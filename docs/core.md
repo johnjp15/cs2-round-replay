@@ -6,8 +6,11 @@ The Core (`src/core`) replays the recorded round through `ICore`. It imports onl
 const round = parseRound(roundJson);           // src/contracts/round.ts
 const model = new RoundModel(round);
 const schedule = new EventSchedule(round);
-const core = new ReplayCore(model, schedule, parseTuning(tuningJson), seed);
+const walk = new NavWalkQuery(nav);            // src/sim2d/walk-query.ts (CS2: a nav/trace query)
+const core = new ReplayCore(model, schedule, parseTuning(tuningJson), seed, walk);
 ```
+
+Without the `walk` argument (or with `null`) the puppets are off and every REPLAY pawn holds still, as in B1. Tests with fake hosts that don't model the map use that.
 
 ## Clock (`clock.ts`)
 
@@ -25,6 +28,7 @@ const core = new ReplayCore(model, schedule, parseTuning(tuningJson), seed);
 - `trackAt(id, t)` interpolates the 10 Hz samples linearly. It returns `null` before the first sample and after the last one. The off-grid samples are not used, so eradicate's track ends at 12.7 s even though he dies at 12.75 s. It returns `{pos, confidence, uncertainty}`: `confidence` is the less certain of the two bracketing samples, and `uncertainty` is the larger radius of those that have one (else `null`). This is the same rule the extractor uses when it resamples. `trackAtTick(id, tick)` is the same function, taking a tick.
 - `deathTick(id)` is the kill-feed tick, or `null` for sp4rtan. cart's is 4442, the post-round kill. `isAlive(id, tick)` is true before that tick.
 - `isObserved(id, t)` is true when `trackAt` is `observed`, meaning both bracketing samples were seen on camera or radar. It is false outside the track.
+- `yawTrack(id)` is the recorded yaw (20 Hz while a camera POV follows the player, with gaps; empty for players never on camera: only barely, cart, donk and eradicate have any).
 
 ## Start state (`start-state.ts`)
 
@@ -105,14 +109,14 @@ Other cases:
 
 ## ReplayCore (`replay-core.ts`)
 
-`new ReplayCore(model, schedule, tuning, seed)` implements `ICore`.
+`new ReplayCore(model, schedule, tuning, seed, walk = null)` implements `ICore`.
 
 `step(o)`:
 
-1. On the first step after `start` or `restart`, it emits `startActions` and resets every pawn's status to `REPLAY` since that tick. Before any `start` it emits no setup.
+1. On the first step after `start` or `restart`, it emits `startActions`, resets every pawn's status to `REPLAY` since that tick, and resets every puppet controller to the pawn's start yaw. Before any `start` it emits no setup.
 2. Status for all ten pawns, in id order: `DEAD` from the tick the observe first shows `alive: false`, otherwise `REPLAY`. `trigger` is `null`, and `sinceTick` is the tick the mode began (0 before the first start). The human's pawn is reported the same way; B4 should decide what mode the human's pawn reports.
 3. **Hook `scheduledActions(o, actions)`**, for B3: append this tick's event actions (from `schedule.at(o.tick)`) after the setup. B1 adds none.
-4. **Hook `pawnInput(pawn, o)`**, for B2: called once per alive pawn that isn't `o.human`, in id order. B1 returns a neutral input: forward 0, side 0, the pawn's current yaw and pitch, no buttons.
+4. **`pawnInput(pawn, o, actions)`** (B2): called once per REPLAY pawn (alive, not `o.human`, mode `REPLAY`), in id order. It returns the puppet's input and may append a snap (`teleport` + `log`) to `actions`, after the setup and scheduled actions. On the setup step every puppet gets a neutral input at its start yaw, because that observe predates the setup teleports. Without puppets (no `walk`) the input is neutral: forward 0, side 0, the pawn's current yaw and pitch, no buttons. See "Puppets" below.
 
 `control(c)`:
 
@@ -120,6 +124,123 @@ Other cases:
 - `pause {paused}` and `speed {x}` are stored; `x` must be positive. The driver does the actual pausing and pacing: Core doesn't stop stepping by itself.
 - `seek`, `checkpoint` and `rewind` throw "not implemented until B5".
 
-`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `startTick`, `lastTick`, `paused`, `speed`, and each pawn's mode and since tick) together with the seed. Restoring checks that the seed matches.
+`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `setupThisStep`, `startTick`, `lastTick`, `paused`, `speed`, each pawn's mode and since tick, and each puppet's `PuppetState`) together with the seed. Restoring checks that the seed matches. Every stored number is already canonical (yaw to 0.001°, `behind` to 6 decimals), so a restore continues exactly.
+
+`puppet(id)` returns a pawn's `PuppetController` (or null without puppets) and `snapCount` the snaps since the last start.
 
 `rng` is a seeded `Rng` that nothing draws from yet. Draw through `rng.fork(label)`, keyed by tick and id, so the snapshot never needs the PRNG state.
+
+## Puppets (`puppet.ts`)
+
+A puppet is a REPLAY pawn driven along its recorded track with **per-tick inputs only** (`forward`, `side`, `yaw`, `pitch`, `buttons`), the way CS2 bots will be driven through usercmd injection. It never sets a position, except for an unseen snap at a teleport point. Not driven: the human's pawn, DEAD pawns and (B4) LIVE pawns.
+
+### WalkQuery
+
+Wall-aware steering needs "can a pawn walk straight from a to b?". The Core can't import an engine, so the engine passes a `WalkQuery { isWalkableLine(a, b) }` (`src/contracts/walk.ts`) to the `ReplayCore` constructor. The 2D sim's is `NavWalkQuery` (`src/sim2d/walk-query.ts`, `NavMesh.segmentWalkable`, 2D). In CS2 it becomes a nav-mesh raycast or a hull trace (`docs/port-notes.md`).
+
+### Track preprocessing (`PuppetTrack`)
+
+`PuppetTrack.fromModel(model, schedule, tuning, id)` turns the 10 Hz samples into a physically followable reference. `raw` keeps the recording untouched (the golden master compares against it); `ref` is the reference.
+
+- A step between two samples is **over-speed** when its 2D speed exceeds `spikeSpeedFactor` (1.6) × the run speed of the weapon the recording shows at either sample (kit, then scheduled `weapon_switch`es; AK 215 → 344 u/s, AWP 200 → 320, deagle 230 → 368).
+- **Spike**: at an over-speed step into sample i, if for some j ≥ i with t[j+1] − t[i−1] ≤ `spikeMaxSec` (0.5 s) the step out of j is over-speed too and the bridge i−1 → j+1 is not, then samples i..j are an excursion that comes back. They are replaced by linear interpolation between i−1 and j+1 (smallest such j). For one sample this is "implied speed from both neighbours too high, and the neighbours agree".
+- **Discontinuity**: otherwise the run of consecutive over-speed steps from i is a jump that doesn't come back. It stays in the reference and becomes a teleport point.
+- **Teleport window** per event: a discontinuity opens at the start of its *last* over-speed step (so a long infeasible stretch gets one snap at its end, not one per stretch of it); a spike opens at the sample before it. Both close `teleportWindowSec` (1 s) after the event's last sample. `isTeleportPoint(tick)` is true inside any window.
+- **Button plan**: per tick, `movementButtons` of the recorded speed |ref(t + lookahead) − ref(t)| / lookahead: nothing below `standSpeedThreshold` (20 u/s, the 10 Hz tracking noise), DUCK below `crouchSpeedThreshold` (60), WALK below `walkSpeedThreshold` (120), never both (crouch-moving is silent anyway, and WALK + DUCK caps an AK at 38 u/s, below the crouch threshold). WALK / DUCK stretches shorter than `buttonMinSec` (0.25 s) are dropped, so a pawn doesn't crouch for a few ticks at every start and stop. Buttons only cap speed, so this never costs tracking.
+- `summary()` lists the spikes, discontinuities and teleport points; `describeEvent(e)` prints one; `npm run ghost` prints them all.
+
+What it finds in `data/round.json` (no real spike survives the "comes back" test; most "spikes" C1 saw are jumps forward along the path):
+
+| player | event | kind | what |
+| --- | --- | --- | --- |
+| barely | 44.70–44.80 s | discontinuity | Tunnel Stairs → Catwalk, 89 u across, dz +154, 890 u/s |
+| barely | 45.20–45.30 s | discontinuity | 91 u in 0.1 s on Catwalk (910 u/s) |
+| cart | 12.80–13.00 s | discontinuity | 137 u in 0.2 s (709 u/s) |
+| cart | 14.20–14.50 s | discontinuity | 217 u in 0.3 s (1,084 u/s), then walks at 41 u/s |
+| cart | 15.80–15.90 s | discontinuity | 46 u (463 u/s) |
+| cart | 21.00–21.10 s | discontinuity | Balcony drop, dz −104 (391 u/s) |
+| cart | 22.30–22.40 s, 22.80–22.90 s | discontinuity | 50 u (502 u/s), 60 u (602 u/s) |
+| donk | 13.40–13.60, 14.30–14.50, 18.60–18.80 s | discontinuity | AWP (cap 200), 361–406 u/s: the sustained over-speed |
+| eradicate | 11.20–11.30 s | discontinuity | 43 u (430 u/s) |
+| snarlbot | 16.00–16.10 s | discontinuity | 39 u (388 u/s) |
+| sp4rtan | 17.90–18.10 s | spike | 1 sample (18.0 s) repaired: 494 / 455 u/s in and out, bridge 331 u/s |
+| sp4rtan | 18.10–19.60 s | discontinuity | inferred loop through Bombsite A at ~700 u/s for 1.5 s (3 × the deagle's 230) |
+
+CTs other than sp4rtan (incredibad, lokier, snakelore, zwomp) have none.
+
+### Per tick (`PuppetController.input(pawn, observe, tick)`)
+
+1. **Outside the track** (before its first sample, or more than `holdLastPositionSec` = 0.25 s after its last): neutral input, yaw held. Until then the reference is clamped to the last sample, so the pawn holds its last position through the ~0.05 s between a track's end and the kill-feed death (eradicate, snarlbot, barely, donk).
+2. **Drift**: ref = reference at t; behind = |pawn − ref| (2D).
+3. **Snap** when behind > `driftSnapUnits` (96) **and** no human sees the pawn (the human pawn's `sees`; `observe.human === null` = nobody) **and** a teleport window not used yet is open at this tick: `teleport {pos: ref, yaw: current}`, then `log {info, "puppet <id>: snap to track at tick <k>, <n> u behind (<kind> at ticks <a>-<b>)"}`. One snap per teleport point. The input below is then computed from ref. A pawn a human sees is never teleported. Snaps are counted in `PuppetState.snaps` and `ReplayCore.snapCount`.
+4. **Lookahead**: ahead = reference at t + `lookaheadSec` (0.15 s), before = at t − 0.15 s.
+5. **Yaw**: the recorded yaw when known (two yaw samples ≤ 0.1 s apart bracket t; shortest-arc interpolation), else the heading of motion (bearing from before to ahead) while the recorded speed is ≥ `standSpeedThreshold`, else held. The commanded yaw turns toward that by at most `maxTurnRateDegPerTick` (12°). The recorded POV yaw never turns faster than 11.7°/tick, so recorded yaw is followed exactly; the limit only smooths motion headings and the switch between the two sources. Yaw is in (−180, 180], rounded to 0.001°. Pitch is 0 (B3 aims).
+6. **Buttons**: the plan, or none while behind > `driftNudgeUnits` (24): run to catch up.
+7. **Steer** at ahead if `isWalkableLine(pawn, ahead)`; otherwise at the latest reference point before it, back to `steerFallbackSec` (2 s) ago, that is in walkable line (C1's wall-aware rule); ahead if none is.
+8. **Speed**: wish speed = min(cap, |ahead − pawn| / lookahead), cap = run speed of the held weapon (observed) × WALK / DUCK factors. A pawn on the reference then gets exactly the recorded velocity, and lag is fed back with gain 1 / lookahead.
+9. **Stick**: the steer direction in the frame of this tick's yaw: forward = dot(dir, (cos yaw, sin yaw)), side = dot(dir, (sin yaw, −cos yaw)) (+side = strafe right), scaled by wish speed / cap and rounded to 6 decimals. **B3:** forward/side are relative to `yaw`, so aim through `withLook(input, yaw, pitch)` (which re-expresses the stick) and write the commanded yaw back to `puppet(id).state.yaw` so the turn limit continues from it.
+
+### Ghost round (`tests/ghost-round.test.ts`, `npm run ghost`)
+
+The whole round with **no human**: `ReplayCore` (B1 + puppets) drives all ten pawns in `Sim2DHost` (`act = core.step(observe)`, `host.apply(act)`, `host.tick()`; the driver is `drive()` in `tools/ghost-round.ts`). Nobody dies without B3, so each pawn is measured up to its recorded death tick (or last sample), and is no longer driven after its track plus the hold. Errors are 2D, against the **raw** recording at every 10 Hz sample, with the pawn position interpolated between the ticks around the sample time (positions taken after each tick's actions, so the tick-0 setup counts). "ticks > 24 behind" is the share of measured ticks more than 24 units from the raw track. `npm run ghost` writes `logs/ghost-round.jsonl` and `logs/ghost-trace.json` (`toReplayTrace`, for the replay page; snaps appear as `info` events).
+
+**2D model values; compare against the CS2 probe.** 4,517 ticks, digest `ae671674`.
+
+| player | team | observed n | RMS | max (at t) | est./inf. n | RMS | max (at t) | inferred RMS | radius (min–max) | snaps (t) | ticks > 24 behind |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| barely | T | 588 | 12.9 | 92 (45.3 s) | 1 | 0.7 | 1 (27.9 s) | – | – | 1 (44.98) | 8.6 % |
+| cart | T | 683 | 13.7 | 93 (13.0 s) | 12 | 13.9 | 36 (13.4 s) | – | – | 2 (14.41, 21.09) | 6.4 % |
+| donk | T | 504 | 11.3 | 94 (14.4 s) | 0 | – | – | – | – | 1 (14.42) | 4.0 % |
+| eradicate | T | 128 | 5.7 | 32 (11.3 s) | 0 | – | – | – | – | 0 | 1.6 % |
+| incredibad | CT | 0 | – | – | 6 | 0.0 | 0 (0.0 s) | 0.0 | 260 | 0 | 0.0 % |
+| lokier | CT | 17 | 4.2 | 8 (18.0 s) | 172 | 1.4 | 8 (17.3 s) | 1.4 | 110–140 | 0 | 0.0 % |
+| snakelore | CT | 5 | 0.0 | 0 (12.0 s) | 120 | 0.0 | 0 (0.0 s) | 0.0 | 220 | 0 | 0.0 % |
+| snarlbot | T | 48 | 13.8 | 33 (14.4 s) | 131 | 4.5 | 20 (10.3 s) | – | – | 0 | 4.9 % |
+| sp4rtan | CT | 87 | 23.5 | 131 (58.6 s) | 617 | 41.2 | 450 (19.4 s) | 42.5 | 120–320 | 2 (18.20, 19.50) | 5.2 % |
+| zwomp | CT | 4 | 4.4 | 8 (43.9 s) | 439 | 3.3 | 17 (35.9 s) | 3.3 | 240–450 | 0 | 0.0 % |
+
+The test asserts: observed RMS < 24 for every T; inferred RMS < the smallest uncertainty radius of that CT's inferred samples; every snap at a teleport point and logged once; fewer than 10 snaps; a second run gives the same digest and the log replays identically through a fresh Core.
+
+**Snaps (6)**, all unseen (no human), each at a teleport point:
+
+| player | tick (t) | behind | window |
+| --- | --- | ---: | --- |
+| cart | 922 (14.41 s) | 124 u | discontinuity 14.20–14.50 s |
+| donk | 923 (14.42 s) | 97 u | discontinuity 13.40–13.60 s (window to 14.6 s); the over-speed continues to 14.5 s |
+| sp4rtan | 1165 (18.20 s) | 96 u | spike 17.90–18.10 s (start of the inferred loop) |
+| sp4rtan | 1248 (19.50 s) | 430 u | discontinuity 18.10–19.60 s (end of the loop) |
+| cart | 1350 (21.09 s) | 97 u | discontinuity 21.00–21.10 s (Balcony drop) |
+| barely | 2879 (44.98 s) | 98 u | discontinuity 44.70–44.80 s (Tunnel Stairs → Catwalk) |
+
+Compared with C1's wall-aware pursuit (no snaps): cart 21.2 → 13.7, donk 17.5 → 11.3, barely 68.4 → 12.9. With snapping disabled (`driftSnapUnits` = 10⁹) the same controller gives barely 69.0 and sp4rtan 1,751 (observed): without the snaps, barely has to go round by Tunnel after the level change, and sp4rtan gets stuck for good on the A stairs at (−525, −1422) at 18.0 s, because the inferred track races off through Bombsite A at ~700 u/s and no reference point of the last 2 s is in walkable line. Snaps are what make those two followable.
+
+**What remains, by cause:**
+
+- **sp4rtan, inferred 18.0–19.6 s**: the loop at 3 × his run speed. The pawn falls up to 450 units behind (radius 200 there) until the 19.50 s snap. Physics are not loosened for it.
+- **sp4rtan, 57.6–59.1 s**: his inferred track runs 320–340 u/s for 1 s, 1.46 × the deagle's 230 (below the 1.6 spike factor, so not a teleport point). The pawn falls 131 units behind, and the first observed samples after it (58.6–59.1 s) carry that lag; it catches up by 59.2 s. Without B3 he still holds the deagle; in the recording he picked up the AK (215) at 19.6 s, which would make it worse.
+- **cart 13.0 s, barely 45.3 s** (max errors 93 and 92): jumps where the drift peaks just under 96, so the pawn catches up physically. **donk 14.4 s** (94): the sample just before his snap at 14.42 s.
+
+### Tunables (`data/tuning.json` → `replay`)
+
+| Key | Value | Meaning |
+| --- | --- | --- |
+| `lookaheadSec` | 0.15 | Steer at the reference this far ahead; also the speed window and the P-gain (1 / lookahead). |
+| `driftNudgeUnits` | 24 | More than this behind (2D): no WALK / DUCK. |
+| `driftSnapUnits` | 96 | More than this behind, unseen, in a teleport window: snap. |
+| `walkSpeedThreshold` | 120 | WALK below this recorded speed (u/s). Note the AK walk cap is 111.8, so 112–120 u/s stretches lag slightly until the nudge releases WALK. |
+| `crouchSpeedThreshold` | 60 | DUCK below this recorded speed (and at or above `standSpeedThreshold`). |
+| `maxTurnRateDegPerTick` | 12 | Yaw turn limit. |
+| `spikeSpeedFactor` | 1.6 | **new.** Over-speed = faster than this × the recorded weapon's run speed. |
+| `spikeMaxSec` | 0.5 | **new.** A spike must come back within this long; else it is a discontinuity. |
+| `teleportWindowSec` | 1 | **new.** A snap is allowed until this long after a teleport point. |
+| `holdLastPositionSec` | 0.25 | **new.** Hold the last position this long after the track ends, then neutral input. |
+| `standSpeedThreshold` | 20 | **new.** Below this recorded speed: standing (no buttons, yaw held). 10 Hz integer positions jitter at 10–30 u/s. |
+| `buttonMinSec` | 0.25 | **new.** Shorter WALK / DUCK stretches of the plan are dropped. |
+| `steerFallbackSec` | 2 | **new.** How far back the wall-aware rule looks for a reference point in walkable line. |
+| `hearingRangeUnits`, `outliveGraceSec` | 1500, 3 | Not used by B2. |
+
+### Known limits
+
+- **No path query.** If no reference point of the last 2 s + lookahead is in walkable line, the pawn pushes at the lookahead point and can stay stuck. Recovery then depends on a teleport window (see sp4rtan above). A `WalkQuery.path` (nav A*) would fix this; a stuck-pawn snap would need a policy decision, because snaps are restricted to teleport points.
+- **Snap visibility** checks only whether the human sees the pawn now, not whether the destination is in view. `Sim2DHost` reports `sees: []`, so in the 2D sim every pawn is unseen until the host computes `sees`.
+- **Drift is 2D.** A pawn on the wrong level right under its track counts as on track. barely's level change snaps 0.18 s after the jump (98 u at 44.98 s), because the 2D gap at the jump is only 89 u.

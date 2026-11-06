@@ -23,3 +23,24 @@ export type {
   ChatEntry,
 } from './schedule';
 export { ReplayCore } from './replay-core';
+export {
+  PuppetTrack,
+  PuppetController,
+  RECORDED_YAW_MAX_GAP_SEC,
+  normYaw,
+  yawDelta,
+  roundYaw,
+  turnToward,
+  bearing,
+  dist2,
+  stickToward,
+  withLook,
+  movementButtons,
+  runSpeedOf,
+  maxSpeedOf,
+  seenByHuman,
+  recordedWeapons,
+  weaponAt,
+  describeEvent,
+} from './puppet';
+export type { PuppetState, PuppetStep, PuppetTrackSummary, Stick, TeleportPoint, TrackEvent, TrackEventKind, WeaponChange } from './puppet';

@@ -15,6 +15,7 @@ import {
   type Team,
   type TrackSample,
   type Vec3,
+  type YawSample,
 } from '../contracts/index';
 import { tOf } from './clock';
 
@@ -57,12 +58,15 @@ export class RoundModel {
   readonly players: readonly ModelPlayer[];
   /** 10 Hz track samples, parallel to `players`. */
   private readonly samples: readonly (readonly TrackSample[])[];
+  /** Recorded yaw samples (camera POVs only), parallel to `players`. */
+  private readonly yaws: readonly (readonly YawSample[])[];
   /** id -> index into players/samples. Lookup only; never iterated. */
   private readonly index: ReadonlyMap<PlayerId, number>;
 
   constructor(round: RoundData) {
     const players: ModelPlayer[] = [];
     const samples: (readonly TrackSample[])[] = [];
+    const yaws: (readonly YawSample[])[] = [];
     const index = new Map<PlayerId, number>();
     for (const id of PLAYER_IDS) {
       const p = round.players.find((q) => q.id === id);
@@ -88,11 +92,13 @@ export class RoundModel {
         isHumanDefault: p.isHumanDefault,
       });
       samples.push(track.samples);
+      yaws.push(track.yaw);
     }
     this.meta = round.meta;
     this.bomb = round.bomb;
     this.players = players;
     this.samples = samples;
+    this.yaws = yaws;
     this.index = index;
   }
 
@@ -103,6 +109,14 @@ export class RoundModel {
   /** The player's 10 Hz samples (t = 0, 0.1, … to the last sample). */
   track(id: PlayerId): readonly TrackSample[] {
     return this.samples[this.indexOf(id)] as readonly TrackSample[];
+  }
+
+  /**
+   * The player's recorded yaw samples (20 Hz while a camera POV follows them, with gaps
+   * between POV segments; empty for players never on camera). Degrees CCW from +x.
+   */
+  yawTrack(id: PlayerId): readonly YawSample[] {
+    return this.yaws[this.indexOf(id)] as readonly YawSample[];
   }
 
   /**

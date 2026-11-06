@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "extract:round": "tsx tools/extract-round.ts",
     "validate:round": "tsx tools/validate-round.ts",
-    "extract:nav": "tsx tools/extract-nav.ts"
+    "extract:nav": "tsx tools/extract-nav.ts",
+    "ghost": "tsx tools/ghost-round.ts"
   },
   "repository": {
     "type": "git",

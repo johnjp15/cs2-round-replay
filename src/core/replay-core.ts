@@ -1,7 +1,8 @@
 /**
- * ReplayCore: the ICore that replays the recording. B1 skeleton: it sets the round
- * up, holds every puppet still and reports status. B2 (movement) and B3 (scripted
- * events) extend it through the two hooks marked below. See docs/core.md "ReplayCore".
+ * ReplayCore: the ICore that replays the recording. It sets the round up, drives
+ * every REPLAY pawn along its recorded track (B2 puppets, src/core/puppet.ts) and
+ * reports status. B3 (scripted events) extends it through the `scheduledActions`
+ * hook. See docs/core.md "ReplayCore" and "Puppets".
  */
 import {
   PLAYER_IDS,
@@ -19,11 +20,13 @@ import {
   type PawnStatus,
   type PlayerId,
   type Tuning,
+  type WalkQuery,
 } from '../contracts/index';
 import { RoundClock } from './clock';
+import { PuppetController, PuppetTrack, type PuppetState } from './puppet';
 import type { RoundModel } from './round-model';
 import type { EventSchedule } from './schedule';
-import { startActions } from './start-state';
+import { startActions, startYaw } from './start-state';
 
 /** Per-pawn status bookkeeping. */
 interface PawnState {
@@ -45,6 +48,8 @@ interface ReplayCoreState {
   speed: number;
   /** All ten pawns, in PLAYER_IDS order. */
   pawns: PawnState[];
+  /** True on the step that emits the setup (puppets hold still: the observe predates the teleports). */
+  setupThisStep: boolean;
 }
 
 export class ReplayCore implements ICore {
@@ -57,28 +62,41 @@ export class ReplayCore implements ICore {
    * (e.g. `aim:1203:cart`): forks depend only on the seed, so snapshots stay seed-only.
    */
   readonly rng: Rng;
+  /**
+   * One puppet controller per player (PLAYER_IDS order), or null when the Core was
+   * built without a WalkQuery: then every REPLAY pawn gets the neutral input (holds
+   * still), as in B1. Tests with fake hosts that don't model the map use that.
+   */
+  private readonly puppets: readonly PuppetController[] | null;
   private state: ReplayCoreState;
 
-  constructor(model: RoundModel, schedule: EventSchedule, tuning: Tuning, seed: number) {
+  /**
+   * @param walk the engine's walkable-line query (2D sim: `NavWalkQuery`); null = no puppet movement.
+   */
+  constructor(model: RoundModel, schedule: EventSchedule, tuning: Tuning, seed: number, walk: WalkQuery | null = null) {
     this.model = model;
     this.schedule = schedule;
     this.tuning = tuning;
     this.clock = new RoundClock(model.meta.clock0, model.meta.bombTimerSec);
     this.rng = new Rng(seed);
+    this.puppets = walk === null ? null : PLAYER_IDS.map((id) => new PuppetController(PuppetTrack.fromModel(model, schedule, tuning, id), tuning, walk));
     this.state = initialState();
   }
 
   step(o: Observe): Act {
     const s = this.state;
     const actions: Action[] = [];
+    s.setupThisStep = false;
     if (s.setupPending) {
       for (const a of startActions(this.model, this.tuning)) actions.push(a);
       s.setupPending = false;
+      s.setupThisStep = true;
       s.startTick = o.tick;
       for (const p of s.pawns) {
         p.mode = 'REPLAY';
         p.since = o.tick;
       }
+      if (this.puppets !== null) for (const c of this.puppets) c.reset(startYaw(this.model, c.id).yaw);
     }
 
     const byId = new Map<PlayerId, PawnObs>();
@@ -97,11 +115,12 @@ export class ReplayCore implements ICore {
 
     this.scheduledActions(o, actions);
 
+    // Inputs for every REPLAY pawn (alive, not the human's, not LIVE), in id order.
     const inputs: PawnInput[] = [];
-    for (const id of PLAYER_IDS) {
-      const obs = byId.get(id);
-      if (obs === undefined || !obs.alive || id === o.human) continue;
-      inputs.push(this.pawnInput(obs, o));
+    for (const p of s.pawns) {
+      const obs = byId.get(p.id);
+      if (obs === undefined || !obs.alive || p.id === o.human || p.mode !== 'REPLAY') continue;
+      inputs.push(this.pawnInput(obs, o, actions));
     }
 
     const status: PawnStatus[] = s.pawns.map((p) => ({ id: p.id, mode: p.mode, trigger: null, sinceTick: p.since }));
@@ -137,17 +156,31 @@ export class ReplayCore implements ICore {
     return this.state.speed;
   }
 
+  /** The puppet controller for `id`, or null when puppets are off (no WalkQuery). */
+  puppet(id: PlayerId): PuppetController | null {
+    return this.puppets === null ? null : (this.puppets.find((c) => c.id === id) ?? null);
+  }
+
+  /** Snaps since the last start / restart, all pawns. */
+  get snapCount(): number {
+    let n = 0;
+    if (this.puppets !== null) for (const c of this.puppets) n += c.state.snaps;
+    return n;
+  }
+
   snapshot(): CoreSnapshot {
-    return { kind: 'core', data: toJsonValue({ seed: this.rng.seed, state: this.state }) };
+    const puppets: PuppetState[] = this.puppets === null ? [] : this.puppets.map((c) => c.state);
+    return { kind: 'core', data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets }) };
   }
 
   restore(snap: CoreSnapshot): void {
     if (snap.kind !== 'core') throw new Error('ReplayCore.restore: not a core snapshot');
-    const d = snap.data as unknown as { seed: number; state: ReplayCoreState };
+    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[] };
     if (d.seed !== this.rng.seed) throw new Error(`ReplayCore.restore: snapshot seed ${d.seed} != core seed ${this.rng.seed}`);
     const st = d.state;
     this.state = {
       setupPending: st.setupPending,
+      setupThisStep: st.setupThisStep,
       startTick: st.startTick,
       lastTick: st.lastTick,
       paused: st.paused,
@@ -158,6 +191,13 @@ export class ReplayCore implements ICore {
         return { id, mode: p.mode, since: p.since };
       }),
     };
+    if (this.puppets !== null) {
+      for (const c of this.puppets) {
+        const ps = d.puppets.find((q) => q.id === c.id);
+        if (ps === undefined) throw new Error(`ReplayCore.restore: no puppet state for ${c.id}`);
+        c.restore(ps);
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -165,12 +205,20 @@ export class ReplayCore implements ICore {
   // -------------------------------------------------------------------------
 
   /**
-   * B2 (movement) hook: the input for one alive, non-human pawn this tick. B1 holds
-   * it still, looking where it already looks. Called in id order.
+   * The input for one REPLAY pawn this tick (alive, not the human's), called in id
+   * order after `scheduledActions`. The puppet controller drives it along its track
+   * and may append a snap (`teleport` + `log`) to `actions`. Without puppets (no
+   * WalkQuery) the pawn holds still, looking where it already looks. On the setup
+   * step every puppet holds still at its start yaw, because this observe predates the
+   * setup teleports.
    */
-  protected pawnInput(p: PawnObs, o: Observe): PawnInput {
-    void o;
-    return { id: p.id, forward: 0, side: 0, yaw: p.yaw, pitch: p.pitch, buttons: [] };
+  protected pawnInput(p: PawnObs, o: Observe, actions: Action[]): PawnInput {
+    const c = this.puppet(p.id);
+    if (c === null) return { id: p.id, forward: 0, side: 0, yaw: p.yaw, pitch: p.pitch, buttons: [] };
+    if (this.state.setupThisStep) return c.neutral(p);
+    const r = c.input(p, o, o.tick);
+    for (const a of r.actions) actions.push(a);
+    return r.input;
   }
 
   /**
@@ -186,6 +234,7 @@ export class ReplayCore implements ICore {
 function initialState(): ReplayCoreState {
   return {
     setupPending: false,
+    setupThisStep: false,
     startTick: null,
     lastTick: null,
     paused: false,

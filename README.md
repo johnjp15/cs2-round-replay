@@ -30,6 +30,7 @@ npm test         # Vitest
 npm run lint     # ESLint, incl. import boundaries
 npm run typecheck
 npm run build    # static build to dist/ (npm run preview to serve it)
+npm run ghost    # whole round with no human: logs/ghost-round.jsonl + logs/ghost-trace.json, prints the tracking table
 ```
 
 ## Docs
