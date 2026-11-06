@@ -1,7 +1,11 @@
 /**
  * Browser entry: loads the round, builds the Session, runs the 64 Hz loop from requestAnimationFrame,
- * feeds the human's keyboard/mouse input and draws with the debug renderer. Wiring only: the logic
- * lives in session.ts, loop.ts, input.ts and debug-render.ts (see docs/app.md).
+ * feeds the human's keyboard/mouse input, and draws the canvas (renderer.ts) and the HUD (hud.ts).
+ * Wiring only: the logic lives in session.ts, loop.ts, input.ts, scene.ts, camera.ts and hud-model.ts
+ * (see docs/app.md).
+ *
+ * After every Session.step() the Scene ingests the new observe, Core's Act and the host's active
+ * effects, so events of every tick reach the kill feed and the effects layer even at 4×.
  *
  * URL parameters: `?seed=<int>` (default 1); `?human=cart|none` (default cart, or none on touch-only
  * devices, which have no controls for the human yet).
@@ -10,12 +14,18 @@ import roundUrl from '../../data/round.json?url';
 import navUrl from '../../data/mirage-nav.json?url';
 import radarUrl from '../../data/mirage-radar.jpg';
 import tuningJson from '../../data/tuning.json';
-import { isPlayerId, type Observe, type PlayerId } from '../contracts/index';
-import { DebugRenderer } from './debug-render';
+import { isPlayerId, type PlayerId } from '../contracts/index';
+import type { Camera } from './camera';
+import { CameraInput } from './camera-dom';
+import type { EffectsSource } from './effects';
+import { Hud } from './hud';
+import { overlayForKey, toggleOverlay, type OverlayKey, type Overlays } from './hud-model';
 import { humanInput, yawToward } from './input';
 import { InputDom } from './input-dom';
-import { FixedLoop, RateMeter } from './loop';
+import { FixedLoop, RateMeter, TICK_MS } from './loop';
 import { screenToWorld, worldToScreen } from './radar';
+import { FOLLOWED, Renderer } from './renderer';
+import { Scene, interpolationAlpha } from './scene';
 import { DEFAULT_HUMAN, Session, parseSessionData, type SessionData } from './session';
 
 type Phase = 'ready' | 'running' | 'paused';
@@ -31,6 +41,10 @@ export interface AppStats {
   readonly human: PlayerId | null;
   readonly fps: number;
   readonly tps: number;
+  readonly overlays: Overlays;
+  readonly camera: Camera;
+  /** Radar cache rebuilds since load. */
+  readonly radarRebuilds: number;
 }
 
 declare global {
@@ -38,6 +52,8 @@ declare global {
     __cs2replay?: {
       stats: () => AppStats;
       session: () => Session;
+      /** What the renderer and HUD draw (kill feed, tracers, effects, bomb, statuses). */
+      scene: () => Scene;
       /** Viewport (client) coordinates of a world point, for automated mouse input. */
       screenOf: (x: number, y: number) => { x: number; y: number };
     };
@@ -86,23 +102,28 @@ function initialHuman(params: URLSearchParams): PlayerId | null {
 class App {
   private readonly data: SessionData;
   private readonly seed: number;
-  private readonly renderer: DebugRenderer;
+  private readonly canvas: HTMLCanvasElement;
+  private readonly renderer: Renderer;
+  private readonly hud: Hud;
   private readonly input: InputDom;
   private readonly loop: FixedLoop;
   private readonly fpsMeter = new RateMeter(1000);
   private readonly tpsMeter = new RateMeter(1000);
   private session: Session;
+  private scene: Scene;
   private human: PlayerId | null;
   private phase: Phase = 'ready';
-  private obs: Observe;
+  private overlays: Overlays;
   private lastFrame: number | null = null;
   private frames = 0;
+  private cursorStyle = '';
   private readonly buttons: {
     start: HTMLButtonElement;
     pause: HTMLButtonElement;
     restart: HTMLButtonElement;
     spectate: HTMLButtonElement;
     speeds: HTMLButtonElement[];
+    overlays: HTMLButtonElement[];
   };
 
   constructor(data: SessionData, radar: HTMLImageElement, seed: number, human: PlayerId | null) {
@@ -110,28 +131,46 @@ class App {
     this.seed = seed;
     this.human = human;
     const canvas = el('view', HTMLCanvasElement);
-    this.renderer = new DebugRenderer(canvas, radar, data.round.meta.map);
-    this.loop = new FixedLoop(() => this.session.step(), { paused: true });
-    this.session = this.newSession();
-    this.obs = this.session.observe();
+    this.canvas = canvas;
+    this.overlays = { follow: false, ghost: true, tracks: false, panel: window.matchMedia('(min-width: 900px)').matches };
+    this.renderer = new Renderer(canvas, radar, data.round);
+    this.hud = new Hud(data.round, () => this.toggle('panel'));
+    this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
+    this.session = new Session({ ...this.data, seed: this.seed, human: this.human });
+    this.scene = this.ready(this.session);
     this.input = new InputDom(canvas, {
-      active: () => this.phase === 'running' && this.session.human !== null,
+      active: () => this.playing(),
       onSlot: (slot) => {
         if (this.phase === 'running') this.session.requestWeaponSlot(slot);
       },
     });
+    new CameraInput(canvas, {
+      playing: () => this.playing(),
+      onZoom: (at, factor) => this.renderer.zoomAt(this.overlays.follow ? null : at, factor),
+      onPan: (dx, dy) => {
+        if (this.overlays.follow) this.toggle('follow');
+        this.renderer.panBy(dx, dy);
+      },
+      onReset: () => {
+        if (this.overlays.follow) this.toggle('follow');
+        this.renderer.resetCamera();
+      },
+    });
+    window.addEventListener('keydown', (e) => this.onKey(e));
     this.buttons = {
       start: el('start', HTMLButtonElement),
       pause: el('pause', HTMLButtonElement),
       restart: el('restart', HTMLButtonElement),
       spectate: el('spectate', HTMLButtonElement),
       speeds: [...document.querySelectorAll<HTMLButtonElement>('button[data-speed]')],
+      overlays: [...document.querySelectorAll<HTMLButtonElement>('button[data-overlay]')],
     };
     this.wireControls();
     this.updateControls();
     window.__cs2replay = {
       stats: () => this.stats(),
       session: () => this.session,
+      scene: () => this.scene,
       screenOf: (x, y) => {
         const s = worldToScreen(this.renderer.view, { x, y });
         const rect = canvas.getBoundingClientRect();
@@ -141,20 +180,57 @@ class App {
     requestAnimationFrame(this.frame);
   }
 
+  /** True while keyboard and mouse drive the human pawn. */
+  private playing(): boolean {
+    return this.phase === 'running' && this.session.human !== null;
+  }
+
+  /** The host's grenade effects (Sim2DHost.activeEffects). */
+  private effects(s: Session): EffectsSource {
+    return s.host;
+  }
+
+  /** One tick: step the session, then hand the Scene what happened. */
+  private stepOnce(): void {
+    const act = this.session.step();
+    this.scene.ingest(this.session.observe(), act, this.effects(this.session).activeEffects());
+  }
+
   /** A new session in the ready state: tick 0 (the round setup) has run, so the pawns are on their spots. */
   private newSession(): Session {
     const s = new Session({ ...this.data, seed: this.seed, human: this.human });
-    this.ready(s);
+    this.scene = this.ready(s);
     return s;
   }
 
-  private ready(s: Session): void {
+  /** Put a session in the ready state (setup tick run, paused) and start a Scene on it. */
+  private ready(s: Session): Scene {
     if (this.loop.speed !== 1) s.control({ type: 'speed', x: this.loop.speed });
     s.step();
     this.phase = 'ready';
     this.loop.paused = true;
     this.loop.reset();
-    this.obs = s.observe();
+    return new Scene(s.observe(), s.lastAct, this.effects(s).activeEffects(), s.nav);
+  }
+
+  private toggle(key: OverlayKey): void {
+    this.overlays = toggleOverlay(this.overlays, key);
+    if (key === 'follow' && this.overlays.follow) {
+      const p = this.scene.pawn(this.session.human ?? FOLLOWED);
+      this.renderer.startFollow(p === null ? null : p.pos);
+    }
+    this.updateControls();
+  }
+
+  /** View toggles: F follow, G ghost, T tracks, Tab status panel. */
+  private onKey(e: KeyboardEvent): void {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    const key = overlayForKey(e.code);
+    if (key === null) return;
+    // Tab moves focus as usual inside the controls bar; from the page it toggles the panel.
+    if (key === 'panel' && document.activeElement !== null && document.activeElement !== document.body && document.activeElement !== this.canvas) return;
+    e.preventDefault();
+    this.toggle(key);
   }
 
   private wireControls(): void {
@@ -182,7 +258,7 @@ class App {
     });
     on(b.restart, () => {
       this.session.restart();
-      this.ready(this.session);
+      this.scene = this.ready(this.session);
     });
     on(b.spectate, () => {
       this.human = this.human === null ? DEFAULT_HUMAN : null;
@@ -193,6 +269,12 @@ class App {
         const x = Number(sb.dataset['speed']);
         this.loop.speed = x;
         this.session.control({ type: 'speed', x: this.loop.speed });
+      });
+    }
+    for (const ob of b.overlays) {
+      on(ob, () => {
+        const key = ob.dataset['overlay'];
+        if (key === 'follow' || key === 'ghost' || key === 'tracks' || key === 'panel') this.toggle(key);
       });
     }
     on(el('dl-log', HTMLButtonElement), () => {
@@ -211,10 +293,14 @@ class App {
     b.restart.disabled = false;
     b.spectate.setAttribute('aria-pressed', String(this.human === null));
     for (const sb of b.speeds) sb.setAttribute('aria-pressed', String(Number(sb.dataset['speed']) === this.loop.speed));
+    for (const ob of b.overlays) {
+      const key = ob.dataset['overlay'] as OverlayKey | undefined;
+      if (key !== undefined && key in this.overlays) ob.setAttribute('aria-pressed', String(this.overlays[key]));
+    }
   }
 
   private fileStem(): string {
-    return `cs2-replay-seed${this.seed}-${this.session.human ?? 'spectate'}-tick${this.obs.tick}`;
+    return `cs2-replay-seed${this.seed}-${this.session.human ?? 'spectate'}-tick${this.scene.cur.tick}`;
   }
 
   private readonly frame = (now: number): void => {
@@ -225,26 +311,51 @@ class App {
     this.frames++;
     this.fpsMeter.add(now, 1);
     this.tpsMeter.add(now, n);
-    this.obs = this.session.observe();
+    const alpha = interpolationAlpha(this.loop.pending, TICK_MS);
+    const s = this.session;
     this.renderer.resize();
     this.renderer.draw({
-      observe: this.obs,
-      clock: this.session.clock.hudClock(this.obs.tick),
-      human: this.session.human,
-      phase: this.phase === 'ready' ? 'ready: press Start' : this.phase,
+      scene: this.scene,
+      alpha,
+      model: s.model,
+      clock: s.clock,
+      human: s.human,
+      overlays: this.overlays,
+      aim: this.playing() ? this.input.cursor() : null,
+      fovDeg: s.tuning.ai.fovDeg,
+      blind: s.host,
+      nowMs: now,
+    });
+    this.hud.update({
+      scene: this.scene,
+      clock: s.clock,
+      human: s.human,
+      you: s.human ?? FOLLOWED,
+      phase: this.phase,
       speed: this.loop.speed,
+      panelOpen: this.overlays.panel,
+      tick: this.scene.renderTick(alpha),
       fps: this.fpsMeter.rate(now),
       tps: this.tpsMeter.rate(now),
     });
+    this.updateCursor();
     requestAnimationFrame(this.frame);
   };
+
+  /** Crosshair while playing; a grab hand where dragging pans. */
+  private updateCursor(): void {
+    const c = this.playing() ? 'crosshair' : this.renderer.camera.zoom > 1 && !this.overlays.follow ? 'grab' : 'default';
+    if (c === this.cursorStyle) return;
+    this.cursorStyle = c;
+    this.canvas.style.cursor = c;
+  }
 
   /** Human input for this frame: held keys, and yaw toward the cursor. Used for every tick until the next frame. */
   private feedHuman(): void {
     const id = this.session.human;
     if (id === null) return;
-    const p = this.obs.pawns.find((q) => q.id === id);
-    if (p === undefined || !p.alive) return;
+    const p = this.scene.pawn(id);
+    if (p === null || !p.alive) return;
     const cursor = this.input.cursor();
     const target = cursor === null ? null : screenToWorld(this.renderer.view, cursor);
     const yaw = target === null ? p.yaw : yawToward(p.pos, target, p.yaw);
@@ -255,7 +366,7 @@ class App {
     const now = performance.now();
     return {
       phase: this.phase,
-      tick: this.obs.tick,
+      tick: this.scene.cur.tick,
       frames: this.frames,
       ticksRun: this.loop.ticksRun,
       droppedTicks: this.loop.droppedTicks,
@@ -263,6 +374,9 @@ class App {
       human: this.session.human,
       fps: this.fpsMeter.rate(now),
       tps: this.tpsMeter.rate(now),
+      overlays: this.overlays,
+      camera: this.renderer.camera,
+      radarRebuilds: this.renderer.cacheRebuilds,
     };
   }
 }

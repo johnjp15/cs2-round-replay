@@ -1,0 +1,225 @@
+/**
+ * HUD and overlay logic, pure and DOM-free: mode badges, weapon names, the round clock / bomb timer,
+ * the score, view toggles. hud.ts (DOM) and renderer.ts (canvas) only display what these return.
+ *
+ * Round state: C3 adds `Observe.round` (phase, score, winner, bomb, …). roundStateOf() reads it when
+ * present; until then the clock falls back to RoundClock and the Scene's bomb events.
+ */
+import type { Mode, Observe, PawnObs, PlayerId, RoundEndReason, Team, Vec3 } from '../contracts/index';
+import type { RoundClock } from '../core/index';
+import type { BombState, RoundEnd } from './scene';
+
+// ---- mode badges -------------------------------------------------------------------------------
+
+export type BadgeTone = 'subtle' | 'alert' | 'dead' | 'human';
+
+export interface Badge {
+  readonly text: 'REPLAY' | 'LIVE' | 'DEAD' | 'YOU';
+  /** subtle = REPLAY (quiet), alert = LIVE (bright), dead, human = the player's own pawn. */
+  readonly tone: BadgeTone;
+}
+
+/**
+ * The badge for a pawn from its `act.status` mode. The human's own living pawn is "YOU" whatever Core
+ * reports for it; no status yet (before the first step) reads as REPLAY.
+ */
+export function statusBadge(mode: Mode | null, isHuman: boolean, alive = true): Badge {
+  if (mode === 'DEAD' || !alive) return { text: 'DEAD', tone: 'dead' };
+  if (isHuman) return { text: 'YOU', tone: 'human' };
+  if (mode === 'LIVE') return { text: 'LIVE', tone: 'alert' };
+  return { text: 'REPLAY', tone: 'subtle' };
+}
+
+// ---- names ---------------------------------------------------------------------------------------
+
+const WEAPON_NAMES: Readonly<Record<string, string>> = {
+  ak47: 'AK-47',
+  awp: 'AWP',
+  ssg08: 'SSG 08',
+  deagle: 'Desert Eagle',
+  m4a4: 'M4A4',
+  glock: 'Glock-18',
+  knife: 'Knife',
+  c4: 'C4',
+  smoke: 'Smoke',
+  flash: 'Flashbang',
+  he: 'HE grenade',
+  molotov: 'Molotov',
+};
+
+/** Short display name of a weapon id (unknown ids pass through; null = world damage). */
+export function weaponName(w: string | null): string {
+  if (w === null) return 'World';
+  return WEAPON_NAMES[w] ?? w;
+}
+
+/** Weapons that show a clip / reserve count. */
+export function hasAmmo(w: string): boolean {
+  return !['knife', 'c4', 'smoke', 'flash', 'he', 'molotov'].includes(w);
+}
+
+/** HP colour band: healthy, hurt, critical. */
+export function hpBand(hp: number): 'ok' | 'hurt' | 'low' {
+  return hp > 50 ? 'ok' : hp > 20 ? 'hurt' : 'low';
+}
+
+// ---- view toggles --------------------------------------------------------------------------------
+
+export interface Overlays {
+  /** Camera follows cart. */
+  readonly follow: boolean;
+  /** cart's recorded position as a hollow outline. */
+  readonly ghost: boolean;
+  /** Each pawn's recorded path for the next few seconds. */
+  readonly tracks: boolean;
+  /** Status panel open. */
+  readonly panel: boolean;
+}
+
+export type OverlayKey = keyof Overlays;
+
+/** View toggles by `KeyboardEvent.code`: F follow, G ghost, T tracks, Tab panel. */
+export function overlayForKey(code: string): OverlayKey | null {
+  switch (code) {
+    case 'KeyF':
+      return 'follow';
+    case 'KeyG':
+      return 'ghost';
+    case 'KeyT':
+      return 'tracks';
+    case 'Tab':
+      return 'panel';
+    default:
+      return null;
+  }
+}
+
+export function toggleOverlay(o: Overlays, key: OverlayKey): Overlays {
+  return { ...o, [key]: !o[key] };
+}
+
+// ---- round state (C3) ----------------------------------------------------------------------------
+
+/** The shape C3 adds as `Observe.round`. Read through roundStateOf(); absent until C3 lands. */
+export interface RoundStateLike {
+  readonly phase: 'live' | 'planted' | 'over';
+  readonly score: { readonly ct: number; readonly t: number };
+  readonly winner: Team | null;
+  readonly reason: RoundEndReason | null;
+  readonly endTick: number | null;
+  readonly timeLeftSec: number;
+  readonly bomb: {
+    readonly state: string;
+    readonly carrier: PlayerId | null;
+    readonly pos: Vec3 | null;
+    readonly plantTick: number | null;
+    readonly defuser: PlayerId | null;
+    readonly defuseEndTick: number | null;
+  };
+}
+
+/** `observe.round` if the host reports one (C3), else null. */
+export function roundStateOf(o: Observe): RoundStateLike | null {
+  const r = (o as { readonly round?: unknown }).round;
+  if (typeof r !== 'object' || r === null) return null;
+  const s = r as Partial<RoundStateLike>;
+  if (typeof s.phase !== 'string' || typeof s.score !== 'object' || s.score === null || typeof s.bomb !== 'object' || s.bomb === null) return null;
+  return r as RoundStateLike;
+}
+
+// ---- clock and score ---------------------------------------------------------------------------
+
+export type ClockMode = 'round' | 'bomb' | 'defusing' | 'defused' | 'exploded' | 'over';
+
+export interface ClockView {
+  /** The big figure: "1:36", "38.4", … */
+  readonly text: string;
+  readonly mode: ClockMode;
+  /** Bomb time left as a fraction of the timer (for the draining bar), or null. */
+  readonly bombLeft: number | null;
+  /** Who won, once the round is over. */
+  readonly winner: Team | null;
+  readonly reason: RoundEndReason | null;
+}
+
+function mss(secs: number): string {
+  const s = Math.max(0, Math.ceil(secs));
+  const m = Math.floor(s / 60);
+  const r = s - m * 60;
+  return `${m}:${r < 10 ? '0' : ''}${r}`;
+}
+
+/**
+ * The top-centre clock at `tick`: the round clock, then the red bomb timer once the bomb is planted.
+ * Reads `observe.round` (C3) when present, else RoundClock and the Scene's bomb and round-end events.
+ */
+export function clockView(o: Observe, clock: RoundClock, bomb: BombState, roundEnd: RoundEnd | null): ClockView {
+  const tick = o.tick;
+  const r = roundStateOf(o);
+  if (r !== null) {
+    const plantTick = r.bomb.plantTick;
+    const bombLeft = plantTick === null ? null : Math.max(0, clock.bombRemaining(tick, plantTick) / clock.bombTimerSec);
+    if (r.phase === 'over') {
+      const mode: ClockMode = r.reason === 'bomb_defused' ? 'defused' : r.reason === 'bomb_exploded' ? 'exploded' : 'over';
+      const text = plantTick !== null && r.reason !== 'time' ? clock.hudBomb(r.endTick ?? tick, plantTick) : mss(r.timeLeftSec);
+      return { text, mode, bombLeft, winner: r.winner, reason: r.reason };
+    }
+    if (r.phase === 'planted' && plantTick !== null) {
+      const mode: ClockMode = r.bomb.defuser !== null ? 'defusing' : 'bomb';
+      return { text: clock.hudBomb(tick, plantTick), mode, bombLeft, winner: null, reason: null };
+    }
+    return { text: mss(r.timeLeftSec), mode: 'round', bombLeft: null, winner: null, reason: null };
+  }
+  // Fallback: RoundClock and events.
+  const winner = roundEnd?.winner ?? null;
+  const reason = roundEnd?.reason ?? null;
+  if (bomb.plantTick !== null) {
+    const at = bomb.endTick ?? roundEnd?.tick ?? tick;
+    const bombLeft = Math.max(0, clock.bombRemaining(at, bomb.plantTick) / clock.bombTimerSec);
+    const mode: ClockMode =
+      bomb.phase === 'defused' ? 'defused' : bomb.phase === 'exploded' ? 'exploded' : roundEnd !== null ? 'over' : bomb.phase === 'defusing' ? 'defusing' : 'bomb';
+    return { text: clock.hudBomb(at, bomb.plantTick), mode, bombLeft, winner, reason };
+  }
+  if (roundEnd !== null) return { text: clock.hudClock(roundEnd.tick), mode: 'over', bombLeft: null, winner, reason };
+  return { text: clock.hudClock(tick), mode: 'round', bombLeft: null, winner: null, reason: null };
+}
+
+/** Score to show: `observe.round.score` (C3), else the recorded score before the round plus this round's winner. */
+export function scoreView(o: Observe, before: { readonly ct: number; readonly t: number }, roundEnd: RoundEnd | null): { ct: number; t: number } {
+  const r = roundStateOf(o);
+  if (r !== null) return { ct: r.score.ct, t: r.score.t };
+  if (roundEnd === null) return { ct: before.ct, t: before.t };
+  return roundEnd.winner === 'CT' ? { ct: before.ct + 1, t: before.t } : { ct: before.ct, t: before.t + 1 };
+}
+
+/** Bomb carrier from C3 (for the C4 marker on a pawn), or null. */
+export function bombCarrier(o: Observe): PlayerId | null {
+  return roundStateOf(o)?.bomb.carrier ?? null;
+}
+
+// ---- your status ---------------------------------------------------------------------------------
+
+export interface YouView {
+  readonly id: PlayerId;
+  readonly team: Team;
+  readonly alive: boolean;
+  readonly hp: number;
+  readonly armor: number;
+  readonly weapon: string;
+  /** "30 / 90", or null for weapons without ammo. */
+  readonly ammo: string | null;
+  readonly band: 'ok' | 'hurt' | 'low';
+}
+
+export function youView(p: PawnObs): YouView {
+  return {
+    id: p.id,
+    team: p.team,
+    alive: p.alive,
+    hp: p.alive ? p.hp : 0,
+    armor: p.alive ? p.armor : 0,
+    weapon: weaponName(p.weapon),
+    ammo: hasAmmo(p.weapon) ? `${p.ammo.clip} / ${p.ammo.reserve}` : null,
+    band: hpBand(p.alive ? p.hp : 0),
+  };
+}
