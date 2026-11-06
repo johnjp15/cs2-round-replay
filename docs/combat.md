@@ -104,12 +104,16 @@ A bullet is a 2D ray from the shooter's `pos` along `yaw`, up to `damage.maxRang
 2. **Walls:** if the host's sight (`Sight.lineOfSight(shooter, impact)`: the radar sight mask plus the level check, C4,
    `docs/vision.md`; the nav mesh's line of sight on a host without a mask) fails for a candidate (impact = where the
    ray enters its circle, at the target's floor z), the bullet hit a wall first. No pawn further along is hit.
-   Bullets go through what the mask calls open: windows (the Apartments window over B), railings and props.
+   Bullets go through what the mask calls open: windows (the Apartments window over B) and railings.
 3. **Hitgroup from pitch:** for each band, the aim pitch is −atan2(band z − eye z, horizontal distance), using
    the target's centre. The closest band to the shooter's pitch is the hitgroup if it is within
    `damage.hitToleranceDeg` (3°). Otherwise the bullet passes over or under this pawn and the next candidate is
    tried. `aimPitch(from, to, band, tuning.damage)` gives Core the pitch to aim with.
-4. Bullets ignore smoke.
+4. **Cover (F):** the line from the shooter's eye to that band's point on the target must pass the sight's cover rule
+   (`docs/vision.md`, "Cover": boxes block unless an upright end is within 48 units of the box or the line passes
+   over it; crouched, planting and defusing pawns are low), else the box stops the bullet and no pawn further along
+   is hit.
+5. Bullets ignore smoke.
 
 The 2D engine produces `head`, `chest`, `stomach` and `leg`, never `arm` or `neck`.
 

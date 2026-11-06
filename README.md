@@ -57,7 +57,7 @@ npm run scripted       # the same round with B3's checks: logs/scripted-round.js
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
                        # headless harness (the app's Session in Node): log.jsonl, trace.json, summary.json (docs/golden.md)
 npm run fixtures:update  # regenerate the golden fixtures for the C# port after an intended behaviour change (docs/golden.md)
-npm run extract:vismask  # rebuild data/mirage-vismask.json (the sight mask) from the radar; logs/vismask-debug.png
+npm run extract:vismask  # rebuild data/mirage-vismask.json (the sight mask: walls and cover) from the radar; logs/vismask-debug*.png
 npm run vision         # the labelled vision set against the sight mask (docs/vision.md); logs/vision-labels.png
 ```
 

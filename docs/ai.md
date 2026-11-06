@@ -13,21 +13,25 @@ on the **engine** drives that pawn. In CS2 that is the native bot AI, unlocked (
   should never set it LIVE). Actions still apply to LIVE pawns (`teleport`, `set_hp`, `give`, `set_weapon`, damage…);
   a teleported LIVE pawn re-plans from where it lands.
 - **When it thinks.** At the start of `tick()`, before the movement locks, for each LIVE, alive pawn in id order. It
-  reads only what the pawn could know: its own state, its `sees` (the same lists `observe()` reported for this state),
-  the previous tick's events (sounds, the bomb), and where its own team's planted bomb is. So it has the Core's
+  reads only what the pawn could know: its own state (its defuse progress bar included), its `sees` (the same lists
+  `observe()` reported for this state), the previous tick's events (sounds, the bomb), where its own team's planted bomb
+  is, the bomb's explode tick and the round's phase as the round shows them (`observe.round`). So it has the Core's
   latency: what it sees on tick k changes its input on tick k.
 - **Weapon switches** it asks for are applied at once, with the deploy time, like a `set_weapon`.
 - **Randomness:** each draw is `new Rng(seed).fork('ai:' + id).fork('d' + n).next()` for the pawn's n-th draw
   (`src/contracts/rng.ts`). The host's seed is `Sim2DVision.seed` (the Session's seed); pawns never share a stream,
   and a snapshot only needs each pawn's draw count. No `Math.random`.
-- **Snapshot** version 4: each pawn carries `ai` (plain data) and `aiDraws`, the host `aiSeed`.
+- **Snapshot** version 4: each pawn carries `ai` (plain data) and `aiDraws`, the host `aiSeed`. F added two optional
+  fields to `ai` (`escape`, `abandoned`); a state without them reads as none.
 - **`host.aiDebug(id)`** → `{id, role, behaviour, target, targetVisible, lastKnown, dest, path, routeIndex, repaths,
-  sinceTick}` for a LIVE pawn, else null. Not in `observe()`. For the renderer: draw `path` as a polyline from the pawn,
-  a line to `target` (solid when `targetVisible`), a marker at `lastKnown`, and `behaviour` in the status panel.
+  sinceTick}` for a LIVE pawn, else null. Not in `observe()`. The app (F) shows `behaviour`, `target` and the goal
+  (`role` → `dest`) under the pawn's row in the status panel (Tab), and with the tracks overlay (T) its `path` as a faint
+  dashed magenta line from the pawn with a ring at the next waypoint (`docs/app.md`). 2D debug: the Core never reads it.
 
 ## Roles (`goal.role`, exact strings)
 
-Every role first walks `goal.route` waypoint by waypoint (each reached within `ai.arriveUnits`, 24), then:
+Every role first walks `goal.route` waypoint by waypoint (each reached within `ai.arriveUnits`, 24), then does what
+the table says; the bomb's blast (next section) comes before both.
 
 | role | behaviour |
 | --- | --- |
@@ -39,12 +43,28 @@ Every role first walks `goal.route` waypoint by waypoint (each reached within `a
 | `hunt` | Go to the last known enemy position (seen or heard, at most `ai.memorySec` old); reaching it without contact forgets it and holds there (`searching`). Nothing known: `hold`. |
 | anything else | `hold` (aiDebug reports `hold`). |
 
+### The bomb's blast (F)
+
+- **After the round.** Once `observe.round.phase` is `over` with the bomb still ticking (the Ts won by elimination, or an
+  `end_round` was forced), every LIVE pawn of either team, whatever its role and route, gets out of the blast: it runs
+  (no WALK) to the nearest point at least `bomb.radius` + `ai.blastMarginUnits` (1,750 + 64 units, 3D) from the bomb,
+  then holds there, facing the enemy's approach, also after the explosion (`escapeSpot`: a Dijkstra over the nav areas
+  from the pawn, the first area with such a point by walking distance; a pawn already clear just holds). It still
+  fights whatever it sees on the way.
+- **A defuse too late.** A LIVE CT with `retake` or `defuse` gives the defuse up and saves himself the same way when it
+  can't finish before the explosion (`canFinishDefuse`): while defusing, if its progress bar ends at or after the
+  explode tick (the engine's rule); otherwise if the time left is less than the walk to within the defuse range (the
+  nav path at the held weapon's run speed) + the defuse (`bomb.defuseKitSec` 5 s with a kit, else `bomb.defuseSec` 10 s)
+  + `ai.defuseMarginSec` (0.25 s). Once given up it stays given up for that goal. CS players do this: with 4 s left and
+  no time to reach the bomb, you run.
+
 **Facing while holding** (computed on arrival): (1) toward a known enemy position (at most `memorySec` old): the first leg
 of the nav path from the spot to it; else (2) the most likely approach: the last leg of the nav path from the enemy
 side's spawn (place `T Spawn` for a CT, `CT Spawn` for a T) to the spot, reversed; else (3) the goal route's last leg
 reversed; else the current yaw. While moving it looks where it goes, or at a heard sound.
 
-`aiDebug().behaviour` is one of `route moving holding planting guarding defusing hunting searching reacting fighting`.
+`aiDebug().behaviour` is one of `route moving holding planting guarding defusing hunting searching reacting fighting
+escaping`.
 
 ## Navigation
 
@@ -108,7 +128,10 @@ round shows it).
 | `plantSpotUnits` | 150 | plant this close to the plant spot (inside a bombsite) |
 | `defuseRangeFactor` | 0.6 | walk to this fraction of `bomb.defuseRange` before USE |
 | `guardMaxUnits` | 800 | a guard spot's largest distance from the bomb |
+| `blastMarginUnits` | 64 | leave the blast to at least `bomb.radius` + this (3D) |
+| `defuseMarginSec` | 0.25 | a defuse must be able to finish this long before the explosion |
 | `losWallTolerancePx`, `losEndpointTolerancePx`, `losLevelStepUnits`, `losLevelSlackUnits` | 1, 3, 16, 48 | sight (`docs/vision.md`) |
+| `losCoverTolerancePx`, `losCoverNearUnits`, `losCoverHeightUnits` | 1, 48, 72 | the cover rule (`docs/vision.md`, "Cover") |
 
 `reactionSec` and `aimErrorDeg` are the CS2 probe's P5 targets (`docs/cs2-adapter.md`); the rest are 2D choices.
 
@@ -124,6 +147,12 @@ round shows it).
 | Hearing | facing west on B, an enemy behind the Apartments wall (1,097 units, never in sight) fires once: within 0.5 s he faces within 20° of him, `lastKnown` set |
 | Core inputs | a LIVE pawn's observes are identical with and without junk Core inputs; back to REPLAY they drive it |
 | Determinism | two runs of a 4-pawn LIVE fight give the same digest, another seed another fight; snapshot mid-fight → identical continuation in the same and in a fresh host |
+| Escape spot (F) | from the B plant: (−1613, −1563), 1,912 units from the bomb, a 2,081-unit walk (to CT spawn); a pawn already clear stays |
+| After a T elimination win, bomb ticking (F) | LIVE barely (`guard_bomb`) never guards: escapes, holds 1,902 units out, survives the explosion on 100 HP, doesn't move after it |
+| Forced `end_round`, bomb ticking (F) | a LIVE sp4rtan with `defuse` leaves instead: no `defuse_start`, alive on 100 HP |
+| Defuse too late (F) | LIVE sp4rtan (kit, AK) ~700 units from the bomb with 6 s left: no defuse start, escapes, survives (T `bomb_exploded`); the same with 12 s left: walks there and defuses |
+| Defuse in progress that can't finish (F) | zwomp (no kit) defusing with 9.5 s left goes LIVE: `defuse_stop` at once, runs, 1,857 units out at the blast, 100 HP |
+| In the round (`tests/scenarios.test.ts`, F) | `flank-sp4rtan`: donk and barely, LIVE after the T win, survive the explosion (donk 1,826 units out, barely 1,564 units out on 74 HP; he went LIVE 5.7 s before it) instead of dying in it |
 
 ## What B4 needs to know
 
@@ -138,6 +167,7 @@ round shows it).
   a CT needs `retake`/`defuse` to go to the bomb (it hears the beeps from anywhere); `guard_bomb` before the plant just
   holds.
 - **Expect** it to stop and fight whatever it sees (enemies only) and to turn toward enemy shots and footsteps within
-  1,500 units. It walks near known enemies, so it can be quiet. It doesn't throw grenades, jump or crouch.
+  1,500 units. It walks near known enemies, so it can be quiet. It doesn't throw grenades, jump or crouch. After the
+  round, and when a defuse is too late, it leaves the bomb's blast whatever its goal (above).
 - **Timing:** the set_mode applies in `apply()`; the AI first moves the pawn in the following `tick()`.
 - **Status:** `aiDebug(id)` is the 2D host's; CS2 has its own bot state, so the Core must not depend on it.

@@ -186,7 +186,7 @@ CTs other than sp4rtan (incredibad, lokier, snakelore, zwomp) have none.
 
 The whole round with **no human**: `ReplayCore` (B1 + puppets + B3's scripted events) drives all ten pawns in `Sim2DHost` (`act = core.step(observe)`, `host.apply(act)`, `host.tick()`; since E1 the driver is the headless harness, `runHarness` in `tools/harness.ts`, which runs the app's `Session`; `docs/golden.md`). Each pawn is measured up to its recorded death tick (or last sample), where B3 also kills it, and is no longer driven after its track plus the hold. Errors are 2D, against the **raw** recording at every 10 Hz sample, with the pawn position interpolated between the ticks around the sample time (positions taken after each tick's actions, so the tick-0 setup counts). "ticks > 24 behind" is the share of measured ticks more than 24 units from the raw track. `npm run ghost` writes `logs/ghost-round.jsonl` and `logs/ghost-trace.json` (`toReplayTrace`, for the replay page; snaps appear as `info` events).
 
-**2D model values; compare against the CS2 probe.** 4,517 ticks, digest `e6c2be70` (with B3, C3 and C4's sight mask; `0fb55e23` before C4: real `sees` and grenades clamped by the mask change the Observe stream, not the positions, the snaps or the Core's acts).
+**2D model values; compare against the CS2 probe.** 4,517 ticks, digest `e9a228d9` (with B3, C3, C4's sight mask and F's cover; `e6c2be70` before F, `0fb55e23` before C4: real `sees`, grenades clamped by the mask and cover change the Observe stream, not the positions, the snaps or the Core's acts).
 
 | player | team | observed n | RMS | max (at t) | est./inf. n | RMS | max (at t) | inferred RMS | radius (min–max) | snaps (t) | ticks > 24 behind |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
@@ -327,7 +327,7 @@ For each `utility` entry (throw tick U): `set_weapon <grenade>` at U − latency
 
 ### Results (golden master, `npm run scripted`, `tests/golden-round.test.ts`)
 
-4,517 ticks, digest `e6c2be70` (with C4's sight mask; `0fb55e23` before C4, `7e3523a6` before C3), identical on a second run and on replay. C4 changed only the Observe stream: `sees` is real (2,063 of the 4,517 observes differ in it), and 10 grenade pops moved or changed tick because throws now stop at the sight mask's walls instead of nav holes; every Core act, position, kill, HP change, shot tick, the plant and the defuse are byte-identical. The driver passes the round's score (CT 11 – T 15) and clock (98.25 s) to `Sim2DHost`, like the Session.
+4,517 ticks, digest `e9a228d9` (with C4's sight mask and F's cover; `e6c2be70` before F, `0fb55e23` before C4, `7e3523a6` before C3), identical on a second run and on replay. F's cover changes only `sees` (123 lines; `docs/golden.md`, History). C4 changed only the Observe stream: `sees` is real (2,063 of the 4,517 observes differ in it), and 10 grenade pops moved or changed tick because throws now stop at the sight mask's walls instead of nav holes; every Core act, position, kill, HP change, shot tick, the plant and the defuse are byte-identical. The driver passes the round's score (CT 11 – T 15) and clock (98.25 s) to `Sim2DHost`, like the Session.
 
 | t (s) | killer → victim | weapon | HS | recorded tick | `death` event | Δ |
 | ---: | --- | --- | --- | ---: | ---: | ---: |
@@ -429,7 +429,7 @@ The C4 AI faces a holding pawn toward the enemy's approach from their spawn; the
 
 ### The human's pawn
 
-`status` reports the human's living pawn as **`HUMAN`** (`MODES` gained it; status only, `set_mode` still takes `REPLAY | LIVE`; `trigger` null), DEAD once dead. With `human === null` it never appears, so the golden master is byte-identical (`e6c2be70`). The renderer's badge reads it ("YOU").
+`status` reports the human's living pawn as **`HUMAN`** (`MODES` gained it; status only, `set_mode` still takes `REPLAY | LIVE`; `trigger` null), DEAD once dead. With `human === null` it never appears, so the golden master was byte-identical (`e6c2be70` then; `e9a228d9` since F's cover). The renderer's badge reads it ("YOU").
 
 ### Tunables (`data/tuning.json` → `replay`, B4)
 
@@ -449,15 +449,16 @@ The C4 AI faces a holding pawn toward the enemy's approach from their spawn; the
 
 Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aimAt`, `fire`, `holdStill`, `throw`, setup `teleport`; `npm run harness -- --scenario <file>` prints the timeline). Seed 1, deterministic. Shared invariant: a puppet nothing touched replays exactly; on every tick it is REPLAY (and not body-blocked) it is within 0.01 units of the no-human golden master's position (measured: 0.0005 at most, in every scenario). Where a LIVE fight's winner depends on the toy AI, the tests assert the triggers and print the winner. The recorded opening (snarlbot's kills of incredibad and snakelore, Lokier's of eradicate, sp4rtan's of snarlbot) is the same in all but `cart-dies` and is left out.
 
-**1. No-op guard.** Golden no-human round: no switch, no `set_mode`, no `HUMAN`. `cart-follows-recording`: exactly one switch, genuine. Lokier sees cart at 10.9 s down the corridor from Truck, but cart is on course (no divergence). The encounter starts when he sees cart at the window at 17.63 s (+0.2 s); cart's real AK headshot kills him at 18.50 s, before the hit due at 18.63 s, so cart keeps 100 HP (E1's re-check: with C4's sight mask cart's bullets do reach Lokier through the window, 0.3 s before the recorded kill, because 2D has no spread). Everything then replays until cart's recorded spray at the defusing sp4rtan hits him for real (the B-site boxes that stopped it in the recording are open in the radar mask):
+**1. No-op guard.** Golden no-human round: no switch, no `set_mode`, no `HUMAN`. `cart-follows-recording`: **no switch** (F; before F exactly one). Lokier sees cart at 10.9 s down the corridor from Truck, but cart is on course (no divergence). The encounter starts when he sees cart at the window at 17.63 s (+0.2 s); cart's real AK headshot kills him at 18.50 s, before the hit due at 18.63 s, so cart keeps 100 HP (E1's re-check: with C4's sight mask cart's bullets do reach Lokier through the Apartments window, 0.3 s before the recorded kill, because 2D has no spread). Everything then replays to the end. Cart's recorded spray at the defusing sp4rtan (65.9–66.9 s) hit nothing on the tape; until F the follow script aimed it at sp4rtan with B3's aim, and with no spread and no box on the line (`docs/vision.md`, "Cart's spray") it hit him for real at 65.91 s (sp4rtan LIVE, T elimination 11 – 16, the bomb killing cart at 67.52 s). The follow script now looks where cart's recorded view does on the shots the tape shows missing (`tools/follow-aim.ts`, `docs/golden.md`), 17–22° off sp4rtan:
 
 | t (s) | event |
 | ---: | --- |
 | 17.63 | encounter: cart in sight at the spot (+0.2 s), hit due 18.63 s |
 | 18.50 | cart kills lokier (AK, HS); encounter over |
 | 27.52, 44.20, 50.34, 58.84, 61.80 | plant, barely → zwomp, sp4rtan → donk, sp4rtan → barely, defuse start: as recorded |
-| 65.91 | **sp4rtan LIVE: hit by cart (27 hp, ak47)** → `defuse` |
-| 66.22 | cart kills sp4rtan; round_end T elimination, 11 – 16 (the bomb explodes at 67.52 s and kills cart) |
+| 65.9–66.9 | cart's spray at the defuser: 11 shots, no hit (as the tape) |
+| 66.80 | sp4rtan defuses: round_end CT bomb_defused, 12 – 15, 0.72 s on the bomb (the tape: 0.72 s) |
+| 69.41 | sp4rtan's post-round shot (B3's single implied tap) hits cart for 27; he ends on 73 HP (the tape: killed; the kill shot's timing is masked by cart's own spray) |
 
 **2. `lokier-late`**: cart follows to 16.6 s, holds back in the Apartments, peeks at 19.5 s, waits for the hit, fires; then walks his recorded way to Shop and follows again.
 
@@ -467,8 +468,8 @@ Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aim
 | 21.14 | scripted hit 73 / 7 (cart 27 HP / 93 armor) |
 | 21.42 | cart kills lokier (AK, HS, real), 2.63 s after the recorded kill |
 | 27.52 – 61.80 | plant, Zwomp, donk, barely kills, defuse start: on the golden master's ticks |
-| 65.91 | **sp4rtan LIVE: hit by cart** (as in the follow run) |
-| 66.19 | sp4rtan kills cart (27 HP); 67.52 the bomb explodes: T bomb_exploded, 11 – 16 |
+| 66.80 | sp4rtan defuses: CT bomb_defused, 12 – 15 (no switch: cart's spray misses as in the follow run; F. Before: sp4rtan LIVE at 65.91 s, hit by cart, killed cart at 66.19 s and died in the explosion, T bomb_exploded 11 – 16) |
+| 69.41 | sp4rtan kills cart (27 HP) after the round, as recorded |
 
 **3. `never-peeks`** (cart stands in Back Alley all round):
 
@@ -479,8 +480,9 @@ Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aim
 | 22.17 | barely kills lokier (real; donk, dwelling in the Apartments, never saw him) |
 | 28.41 | barely plants (AI) |
 | 40.06 | **sp4rtan LIVE: sees cart (the human)** on his flank → `defuse`; 40.58 sp4rtan kills cart |
-| 43.33, 49.97 | barely kills zwomp, sp4rtan kills donk (real fights) |
+| 43.41, 49.97 | barely kills zwomp, sp4rtan kills donk (real fights; 43.33 s before F's cover) |
 | 59.61 | barely kills sp4rtan: round_end T elimination, 11 – 16 |
+| 59.6 – 68.4 | the bomb still ticks: barely (LIVE) leaves its blast and survives it (F; before, the explosion at 68.41 s killed him) |
 
 **4. `mid-zwomp`** (cart follows to 29.7 s, then is teleported into Middle):
 
@@ -497,9 +499,9 @@ Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aim
 | ---: | --- |
 | 44.61 | **sp4rtan LIVE: sees cart (the human)**; 44.63 cart kills him (HS): round_end T elimination, 11 – 16 (no CT left) |
 | 49.83 – 58.83 | sp4rtan's shots and damage on donk and barely dropped (`sp4rtan is dead`) |
-| 53.34 | **donk LIVE: outlived recording (+3.0 s)** → `guard_bomb` |
-| 61.84 | **barely LIVE: outlived recording (+3.0 s)** → `guard_bomb` |
-| 67.52 | the bomb explodes and kills both guards (the 2D AI doesn't leave the blast) |
+| 53.34 | **donk LIVE: outlived recording (+3.0 s)** → `guard_bomb`; the round is over, so he leaves the blast at once (F) |
+| 61.84 | **barely LIVE: outlived recording (+3.0 s)** → `guard_bomb`, leaves the blast too |
+| 67.52 | the bomb explodes: donk is 1,826 units away (100 HP), barely 1,564 (74 HP); both live. Before F the 2D AI stayed by the bomb and both died |
 
 **6. `cart-dies`** (cart teleported to the window at 8 s, 9.5 s early, never fires):
 
@@ -513,8 +515,9 @@ Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aim
 | 11.30 | donk kills lokier; **zwomp LIVE: heard donk fire 1387 u away** |
 | 15.75 | **eradicate LIVE: outlived recording (+3.0 s)** (Lokier's 12.75 s kill was dropped) |
 | 17.84, 27.52 | sp4rtan kills snarlbot, barely plants: as recorded (untouched puppets) |
-| 30.59 | **barely LIVE: sees zwomp (LIVE)**; 30.91 kills him |
+| 30.81 | **barely LIVE: sees zwomp (LIVE)**; 31.09 kills him (30.59 / 30.91 before F's cover: a box hid zwomp a little longer) |
 | 52.84 | **sp4rtan LIVE: sees donk (LIVE)**; 53.19 donk kills him: T elimination, 11 – 16 |
+| 67.52 | the bomb explodes; barely, donk and eradicate (LIVE) have left its blast and live (F; before, all three died) |
 
 **7. `block-barely`**: cart stands in barely's path in the Apartments corridor, looking at him. Teammates aren't solid (`collision.solidTeammates` false, `mp_solid_teammates 0`): barely walks through, never blocked, never off course; no switch to 21.5 s. **7b. `block-sp4rtan`**: cart (teleported at 57 s) stands in sp4rtan's way to the bomb. The pair is recorded in sight on B from 58.6 s (no sighting trigger); sp4rtan is held in contact from 58.9 s and goes **LIVE: blocked by cart, held 110 u off course, seen by cart** at 59.16 s, then kills cart (59.70 s) and starts the defuse LIVE (61.09 s).
 
@@ -523,5 +526,6 @@ Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aim
 ### Known limits
 
 - **2D sight**: the sight mask's window over B is the whole Apartments wall, and Truck sees down the whole corridor (Lokier sees cart at 7–11 s in several runs), so sighting-driven divergence is wider in 2D than it would be in CS2. Expected spans are per pair and time, not position.
-- **Toy AI**: LIVE fights are the C4 bot's; a 2D LIVE Lokier at 1,750 u rarely lands a hit, and Ts guarding the bomb die in its blast.
+- **Toy AI**: LIVE fights are the C4 bot's; a 2D LIVE Lokier at 1,750 u rarely lands a hit. Since F it leaves the bomb's blast after the round and gives up a defuse that can't finish (`docs/ai.md`).
+- **No spread**: a scripted human's recorded shots hit wherever they are aimed; the follow script aims the shots the tape shows missing where cart's recorded view was (`tools/follow-aim.ts`). The human-bot's `followRecording` does the same.
 - **Encounters** exist only for the default human (cart); with another human pawn there are none.
