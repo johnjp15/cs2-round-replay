@@ -49,7 +49,7 @@ import {
   type WalkQuery,
 } from '../contracts/index';
 import { CheckpointStore, EventSchedule, ReplayCore, RoundModel, autoCheckpointId, checkpointInterval, tickOf, type Checkpoint, type RoundClock } from '../core/index';
-import { HullWalkQuery, MapGeometry, NavMesh, NavWalkQuery, Sim2DHost, VisMask, combineMeshes, decodeGeometry, navOptionsFromTuning, visOptionsFromTuning, type HostNote, type PawnState, type RosterEntry } from '../sim2d/index';
+import { HullWalkQuery, MapGeometry, NavMesh, NavWalkQuery, Sim2DHost, nav3dFor, VisMask, combineMeshes, decodeGeometry, navOptionsFromTuning, visOptionsFromTuning, type HostNote, type PawnState, type RosterEntry } from '../sim2d/index';
 import { weaponForSlot, type WeaponSlot } from './input';
 
 /** The pawn a human plays unless told otherwise. */
@@ -92,7 +92,9 @@ export function parseSessionData(roundJson: unknown, navJson: unknown, tuningJso
   const recorded = parseRound(roundJson);
   if (world3d === null) return { round: recorded, nav, tuning, vision, geometry: null, recorded };
   const geometry = new MapGeometry(combineMeshes(decodeGeometry(world3d.geometry), decodeGeometry(world3d.clips)));
-  return { round: applyTracks3d(recorded, parseTracks3d(world3d.tracks)), nav, tuning, vision, geometry, recorded };
+  // Paths (the LIVE AI, G1's pathLength) only through portals a hull can cross on the CS2 mesh.
+  const nav3d = nav.with3d(nav3dFor(geometry, tuning.movement.stepSize));
+  return { round: applyTracks3d(recorded, parseTracks3d(world3d.tracks)), nav: nav3d, tuning, vision, geometry, recorded };
 }
 
 /** What a Core is built from. */

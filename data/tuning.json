@@ -83,7 +83,9 @@
     "rejoinLeadSec": 0.25,
     "rejoinHorizonSec": 15,
     "rejoinLateSec": 1,
-    "rejoinRetrySec": 0.5
+    "rejoinRetrySec": 0.5,
+    "jumpWindowSec": 0.5,
+    "jumpReachUnits": 24
   },
   "weapons": {
     "ak47": { "damage": 36, "rpm": 600, "headshotMult": 4, "armorPen": 0.775, "rangeModifier": 0.98, "clip": 30, "reserve": 90, "reloadSec": 2.5, "deploySec": 1, "automatic": true },

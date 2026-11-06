@@ -278,6 +278,8 @@ export class PuppetTrack {
    * stretch never costs tracking.
    */
   private readonly plan: readonly (Button | null)[];
+  /** G3: the samples a jump takes off from (`TrackSample.jump`, set by the snapped 3D tracks), raw indices in order. */
+  readonly takeoffs: readonly number[];
 
   /**
    * @param runSpeeds run speed (units/s) of the recorded weapon at each sample, parallel to `raw`.
@@ -349,6 +351,25 @@ export class PuppetTrack {
       closeTick: e.tick1 + windowTicks,
     }));
     this.plan = buttonPlan(this, tuning);
+    const takeoffs: number[] = [];
+    raw.forEach((q, i) => {
+      if (q.jump !== undefined && i + 1 < raw.length) takeoffs.push(i);
+    });
+    this.takeoffs = takeoffs;
+  }
+
+  /**
+   * G3: the take-off (raw index) whose jump window holds `tick` (from `windowTicks` before its tick to `windowTicks`
+   * after the landing sample's) and that isn't in `used`; −1 if none.
+   */
+  takeoffAt(tick: number, windowTicks: number, used: readonly number[]): number {
+    for (const i of this.takeoffs) {
+      if (used.includes(i)) continue;
+      const a = (this.raw[i] as TrackSample).tick;
+      const b = (this.raw[i + 1] as TrackSample).tick;
+      if (tick >= a - windowTicks && tick <= b + windowTicks) return i;
+    }
+    return -1;
   }
 
   /** Build from the round model: the player's 10 Hz samples, recorded weapons and recorded yaw. */
@@ -518,6 +539,14 @@ function interpolate(raw: readonly TrackSample[], ref: readonly Vec3[] | null, t
 // PuppetController
 // ---------------------------------------------------------------------------
 
+/**
+ * G3: a puppet jumps running when its run is within this cosine (about 25°) of the jump's bearing; else from nearly
+ * standing (at most this speed, u/s) within this of the take-off spot (units).
+ */
+const JUMP_ALIGN_COS = 0.9;
+const JUMP_STANDING_SPEED = 60;
+const JUMP_STOP_UNITS = 6;
+
 /** Per-pawn controller state (plain data; ReplayCore snapshots it). */
 export interface PuppetState {
   readonly id: PlayerId;
@@ -530,6 +559,10 @@ export interface PuppetState {
   /** Teleport points already used for a snap (indices into `PuppetTrack.teleportPoints`). One snap per point. */
   usedPoints: number[];
   lastSnapTick: number | null;
+  /** G3: take-offs already jumped (raw indices into the track), and the one in the air: steer at its landing until this tick. */
+  usedJumps: number[];
+  jumpFrom: number | null;
+  jumpUntil: number | null;
 }
 
 export interface PuppetStep {
@@ -589,7 +622,7 @@ export class PuppetController {
   /** Replace the state (snapshot restore). Copies it. */
   restore(s: PuppetState): void {
     if (s.id !== this.track.id) throw new Error(`PuppetController.restore: state for ${s.id}, controller for ${this.track.id}`);
-    this.st = { id: s.id, yaw: s.yaw, behind: s.behind, snaps: s.snaps, usedPoints: [...s.usedPoints], lastSnapTick: s.lastSnapTick };
+    this.st = { id: s.id, yaw: s.yaw, behind: s.behind, snaps: s.snaps, usedPoints: [...s.usedPoints], lastSnapTick: s.lastSnapTick, usedJumps: [...s.usedJumps], jumpFrom: s.jumpFrom, jumpUntil: s.jumpUntil };
   }
 
   /** Input that holds still (no stick, no buttons) at the current yaw. */
@@ -646,9 +679,54 @@ export class PuppetController {
     // The track's button plan, unless lagging (then run: never WALK / DUCK while behind).
     const planned = tr.plannedButton(tick);
     const buttons: Button[] = planned === null || behind > r.driftNudgeUnits ? [] : [planned];
-    const steer = this.walk.isWalkableLine(pos, ahead) ? ahead : this.fallbackSteer(pos, t, ahead);
+    let steer = this.walk.isWalkableLine(pos, ahead) ? ahead : this.fallbackSteer(pos, t, ahead);
+    // G3: a jump on the track. In its window, on the ground within jumpReachUnits of the take-off spot: JUMP (and DUCK
+    // for a crouch jump, held while in the air), then steer at the landing sample until on the ground near it (or the
+    // window is over).
+    const windowTicks = Math.round(r.jumpWindowSec * TICK_RATE);
+    const k = s.jumpFrom === null ? tr.takeoffAt(tick, windowTicks, s.usedJumps) : -1;
+    const off = k >= 0 ? (tr.ref[k] as Vec3) : null;
+    const land = k >= 0 ? (tr.ref[k + 1] as Vec3) : null;
+    // Lined up (running within JUMP_ALIGN_COS of the take-off → landing bearing): jump within jumpReachUnits of the
+    // take-off. Otherwise come to the take-off and slow down there (the stick eases off near it), and jump from
+    // (nearly) standing, within JUMP_STOP_UNITS: the snapping checked the jump from standing.
+    let jumpNow = false;
+    let easeTo = ahead;
+    if (off !== null && land !== null && p.onGround && dist2(pos, off) <= r.jumpReachUnits) {
+      const dx = land.x - off.x;
+      const dy = land.y - off.y;
+      const sp = Math.hypot(p.vel.x, p.vel.y);
+      const dl = Math.hypot(dx, dy);
+      const aligned = dl === 0 || (sp > 0 && (p.vel.x * dx + p.vel.y * dy) / (sp * dl) >= JUMP_ALIGN_COS);
+      jumpNow = aligned || (dist2(pos, off) <= JUMP_STOP_UNITS && sp <= JUMP_STANDING_SPEED);
+      if (!jumpNow) {
+        steer = off;
+        easeTo = off;
+      }
+    }
+    if (jumpNow) {
+      s.usedJumps.push(k);
+      s.jumpFrom = k;
+      s.jumpUntil = (tr.raw[k + 1] as TrackSample).tick + windowTicks;
+      buttons.length = 0;
+      buttons.push('JUMP');
+    }
+    if (s.jumpFrom !== null) {
+      const from = s.jumpFrom;
+      if (tick > (s.jumpUntil as number) || (p.onGround && !buttons.includes('JUMP') && dist2(pos, tr.ref[from + 1] as Vec3) <= r.jumpReachUnits)) {
+        s.jumpFrom = null;
+        s.jumpUntil = null;
+      } else {
+        steer = tr.ref[from + 1] as Vec3;
+        if ((tr.raw[from] as TrackSample).jump === 'crouch' && !buttons.includes('DUCK')) {
+          const w = buttons.indexOf('WALK');
+          if (w >= 0) buttons.splice(w, 1);
+          buttons.push('DUCK');
+        }
+      }
+    }
     const cap = maxSpeedOf(p.weapon, buttons, this.movement);
-    const scale = cap > 0 ? Math.min(1, dist2(pos, ahead) / (cap * r.lookaheadSec)) : 0;
+    const scale = cap > 0 ? Math.min(1, dist2(pos, easeTo) / (cap * r.lookaheadSec)) : 0;
     const stick = stickToward(steer.x - pos.x, steer.y - pos.y, yaw, scale);
     return { input: { id: p.id, forward: stick.forward, side: stick.side, yaw, pitch: 0, buttons }, actions };
   }
@@ -681,5 +759,5 @@ export class PuppetController {
 }
 
 function initialPuppetState(id: PlayerId, yaw: number | null): PuppetState {
-  return { id, yaw, behind: 0, snaps: 0, usedPoints: [], lastSnapTick: null };
+  return { id, yaw, behind: 0, snaps: 0, usedPoints: [], lastSnapTick: null, usedJumps: [], jumpFrom: null, jumpUntil: null };
 }

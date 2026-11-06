@@ -10,7 +10,7 @@
  */
 import { roundNumber, type Vec3, type WalkQuery } from '../contracts/index';
 import { STANDING_HULL, TRACE_SKIN, type MapGeometry } from './geometry';
-import { NavMesh } from './nav';
+import { NavMesh, areaZ, type Nav3d, type NavArea, type NavPortal } from './nav';
 
 /** hullLineClear: a sweep that stops this close to its end (units) reaches it (the trace's skin is 1/32). */
 const LINE_REACH = 0.125;
@@ -68,4 +68,109 @@ export class HullWalkQuery implements WalkQuery {
   pathLength(a: Vec3, b: Vec3): number | null {
     return this.navQuery.pathLength(a, b);
   }
+}
+
+/** nav3dFor: crossing points along a portal (every this many units), and how far into each area the hull starts and ends. */
+const PORTAL_STEP = 8;
+const PORTAL_DEPTHS: readonly number[] = [20, 32];
+
+/**
+ * G3: the nav's 3D hooks (`NavMesh.with3d`). `crossing` keeps level portals as they are (the movement slides along
+ * CS2's walls and the AI replans when stuck) and tests each drop portal (`to` lower by more than a step at its ends
+ * and middle) every PORTAL_STEP units along it: a standing hull, free at a CS2 floor a little inside `from`, must
+ * walk off toward a point a little inside `to` in a straight line (`hullLineClear`, level at the start's height). The
+ * portal becomes the longest run of such points (its midpoint is where paths cross), or is dropped when there are
+ * none. The 2020 nav knows nothing of CS2's walls at its ledges: B Apartments' window over B site, for one, is a wall
+ * with a sill 20 units up (a jump) where the 2020 nav drops onto an awning; the Balcony's open edge to the west is
+ * the way down. `line` is `hullLineClear` (path smoothing and `segmentWalkable`).
+ */
+export function nav3dFor(g: MapGeometry, step: number): Nav3d {
+  return {
+    line: (a, b) => hullLineClear(g, a, b, step),
+    crossing: (from, to, p) => portalCrossing(g, step, from, to, p),
+  };
+}
+
+function portalCrossing(g: MapGeometry, step: number, from: NavArea, to: NavArea, p: NavPortal): NavPortal | null {
+  // Level portals keep the 2D nav's meaning (the movement slides along CS2's walls and the AI replans when stuck);
+  // only drops (to lower by more than a step everywhere) are where the two maps disagree in ways the AI can't recover
+  // from: walking off a ledge that CS2 walls in, or toward a drop that isn't there.
+  if (!isDrop(from, to, p, step)) return p;
+  const dx = p.bx - p.ax;
+  const dy = p.by - p.ay;
+  const len = Math.hypot(dx, dy);
+  // Direction from `from` into `to`: across the portal segment, or centre to centre for an overlap (a point portal).
+  let nx = len > 0 ? -dy / len : (to.x1 + to.x2 - from.x1 - from.x2) / 2;
+  let ny = len > 0 ? dx / len : (to.y1 + to.y2 - from.y1 - from.y2) / 2;
+  const cx = (from.x1 + from.x2) / 2;
+  const cy = (from.y1 + from.y2) / 2;
+  if (len > 0 && nx * (p.mx - cx) + ny * (p.my - cy) < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const nl = Math.hypot(nx, ny);
+  if (nl === 0) return p;
+  nx /= nl;
+  ny /= nl;
+  const n = Math.max(1, Math.round(len / PORTAL_STEP));
+  let bestLo = -1;
+  let bestHi = -1;
+  let runLo = -1;
+  for (let k = 0; k <= n; k++) {
+    const f = len > 0 ? k / n : 0.5;
+    const px = p.ax + dx * f;
+    const py = p.ay + dy * f;
+    let clear = false;
+    for (const d of PORTAL_DEPTHS) {
+      const ax = clampTo(px - nx * d, from.x1, from.x2);
+      const ay = clampTo(py - ny * d, from.y1, from.y2);
+      const bx = clampTo(px + nx * d, to.x1, to.x2);
+      const by = clampTo(py + ny * d, to.y1, to.y2);
+      const a = { x: ax, y: ay, z: floorNear(g, ax, ay, areaZ(from, ax, ay)) };
+      const b = { x: bx, y: by, z: floorNear(g, bx, by, areaZ(to, bx, by)) };
+      // Only the start must be free: the sweep runs at the higher end's height, so a 2020 area with no CS2 floor at
+      // its height (b inside something) fails the sweep or, for a drop, is fallen past.
+      if (g.hullBlocked(a.x, a.y, a.z, STANDING_HULL)) continue;
+      if (hullLineClear(g, a, b, step)) {
+        clear = true;
+        break;
+      }
+    }
+    if (clear) {
+      if (runLo < 0) runLo = k;
+      if (bestLo < 0 || k - runLo > bestHi - bestLo) {
+        bestLo = runLo;
+        bestHi = k;
+      }
+    } else {
+      runLo = -1;
+    }
+    if (len === 0) break;
+  }
+  if (bestLo < 0) return null;
+  if (len === 0) return p;
+  const ax = p.ax + (dx * bestLo) / n;
+  const ay = p.ay + (dy * bestLo) / n;
+  const bx = p.ax + (dx * bestHi) / n;
+  const by = p.ay + (dy * bestHi) / n;
+  return { to: p.to, ax, ay, bx, by, mx: (ax + bx) / 2, my: (ay + by) / 2 };
+}
+
+function isDrop(from: NavArea, to: NavArea, p: NavPortal, step: number): boolean {
+  for (const [x, y] of [[p.ax, p.ay], [p.mx, p.my], [p.bx, p.by]] as const) {
+    const za = areaZ(from, clampTo(x, from.x1, from.x2), clampTo(y, from.y1, from.y2));
+    const zb = areaZ(to, clampTo(x, to.x1, to.x2), clampTo(y, to.y1, to.y2));
+    if (za - zb <= step) return false;
+  }
+  return true;
+}
+
+/** The CS2 floor under the hull near a 2020 nav height (which is off by up to ~27 on stairs), a skin above it. */
+function floorNear(g: MapGeometry, x: number, y: number, z: number): number {
+  const f = g.floorBelow(x, y, z + 32, STANDING_HULL.halfWidth, 0, 64);
+  return (f === null ? z : f.z) + TRACE_SKIN;
+}
+
+function clampTo(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
 }

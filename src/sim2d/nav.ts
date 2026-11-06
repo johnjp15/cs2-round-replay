@@ -52,6 +52,18 @@ export interface NavPortal {
   my: number;
 }
 
+/**
+ * G3: how 3D movement changes the nav (implemented in walk-query.ts, `nav3dFor`): `crossing` narrows a portal to where a
+ * standing hull can cross it on the CS2 mesh, or drops it (null); `line` is a hull's walkable straight line.
+ */
+export interface Nav3d {
+  crossing(from: NavArea, to: NavArea, p: NavPortal): NavPortal | null;
+  line(a: Vec3, b: Vec3): boolean;
+}
+
+/** G3 `gapDrops`: how far across a gap (units) a drop portal the 2020 nav lacks may reach. */
+const GAP_DROP_REACH = 64;
+
 export class NavError extends Error {
   constructor(message: string) {
     super(message);
@@ -77,7 +89,14 @@ export class NavMesh {
   /** Areas grown by losMargin (line-of-sight space). */
   private readonly losGrid: RectGrid;
 
-  constructor(data: NavData, options: NavOptions) {
+  /** G3: the 3D movement's hooks (`nav3dFor` in walk-query.ts), or null for the plain 2D mesh. */
+  readonly nav3d: Nav3d | null;
+
+  /**
+   * @param nav3d G3: with 3D movement, portals narrowed to where a hull crosses them on the CS2 mesh (or dropped), and
+   *   a hull line test for path smoothing and the AI's walkable lines; null = the 2D mesh as built.
+   */
+  constructor(data: NavData, options: NavOptions, nav3d: Nav3d | null = null) {
     const areas = [...data.areas].sort((a, b) => a.id - b.id);
     areas.forEach((a, i) => {
       if (a.id !== i) throw new NavError(`area ids must be 0..n-1, found ${a.id} at position ${i}`);
@@ -90,7 +109,61 @@ export class NavMesh {
     this.areaGrid = new RectGrid(areas, GRID_CELL);
     this.walkGrid = new RectGrid(areas.map((a) => grow(a, options.edgeEpsilon / 2)), GRID_CELL);
     this.losGrid = new RectGrid(areas.map((a) => grow(a, options.losMargin)), GRID_CELL);
-    this.portals = areas.map((a) => this.buildPortals(a));
+    this.nav3d = nav3d;
+    this.portals = areas.map((a) => {
+      const built = this.buildPortals(a);
+      if (nav3d === null) return built;
+      const out: NavPortal[] = [];
+      for (const p of built) {
+        const q = nav3d.crossing(a, areas[p.to] as NavArea, p);
+        if (q !== null) out.push(q);
+      }
+      for (const p of this.gapDrops(a, built)) {
+        const q = nav3d.crossing(a, areas[p.to] as NavArea, p);
+        if (q !== null) out.push(q);
+      }
+      return out;
+    });
+  }
+
+  /**
+   * G3: drop portals the 2020 nav doesn't have: to an area within GAP_DROP_REACH of a's side across a gap (a ledge's
+   * lip, a railing's thin 2020 areas between), lower by more than a step and at most dropHeight all along, overlapping
+   * the side by more than edgeEpsilon. The portal is a's side where they overlap; with 3D hooks `crossing` keeps only
+   * where a hull walks off there on the CS2 mesh (B Apartments' Balcony: the drop to B site at its west end).
+   */
+  private gapDrops(a: NavArea, built: readonly NavPortal[]): NavPortal[] {
+    const eps = this.options.edgeEpsilon;
+    const r = GAP_DROP_REACH;
+    const out: NavPortal[] = [];
+    for (const j of this.areaGrid.query(a.x1 - r, a.y1 - r, a.x2 + r, a.y2 + r)) {
+      if (j === a.id || built.some((p) => p.to === j)) continue;
+      const b = this.areas[j] as NavArea;
+      const ox1 = Math.max(a.x1, b.x1);
+      const ox2 = Math.min(a.x2, b.x2);
+      const oy1 = Math.max(a.y1, b.y1);
+      const oy2 = Math.min(a.y2, b.y2);
+      let seg: [number, number, number, number] | null = null;
+      if (ox2 - ox1 > eps && b.y2 < a.y1 - eps && a.y1 - b.y2 <= r) seg = [ox1, a.y1, ox2, a.y1];
+      else if (ox2 - ox1 > eps && b.y1 > a.y2 + eps && b.y1 - a.y2 <= r) seg = [ox1, a.y2, ox2, a.y2];
+      else if (oy2 - oy1 > eps && b.x2 < a.x1 - eps && a.x1 - b.x2 <= r) seg = [a.x1, oy1, a.x1, oy2];
+      else if (oy2 - oy1 > eps && b.x1 > a.x2 + eps && b.x1 - a.x2 <= r) seg = [a.x2, oy1, a.x2, oy2];
+      if (seg === null) continue;
+      let ok = true;
+      for (const f of [0, 0.5, 1]) {
+        const x = seg[0] + (seg[2] - seg[0]) * f;
+        const y = seg[1] + (seg[3] - seg[1]) * f;
+        const drop = areaZ(a, x, y) - areaZ(b, clamp(x, b.x1, b.x2), clamp(y, b.y1, b.y2));
+        if (!(drop > this.options.stepHeight && drop <= this.options.dropHeight)) ok = false;
+      }
+      if (ok) out.push({ to: b.id, ax: seg[0], ay: seg[1], bx: seg[2], by: seg[3], mx: (seg[0] + seg[2]) / 2, my: (seg[1] + seg[3]) / 2 });
+    }
+    return out;
+  }
+
+  /** The same mesh with 3D hooks (G3). */
+  with3d(nav3d: Nav3d): NavMesh {
+    return new NavMesh({ places: [...this.places], areas: [...this.areas] }, this.options, nav3d);
   }
 
   /** Build from parsed data/mirage-nav.json (validated). */
@@ -186,9 +259,17 @@ export class NavMesh {
 
   // ---- segment queries -----------------------------------------------------------------------
 
-  /** True if the whole segment a→b lies in walkable space. */
+  /**
+   * True if the whole segment a→b lies in walkable space. G3: with 3D hooks, if a hull can walk it on the CS2 mesh
+   * (heights from the nav where a point has none).
+   */
   segmentWalkable(a: NavPoint, b: NavPoint): boolean {
+    if (this.nav3d !== null) return this.nav3d.line(this.withZ(a), this.withZ(b));
     return this.walkGrid.coverage(a.x, a.y, b.x, b.y) >= 1;
+  }
+
+  private withZ(p: NavPoint): Vec3 {
+    return p.z === undefined ? { x: p.x, y: p.y, z: this.zAt(p) } : { x: p.x, y: p.y, z: p.z };
   }
 
   /**
@@ -291,6 +372,19 @@ export class NavMesh {
     const out: Vec3[] = [this.pos(sa.x, sa.y, sa)];
     let i = 0;
     const last = cx.length - 1;
+    if (this.nav3d !== null) {
+      // G3: forward (each step a hull line on the CS2 mesh; the cost grows with the line, so short ones first).
+      const zs = chain.map((id, k) => (k === 0 ? (sa.z ?? this.zAt({ x: sa.x, y: sa.y })) : areaZ(this.areas[id] as NavArea, clamp(cx[k] as number, (this.areas[id] as NavArea).x1, (this.areas[id] as NavArea).x2), clamp(cy[k] as number, (this.areas[id] as NavArea).y1, (this.areas[id] as NavArea).y2))));
+      zs.push(sb.z ?? this.zAt({ x: sb.x, y: sb.y }));
+      const pt = (k: number): Vec3 => ({ x: cx[k] as number, y: cy[k] as number, z: zs[k] as number });
+      while (i < last) {
+        let j = i + 1;
+        while (j < last && this.nav3d.line(pt(i), pt(j + 1))) j++;
+        out.push(this.pos(cx[j] as number, cy[j] as number, j === last ? sb : { x: cx[j] as number, y: cy[j] as number, z: zs[j] as number }));
+        i = j;
+      }
+      return out;
+    }
     while (i < last) {
       let j = last;
       while (j > i + 1 && this.walkGrid.coverage(cx[i] as number, cy[i] as number, cx[j] as number, cy[j] as number) < 1) j--;

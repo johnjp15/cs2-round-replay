@@ -145,6 +145,10 @@ export interface ReplayTuning {
   rejoinLateSec: number;
   /** G1: after a plan finds no reachable point, wait this long (seconds) before planning again. */
   rejoinRetrySec: number;
+  /** G3: a puppet presses JUMP for a take-off sample (`TrackSample.jump`) from this long (seconds) before its tick to this long after the landing sample's. */
+  jumpWindowSec: number;
+  /** G3: ... once it is within this (2D, units) of the take-off spot, on the ground. */
+  jumpReachUnits: number;
 }
 
 /** One gun (`weapons.<id>`). Sources and the damage formula: docs/combat.md. */
@@ -467,6 +471,8 @@ const REPLAY_KEYS = [
   'rejoinHorizonSec',
   'rejoinLateSec',
   'rejoinRetrySec',
+  'jumpWindowSec',
+  'jumpReachUnits',
 ] as const;
 const WEAPON_KEYS = ['damage', 'rpm', 'headshotMult', 'armorPen', 'rangeModifier', 'clip', 'reserve', 'reloadSec', 'deploySec'] as const;
 const BOMB_KEYS = [
@@ -621,6 +627,7 @@ function checkReplay(r: ReplayTuning): ReplayTuning {
   for (const k of nonNegative) if (r[k] < 0) throw new TuningError(`replay.${k}: must be >= 0, got ${r[k]}`);
   for (const k of ['rejoinHorizonSec', 'rejoinRetrySec'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
   if (!(r.rejoinSpeedFactor > 0 && r.rejoinSpeedFactor <= 1)) throw new TuningError(`replay.rejoinSpeedFactor: must be in (0, 1], got ${r.rejoinSpeedFactor}`);
+  for (const k of ['jumpWindowSec', 'jumpReachUnits'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
   return r;
 }
 

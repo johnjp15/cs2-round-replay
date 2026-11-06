@@ -14,7 +14,10 @@
  *    player clips), allowed by the clips' nav rule (`Pieces.allowsLevel`: the hull isn't inside a clip prism).
  * 2. The nearest such spot to the recorded (x, y), searching a 2-unit grid out to SEARCH_RADIUS in order of distance,
  *    with a level within Z_WINDOW of the recorded z; the smallest |Δz| wins at a spot. z becomes that level (the floor
- *    the feet rest on). Samples with no spot within the radius keep their (x, y) and take the nearest level there
+ *    the feet rest on). A track stays on its floor between samples (`continuity`, `follow`) unless the recording
+ *    changes floor and a hull can walk to the recording's (`levelChange`); a track left on another floor than the
+ *    recording's for a second (`floorRun`) restarts on the recording's (the puppet snaps there unless pass 3 finds a
+ *    way). Samples with no spot within the radius keep their (x, y) and take the nearest level there
  *    within FAR_Z_WINDOW, or keep the recording (`impossible`).
  * 3. Jumps: wherever consecutive snapped samples climb more than a step (sv_stepsize), the 3D movement is run from
  *    the lower one toward the upper one, walking and then jumping (and crouch jumping): if only a jump gets there, the
@@ -29,7 +32,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { PLAYER_IDS, parseRound, parseTuning, type MovementTuning, type PlayerId, type RoundData } from '../src/contracts/index';
 import { TRACKS3D_FORMAT, type Tracks3d, type Tracks3dJump } from '../src/contracts/tracks3d';
-import { MapGeometry, combineMeshes, decodeGeometry } from '../src/sim2d/geometry';
+import { EventSchedule, RoundModel, recordedWeapons, runSpeedOf, weaponAt } from '../src/core/index';
+import { MapGeometry, TRACE_SKIN, combineMeshes, decodeGeometry } from '../src/sim2d/geometry';
 import { restingState, settle, stepMove3d, type MoveState } from '../src/sim2d/movement';
 import { hullLineClear } from '../src/sim2d/walk-query';
 import { CLIPS_PATH, NavCover, Pieces } from './extract-clips';
@@ -55,6 +59,10 @@ export const SNAP_PARAMS = {
   /** Pass 2 (`repairWindow`): candidate spots within this of the recorded position, on this grid. */
   repairRadius: 48,
   repairGrid: 8,
+  /** A recorded z this far from the previous sample's floor is a change of floor (stairs between samples): snap to the recording's floor when a hull can walk there. */
+  levelChange: 48,
+  /** ... and when pass 1 stays off the recording's floor for this many samples, even without such a way near by. */
+  floorRun: 10,
   /** Samples with no spot within the radius: the nearest level at the recorded (x, y) within this. */
   farZWindow: 96,
   /** Consecutive samples that climb more than sv_stepsize + this are tested for a jump. */
@@ -78,12 +86,35 @@ const DETOUR_SPREAD: readonly number[] = [4, 6, 8, 12, 16, 20, 25, 30];
 /** detour: the longest step between samples (units per 0.1 s) a spread may have: a little under the AK's 215 u/s. */
 const DETOUR_MAX_STEP = 21;
 /** frozenTick: margin around a plant or defuse, the plant's duration (tuning.bomb.plantSec), and the round's defuser (round.json's bomb has no defuser field; docs/round-data.md: sp4rtan). */
-const FROZEN_MARGIN_SEC = 1;
+const FROZEN_MARGIN_SEC = 0.5;
 const PLANT_SEC = 3.2;
 const DEFUSER: PlayerId = 'sp4rtan';
 const DETOUR_MAX_NODES = 6000;
+/**
+ * retime: a snapped track may cover this × the run speed of the recorded weapon per sample step, or as much as the
+ * recording itself covered there (its own spikes and gaps stay as they are: the puppets snap there as before).
+ */
+const RETIME_SPEED_FACTOR = 1;
+/** retime: a recorded step faster than this × run speed is a gap in the recording (tuning.replay.spikeSpeedFactor). */
+const RETIME_GAP_FACTOR = 1.6;
+/** reroute: the lag that makes `reroute` look for a shorter way (units), how far back before the lag it starts (samples), the least it must save (units), and its A* budget. */
+const REROUTE_MIN_LAG = 48;
+const REROUTE_BACK = 5;
+const REROUTE_MIN_GAIN = 16;
+const REROUTE_MAX_NODES = 40000;
+/** reroute: the most samples (8 s) one new way replaces, and how many times a track is looked at again. */
+const REROUTE_MAX_SPAN = 80;
+const REROUTE_ROUNDS = 8;
+/** reroute's A*: the highest climb it jumps (a crouch jump reaches about 54 + 9; plain about 57 at the apex but lands lower) and the extra cost of a jump (units). */
+const JUMP_UP = 48;
+const JUMP_COST = 16;
+/** reroute's A*: the room a jump's landing needs above it: the standing hull plus a jump's rise (sv_jump_impulse²/2g ≈ 57). */
+const JUMP_HEADROOM = 72 + 57;
+/** reroute: how far ahead along the new way (× a run-speed step) and how finely (units) a sample looks for its recorded position. */
+const REROUTE_AHEAD = 2;
+const REROUTE_PROBE = 2;
 /** detour: the highest drop it walks off (below sv_falldamage's 222). */
-const DETOUR_DROP = 200;
+const DETOUR_DROP = 216;
 const DETOUR_STEPS: readonly [number, number][] = [
   [1, 0],
   [-1, 0],
@@ -110,7 +141,7 @@ function frozenTick(round: RoundData, id: PlayerId, tick: number): boolean {
 /** Consecutive snapped samples that aren't in a clear hull line. */
 function countUnconnected(g: MapGeometry, s: readonly SnappedSample[], step: number): number {
   let n = 0;
-  for (let i = 1; i < s.length; i++) if (!hullLineClear(g, s[i - 1] as SnappedSample, s[i] as SnappedSample, step)) n++;
+  for (let i = 1; i < s.length; i++) if (!stepOk(g, s[i - 1] as SnappedSample, s[i] as SnappedSample, step)) n++;
   return n;
 }
 
@@ -142,11 +173,75 @@ export interface SnappedSample {
   readonly dz: number;
   /** In a clear hull line from the previous snapped sample (or the first). */
   readonly connected: boolean;
+  /** A jump takes off here to the next sample (`reroute` over a path with a jump in it): 'plain' or 'crouch'. */
+  readonly jump?: 'plain' | 'crouch';
+}
+
+/** A path point; `jump` = the edge into it is a jump of that kind. */
+interface PathPoint {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly jump?: 'plain' | 'crouch';
+}
+
+/** The sample without its take-off mark. */
+function withoutJump(q: SnappedSample): SnappedSample {
+  return { x: q.x, y: q.y, z: q.z, kind: q.kind, dxy: q.dxy, dz: q.dz, connected: q.connected };
+}
+
+/** Consecutive samples a puppet gets between: a clear hull line, or a jump the first one takes off for. */
+function stepOk(g: MapGeometry, a: SnappedSample, b: SnappedSample, step: number): boolean {
+  return a.jump !== undefined || hullLineClear(g, a, b, step);
 }
 
 /** 1/32 unit (exact in binary, so JSON round-trips it). */
 function q32(v: number): number {
   return Math.round(v * 32) / 32;
+}
+
+/** A binary min-heap under `before` (deterministic: equal elements never reorder by insertion luck, `before` decides). */
+class Heap<T> {
+  private readonly items: T[] = [];
+
+  constructor(private readonly before: (a: T, b: T) => boolean) {}
+
+  get size(): number {
+    return this.items.length;
+  }
+
+  push(v: T): void {
+    const it = this.items;
+    it.push(v);
+    let i = it.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (!this.before(it[i] as T, it[p] as T)) break;
+      [it[i], it[p]] = [it[p] as T, it[i] as T];
+      i = p;
+    }
+  }
+
+  pop(): T | undefined {
+    const it = this.items;
+    const top = it[0];
+    const last = it.pop();
+    if (it.length > 0 && last !== undefined) {
+      it[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < it.length && this.before(it[l] as T, it[m] as T)) m = l;
+        if (r < it.length && this.before(it[r] as T, it[m] as T)) m = r;
+        if (m === i) break;
+        [it[i], it[m]] = [it[m] as T, it[i] as T];
+        i = m;
+      }
+    }
+    return top;
+  }
 }
 
 export class Snapper {
@@ -159,6 +254,8 @@ export class Snapper {
     private readonly g: MapGeometry,
     private readonly pieces: Pieces,
     private readonly step: number,
+    /** For jump edges in `astar` (`reroute`); null = no jumps. */
+    private readonly m: MovementTuning | null = null,
   ) {}
 
   /** Allowed stand levels at (x, y) within `window` of z where the standing hull fits, nearest first. */
@@ -305,10 +402,12 @@ export class Snapper {
     let bestStep = Infinity;
     for (const spread of DETOUR_SPREAD) {
       // Never into a frozen sample (a planter's plant, a defuser's defuse): the spread stops short of it on that side.
+      // Nor across another gap (its own detour, or the snap there, is that gap's business).
+      const clear = (j: number): boolean => j <= 0 || j >= snapped.length || stepOk(this.g, snapped[j - 1] as SnappedSample, snapped[j] as SnappedSample, this.step);
       let before = 0;
-      while (before < spread && i - before - 1 >= 0 && !frozen(i - before - 1)) before++;
+      while (before < spread && i - before - 1 >= 0 && !frozen(i - before - 1) && clear(i - before - 1)) before++;
       let after = 0;
-      while (after < spread && i + after < snapped.length && !frozen(i + after)) after++;
+      while (after < spread && i + after < snapped.length && !frozen(i + after) && clear(i + after + 1)) after++;
       if (before === 0 || after === 0) continue;
       const out = this.spread(snapped, i, path, before, after);
       if (out === null) continue;
@@ -385,7 +484,7 @@ export class Snapper {
   }
 
   /** A* from a to b over grid spots (see `detour`); the path (a first, b last) or null. */
-  private astar(a: SnappedSample, b: SnappedSample, maxLen: number): { x: number; y: number; z: number }[] | null {
+  astar(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }, maxLen: number, maxNodes = DETOUR_MAX_NODES, jumps = false): PathPoint[] | null {
     const G = DETOUR_GRID;
     const key = (ix: number, iy: number): number => (ix + 32768) * 65536 + (iy + 32768);
     const sx = Math.round(a.x / G);
@@ -402,6 +501,7 @@ export class Snapper {
       g: number;
       f: number;
       parent: Node | null;
+      jump?: 'plain' | 'crouch';
     }
     const level = new Map<number, number | null>();
     // Where a hull walking in from height `near` comes to rest: the highest allowed standing level at most a step up
@@ -417,23 +517,20 @@ export class Snapper {
       return level.get(k) ?? null;
     };
     const best = new Map<number, number>();
-    const open: Node[] = [{ ix: sx, iy: sy, z: a.z, g: 0, f: Math.hypot(b.x - a.x, b.y - a.y), parent: null }];
+    // Smallest f first (ties: smaller g, then grid order).
+    const before = (n: Node, o: Node): boolean => n.f < o.f || (n.f === o.f && (n.g < o.g || (n.g === o.g && (n.ix < o.ix || (n.ix === o.ix && n.iy < o.iy)))));
+    const open = new Heap<Node>(before);
+    open.push({ ix: sx, iy: sy, z: a.z, g: 0, f: Math.hypot(b.x - a.x, b.y - a.y), parent: null });
     best.set(key(sx, sy), 0);
     let expanded = 0;
-    while (open.length > 0 && expanded < DETOUR_MAX_NODES) {
-      // Smallest f (ties: smaller g, then grid order); the open list stays small enough for a scan.
-      let bi = 0;
-      for (let k = 1; k < open.length; k++) {
-        const n = open[k] as Node;
-        const o = open[bi] as Node;
-        if (n.f < o.f || (n.f === o.f && (n.g < o.g || (n.g === o.g && (n.ix < o.ix || (n.ix === o.ix && n.iy < o.iy)))))) bi = k;
-      }
-      const n = open.splice(bi, 1)[0] as Node;
+    while (open.size > 0 && expanded < maxNodes) {
+      const n = open.pop() as Node;
+      if (n.g > (best.get(key(n.ix, n.iy)) ?? Infinity)) continue;
       expanded++;
       const here = n.parent === null ? { x: a.x, y: a.y, z: a.z } : { x: n.ix * G, y: n.iy * G, z: n.z };
       if (Math.abs(n.ix - tx) <= 1 && Math.abs(n.iy - ty) <= 1 && hullLineClear(this.g, here, b, this.step)) {
-        const out: { x: number; y: number; z: number }[] = [{ x: b.x, y: b.y, z: b.z }];
-        for (let m: Node | null = n; m !== null; m = m.parent) out.unshift(m.parent === null ? { x: a.x, y: a.y, z: a.z } : { x: m.ix * G, y: m.iy * G, z: m.z });
+        const out: PathPoint[] = [{ x: b.x, y: b.y, z: b.z }];
+        for (let m: Node | null = n; m !== null; m = m.parent) out.unshift(m.parent === null ? { x: a.x, y: a.y, z: a.z } : { x: m.ix * G, y: m.iy * G, z: m.z, ...(m.jump === undefined ? {} : { jump: m.jump }) });
         return out;
       }
       for (const [dx, dy] of DETOUR_STEPS) {
@@ -441,18 +538,38 @@ export class Snapper {
         const iy = n.iy + dy;
         if (Math.hypot(ix * G - cx, iy * G - cy) > reach) continue;
         const z = levelAt(ix, iy, n.z);
-        if (z === null) continue;
-        const there = { x: ix * G, y: iy * G, z };
-        const g = n.g + Math.hypot(there.x - here.x, there.y - here.y);
-        if (g + Math.hypot(b.x - there.x, b.y - there.y) > maxLen) continue;
         const k = key(ix, iy);
-        if ((best.get(k) ?? Infinity) <= g) continue;
-        if (!hullLineClear(this.g, here, there, this.step)) continue;
+        if (z !== null) {
+          const there = { x: ix * G, y: iy * G, z };
+          const g = n.g + Math.hypot(there.x - here.x, there.y - here.y);
+          if (g + Math.hypot(b.x - there.x, b.y - there.y) <= maxLen && (best.get(k) ?? Infinity) > g && hullLineClear(this.g, here, there, this.step)) {
+            best.set(k, g);
+            open.push({ ix, iy, z, g, f: g + Math.hypot(b.x - there.x, b.y - there.y), parent: n });
+            continue;
+          }
+        }
+        // A jump: up onto a level more than a step and at most JUMP_UP above, from standing ground (not mid-jump),
+        // where the 3D movement gets there with a jump (or a crouch jump) from here.
+        if (!jumps || this.m === null || n.jump !== undefined) continue;
+        const up = this.levels(ix * G, iy * G, n.z + (this.step + JUMP_UP) / 2, (JUMP_UP - this.step) / 2).filter((lz) => lz > n.z + this.step && lz <= n.z + JUMP_UP);
+        if (up.length === 0) continue;
+        const zj = Math.max(...up);
+        // Headroom for the whole jump over the landing (a jump into a window bumps the lintel and stalls there:
+        // a puppet does better going round).
+        if (this.g.ceilingAbove(ix * G, iy * G, zj + TRACE_SKIN) - zj < JUMP_HEADROOM) continue;
+        const there = { x: ix * G, y: iy * G, z: zj };
+        const g = n.g + Math.hypot(there.x - here.x, there.y - here.y) + JUMP_COST;
+        if (g + Math.hypot(b.x - there.x, b.y - there.y) > maxLen || (best.get(k) ?? Infinity) <= g) continue;
+        // The quicker of a plain and a crouch jump (a plain one can bump its head under a window's lintel).
+        const plain = reachTicks(this.g, this.m, here, there, true, false);
+        const crouch = reachTicks(this.g, this.m, here, there, true, true);
+        const kind = crouch !== null && (plain === null || crouch < plain) ? 'crouch' : plain !== null ? 'plain' : null;
+        if (kind === null) continue;
         best.set(k, g);
-        open.push({ ix, iy, z, g, f: g + Math.hypot(b.x - there.x, b.y - there.y), parent: n });
+        open.push({ ix, iy, z: zj, g, f: g + Math.hypot(b.x - there.x, b.y - there.y), parent: n, jump: kind });
       }
     }
-    if (process.env['DEBUG_ASTAR'] !== undefined) console.log('astar fail', expanded, open.length, best.size);
+    if (process.env['DEBUG_ASTAR'] !== undefined) console.log('astar fail', expanded, open.size, best.size);
     return null;
   }
 
@@ -465,6 +582,15 @@ export class Snapper {
   snap(x: number, y: number, z: number, prev: SnappedSample | null): SnappedSample {
     const near = prev === null ? null : this.search(this.near, x, y, z, prev, true);
     if (near !== null) return near;
+    // The recording changes floors (it went down or up stairs between samples): take its floor if a hull can walk
+    // there from prev (the detour pass then spreads the way over the samples around), not prev's floor near by.
+    if (prev !== null && Math.abs(z - prev.z) > SNAP_PARAMS.levelChange) {
+      const other = this.search(this.near, x, y, z, null, false);
+      if (other !== null && Math.abs(other.z - prev.z) > SNAP_PARAMS.levelChange) {
+        const d = Math.hypot(other.x - prev.x, other.y - prev.y);
+        if (this.astar(prev, other, Math.max(d * DETOUR_MAX_RATIO, d + DETOUR_SLACK)) !== null) return { ...other, connected: hullLineClear(this.g, prev, other, this.step) };
+      }
+    }
     const fol = prev === null ? null : this.follow(x, y, prev);
     if (fol !== null && fol.dxy <= SNAP_PARAMS.followMaxMiss) return { ...fol, dz: fol.z - z };
     const any = this.search(this.near, x, y, z, null, false) ?? this.search(this.wide, x, y, z, null, false);
@@ -482,6 +608,11 @@ export class Snapper {
  * height of b within reachSec.
  */
 export function reaches(g: MapGeometry, m: MovementTuning, a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }, jump: boolean, crouch: boolean): boolean {
+  return reachTicks(g, m, a, b, jump, crouch) !== null;
+}
+
+/** `reaches`, as the ticks it takes (null: not within reachSec). */
+export function reachTicks(g: MapGeometry, m: MovementTuning, a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }, jump: boolean, crouch: boolean): number | null {
   const yaw = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
   const st = settle(g, a, false, m);
   let s: MoveState = { ...restingState(st.pos, yaw), onGround: st.onGround };
@@ -491,9 +622,9 @@ export function reaches(g: MapGeometry, m: MovementTuning, a: { x: number; y: nu
     if (jump && k === 0) buttons.push('JUMP');
     if (crouch && jump) buttons.push('DUCK');
     s = stepMove3d(s, { forward: 1, side: 0, yaw, pitch: 0, buttons }, 'knife', g, m).state;
-    if (Math.hypot(s.pos.x - b.x, s.pos.y - b.y) <= SNAP_PARAMS.reachUnits && Math.abs(s.pos.z - b.z) <= SNAP_PARAMS.reachZ && s.onGround) return true;
+    if (Math.hypot(s.pos.x - b.x, s.pos.y - b.y) <= SNAP_PARAMS.reachUnits && Math.abs(s.pos.z - b.z) <= SNAP_PARAMS.reachZ && s.onGround) return k + 1;
   }
-  return false;
+  return null;
 }
 
 export interface SnapProducts {
@@ -513,7 +644,12 @@ export function buildTracks(): SnapProducts {
   const world = new MapGeometry(worldMesh);
   const g = new MapGeometry(combineMeshes(worldMesh, decodeGeometry(clipsBytes)));
   const pieces = new Pieces(world, world.triangleCount, new NavCover(readCs2Nav(navBytes).areas));
-  const snapper = new Snapper(g, pieces, m.stepSize);
+  const snapper = new Snapper(g, pieces, m.stepSize, m);
+  const model = new RoundModel(round);
+  const schedule = new EventSchedule(round);
+  const weapons = (id: PlayerId) => recordedWeapons(model, schedule, id);
+  const retimed: string[] = [];
+  const rerouted: string[] = [];
   const tracks: Partial<Record<PlayerId, number[][]>> = {};
   const jumps: Tracks3dJump[] = [];
   const counts: Record<SnapKind, number> = { ok: 0, moved: 0, far: 0, impossible: 0 };
@@ -529,31 +665,80 @@ export function buildTracks(): SnapProducts {
     const tr = round.tracks[id];
     if (tr === undefined) continue;
     // Pass 1: each sample on its own (nearest allowed spot, preferring one in a clear line from the previous).
-    let snapped: SnappedSample[] = [];
-    for (const s of tr.samples) snapped.push(snapper.snap(s.x, s.y, s.z, snapped.length === 0 ? null : (snapped[snapped.length - 1] as SnappedSample)));
+    // A run of floorRun samples or more that pass 1 leaves on another floor than the recording's (it found no way to
+    // the recording's floor near by) starts afresh on the recording's floor: a discontinuity unless pass 3 finds a way.
+    const pass1 = (out: SnappedSample[], from: number): SnappedSample[] => {
+      for (let i = from; i < tr.samples.length; i++) {
+        const q = tr.samples[i] as { x: number; y: number; z: number };
+        const prev = out.length === 0 || i === from ? null : (out[out.length - 1] as SnappedSample);
+        const r = snapper.snap(q.x, q.y, q.z, prev);
+        out.push(i === from && from > 0 ? { ...r, connected: hullLineClear(g, out[out.length - 1] as SnappedSample, r, m.stepSize) } : r);
+      }
+      return out;
+    };
+    let snapped: SnappedSample[] = pass1([], 0);
+    const restarted = new Set<number>();
+    for (;;) {
+      let runFrom = -1;
+      let start = -1;
+      for (let i = 0; i <= snapped.length; i++) {
+        const off = i < snapped.length && Math.abs((tr.samples[i] as { z: number }).z - (snapped[i] as SnappedSample).z) > SNAP_PARAMS.levelChange;
+        if (off && start < 0) start = i;
+        if (!off && start >= 0) {
+          if (i - start >= SNAP_PARAMS.floorRun && !restarted.has(start)) {
+            runFrom = start;
+            break;
+          }
+          start = -1;
+        }
+      }
+      if (runFrom < 0) break;
+      restarted.add(runFrom);
+      snapped = pass1(snapped.slice(0, runFrom), runFrom);
+    }
     // Pass 2: where two consecutive samples still aren't in a clear line (a corner the greedy pass cut), re-place the
     // samples around it together (`repairWindow`).
     const before = countUnconnected(g, snapped, m.stepSize);
     for (let i = 1; i < snapped.length; i++) {
-      if (hullLineClear(g, snapped[i - 1] as SnappedSample, snapped[i] as SnappedSample, m.stepSize)) continue;
+      if (stepOk(g, snapped[i - 1] as SnappedSample, snapped[i] as SnappedSample, m.stepSize)) continue;
       snapped = snapper.repairWindow(snapped, tr.samples, i);
     }
     // Pass 3: a gap that remains is a wall or obstacle the recording went through: walk round it (`detour`) and spread
     // the samples around the gap along the way, unless the way round is too long (then the gap stays: the puppet snaps).
     for (let i = 1; i < snapped.length; i++) {
-      if (hullLineClear(g, snapped[i - 1] as SnappedSample, snapped[i] as SnappedSample, m.stepSize)) continue;
+      if (stepOk(g, snapped[i - 1] as SnappedSample, snapped[i] as SnappedSample, m.stepSize)) continue;
       const next = snapper.detour(snapped, i, (j) => frozenTick(round, id, (tr.samples[j] as { tick: number }).tick));
       if (next !== null) {
         snapped = next;
         detoured++;
       }
     }
+    // Pass 4: where the snapped track is longer than the recording (detours, corners), a puppet running at full speed
+    // can't keep up: let the track fall behind along its own path and catch up where the recording is slower (`retime`).
+    const speeds = tr.samples.map((q) => runSpeedOf(weaponAt(weapons(id), q.tick), m));
+    const isFrozen = (j: number): boolean => frozenTick(round, id, (tr.samples[j] as { tick: number }).tick);
+    // The first lag worth it not tried yet, from its start (at most REROUTE_MAX_SPAN samples at a time), then
+    // retime again and look again: a long lag is rerouted piece by piece, each piece as short as it can be.
+    let rt = retime(g, snapper, tr.samples, snapped, speeds, m.stepSize, isFrozen);
+    const tried = new Set<number>();
+    for (let round = 0; round < REROUTE_ROUNDS; round++) {
+      const w = rt.windows.find((x) => (x.maxLag > REROUTE_MIN_LAG || x.forced) && !tried.has(x.from));
+      if (w === undefined) break;
+      tried.add(w.from);
+      const rr = reroute(g, snapper, tr.samples, snapped, speeds, w, m.stepSize, isFrozen);
+      if (rr === null) continue;
+      snapped = rr.out;
+      rerouted.push(`${id} ${rr.note}`);
+      rt = retime(g, snapper, tr.samples, snapped, speeds, m.stepSize, isFrozen);
+    }
+    snapped = rt.out;
+    retimed.push(...rt.notes.map((x) => `${id} ${x}`));
     const unconnected = countUnconnected(g, snapped, m.stepSize);
     repaired += before - unconnected;
     for (let i = 1; i < snapped.length; i++) {
       const a = snapped[i - 1] as SnappedSample;
       const b = snapped[i] as SnappedSample;
-      if (!hullLineClear(g, a, b, m.stepSize)) gaps.push(`${id} ${(tr.samples[i - 1] as { t: number }).t.toFixed(1)} s: (${a.x}, ${a.y}, ${a.z}) → (${b.x}, ${b.y}, ${b.z}), ${Math.hypot(b.x - a.x, b.y - a.y).toFixed(0)} u, dz ${(b.z - a.z).toFixed(0)}`);
+      if (!stepOk(g, a, b, m.stepSize)) gaps.push(`${id} ${(tr.samples[i - 1] as { t: number }).t.toFixed(1)} s: (${a.x}, ${a.y}, ${a.z}) → (${b.x}, ${b.y}, ${b.z}), ${Math.hypot(b.x - a.x, b.y - a.y).toFixed(0)} u, dz ${(b.z - a.z).toFixed(0)}`);
     }
     const out: number[][] = [];
     let moved = 0;
@@ -573,10 +758,17 @@ export function buildTracks(): SnapProducts {
       }
       out.push([r.x, r.y, r.z]);
     });
-    // Jumps: a climb of more than a step between consecutive samples that only a jump makes.
+    // Jumps: the take-offs `reroute` placed, and a climb of more than a step between consecutive samples that only a
+    // jump makes.
     for (let i = 0; i + 1 < snapped.length; i++) {
       const a = snapped[i] as SnappedSample;
       const b = snapped[i + 1] as SnappedSample;
+      const sa0 = tr.samples[i] as RoundData['tracks'][PlayerId]['samples'][number];
+      if (a.jump !== undefined) {
+        climbs.push(`${id} ${sa0.t.toFixed(1)} s: (${a.x}, ${a.y}, ${a.z}) → (${b.x}, ${b.y}, ${b.z}), ${b.z - a.z >= 0 ? '+' : ''}${(b.z - a.z).toFixed(1)} in ${Math.hypot(b.x - a.x, b.y - a.y).toFixed(0)} u: ${a.jump === 'crouch' ? 'crouch jump' : 'jump'} (rerouted)`);
+        jumps.push({ id, t: sa0.t, tick: sa0.tick, crouch: a.jump === 'crouch' });
+        continue;
+      }
       if (!(b.z - a.z > m.stepSize + SNAP_PARAMS.climbSlack)) continue;
       const sa = tr.samples[i] as RoundData['tracks'][PlayerId]['samples'][number];
       const walk = reaches(g, m, a, b, false, false);
@@ -622,6 +814,12 @@ export function buildTracks(): SnapProducts {
     `consecutive samples not in a clear hull line: ${totalUnconnected} (${repaired} more repaired by re-placing the samples around them, ${detoured} of those by a detour):`,
     ...gaps.map((x) => `  ${x}`),
     '',
+    `rerouted stretches (a shorter way than the snapped one, ${rerouted.length}):`,
+    ...rerouted.map((x) => `  ${x}`),
+    '',
+    `retimed stretches (the track falls behind the recording along its own path, then catches up; ${retimed.length}):`,
+    ...retimed.map((x) => `  ${x}`),
+    '',
     '| player | samples | moved in x/y | largest move | not in a clear line from the previous |',
     '| --- | ---: | ---: | --- | ---: |',
     ...rows,
@@ -632,6 +830,246 @@ export function buildTracks(): SnapProducts {
     `jumps: ${jumps.length === 0 ? 'none' : jumps.map((j) => `${j.id} @ ${j.t} s${j.crouch ? ' (crouch)' : ''}`).join(', ')}`,
   ].join('\n');
   return { text, data, report };
+}
+
+/**
+ * Pass 4 (`retime`): the snapped samples as a path (2D arc length S along the polyline through them, as the puppets
+ * measure speed), walked at no more than A_i per step: the larger of RETIME_SPEED_FACTOR × the recorded weapon's run
+ * speed × the step's time and the recording's own step. R_0 = S_0 and R_i = min(S_i, R_{i−1} + A_i): a sample whose
+ * R_i < S_i sits on the path R_i along (behind where the snapping put it), z the allowed stand level there nearest the
+ * path's; once R catches up, samples are as snapped. Every step is a clear hull line: where the spot at R_{i−1} + A_i
+ * isn't (a corner the line would cut, or no stand level there: decimated stairs), the sample takes the last path
+ * corner before it that is, or stays put. A frozen sample (plant, defuse), and a jump's take-off and landing, keep
+ * their places: a lag still open there is closed in one step (the puppet snaps) and reported. So is a step both the recording and the snapped track make
+ * faster than RETIME_GAP_FACTOR × run speed (a gap in the recording no detour spread: the puppet snaps there anyway).
+ */
+function retime(
+  g: MapGeometry,
+  snapper: Snapper,
+  rec: readonly { t: number; x: number; y: number }[],
+  snapped: readonly SnappedSample[],
+  speeds: readonly number[],
+  step: number,
+  frozen: (i: number) => boolean,
+): { out: SnappedSample[]; notes: string[]; windows: LagWindow[] } {
+  const n = snapped.length;
+  const windows: LagWindow[] = [];
+  const S: number[] = [0];
+  for (let i = 1; i < n; i++) {
+    const a = snapped[i - 1] as SnappedSample;
+    const b = snapped[i] as SnappedSample;
+    S.push((S[i - 1] as number) + Math.hypot(b.x - a.x, b.y - a.y));
+  }
+  const out: SnappedSample[] = [snapped[0] as SnappedSample];
+  const notes: string[] = [];
+  let R = 0;
+  let lagFrom = -1;
+  let maxLag = 0;
+  // The spot R = r along the path, on segment k (S[k − 1] ≤ r < S[k]), at an allowed stand level near the path's z; null if none.
+  const at = (r: number, k: number): SnappedSample | null => {
+    const a = snapped[k - 1] as SnappedSample;
+    const b = snapped[k] as SnappedSample;
+    const len = (S[k] as number) - (S[k - 1] as number);
+    const f = len > 0 ? (r - (S[k - 1] as number)) / len : 1;
+    const x = q32(a.x + (b.x - a.x) * f);
+    const y = q32(a.y + (b.y - a.y) * f);
+    const zl = a.z + (b.z - a.z) * f;
+    const lv = snapper.levels(x, y, zl, Math.abs(b.z - a.z) + step)[0];
+    if (lv === undefined) return null;
+    return { ...withoutJump(b), x, y, z: q32(lv), kind: 'far', dxy: b.dxy + Math.hypot(b.x - x, b.y - y), connected: true };
+  };
+  for (let i = 1; i < n; i++) {
+    const p0 = rec[i - 1] as { t: number; x: number; y: number };
+    const p1 = rec[i] as { t: number; x: number; y: number };
+    const allow = Math.max(RETIME_SPEED_FACTOR * Math.max(speeds[i - 1] as number, speeds[i] as number) * (p1.t - p0.t), Math.hypot(p1.x - p0.x, p1.y - p0.y));
+    const prev = out[i - 1] as SnappedSample;
+    // A jump's take-off and landing stay where the path put them (a fixed move), like a frozen sample.
+    const fixed = frozen(i) || (snapped[i] as SnappedSample).jump !== undefined || (snapped[i - 1] as SnappedSample).jump !== undefined;
+    const forced = fixed && (S[i] as number) - R > allow;
+    // A step the recording itself makes faster than a spike allows (a gap in it) stays a jump: the puppet snaps there.
+    const gapAt = RETIME_GAP_FACTOR * Math.max(speeds[i - 1] as number, speeds[i] as number) * (p1.t - p0.t);
+    const gap = Math.hypot(p1.x - p0.x, p1.y - p0.y) > gapAt && (S[i] as number) - (S[i - 1] as number) > gapAt;
+    if (fixed || gap || (S[i] as number) <= R + allow) {
+      out.push(snapped[i] as SnappedSample);
+      R = S[i] as number;
+    } else {
+      // The spot at R + allow, else the last path corner before it, else the one before that, ... (each ahead of
+      // the previous sample and in a clear hull line from it); else stay put this step.
+      const target = R + allow;
+      let k = 1;
+      while ((S[k] as number) <= target) k++;
+      let placed = false;
+      const here = at(target, k);
+      if (here !== null && hullLineClear(g, prev, here, step)) {
+        out.push(here);
+        R = target;
+        placed = true;
+      }
+      for (let v = k - 1; !placed && v >= 1 && (S[v] as number) > R; v--) {
+        const c = snapped[v] as SnappedSample;
+        if (!hullLineClear(g, prev, c, step)) continue;
+        out.push({ ...withoutJump(snapped[i] as SnappedSample), x: c.x, y: c.y, z: c.z, kind: 'far', connected: true });
+        R = S[v] as number;
+        placed = true;
+      }
+      // Nothing in a clear line (the snapping left a gap here, or stairs the decimated mesh makes steps of): go on
+      // along the path anyway rather than stall.
+      if (!placed && here !== null) {
+        out.push(here);
+        R = target;
+      } else if (!placed) {
+        const v = (S[k - 1] as number) > R ? k - 1 : k;
+        const c = snapped[v] as SnappedSample;
+        out.push({ ...withoutJump(snapped[i] as SnappedSample), x: c.x, y: c.y, z: c.z, kind: 'far', connected: true });
+        R = Math.min(S[v] as number, S[i] as number);
+      }
+    }
+    const lag = (S[i] as number) - R;
+    if (lag > 0 && lagFrom < 0) {
+      lagFrom = i;
+      maxLag = 0;
+    }
+    if (lag > maxLag) maxLag = lag;
+    if (lag <= 0 && lagFrom >= 0) {
+      windows.push({ from: lagFrom, to: i, maxLag, forced });
+      notes.push(`${(rec[lagFrom] as { t: number }).t.toFixed(1)}–${p1.t.toFixed(1)} s: up to ${maxLag.toFixed(0)} u behind${forced ? ` (closed at the fixed sample at ${p1.t.toFixed(1)} s: the puppet snaps)` : ''}`);
+      lagFrom = -1;
+    }
+  }
+  if (lagFrom >= 0) windows.push({ from: lagFrom, to: n - 1, maxLag, forced: false });
+  if (lagFrom >= 0) notes.push(`${(rec[lagFrom] as { t: number }).t.toFixed(1)} s–end: up to ${maxLag.toFixed(0)} u behind at the end`);
+  return { out, notes, windows };
+}
+
+/** A stretch where `retime` leaves the track behind: samples from..to − 1 lag, `to` is back on the snapped track. */
+interface LagWindow {
+  readonly from: number;
+  readonly to: number;
+  readonly maxLag: number;
+  /** Closed at a frozen sample (the puppet snaps there). */
+  readonly forced: boolean;
+}
+
+/**
+ * Pass 4a (`reroute`): where retiming leaves a track more than REROUTE_MIN_LAG behind, the snapped way is longer than
+ * the recording's (the recording went through something CS2 has there: a wall, a box). Try the shortest way instead:
+ * A* (as `detour`, up to REROUTE_MAX_NODES) from the sample REROUTE_BACK before the lag starts to the one where it
+ * ends (or the first frozen one), kept if it is shorter than the snapped way by at least REROUTE_MIN_GAIN. Each sample
+ * in between goes as far along the new way as the recording's progress (the share of the window's 2D distance it had
+ * covered by then), or further, to the point nearest its recorded position up to REROUTE_AHEAD run-speed steps ahead
+ * of the previous sample (at the way's corner before that when it isn't in a clear hull line from the previous
+ * sample); `retime` then runs on the result.
+ */
+function reroute(
+  g: MapGeometry,
+  snapper: Snapper,
+  rec: readonly { t: number; x: number; y: number }[],
+  snapped: readonly SnappedSample[],
+  speeds: readonly number[],
+  w: LagWindow,
+  step: number,
+  frozen: (i: number) => boolean,
+): { out: SnappedSample[]; note: string } | null {
+  let i0 = Math.max(0, w.from - 1 - REROUTE_BACK);
+  while (i0 < w.from - 1 && frozen(i0)) i0++;
+  let i1 = w.to;
+  for (let j = i0 + 1; j < i1; j++) {
+    if (frozen(j)) {
+      i1 = j;
+      break;
+    }
+  }
+  // At most REROUTE_MAX_SPAN samples from where it starts: the less of the recording a new way replaces, the better.
+  while (i1 > i0 + REROUTE_MAX_SPAN) i1--;
+  if (i1 - i0 < 2) return null;
+  let snappedLen = 0;
+  for (let j = i0 + 1; j <= i1; j++) snappedLen += Math.hypot((snapped[j] as SnappedSample).x - (snapped[j - 1] as SnappedSample).x, (snapped[j] as SnappedSample).y - (snapped[j - 1] as SnappedSample).y);
+  const a = snapped[i0] as SnappedSample;
+  const b = snapped[i1] as SnappedSample;
+  const path = snapper.astar(a, b, snappedLen - REROUTE_MIN_GAIN, REROUTE_MAX_NODES, true);
+  if (path === null) return null;
+  const cum = [0];
+  for (let k = 1; k < path.length; k++) cum.push((cum[k - 1] as number) + Math.hypot((path[k] as { x: number }).x - (path[k - 1] as { x: number }).x, (path[k] as { y: number }).y - (path[k - 1] as { y: number }).y));
+  const total = cum[cum.length - 1] as number;
+  const pointAt = (arc: number): { x: number; y: number } => {
+    let k = 1;
+    while (k < path.length - 1 && (cum[k] as number) < arc) k++;
+    const p0 = path[k - 1] as { x: number; y: number };
+    const p1 = path[k] as { x: number; y: number };
+    const seg = (cum[k] as number) - (cum[k - 1] as number);
+    const f = seg > 0 ? Math.min(1, Math.max(0, (arc - (cum[k - 1] as number)) / seg)) : 0;
+    return { x: p0.x + (p1.x - p0.x) * f, y: p0.y + (p1.y - p0.y) * f };
+  };
+  const recCum = [0];
+  for (let j = i0 + 1; j <= i1; j++) recCum.push((recCum[recCum.length - 1] as number) + Math.hypot((rec[j] as { x: number }).x - (rec[j - 1] as { x: number }).x, (rec[j] as { y: number }).y - (rec[j - 1] as { y: number }).y));
+  const recTotal = recCum[recCum.length - 1] as number;
+  const out = [...snapped];
+  let prevArc = 0;
+  for (let j = i0 + 1; j < i1; j++) {
+    // At least the recording's progress (the 2D distance it had covered by then, as a share of the window's), so the
+    // new way is done by the window's end ...
+    const share = recTotal > 0 ? (total * (recCum[j - i0] as number)) / recTotal : (total * (j - i0)) / (i1 - i0);
+    // ... and further where the recording is: the nearest point to it (2D) ahead of the previous sample's and at
+    // most REROUTE_AHEAD × a run-speed step further (so a way that passes near itself isn't skipped), REROUTE_PROBE apart.
+    const reach = REROUTE_AHEAD * Math.max(speeds[j - 1] as number, speeds[j] as number) * ((rec[j] as { t: number }).t - (rec[j - 1] as { t: number }).t);
+    let target = Math.max(prevArc, share);
+    let bestD = Infinity;
+    let nearest = prevArc;
+    for (let arc = prevArc; arc <= Math.min(total, prevArc + reach) + 1e-9; arc += REROUTE_PROBE) {
+      const q = pointAt(Math.min(arc, total));
+      const d = Math.hypot(q.x - (rec[j] as { x: number }).x, q.y - (rec[j] as { y: number }).y);
+      if (d < bestD - 1e-9) {
+        bestD = d;
+        nearest = Math.min(arc, total);
+      }
+    }
+    target = Math.max(target, nearest);
+    const prev = out[j - 1] as SnappedSample;
+    // A jump on the way: a sample takes off at its start (marked) and the next one lands at its end, whatever the
+    // progress says (the jump is a fixed move; retime evens out the time around it).
+    const jumpEdge = path.findIndex((q, k) => k > 0 && q.jump !== undefined && (cum[k] as number) > prevArc && (cum[k - 1] as number) < target + 1e-9);
+    if (prev.jump !== undefined) {
+      const k = path.findIndex((q, kk) => kk > 0 && q.jump !== undefined && Math.abs((cum[kk - 1] as number) - prevArc) < 1e-6);
+      const land = path[k] as PathPoint;
+      const old = withoutJump(snapped[j] as SnappedSample);
+      out[j] = { ...old, x: q32(land.x), y: q32(land.y), z: q32(land.z), kind: 'far', dxy: Math.hypot(land.x - (rec[j] as { x: number }).x, land.y - (rec[j] as { y: number }).y), connected: true };
+      prevArc = cum[k] as number;
+      continue;
+    }
+    if (jumpEdge > 0) {
+      const off = path[jumpEdge - 1] as PathPoint;
+      const q = { x: q32(off.x), y: q32(off.y), z: q32(off.z) };
+      if (!hullLineClear(g, prev, q, step)) return null;
+      const old = snapped[j] as SnappedSample;
+      out[j] = { ...old, ...q, kind: 'far', dxy: Math.hypot(q.x - (rec[j] as { x: number }).x, q.y - (rec[j] as { y: number }).y), connected: true, jump: (path[jumpEdge] as PathPoint).jump as 'plain' | 'crouch' };
+      prevArc = cum[jumpEdge - 1] as number;
+      continue;
+    }
+    let k = 1;
+    while (k < path.length - 1 && (cum[k] as number) < target) k++;
+    const p0 = path[k - 1] as { x: number; y: number; z: number };
+    const p1 = path[k] as { x: number; y: number; z: number };
+    const seg = (cum[k] as number) - (cum[k - 1] as number);
+    const f = seg > 0 ? Math.min(1, Math.max(0, (target - (cum[k - 1] as number)) / seg)) : 0;
+    const cands: { x: number; y: number; z: number; arc: number }[] = [{ x: p0.x + (p1.x - p0.x) * f, y: p0.y + (p1.y - p0.y) * f, z: f < 0.5 ? p0.z : p1.z, arc: target }];
+    for (let c = k - 1; c >= 1 && (cum[c] as number) > prevArc; c--) cands.push({ ...(path[c] as { x: number; y: number; z: number }), arc: cum[c] as number });
+    let chosen: SnappedSample | null = null;
+    for (const c of cands) {
+      const lv = snapper.levels(c.x, c.y, c.z, step)[0];
+      if (lv === undefined) continue;
+      const q = { x: q32(c.x), y: q32(c.y), z: q32(lv) };
+      if (!hullLineClear(g, prev, q, step)) continue;
+      const old = withoutJump(snapped[j] as SnappedSample);
+      chosen = { ...old, ...q, kind: 'far', dxy: Math.hypot(q.x - (rec[j] as { x: number }).x, q.y - (rec[j] as { y: number }).y), connected: true };
+      prevArc = c.arc;
+      break;
+    }
+    if (chosen === null) return null;
+    out[j] = chosen;
+  }
+  if (!stepOk(g, out[i1 - 1] as SnappedSample, b, step)) return null;
+  const jumps = out.slice(i0, i1).filter((q) => q.jump !== undefined).length;
+  return { out, note: `${(rec[i0] as { t: number }).t.toFixed(1)}–${(rec[i1] as { t: number }).t.toFixed(1)} s: rerouted, ${snappedLen.toFixed(0)} → ${total.toFixed(0)} u${jumps > 0 ? `, ${jumps} jump${jumps > 1 ? 's' : ''}` : ''}` };
 }
 
 /** JSON with one track per line (diffable, deterministic). */
