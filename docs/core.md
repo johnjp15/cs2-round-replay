@@ -113,10 +113,11 @@ Other cases:
 
 `step(o)`:
 
-1. On the first step after `start` or `restart`, it emits `startActions`, resets every pawn's status to `REPLAY` since that tick, and resets every puppet controller to the pawn's start yaw. Before any `start` it emits no setup.
-2. Status for all ten pawns, in id order: `DEAD` from the tick the observe first shows `alive: false`, otherwise `REPLAY`. `trigger` is `null`, and `sinceTick` is the tick the mode began (0 before the first start). The human's pawn is reported the same way; B4 should decide what mode the human's pawn reports.
-3. **Hook `scheduledActions(o, actions)`**, for B3: append this tick's event actions (from `schedule.at(o.tick)`) after the setup. B1 adds none.
+1. On the first step after `start` or `restart`, it emits `startActions`, resets every pawn's status to `REPLAY` since that tick, resets every puppet controller to the pawn's start yaw and the scripted events' state, and then (B3) emits the round-start `block_damage` actions (see "Scripted events"). Before any `start` it emits no setup.
+2. Status for all ten pawns, in id order: `DEAD` from the tick the observe first shows `alive: false`; otherwise `LIVE` stays `LIVE` (set by `setPawnMode`, for B4) and anything else is `REPLAY`. `trigger` is `null`, and `sinceTick` is the tick the mode began (0 before the first start). The human's pawn is reported the same way; B4 should decide what mode the human's pawn reports.
+3. **`scheduledActions(o, actions)`** (B3): appends this tick's scripted actions after the setup (`ScriptedEvents.actions`: damage, weapons, grenade selection, plant / defuse fallbacks, drop logs).
 4. **`pawnInput(pawn, o, actions)`** (B2): called once per REPLAY pawn (alive, not `o.human`, mode `REPLAY`), in id order. It returns the puppet's input and may append a snap (`teleport` + `log`) to `actions`, after the setup and scheduled actions. On the setup step every REPLAY pawn (puppets on or off) gets a neutral input at the yaw of its setup `teleport`: that observe predates the teleports, and the engine applies the input yaw after them, so echoing the observed (pre-setup) yaw would turn every pawn back to 0. Without puppets (no `walk`) the input is otherwise neutral: forward 0, side 0, the pawn's current yaw and pitch, no buttons. See "Puppets" below.
+5. **`scriptedInput(input, pawn, o, prevYaw)`** (B3): layers the scripted look (aim, defuse, grenade pitch) and buttons (`ATTACK`, `USE`) on that input, except on the setup step, and writes the commanded yaw back to the puppet's state. `prevYaw` is the puppet's commanded yaw before this tick's movement input (the observed yaw without puppets).
 
 `control(c)`:
 
@@ -124,9 +125,9 @@ Other cases:
 - `pause {paused}` and `speed {x}` are stored; `x` must be positive. The driver does the actual pausing and pacing: Core doesn't stop stepping by itself.
 - `seek`, `checkpoint` and `rewind` throw "not implemented until B5".
 
-`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `setupThisStep`, `startTick`, `lastTick`, `paused`, `speed`, each pawn's mode and since tick, and each puppet's `PuppetState`) together with the seed. Restoring checks that the seed matches. Every stored number is already canonical (yaw to 0.001°, `behind` to 6 decimals), so a restore continues exactly.
+`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `setupThisStep`, `startTick`, `lastTick`, `paused`, `speed`, each pawn's mode and since tick, each puppet's `PuppetState`, and the scripted events' `ScriptState`) together with the seed. Restoring checks that the seed matches. Every stored number is already canonical (yaw to 0.001°, `behind` to 6 decimals), so a restore continues exactly.
 
-`puppet(id)` returns a pawn's `PuppetController` (or null without puppets) and `snapCount` the snaps since the last start.
+`puppet(id)` returns a pawn's `PuppetController` (or null without puppets) and `snapCount` the snaps since the last start. `script` is the `ScriptedEvents` (its `plan` and `state`), `modeOf(id)` a pawn's Core mode, and the protected `setPawnMode(id, mode, tick)` is for B4's triggers.
 
 `rng` is a seeded `Rng` that nothing draws from yet. Draw through `rng.fork(label)`, keyed by tick and id, so the snapshot never needs the PRNG state.
 
@@ -182,24 +183,26 @@ CTs other than sp4rtan (incredibad, lokier, snakelore, zwomp) have none.
 
 ### Ghost round (`tests/ghost-round.test.ts`, `npm run ghost`)
 
-The whole round with **no human**: `ReplayCore` (B1 + puppets) drives all ten pawns in `Sim2DHost` (`act = core.step(observe)`, `host.apply(act)`, `host.tick()`; the driver is `drive()` in `tools/ghost-round.ts`). Nobody dies without B3, so each pawn is measured up to its recorded death tick (or last sample), and is no longer driven after its track plus the hold. Errors are 2D, against the **raw** recording at every 10 Hz sample, with the pawn position interpolated between the ticks around the sample time (positions taken after each tick's actions, so the tick-0 setup counts). "ticks > 24 behind" is the share of measured ticks more than 24 units from the raw track. `npm run ghost` writes `logs/ghost-round.jsonl` and `logs/ghost-trace.json` (`toReplayTrace`, for the replay page; snaps appear as `info` events).
+The whole round with **no human**: `ReplayCore` (B1 + puppets + B3's scripted events) drives all ten pawns in `Sim2DHost` (`act = core.step(observe)`, `host.apply(act)`, `host.tick()`; the driver is `drive()` in `tools/ghost-round.ts`). Each pawn is measured up to its recorded death tick (or last sample), where B3 also kills it, and is no longer driven after its track plus the hold. Errors are 2D, against the **raw** recording at every 10 Hz sample, with the pawn position interpolated between the ticks around the sample time (positions taken after each tick's actions, so the tick-0 setup counts). "ticks > 24 behind" is the share of measured ticks more than 24 units from the raw track. `npm run ghost` writes `logs/ghost-round.jsonl` and `logs/ghost-trace.json` (`toReplayTrace`, for the replay page; snaps appear as `info` events).
 
-**2D model values; compare against the CS2 probe.** 4,517 ticks, digest `ae671674`.
+**2D model values; compare against the CS2 probe.** 4,517 ticks, digest `7e3523a6` (with B3).
 
 | player | team | observed n | RMS | max (at t) | est./inf. n | RMS | max (at t) | inferred RMS | radius (min–max) | snaps (t) | ticks > 24 behind |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
-| barely | T | 588 | 12.9 | 92 (45.3 s) | 1 | 0.7 | 1 (27.9 s) | – | – | 1 (44.98) | 8.6 % |
-| cart | T | 683 | 13.7 | 93 (13.0 s) | 12 | 13.9 | 36 (13.4 s) | – | – | 2 (14.41, 21.09) | 6.4 % |
-| donk | T | 504 | 11.3 | 94 (14.4 s) | 0 | – | – | – | – | 1 (14.42) | 4.0 % |
+| barely | T | 588 | 12.9 | 92 (45.3 s) | 1 | 11.5 | 12 (27.9 s) | – | – | 1 (44.98) | 8.4 % |
+| cart | T | 683 | 13.5 | 93 (13.0 s) | 12 | 13.9 | 36 (13.4 s) | – | – | 2 (14.41, 21.09) | 6.3 % |
+| donk | T | 504 | 11.1 | 94 (14.4 s) | 0 | – | – | – | – | 1 (14.42) | 3.5 % |
 | eradicate | T | 128 | 5.7 | 32 (11.3 s) | 0 | – | – | – | – | 0 | 1.6 % |
 | incredibad | CT | 0 | – | – | 6 | 0.0 | 0 (0.0 s) | 0.0 | 260 | 0 | 0.0 % |
 | lokier | CT | 17 | 4.2 | 8 (18.0 s) | 172 | 1.4 | 8 (17.3 s) | 1.4 | 110–140 | 0 | 0.0 % |
 | snakelore | CT | 5 | 0.0 | 0 (12.0 s) | 120 | 0.0 | 0 (0.0 s) | 0.0 | 220 | 0 | 0.0 % |
 | snarlbot | T | 48 | 13.8 | 33 (14.4 s) | 131 | 4.5 | 20 (10.3 s) | – | – | 0 | 4.9 % |
-| sp4rtan | CT | 87 | 23.5 | 131 (58.6 s) | 617 | 41.2 | 450 (19.4 s) | 42.5 | 120–320 | 2 (18.20, 19.50) | 5.2 % |
+| sp4rtan | CT | 87 | 29.2 | 149 (58.6 s) | 617 | 41.7 | 450 (19.4 s) | 43.0 | 120–320 | 2 (18.20, 19.50) | 5.5 % |
 | zwomp | CT | 4 | 4.4 | 8 (43.9 s) | 439 | 3.3 | 17 (35.9 s) | 3.3 | 240–450 | 0 | 0.0 % |
 
 The test asserts: observed RMS < 24 for every T; inferred RMS < the smallest uncertainty radius of that CT's inferred samples; every snap at a teleport point and logged once; fewer than 10 snaps; a second run gives the same digest and the log replays identically through a fresh Core.
+
+**What B3 changed** (B2 alone: digest `1fac160b` on the same `main`): the aim and grenade looks go through `withLook`, so the paths hardly move. cart 13.7 → 13.5 and donk 11.3 → 11.1 RMS (holding a grenade for a second raises the speed cap), sp4rtan 23.5 → 29.2 (the AK, above), and barely's one estimated sample at 27.9 s 0.7 → 11.5 units, because he stands still for the plant until 27.52 s while the recording has him walk off at 27.5 s. Every other cell is unchanged.
 
 **Snaps (6)**, all unseen (no human), each at a teleport point:
 
@@ -217,7 +220,7 @@ Compared with C1's wall-aware pursuit (no snaps): cart 21.2 → 13.7, donk 17.5 
 **What remains, by cause:**
 
 - **sp4rtan, inferred 18.0–19.6 s**: the loop at 3 × his run speed. The pawn falls up to 450 units behind (radius 200 there) until the 19.50 s snap. Physics are not loosened for it.
-- **sp4rtan, 57.6–59.1 s**: his inferred track runs 320–340 u/s for 1 s, 1.46 × the deagle's 230 (below the 1.6 spike factor, so not a teleport point). The pawn falls 131 units behind, and the first observed samples after it (58.6–59.1 s) carry that lag; it catches up by 59.2 s. Without B3 he still holds the deagle; in the recording he picked up the AK (215) at 19.6 s, which would make it worse.
+- **sp4rtan, 57.6–59.1 s**: his inferred track runs 320–340 u/s for 1 s, 1.46 × the deagle's 230 (below the 1.6 spike factor, so not a teleport point). The pawn falls 149 units behind, and the first observed samples after it (58.6–59.1 s) carry that lag; it catches up by 59.2 s. With B3 he carries the AK (215) he picks up at 19.6 s, as in the recording: before B3 he kept the deagle (230), and this stretch gave 131 units and an observed RMS of 23.5 instead of 29.2.
 - **cart 13.0 s, barely 45.3 s** (max errors 93 and 92): jumps where the drift peaks just under 96, so the pawn catches up physically. **donk 14.4 s** (94): the sample just before his snap at 14.42 s.
 
 ### Tunables (`data/tuning.json` → `replay`)
@@ -244,3 +247,116 @@ Compared with C1's wall-aware pursuit (no snaps): cart 21.2 → 13.7, donk 17.5 
 - **No path query.** If no reference point of the last 2 s + lookahead is in walkable line, the pawn pushes at the lookahead point and can stay stuck. Recovery then depends on a teleport window (see sp4rtan above). A `WalkQuery.path` (nav A*) would fix this; a stuck-pawn snap would need a policy decision, because snaps are restricted to teleport points.
 - **Snap visibility** checks only whether the human sees the pawn now, not whether the destination is in view. `Sim2DHost` reports `sees: []`, so in the 2D sim every pawn is unseen until the host computes `sees`.
 - **Drift is 2D.** A pawn on the wrong level right under its track counts as on track. barely's level change snaps 0.18 s after the jump (98 u at 44.98 s), because the 2D gap at the jump is only 89 u.
+
+## Scripted events (`scripted.ts`, `aim.ts`)
+
+B3 makes the REPLAY puppets act the recording: they aim and shoot on the recorded ticks, switch and pick up weapons, throw their utility, plant and defuse, and the recorded damage and kills are applied exactly. Everything goes through `inputs` (yaw, pitch, `ATTACK`, `USE`) or contract `actions`, so the same Core can drive CS2 bots through usercmd injection.
+
+- `ScriptPlan` (built once from the schedule and tuning) turns the schedule into act ticks: fire items, aim engagements, damage, inventory changes, utility, plant and defuse. It depends only on the data, not on the human.
+- `ScriptedEvents` applies it per tick: `blockActions` on the setup step, `actions` (from `scheduledActions`) every step, and `input` on top of each puppet's movement input (from `scriptedInput`). Its `ScriptState` (bomb events seen, decisions made) is in the Core snapshot.
+
+### Latency and "the tick an event lands on"
+
+An event *lands* on tick t when it is in the Observe whose `tick` is t (that is what the Core, the app and `toReplayTrace` see). The driver runs observe(k) → `core.step` → `host.apply(act)` → `host.tick()`, and the engine's tick k emits its events into observe(k + 1). Measured in `Sim2DHost` (`measureLatency` in `tools/scripted-round.ts`, asserted in `tests/scripted-round.test.ts`):
+
+| what | from | to | latency |
+| --- | --- | --- | ---: |
+| input | `ATTACK` in the Act of tick k | `shot` event | 1 tick |
+| action | `damage` action in the Act of tick k | `damage` (and `death`) event | 1 tick |
+| action | `set_weapon` in the Act of tick k | Observe shows the weapon | 1 tick |
+
+The Core sends every scripted input `inputLatencyTicks` (1) early and every scripted action `actionLatencyTicks` (1) early, so its effect lands on the recorded tick. In CS2 the input latency is measured by probe P3 (findings F7, F8 in `docs/cs2-adapter.md`); set the two keys from it.
+
+### Aim
+
+- **Engagements.** Every fire item with a target gives an aim window [first press − `preAimSec`, last press], and every damage entry one at [its tick − input latency − `preAimSec`, its tick − input latency] (act ticks). A shooter's overlapping or touching windows at the same target merge into one engagement (`plan.engagements`).
+- **Band.** `head` if a merged damage entry is a headshot (lokier → eradicate, cart → lokier, sp4rtan → barely), else `chest`.
+- **Look.** Each tick of an engagement the yaw turns toward the bearing to the target's **observed** position and the pitch toward the band's point (`aimPitchAt`: eye at `pos.z + damage.eyeHeight` or `crouchEyeHeight`, band at `pos.z + damage.bandHeights[band]`, scaled for a crouched target; the shooter counts as crouched when its input holds `DUCK`). Both turn at most `aimTurnRateDegPerTick` (30°) from the last commanded yaw and the observed pitch. The look is applied with `withLook`, so the pawn keeps moving the same way, and the yaw is written back to the puppet: between engagements B2's movement yaw takes over from there (at 12°/tick).
+- When a shooter has two engagements at once, it aims in the one that ends first.
+- `aim.ts` repeats the 2D hitscan's band geometry (the Core can't import `src/sim2d`); a test checks the two agree. The opening duel: snarlbot aims from tick 9 and faces incredibad (within 0.01°) from tick 11, well before the kill at tick 32.
+
+### Firing
+
+- **Sprays.** A shooter's consecutive `shot` entries with one **automatic** gun (`weapons.*.automatic`) at one target, each at most `sprayGapFactor` (1.5) cycles (60 / rpm) after the previous, are one spray: `ATTACK` is held and the engine sets the cadence (F7). The Core models the engine's fire rule (`simulateHolds`: a held AK fires at 0, 7, 13, 20, 26, 32, … ticks after the press) and picks the hold that lands the shots closest to the recorded ticks (`fitSpray`): the start is shifted by 0, −1, +1, −2 or +2 ticks from the first shot − latency. If no single hold gets every shot within a tick, it also tries two holds (split before each shot), which re-phases the cadence. That happens once: cart's post-round spray has shots at 69.2 s and 69.267 s, 4 ticks apart, faster than the AK allows; two holds (4393–4413, 4420–4433) land all seven within a tick.
+- **Taps.** Semi-automatic guns (deagle, awp, ssg08, glock) and isolated shots press `ATTACK` on the shot tick − latency and release it on the next tick.
+- **Bursts** (count only, no exact ticks). With a related kill (the shooter's first kill in the window, of the burst's target if it names one): an automatic gun holds a spray whose last shot lands on the kill tick; a semi-automatic one taps `count` times one cycle apart, the last on the kill tick. Without one: `count` taps evenly through the window (tap k at tick0 + ⌊(k + ½) × span / count + ½⌋). barely: 7 shots ending on the 44.20 s kill of Zwomp (hold 2789–2828), then 11 taps through 49.40–50.83 s; donk: one AWP shot in the middle of 37.25–49.40 s.
+- **Implied shots.** A kill with no recorded shot or burst of that killer at that victim (kill feed only: snarlbot ×2, sp4rtan's deagle kill of snarlbot, the post-round kill of cart) gets one tap landing on the kill tick, so the kill has its shot and sound.
+- While the script has a grenade or the c4 out, only the grenade's own `ATTACK` is pressed.
+
+All 33 recorded exact-time shots land within a tick (20 exactly), and every gun fires exactly the rounds the HUD shows (cart 30 → 6, barely 30 → 12, donk's AWP 10 → 8).
+
+### Damage
+
+- **Blocks.** On the setup step the Core sends `block_damage` for every ordered pair of enemies that are both REPLAY (neither is the human), so the engine's own bullets and grenades between puppets do no damage: the recorded damage is scripted. Each such puppet is also blocked on itself (attacker = victim): in the first run donk's molotov burned him for 40 HP and barely's HE took 34, because the throws are guesses and the recording has no self-damage. Friendly fire is off, so teammates need no block. No human: 50 + 10 blocks; human cart: 40 + 9.
+- **Emission tick.** `Sim2DHost` queues a `damage` action in `apply()` and applies it in the next `tick()` (after shots and grenades), so its `damage` / `death` events land one tick later. The Core sends each schedule `damage` entry at **its tick − `actionLatencyTicks`** (tick − 1), and the events land exactly on the schedule tick. `armor` is the recorded armor (cart's 7 at 18.5 s) or 0 when the recording doesn't show it; `lethal` entries take all remaining HP.
+- **Drops.** A damage entry whose attacker or victim is dead (observed `alive: false`) or LIVE at its emission tick is dropped with one `info` log (`script: dropped damage sp4rtan -> donk (27 hp at tick 3194): donk is dead`).
+
+### The human
+
+When `observe.human` is a pawn (normally cart):
+
+- the Core sends it no input, no weapon change, no grenade, plant or defuse;
+- no scripted damage to or from it (one `debug` log per skipped entry: lokier's 73 on cart, cart's kill of lokier, sp4rtan's post-round kill of cart). B4 adds the gating of Lokier's scripted hit on cart;
+- no `block_damage` pair involves it, so its fights are real: puppets still aim and shoot at the human, and the engine decides those hits.
+
+With `human === null` (the golden master) cart is a puppet like everyone else.
+
+### Drops and decisions
+
+A fire item or engagement is decided once, on the first tick it is active (`ScriptState.decisions`): it is dropped if its shooter is the human (silently) or if its shooter or target is dead or LIVE then (one `info` log per fire item, e.g. `script: dropped sp4rtan ak47 spray at donk (5 shots from tick 3192): donk is dead`). Once started, it runs to its end: cart keeps firing at Lokier for 0.2 s after the 18.8 s kill, as recorded. A dropped engagement doesn't aim. A LIVE pawn gets no input at all.
+
+### Weapons
+
+- `weapon_switch` → `set_weapon`, and `pickup` → `give` (with the gun's tuning clip / reserve) then `set_weapon`, both at the recorded tick − action latency. A pickup and a switch to the same weapon on one tick (sp4rtan's AK at 19.6 s) send one `set_weapon`. The new weapon's deploy time applies (AK 1 s).
+- donk: Glock at 49.93 s and back to the AWP at 50.083 s. The switch back is only in the note of the shots CSV's switch row; `tools/extract-round.ts` now writes both switches into `timelines.weapon.donk` (`docs/round-data.md`), and the schedule takes the second from there.
+- cart: knife at 59.6 s and the AK again at 63.5 s (the weapon timeline).
+
+### Utility
+
+For each `utility` entry (throw tick U): `set_weapon <grenade>` at U − latency − `throwHoldSec` − the grenade deploy (`grenades.deploySec`); `ATTACK` held for `throwHoldSec` (0.25 s, the pin pull); released at U − latency, which throws; then `set_weapon` back to the weapon the recording shows (if the pawn holds something else, e.g. cart's second smoke). During the hold and the release the pitch is `throwPitchDeg` (−10°, slightly up) and the yaw is the puppet's current facing. **The landing spots are not in the data, so this is a guess and purely cosmetic**: several 2D grenades hit a wall a few units in front of the thrower.
+
+### Plant and defuse
+
+- **barely** (plant tick 1761): `set_weapon c4` one c4 deploy (`damage.defaultDeploySec`, 1 s) before the USE window; `USE` and no stick (no forward, side, `WALK` or `DUCK`) from `plantTick − round(plantSec × 64) − input latency` (1555) to `plantTick` (1761), released as soon as a `bomb` event with phase `planted` arrives. The engine plants after `plantSec` (C3). If no `planted` event has arrived by `plantTick + plantFallbackTicks` (1764), the Core sends `plant {id, pos}` and logs it. After the plant (event or fallback) it draws the recorded weapon again (AK) if the pawn still holds something else.
+- **sp4rtan** (defuse 3955 → 4275): looks at the bomb (yaw and pitch, at the aim turn rate) from `preAimSec` before the USE window; `USE` and no stick from `defuseStart − input latency` (3954) to the scheduled defuse end (4275), released on a `defused` or `exploded` event. If the engine hasn't reported `defuse_start` by `defuseStart + defuseFallbackTicks` (3957), the Core sends `defuse_start {id}` and logs it.
+- Neither is scripted for the human's pawn, nor for a dead or LIVE one.
+- Until C3 merges, `Sim2DHost` ignores `USE`, `plant` and `defuse_start`, so the golden master shows both fallbacks; the USE windows are tested, the completion is `it.todo` (E1).
+
+### Results (golden master, `npm run scripted`, `tests/scripted-round.test.ts`)
+
+4,517 ticks, digest `7e3523a6`, identical on a second run and on replay.
+
+| t (s) | killer → victim | weapon | HS | recorded tick | `death` event | Δ |
+| ---: | --- | --- | --- | ---: | ---: | ---: |
+| 0.50 | snarlbot → incredibad | ak47 | | 32 | 32 | 0 |
+| 12.40 | snarlbot → snakelore | ak47 | | 794 | 794 | 0 |
+| 12.75 | lokier → eradicate | ssg08 | yes | 816 | 816 | 0 |
+| 17.85 | sp4rtan → snarlbot | deagle | | 1142 | 1142 | 0 |
+| 18.80 | cart → lokier | ak47 | yes | 1203 | 1203 | 0 |
+| 44.20 | barely → zwomp | ak47 | | 2829 | 2829 | 0 |
+| 50.35 | sp4rtan → donk | ak47 | | 3222 | 3222 | 0 |
+| 58.85 | sp4rtan → barely | ak47 | yes | 3766 | 3766 | 0 |
+| 69.40 | sp4rtan → cart | ak47 | | 4442 | 4442 | 0 |
+
+HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/100 → 27/93 (1184) → 0 (4442); snarlbot 44 from the setup; nobody else is hurt before their kill, and sp4rtan ends on 100. Shots: all 33 recorded exact-time shots land within a tick (Δ −1: 5, 0: 20, +1: 8; none further). Per shot: `npm run scripted`.
+
+### Tunables (`data/tuning.json` → `replay`, B3)
+
+| Key | Value | Meaning |
+| --- | --- | --- |
+| `preAimSec` | 0.35 | Aim at the target from this long before the first shot of an engagement (and at the bomb before a defuse). |
+| `aimTurnRateDegPerTick` | 30 | Yaw and pitch limit while aiming. |
+| `inputLatencyTicks` | 1 | Act → Observe latency of inputs (`shot` events); scripted inputs are sent this early. CS2: probe P3. |
+| `actionLatencyTicks` | 1 | Act → Observe latency of actions (`damage`, `set_weapon`, `give`); scripted actions are sent this early. |
+| `sprayGapFactor` | 1.5 | Consecutive shots at most this many cycles apart are one spray. |
+| `throwPitchDeg` | −10 | Grenade throw pitch (a guess; landings are unknown). |
+| `throwHoldSec` | 0.25 | `ATTACK` held before the release that throws (pin pull). |
+| `plantFallbackTicks` | 3 | No `planted` event this long after the recorded plant tick: `plant` action. |
+| `defuseFallbackTicks` | 2 | No `defuse_start` event this long after the recorded defuse start: `defuse_start` action. |
+
+### Known limits
+
+- **2D line of sight.** The damage is scripted, so whether a bullet hits doesn't matter here, but it shows where the 2D map differs: the aim is right (yaw within 0.3°, the intended band), yet 6 of the 13 fire items with a target don't reach it through the 2D nav line of sight: cart ↔ Lokier (Apartments window ↔ B site), snarlbot → incredibad (Palace, a level apart), sp4rtan → snarlbot and → barely, barely → Zwomp (inferred or level-changing positions). The other 7 would hit (`host.combatLog()` lists them as blocked hits). In CS2 these become real traces.
+- **No spread or recoil** in 2D; in CS2 a sprayed AK drifts, which only matters for the human's real fights (puppet damage is scripted).
+- **Grenades** are thrown blind (see Utility). Self-damage is blocked; a teammate would be hurt only with friendly fire on.
+- **Plant and defuse completion** depend on C3's engine rules; the fallbacks cover an engine that doesn't plant or report the defuse start, not one that interrupts a defuse.

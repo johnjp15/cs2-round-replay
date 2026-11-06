@@ -94,6 +94,8 @@ describe('EventSchedule', () => {
     expect(schedule.ofType('weapon_switch').map((w) => [w.tick, w.id, w.weapon])).toEqual([
       [1254, 'sp4rtan', 'ak47'],
       [tickOf(49.93), 'donk', 'glock'],
+      // Only in the note of the shots CSV's switch row ("back to AWP at 50.083"); the extractor puts both into timelines.weapon.
+      [tickOf(50.083), 'donk', 'awp'],
       [tickOf(57.6), 'barely', 'knife'],
       [tickOf(59.6), 'cart', 'knife'],
       [tickOf(63.5), 'cart', 'ak47'],

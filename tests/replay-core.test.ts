@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAYER_IDS, SessionLog, replay, type Control, type ObsEvent } from '../src/contracts/index';
+import { PLAYER_IDS, SessionLog, replay, type Action, type Control, type ObsEvent, type PlayerId } from '../src/contracts/index';
 import { EventSchedule, ReplayCore, RoundModel, startActions } from '../src/core/index';
 import { ScriptedHost, runSession } from './fakes';
 import { loadRound, loadTuning } from './round-fixture';
@@ -13,6 +13,18 @@ const SEED = 12;
 const newCore = (): ReplayCore => new ReplayCore(model, schedule, tuning, SEED);
 const START = new Map<number, readonly Control[]>([[0, [{ type: 'start' }]]]);
 const DEATH = new Map<number, readonly ObsEvent[]>([[21, [{ type: 'death', victim: 'incredibad', attacker: 'snarlbot', weapon: 'ak47', headshot: false }]]]);
+
+/** The setup Act's actions: startActions, then (B3) block_damage for the enemy pairs and self pairs of the puppets. */
+function setup(human: PlayerId | null): Action[] {
+  const blocks: Action[] = [];
+  for (const a of PLAYER_IDS) {
+    for (const b of PLAYER_IDS) {
+      if (a === human || b === human || (a !== b && model.player(a).team === model.player(b).team)) continue;
+      blocks.push({ type: 'block_damage', attacker: a, victim: b });
+    }
+  }
+  return [...startActions(model, tuning), ...blocks];
+}
 
 function run(ticks: number, controls = START): SessionLog {
   return runSession(ticks, new ScriptedHost(DEATH), newCore(), controls);
@@ -32,7 +44,7 @@ describe('ReplayCore', () => {
   it('sets the round up on the first tick after start, then holds the puppets still', () => {
     const log = run(30);
     const first = log.at(0);
-    expect(first?.act.actions).toEqual(startActions(model, tuning));
+    expect(first?.act.actions).toEqual(setup('sp4rtan'));
     expect(log.at(1)?.act.actions).toEqual([]);
 
     // ScriptedHost's human is sp4rtan: nine inputs, all neutral.
@@ -62,7 +74,7 @@ describe('ReplayCore', () => {
 
     const log = run(60, new Map<number, readonly Control[]>([[0, [{ type: 'start' }]], [40, [{ type: 'restart' }]]]));
     expect(log.at(39)?.act.actions).toEqual([]);
-    expect(log.at(40)?.act.actions).toEqual(startActions(model, tuning));
+    expect(log.at(40)?.act.actions).toEqual(setup('sp4rtan'));
     expect(log.at(41)?.act.actions).toEqual([]);
     // ScriptedHost doesn't revive incredibad, so he is DEAD again from the restart tick.
     expect(log.at(45)?.act.status.find((s) => s.id === 'incredibad')).toMatchObject({ mode: 'DEAD', sinceTick: 40 });

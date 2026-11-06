@@ -40431,6 +40431,18 @@
           "tick": 0,
           "weapon": "awp",
           "raw": "AWP"
+        },
+        {
+          "t": 49.93,
+          "tick": 3196,
+          "weapon": "glock",
+          "raw": "Glock-18 (shots CSV)"
+        },
+        {
+          "t": 50.083,
+          "tick": 3205,
+          "weapon": "awp",
+          "raw": "AWP (shots CSV note)"
         }
       ],
       "eradicate": [

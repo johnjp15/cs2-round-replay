@@ -44,3 +44,35 @@ export {
   describeEvent,
 } from './puppet';
 export type { PuppetState, PuppetStep, PuppetTrackSummary, Stick, TeleportPoint, TrackEvent, TrackEventKind, WeaponChange } from './puppet';
+export {
+  ScriptPlan,
+  ScriptedEvents,
+  SPRAY_FIT_SHIFTS,
+  cadenceOffsets,
+  ceilTicks,
+  cycleTicksOf,
+  deployTicksOf,
+  fitSpray,
+  initialScriptState,
+  recordedWeaponAt,
+  secTicks,
+  simulateHolds,
+  tapSpacing,
+} from './scripted';
+export type {
+  AttackSpan,
+  DamageItem,
+  DefuseItem,
+  Engagement,
+  FireItem,
+  FireKind,
+  InventoryItem,
+  PawnMode,
+  PlantItem,
+  ScriptDecision,
+  ScriptState,
+  SprayFit,
+  UtilityItem,
+} from './scripted';
+export { AIM_BANDS, MAX_PITCH_DEG, aimPitchAt, bandHeightOf, bandPoint, eyeHeightOf, lookToward, pitchTo, roundPitch, turnPitchToward } from './aim';
+export type { AimBand, Look } from './aim';

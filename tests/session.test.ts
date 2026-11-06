@@ -65,7 +65,15 @@ describe('Session', () => {
     s.step();
     const first = s.log().at(0);
     expect(first?.controls).toEqual([{ type: 'start' }]);
-    expect(first?.act.actions).toEqual(startActions(s.model, tuning));
+    // startActions, then (B3) block_damage between the puppets (cart, the human, is in none of them).
+    const setup = startActions(s.model, tuning);
+    expect(first?.act.actions.slice(0, setup.length)).toEqual(setup);
+    const blocks = first?.act.actions.slice(setup.length) ?? [];
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const a of blocks) {
+      expect(a.type).toBe('block_damage');
+      if (a.type === 'block_damage') expect([a.attacker, a.victim]).not.toContain('cart');
+    }
     expect(first?.observe.human).toBe('cart');
     expect(s.tick).toBe(1);
     expect(cart(s)).toMatchObject({ x: -391, y: 909, weapon: 'ak47' });
@@ -158,7 +166,8 @@ describe('Session', () => {
     for (let i = 0; i < s.log().length; i++) {
       const e = s.log().at(i);
       expect(e?.observe.human).toBeNull();
-      if (i > 0) expect(e?.act.inputs).toHaveLength(10);
+      // Every alive pawn (B3 kills incredibad at 0.5 s and snakelore at 12.4 s).
+      if (i > 0) expect(e?.act.inputs).toHaveLength(e?.observe.pawns.filter((p) => p.alive).length ?? -1);
     }
     expect(() => s.setHumanInput(humanInput('cart', held('up'), 90))).toThrow(/spectating/);
     expect(s.requestWeaponSlot(3)).toBe(false);

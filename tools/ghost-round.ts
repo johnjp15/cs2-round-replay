@@ -1,8 +1,9 @@
 /**
  * Ghost round: the whole recorded round with no human. ReplayCore drives all ten pawns
  * as puppets in Sim2DHost, and each pawn's path is measured against the raw recording.
- * Without B3 nobody dies, so each pawn is measured up to its recorded death tick and is
- * no longer driven once its track (plus the hold) ends.
+ * Each pawn is measured up to its recorded death tick (with B3 it also dies there) and
+ * is no longer driven once its track (plus the hold) ends. The same run, with B3's
+ * scripted events checked (kills, HP, shots), is `npm run scripted` (tools/scripted-round.ts).
  *
  *   npm run ghost        # writes logs/ghost-round.jsonl and logs/ghost-trace.json, prints the table
  *
@@ -97,6 +98,8 @@ export interface GhostRun {
   readonly inputs: GhostInputs;
   readonly model: RoundModel;
   readonly core: ReplayCore;
+  /** The engine after the last tick (for its `unhandled()` notes and `combatLog()`). */
+  readonly host: Sim2DHost;
   readonly log: SessionLog;
   readonly ticks: number;
   /** positions[tick][i] = pawn PLAYER_IDS[i] at `tick`, after that tick's actions (setup, snaps) and before its move. */
@@ -126,7 +129,7 @@ export function runGhostRound(inputs: GhostInputs = loadGhostInputs(), ticks: nu
     if (o.tick === 0) return;
     for (const x of a.actions) if (x.type === 'teleport') snaps.push({ id: x.id, tick: o.tick });
   });
-  return { inputs, model, core, log, ticks: n, positions, snaps };
+  return { inputs, model, core, host, log, ticks: n, positions, snaps };
 }
 
 // ---------------------------------------------------------------------------

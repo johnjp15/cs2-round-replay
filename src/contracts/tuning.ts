@@ -49,6 +49,24 @@ export interface ReplayTuning {
   buttonMinSec: number;
   /** When the line to the lookahead point is not walkable, look back this far (seconds) along the track for one that is. */
   steerFallbackSec: number;
+  /** B3 scripted events (docs/core.md "Scripted events"). A shooter aims at its target from this long (seconds) before the first shot of an engagement. */
+  preAimSec: number;
+  /** Yaw and pitch turn limit while aiming (at a target, or at the bomb for a defuse), degrees per tick. */
+  aimTurnRateDegPerTick: number;
+  /** Ticks from an input (ATTACK, USE) in an Act to its effect in an Observe (the shot event): scripted inputs are sent this early. 2D sim: 1; CS2: probe P3. */
+  inputLatencyTicks: number;
+  /** Ticks from an action (damage, set_weapon, give) in an Act to its effect in an Observe: scripted actions are sent this early. 2D sim: 1. */
+  actionLatencyTicks: number;
+  /** Consecutive shots of an automatic gun at most this many cycle times (60 / rpm) apart are one spray (ATTACK held). */
+  sprayGapFactor: number;
+  /** Grenade throw pitch (Source degrees, negative = up). The landing spots are not in the data, so throws are cosmetic. */
+  throwPitchDeg: number;
+  /** ATTACK is held this long (seconds) before the release that throws a grenade (pin pull). */
+  throwHoldSec: number;
+  /** No `planted` bomb event this many ticks after the recorded plant tick: send a `plant` action. */
+  plantFallbackTicks: number;
+  /** No `defuse_start` bomb event this many ticks after the recorded defuse start: send a `defuse_start` action. */
+  defuseFallbackTicks: number;
 }
 
 /** One gun (`weapons.<id>`). Sources and the damage formula: docs/combat.md. */
@@ -214,6 +232,15 @@ const REPLAY_KEYS = [
   'standSpeedThreshold',
   'buttonMinSec',
   'steerFallbackSec',
+  'preAimSec',
+  'aimTurnRateDegPerTick',
+  'inputLatencyTicks',
+  'actionLatencyTicks',
+  'sprayGapFactor',
+  'throwPitchDeg',
+  'throwHoldSec',
+  'plantFallbackTicks',
+  'defuseFallbackTicks',
 ] as const;
 const WEAPON_KEYS = ['damage', 'rpm', 'headshotMult', 'armorPen', 'rangeModifier', 'clip', 'reserve', 'reloadSec', 'deploySec'] as const;
 const BOMB_KEYS = ['plantSec', 'timerSec', 'defuseSec', 'defuseKitSec'] as const;
