@@ -9,6 +9,12 @@ export interface MovementTuning {
   svStopSpeed: number;
   walkFactor: number;
   crouchFactor: number;
+  /**
+   * Acceleration is scaled by max(wishspeed, accelScaleFloor × run speed of the held weapon).
+   * 0 = plain Source (scale = wishspeed: a crouching pawn cannot beat sv_stopspeed friction);
+   * 1 = CS:GO-style (walk/crouch accelerate at the weapon's run rate). See docs/movement.md.
+   */
+  accelScaleFloor: number;
   /** Run speed (units/s) by weapon id. */
   runSpeedByWeapon: Record<string, number>;
 }
@@ -53,6 +59,16 @@ export interface AiTuning {
   aimErrorDeg: number;
 }
 
+/** Nav-mesh geometry tolerances (see docs/nav.md). */
+export interface NavTuning {
+  /** Max height difference (units) at a crossing point for two areas to be neighbours. */
+  stepHeight: number;
+  /** Max gap (units) that still counts as touching; walkable space grows by half of it. */
+  edgeEpsilon: number;
+  /** Line of sight tolerates the segment passing within this many units of walkable space. */
+  losMargin: number;
+}
+
 export interface Tuning {
   movement: MovementTuning;
   replay: ReplayTuning;
@@ -61,6 +77,7 @@ export interface Tuning {
   bomb: BombTuning;
   grenades: GrenadeTuning;
   ai: AiTuning;
+  nav: NavTuning;
 }
 
 export class TuningError extends Error {
@@ -70,7 +87,7 @@ export class TuningError extends Error {
   }
 }
 
-const MOVEMENT_KEYS = ['svAccelerate', 'svFriction', 'svStopSpeed', 'walkFactor', 'crouchFactor'] as const;
+const MOVEMENT_KEYS = ['svAccelerate', 'svFriction', 'svStopSpeed', 'walkFactor', 'crouchFactor', 'accelScaleFloor'] as const;
 const REPLAY_KEYS = [
   'lookaheadSec',
   'driftNudgeUnits',
@@ -85,6 +102,7 @@ const WEAPON_KEYS = ['damage', 'rpm', 'headshotMult', 'armorPen', 'clip', 'reser
 const BOMB_KEYS = ['plantSec', 'timerSec', 'defuseSec', 'defuseKitSec'] as const;
 const GRENADE_KEYS = ['smokeSec', 'molotovSec', 'flashSec'] as const;
 const AI_KEYS = ['fovDeg', 'reactionSec', 'aimErrorDeg'] as const;
+const NAV_KEYS = ['stepHeight', 'edgeEpsilon', 'losMargin'] as const;
 
 /**
  * Validate parsed tuning JSON (or a JSON string) and return a typed copy.
@@ -112,6 +130,7 @@ export function parseTuning(json: unknown): Tuning {
     bomb: pickNumbers(asObject(root['bomb'], 'bomb'), BOMB_KEYS, 'bomb'),
     grenades: pickNumbers(asObject(root['grenades'], 'grenades'), GRENADE_KEYS, 'grenades'),
     ai: pickNumbers(asObject(root['ai'], 'ai'), AI_KEYS, 'ai'),
+    nav: pickNumbers(asObject(root['nav'], 'nav'), NAV_KEYS, 'nav'),
   };
 }
 

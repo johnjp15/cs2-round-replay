@@ -35,6 +35,7 @@ export const WEAPON_IDS = [
   'ssg08',
   'deagle',
   'm4a4',
+  'glock',
   'knife',
   'c4',
   'smoke',
@@ -43,6 +44,10 @@ export const WEAPON_IDS = [
   'molotov',
 ] as const;
 export type WeaponId = (typeof WEAPON_IDS)[number];
+
+/** Anything `give` can hand out: a weapon (incl. grenades and c4) or the defuse kit. */
+export const ITEM_IDS = [...WEAPON_IDS, 'defuser'] as const;
+export type ItemId = (typeof ITEM_IDS)[number];
 
 export const BUTTONS = ['ATTACK', 'ATTACK2', 'USE', 'DUCK', 'WALK', 'JUMP', 'RELOAD'] as const;
 export type Button = (typeof BUTTONS)[number];
@@ -240,7 +245,8 @@ export interface SetWeaponAction {
 export interface GiveAction {
   readonly type: 'give';
   readonly id: PlayerId;
-  readonly item: WeaponId;
+  readonly item: ItemId;
+  /** Guns: rounds in the magazine. 0 for grenades, c4 and the defuser (one item per give). */
   readonly clip: number;
   readonly reserve: number;
 }
@@ -250,6 +256,7 @@ export interface SetHpAction {
   readonly id: PlayerId;
   readonly hp: number;
   readonly armor: number;
+  readonly helmet: boolean;
 }
 
 export interface TeleportAction {

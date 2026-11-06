@@ -6,6 +6,7 @@
     "svStopSpeed": 80,
     "walkFactor": 0.52,
     "crouchFactor": 0.34,
+    "accelScaleFloor": 1,
     "runSpeedByWeapon": {
       "knife": 250,
       "ak47": 215,
@@ -15,7 +16,13 @@
       "m4a1": 225,
       "m4a4": 225,
       "famas": 220,
-      "galil": 215
+      "galil": 215,
+      "glock": 240,
+      "c4": 250,
+      "smoke": 245,
+      "flash": 245,
+      "he": 245,
+      "molotov": 245
     }
   },
   "replay": {
@@ -33,7 +40,8 @@
     "awp": { "damage": 115, "rpm": 41, "headshotMult": 4, "armorPen": 0.975, "clip": 10, "reserve": 30, "reloadSec": 3.7 },
     "ssg08": { "damage": 88, "rpm": 48, "headshotMult": 4, "armorPen": 0.85, "clip": 10, "reserve": 90, "reloadSec": 3.7 },
     "deagle": { "damage": 53, "rpm": 267, "headshotMult": 4, "armorPen": 0.932, "clip": 7, "reserve": 35, "reloadSec": 2.2 },
-    "m4a4": { "damage": 33, "rpm": 666, "headshotMult": 4, "armorPen": 0.7, "clip": 30, "reserve": 90, "reloadSec": 3.1 }
+    "m4a4": { "damage": 33, "rpm": 666, "headshotMult": 4, "armorPen": 0.7, "clip": 30, "reserve": 90, "reloadSec": 3.1 },
+    "glock": { "damage": 30, "rpm": 400, "headshotMult": 4, "armorPen": 0.47, "clip": 20, "reserve": 120, "reloadSec": 2.27 }
   },
   "bomb": { "plantSec": 3.2, "timerSec": 40, "defuseSec": 10, "defuseKitSec": 5 },
   "grenades": { "smokeSec": 18, "molotovSec": 7, "flashSec": 3 },

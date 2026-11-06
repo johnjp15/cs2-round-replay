@@ -1,4 +1,4 @@
-/** Contracts: shared data types, the seeded PRNG and tuning loader; imports nothing else from src/. */
+/** Contracts: shared data types, round data, the seeded PRNG and tuning loader; imports nothing else from src/. */
 export { Rng } from './rng';
 export { parseTuning, TuningError } from './tuning';
 export type {
@@ -9,12 +9,14 @@ export type {
   BombTuning,
   GrenadeTuning,
   AiTuning,
+  NavTuning,
 } from './tuning';
 
 export {
   PLAYER_IDS,
   TEAMS,
   WEAPON_IDS,
+  ITEM_IDS,
   BUTTONS,
   HITGROUPS,
   MODES,
@@ -32,6 +34,7 @@ export type {
   PlayerId,
   Team,
   WeaponId,
+  ItemId,
   Button,
   Hitgroup,
   Mode,
@@ -82,6 +85,36 @@ export type {
 } from './types';
 
 export type { IHost, ICore, HostSnapshot, CoreSnapshot } from './host';
+
+export { TICKS_PER_SEC, toTick, CONFIDENCES, GRENADE_IDS, SHOT_KINDS, RoundDataError, parseRound } from './round';
+export type {
+  Confidence,
+  GrenadeId,
+  ShotKind,
+  Vec2,
+  MapTransform,
+  RoundMeta,
+  Kit,
+  Pickup,
+  Player,
+  TrackSample,
+  YawSample,
+  Track,
+  Shot,
+  Kill,
+  Damage,
+  Utility,
+  Radio,
+  Chat,
+  Sighting,
+  LastKnown,
+  PovSegment,
+  RoundEvent,
+  Bomb,
+  TimelinePoint,
+  WeaponTimelinePoint,
+  RoundData,
+} from './round';
 
 export {
   JsonError,
