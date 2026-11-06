@@ -15,10 +15,12 @@
  * an exact JSON round-trip.
  */
 import {
+  Rng,
   canonicalize,
   compareOrdinal,
   isPlayerId,
   roundNumber,
+  sortButtons,
   toJsonValue,
   type Act,
   type Ammo,
@@ -45,6 +47,7 @@ import {
   type Vec3,
   type WeaponId,
 } from '../contracts/index';
+import { freshAiState, roleOf, stepAi, type AiBehaviour, type AiOther, type AiState } from './ai';
 import { applyBombAction, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
 import { collideMove, type Obstacle } from './collision';
 import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeOutcome } from './grenades';
@@ -52,6 +55,7 @@ import { traceShot, type ScanPawn } from './hitscan';
 import { TICKS_PER_SEC, TICK_DT, stepMove, type MoveState } from './movement';
 import type { NavMesh, NavPoint } from './nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from './round';
+import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning, type VisMask } from './vision';
 import {
   armorDamage,
   bulletDamage,
@@ -97,9 +101,13 @@ export interface PawnState {
   weapon: WeaponId;
   /** Sorted by item (ordinal). */
   inventory: InventoryItem[];
-  /** Recorded from set_mode; the host does not act on it. */
+  /** From set_mode. LIVE: the AI (ai.ts) drives the pawn and Core inputs for it are ignored. */
   mode: SettableMode;
   goal: Goal | null;
+  /** LIVE AI state while mode is LIVE, else null. */
+  ai: AiState | null;
+  /** Random draws the AI has used for this pawn (kept across goals, so a new goal never repeats old numbers). */
+  aiDraws: number;
   /** Fire / reload / deploy timers of the held item. */
   wpn: WeaponState;
   /** Blind (flashed) while the observed tick is below this. */
@@ -143,10 +151,36 @@ export interface Sim2DOptions {
   readonly roundTimeSec: number;
 }
 
+/** Vision and LIVE AI setup (C4). */
+export interface Sim2DVision {
+  /** The sight-blocking mask (data/mirage-vismask.json) for `sees`, bullets and grenades; null = the nav mesh's line of sight. */
+  readonly mask: VisMask | null;
+  /** Seed of the LIVE AI's randomness (each pawn draws from rng.fork('ai:' + id)). */
+  readonly seed: number;
+}
+
+/** What `aiDebug(id)` reports for a LIVE pawn (renderer, status panel, tests). Not part of observe(). */
+export interface AiDebug {
+  readonly id: PlayerId;
+  readonly role: string;
+  readonly behaviour: AiBehaviour;
+  readonly target: PlayerId | null;
+  readonly targetVisible: boolean;
+  /** Last place an enemy was seen or heard, and the tick. */
+  readonly lastKnown: { readonly pos: Vec3; readonly tick: number; readonly id: PlayerId } | null;
+  /** Where it is heading (null when holding), and the rest of its nav path from the next point on. */
+  readonly dest: Vec3 | null;
+  readonly path: readonly Vec3[];
+  readonly routeIndex: number;
+  readonly repaths: number;
+  readonly sinceTick: number;
+}
+
 /** Queued bomb and round actions (applied in the next tick(), after scripted damage, in Core order). */
 type QueuedRoundAction = BombAction | EndRoundAction;
 
-const HOST_SNAPSHOT_VERSION = 3;
+/** 4 (C4): pawns carry `ai` / `aiDraws`, and the host its AI seed. */
+const HOST_SNAPSHOT_VERSION = 4;
 /** CS2 spawn state for a pawn before Core sets it up (game rules, not calibration). */
 const SPAWN_HP = 100;
 const SPAWN_WEAPON: WeaponId = 'knife';
@@ -174,11 +208,20 @@ interface HostState {
   readonly round: RoundState;
   /** Events of the last tick, as observe() reports them. */
   readonly events: readonly ObsEvent[];
+  readonly aiSeed: number;
 }
 
 export class Sim2DHost implements IHost {
   private readonly nav: NavMesh;
   private readonly tuning: Tuning;
+  /** Sight for `sees` and bullets (mask + level check), and its flat form for grenades. */
+  private readonly sight: Sight;
+  private readonly grenadeSight: GrenadeSight;
+  private aiSeed: number;
+  /** `sees` of the current state (pawn order), or null when it must be recomputed. */
+  private seesCache: PlayerId[][] | null = null;
+  /** AI inputs for this tick (LIVE pawns), set at the start of tick(). */
+  private aiInputs: PawnInput[] = [];
   private tickNo = 0;
   private human: PlayerId | null = 'cart';
   private humanInput: PawnInput | null = null;
@@ -201,8 +244,9 @@ export class Sim2DHost implements IHost {
 
   /**
    * @param options score before the round and the round clock at tick 0; default 0 – 0 and `tuning.round.timeSec`.
+   * @param vision the sight mask and the AI seed (C4); default no mask (the nav mesh's line of sight) and seed 0.
    */
-  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null = null) {
+  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null = null, vision: Sim2DVision | null = null) {
     if (roster.length === 0) throw new Error('Sim2DHost: empty roster');
     const seen = new Set<string>();
     for (const r of roster) {
@@ -212,6 +256,10 @@ export class Sim2DHost implements IHost {
     }
     this.nav = nav;
     this.tuning = tuning;
+    this.sight = new Sight(vision?.mask ?? null, nav, sightOptionsFromTuning(tuning));
+    this.grenadeSight = new GrenadeSight(this.sight, nav);
+    this.aiSeed = vision?.seed ?? 0;
+    if (!Number.isInteger(this.aiSeed)) throw new Error(`Sim2DHost: AI seed must be an integer, got ${this.aiSeed}`);
     this.pawns = [...roster].sort((a, b) => compareOrdinal(a.id, b.id)).map((r) => spawnPawn(r));
     const o = options ?? { score: { ct: 0, t: 0 }, roundTimeSec: tuning.round.timeSec };
     if (!Number.isFinite(o.roundTimeSec) || o.roundTimeSec < 0) throw new Error(`Sim2DHost: bad roundTimeSec ${o.roundTimeSec}`);
@@ -224,10 +272,11 @@ export class Sim2DHost implements IHost {
   // ---- IHost ---------------------------------------------------------------------------------
 
   observe(): Observe {
+    const sees = this.currentSees();
     return {
       tick: this.tickNo,
       t: this.tickNo / TICKS_PER_SEC,
-      pawns: this.pawns.map((p) => pawnObs(p)),
+      pawns: this.pawns.map((p, i) => pawnObs(p, sees[i] ?? [])),
       events: this.events.map((e) => ({ ...e })),
       human: this.human,
       round: this.roundObs(),
@@ -254,6 +303,7 @@ export class Sim2DHost implements IHost {
     this.inputs = inputs.sort((p, q) => compareOrdinal(p.id, q.id));
     const teleported = new Set<string>();
     for (const action of a.actions) this.applyAction(action, teleported);
+    this.seesCache = null;
   }
 
   control(c: Control): void {
@@ -276,6 +326,7 @@ export class Sim2DHost implements IHost {
       bomb: this.bomb,
       round: this.round,
       events: this.events,
+      aiSeed: this.aiSeed,
     };
     return { kind: 'host', data: toJsonValue(state) };
   }
@@ -298,7 +349,8 @@ export class Sim2DHost implements IHost {
       d.bomb === null ||
       typeof d.round !== 'object' ||
       d.round === null ||
-      !Array.isArray(d.events)
+      !Array.isArray(d.events) ||
+      !Number.isInteger(d.aiSeed)
     ) {
       throw new Error('Sim2DHost.restore: malformed snapshot');
     }
@@ -321,6 +373,9 @@ export class Sim2DHost implements IHost {
     this.bomb = copy.bomb;
     this.round = copy.round;
     this.events = [...copy.events];
+    this.aiSeed = copy.aiSeed;
+    this.seesCache = null;
+    this.aiInputs = [];
   }
 
   // ---- Sim2D-specific ------------------------------------------------------------------------
@@ -336,6 +391,7 @@ export class Sim2DHost implements IHost {
   tick(): void {
     const t = this.tickNo;
     this.outbox = [];
+    this.stepLiveAi(t);
     const locked = lockedPawns(this.bomb, t, this.bombPawns(), this.tuning.bomb);
     this.moveAll(t, locked);
     for (const p of this.pawns) if (p.alive) this.stepPawnWeapon(p, t);
@@ -354,6 +410,7 @@ export class Sim2DHost implements IHost {
     this.tickNo++;
     this.events = this.outbox;
     this.outbox = [];
+    this.seesCache = null;
   }
 
   /** Which pawn the human controls (default `cart`); null = bots only. Clears any human input. */
@@ -399,6 +456,41 @@ export class Sim2DHost implements IHost {
     return this.blocked.map((b) => ({ ...b }));
   }
 
+  /**
+   * LIVE AI debug view of a pawn (current behaviour, target, path), or null if it isn't LIVE. For the renderer and
+   * status panel; not part of observe() or the contract.
+   */
+  aiDebug(id: PlayerId): AiDebug | null {
+    const p = this.pawn(id);
+    if (p === null || p.mode !== 'LIVE' || p.ai === null) return null;
+    const a = p.ai;
+    const sees = this.currentSees()[this.pawns.indexOf(p)] ?? [];
+    return {
+      id: p.id,
+      role: p.goal === null ? 'hold' : roleOf(p.goal),
+      behaviour: a.behaviour,
+      target: a.target,
+      targetVisible: a.target !== null && sees.includes(a.target),
+      lastKnown: a.lastKnown === null ? null : { pos: copyVec(a.lastKnown.pos), tick: a.lastKnown.tick, id: a.lastKnown.id },
+      dest: a.path.length === 0 || a.dest === null ? null : copyVec(a.dest),
+      path: a.path.slice(a.pathIndex).map((q) => copyVec(q)),
+      routeIndex: a.routeIndex,
+      repaths: a.repaths,
+      sinceTick: a.sinceTick,
+    };
+  }
+
+  /** `sees` of every pawn at the current state, in roster (id) order; computed once per state. */
+  sees(id: PlayerId): readonly PlayerId[] {
+    const i = this.pawns.findIndex((p) => p.id === id);
+    return i < 0 ? [] : [...(this.currentSees()[i] ?? [])];
+  }
+
+  /** The host's sight query: the mask (or nav) in 2D plus the level check (tests, tools). */
+  sightQuery(): Sight {
+    return this.sight;
+  }
+
   /** True if the 2D segment a–b crosses an active smoke at the current tick (for vision, task C4). */
   smokeBlocks(a: NavPoint, b: NavPoint): boolean {
     return smokeBlocks(this.grenades, this.tickNo, a, b, this.tuning.grenades);
@@ -430,6 +522,76 @@ export class Sim2DHost implements IHost {
   }
 
   // ---- tick phases ---------------------------------------------------------------------------
+
+  /** `sees` for the current state (contract F5, vision.ts computeSees), cached until the state changes. */
+  private currentSees(): PlayerId[][] {
+    if (this.seesCache === null) {
+      const d = this.tuning.damage;
+      this.seesCache = computeSees(
+        this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick })),
+        this.sight,
+        this,
+        { fovDeg: this.tuning.ai.fovDeg, eyeHeight: d.eyeHeight, crouchEyeHeight: d.crouchEyeHeight },
+      );
+    }
+    return this.seesCache;
+  }
+
+  /**
+   * The LIVE AI's inputs for this tick (ai.ts), from the state the tick starts with: each LIVE, alive pawn in id
+   * order, with its `sees` and last tick's events. A weapon switch it asks for is applied at once (as set_weapon).
+   */
+  private stepLiveAi(t: number): void {
+    this.aiInputs = [];
+    if (!this.pawns.some((p) => p.mode === 'LIVE' && p.alive)) return;
+    const sees = this.currentSees();
+    const others: AiOther[] = this.pawns.map((q) => ({ id: q.id, team: q.team, pos: copyVec(q.move.pos), crouching: q.move.crouching, alive: q.alive }));
+    const planted = this.bomb.state === 'planted' || this.bomb.state === 'defused' || this.bomb.state === 'exploded' ? this.bomb.pos : null;
+    const root = new Rng(this.aiSeed);
+    this.pawns.forEach((p, i) => {
+      if (p.mode !== 'LIVE' || !p.alive) return;
+      if (p.id === this.human && this.humanInput !== null) return;
+      const goal = p.goal ?? { route: [], role: 'hold', hold: null };
+      p.ai ??= freshAiState(p.id, t, p.aiDraws);
+      const held = p.inventory.find((q) => q.item === p.weapon) ?? null;
+      const w = p.wpn;
+      const reloading = w.reloadEndTick !== null;
+      const step = stepAi(p.ai, {
+        tick: t,
+        self: {
+          id: p.id,
+          team: p.team,
+          pos: copyVec(p.move.pos),
+          vel: copyVec(p.move.vel),
+          yaw: p.move.yaw,
+          pitch: p.move.pitch,
+          crouching: p.move.crouching,
+          weapon: p.weapon,
+          clip: held?.clip ?? 0,
+          reserve: held?.reserve ?? 0,
+          items: p.inventory.map((q) => q.item),
+          ready: reached(t, w.nextAttackTick) && reached(t, w.deployEndTick) && !reloading,
+          reloading,
+        },
+        goal,
+        others: others.filter((q) => q.id !== p.id),
+        sees: sees[i] ?? [],
+        events: this.events,
+        bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb) },
+        nav: this.nav,
+        sight: this.sight,
+        tuning: this.tuning,
+        rng: root.fork('ai:' + p.id),
+      });
+      p.ai = step.state;
+      p.aiDraws = step.state.draws;
+      if (step.weapon !== null && p.inventory.some((q) => q.item === step.weapon) && p.weapon !== step.weapon) {
+        p.weapon = step.weapon;
+        p.wpn = deployState(p.wpn, t, deploySec(step.weapon, this.tuning));
+      }
+      this.aiInputs.push(canonicalize({ id: p.id, ...step.input, buttons: sortButtons(step.input.buttons) }));
+    });
+  }
 
   /**
    * Movement in id order. A `locked` pawn (planting or defusing) keeps its position and gets zero velocity, but
@@ -492,7 +654,7 @@ export class Sim2DHost implements IHost {
     if (step.fired && gun !== null) {
       this.outbox.push({ type: 'shot', shooter: p.id, weapon: p.weapon });
       this.sound(p, 'shot');
-      const hit = traceShot(scanPawn(p), this.pawns.map((q) => scanPawn(q)), this.nav, this.tuning.damage);
+      const hit = traceShot(scanPawn(p), this.pawns.map((q) => scanPawn(q)), this.sight, this.tuning.damage);
       if (hit !== null) {
         const victim = this.pawn(hit.victim) as PawnState;
         const dmg = bulletDamage(gun, hit.distance, hit.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
@@ -505,7 +667,7 @@ export class Sim2DHost implements IHost {
   private throwHeld(p: PawnState, t: number): void {
     const kind = p.weapon;
     if (!isGrenade(kind)) return;
-    const g = throwGrenade(kind, { id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, pitch: p.move.pitch, crouching: p.move.crouching }, t, this.nextGrenadeSeq, this.nav, this.tuning.grenades, this.tuning.damage);
+    const g = throwGrenade(kind, { id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, pitch: p.move.pitch, crouching: p.move.crouching }, t, this.nextGrenadeSeq, this.grenadeSight, this.tuning.grenades, this.tuning.damage);
     this.nextGrenadeSeq++;
     this.grenades = [...this.grenades, g];
     const i = p.inventory.findIndex((q) => q.item === kind);
@@ -519,7 +681,7 @@ export class Sim2DHost implements IHost {
   private stepGrenades(t: number): void {
     if (this.grenades.length === 0) return;
     const r = stepGrenades(this.grenades, t, {
-      nav: this.nav,
+      nav: this.grenadeSight,
       pawns: this.pawns.map((p) => ({ id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, alive: p.alive })),
       grenades: this.tuning.grenades,
       damage: this.tuning.damage,
@@ -713,8 +875,11 @@ export class Sim2DHost implements IHost {
     return this.pawns.find((p) => p.id === id) ?? null;
   }
 
+  /** The human's input, else the AI's for a LIVE pawn (Core inputs for it are ignored), else Core's. */
   private inputFor(id: PlayerId): PawnInput | null {
     if (id === this.human && this.humanInput !== null) return this.humanInput;
+    const p = this.pawn(id);
+    if (p !== null && p.mode === 'LIVE') return this.aiInputs.find((q) => q.id === id) ?? null;
     return this.inputs.find((q) => q.id === id) ?? null;
   }
 
@@ -739,6 +904,8 @@ export class Sim2DHost implements IHost {
         if (p === null) return this.note('action', type, 'unknown pawn', action);
         p.move = { ...p.move, pos: { x: action.pos.x, y: action.pos.y, z: action.pos.z }, vel: { x: 0, y: 0, z: 0 }, yaw: action.yaw };
         teleported.add(p.id);
+        // A LIVE pawn that is moved re-plans from where it lands.
+        if (p.ai !== null) p.ai = { ...p.ai, path: [], pathIndex: 0, dest: null, holdYaw: null };
         return;
       }
       case 'set_hp': {
@@ -777,6 +944,8 @@ export class Sim2DHost implements IHost {
         if (p === null) return this.note('action', type, 'unknown pawn', action);
         p.mode = action.mode;
         p.goal = action.goal;
+        // Every set_mode LIVE starts the goal afresh (route from its first waypoint); REPLAY drops the AI state.
+        p.ai = action.mode === 'LIVE' ? freshAiState(p.id, this.tickNo, p.aiDraws) : null;
         return;
       }
       case 'damage':
@@ -820,6 +989,8 @@ function spawnPawn(r: RosterEntry): PawnState {
     inventory: [{ item: SPAWN_WEAPON, clip: 0, reserve: 0 }],
     mode: 'REPLAY',
     goal: null,
+    ai: null,
+    aiDraws: 0,
     wpn: freshWeaponState(),
     blindUntilTick: 0,
     nextFootstepTick: 0,
@@ -831,7 +1002,7 @@ function scanPawn(p: PawnState): ScanPawn {
   return { id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, pitch: p.move.pitch, crouching: p.move.crouching, alive: p.alive };
 }
 
-function pawnObs(p: PawnState): PawnObs {
+function pawnObs(p: PawnState, sees: readonly PlayerId[]): PawnObs {
   const held = p.inventory.find((q) => q.item === p.weapon);
   const ammo: Ammo = held === undefined ? { clip: 0, reserve: 0 } : { clip: held.clip, reserve: held.reserve };
   return {
@@ -847,7 +1018,7 @@ function pawnObs(p: PawnState): PawnObs {
     weapon: p.weapon,
     ammo,
     crouching: p.move.crouching,
-    sees: [],
+    sees: [...sees],
   };
 }
 

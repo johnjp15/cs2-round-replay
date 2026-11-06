@@ -149,6 +149,19 @@ export class NavMesh {
     return best;
   }
 
+  /**
+   * Floor heights of every area containing (x, y) (exact rectangles, inclusive edges), ascending. More than one
+   * where levels are stacked (Catwalk over the Tunnel). Used by vision's level check (C4). Allocates.
+   */
+  floorsAt(x: number, y: number): number[] {
+    const out: number[] = [];
+    for (const i of this.areaGrid.candidates(x, y)) {
+      const a = this.areas[i] as NavArea;
+      if (rectContains(a, x, y)) out.push(areaZ(a, x, y));
+    }
+    return out.sort((p, q) => p - q);
+  }
+
   /** True if p lies in walkable space (the union of areas, each grown by edgeEpsilon/2). */
   isWalkable(p: NavPoint): boolean {
     return this.walkGrid.contains(p.x, p.y);

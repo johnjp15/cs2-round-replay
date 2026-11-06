@@ -21,7 +21,9 @@
     "bench:session": "tsx tools/bench-session.ts",
     "check:browser": "tsx tools/browser-check.ts",
     "ghost": "tsx tools/ghost-round.ts",
-    "scripted": "tsx tools/scripted-round.ts"
+    "scripted": "tsx tools/scripted-round.ts",
+    "extract:vismask": "tsx tools/extract-vismask.ts",
+    "vision": "tsx tools/vision-labels.ts"
   },
   "repository": {
     "type": "git",
@@ -33,6 +35,7 @@
     "eslint": "^10.14.0",
     "eslint-plugin-import-x": "^4.17.1",
     "globals": "^17.14.0",
+    "jpeg-js": "^0.4.4",
     "playwright-core": "1.63.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",

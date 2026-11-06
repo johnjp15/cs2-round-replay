@@ -101,8 +101,10 @@ A bullet is a 2D ray from the shooter's `pos` along `yaw`, up to `damage.maxRang
 1. **Candidates** are alive pawns other than the shooter whose circle of radius `damage.pawnRadius` (16) the ray
    crosses ahead of the shooter. A pawn the shooter overlaps counts at distance 0. With `friendlyFire: false`,
    teammates are skipped: shots pass through them. They are taken in ray order, then by id.
-2. **Walls:** if `nav.lineOfSight(shooter, impact)` fails for a candidate (impact = where the ray enters its
-   circle), the bullet hit a wall first. No pawn further along is hit.
+2. **Walls:** if the host's sight (`Sight.lineOfSight(shooter, impact)`: the radar sight mask plus the level check, C4,
+   `docs/vision.md`; the nav mesh's line of sight on a host without a mask) fails for a candidate (impact = where the
+   ray enters its circle, at the target's floor z), the bullet hit a wall first. No pawn further along is hit.
+   Bullets go through what the mask calls open: windows (the Apartments window over B), railings and props.
 3. **Hitgroup from pitch:** for each band, the aim pitch is −atan2(band z − eye z, horizontal distance), using
    the target's centre. The closest band to the shooter's pitch is the hitgroup if it is within
    `damage.hitToleranceDeg` (3°). Otherwise the bullet passes over or under this pawn and the next candidate is
@@ -213,7 +215,7 @@ is left, it is drawn (deploy); otherwise the first primary, else secondary, else
    0.4 × sv_gravity 800).
 3. **Flight time:** from eye height until the grenade falls back to the thrower's floor (flat ground).
 4. **Landing:** horizontal range capped at `throwRange` (1500); then the grenade stops at the first wall along the
-   path (bisection on nav line of sight), pulled back `wallBackoff` (16).
+   path (bisection on the 2D sight mask, C4; the nav line of sight without a mask), pulled back `wallBackoff` (16).
 5. A level throw lands 729 units away after 1.1 s (70 ticks). No bounces and no inherited player velocity.
 
 **Fuse and effects.**
@@ -221,8 +223,8 @@ is left, it is drawn (deploy); otherwise the first primary, else secondary, else
 | kind | pops | effect |
 | --- | --- | --- |
 | smoke | 1.5 s after the throw, or on landing if later | 144-radius circle for `smokeSec` (18 s). Puts out any fire whose centre it covers. |
-| flash | 1.5 s after the throw (mid-air if still flying) | blinds each alive pawn (both teams, thrower included) that has nav line of sight to it, has no active smoke in between (`smokeBlocksFlash`), and sees it within `ai.fovDeg` (106°) of its yaw. Blind time = `flashSec` (3 s) × (1 − distance / `flashRange` 1500) × (1 − (1 − `flashEdgeFactor` 0.5) × angle / 53°). |
-| he | 1.5 s after the throw | radial damage to pawns in nav line of sight: 98 × (1 − d / 350), with d the 3D distance to the pawn's stomach height. Armor applies with `heArmorPen` 0.575 (98 point blank → 56 HP / 21 armor). Hitgroup `generic`. |
+| flash | 1.5 s after the throw (mid-air if still flying) | blinds each alive pawn (both teams, thrower included) that has 2D line of sight to it (the sight mask, C4), has no active smoke in between (`smokeBlocksFlash`), and sees it within `ai.fovDeg` (106°) of its yaw. Blind time = `flashSec` (3 s) × (1 − distance / `flashRange` 1500) × (1 − (1 − `flashEdgeFactor` 0.5) × angle / 53°). |
+| he | 1.5 s after the throw | radial damage to pawns in 2D line of sight (the sight mask, C4): 98 × (1 − d / 350), with d the 3D distance to the pawn's stomach height. Armor applies with `heArmorPen` 0.575 (98 point blank → 56 HP / 21 armor). Hitgroup `generic`. |
 | molotov | on landing or 2 s after the throw, whichever is first | 120-radius fire on the floor for `molotovSec` (7 s): 8 HP (40 HP/s × 0.2 s) at burst + ⌈k × 12.8⌉ ticks, 35 steps, to pawns inside with a floor within `fireHeight` (64). Armor does not reduce fire. Hitgroup `generic`. A molotov that bursts inside an active smoke makes no fire. |
 
 Grenade damage goes to enemies of the thrower and the thrower; teammates only with `friendlyFire`. It respects
@@ -466,6 +468,8 @@ Sources read 2026-11-05 (ReGameDLL pinned to the commit above).
 
 ## Per-tick order (`Sim2DHost.tick`)
 
+0. **LIVE AI** (C4, `docs/ai.md`): each LIVE, alive pawn computes its input for this tick from the state the tick starts
+   with (its `sees`, the previous tick's events); weapon switches it asks for apply at once.
 1. **Movement locks:** the planter and the defuser whose plant / defuse goes on this tick, or the pawn that would
    start one (`lockedPawns`, same rules as step 7).
 2. **Inputs → movement:** every alive pawn runs `stepMove` (id order); a locked pawn keeps its position with zero
@@ -494,8 +498,9 @@ shot already covers it, and a `damage` and a `plant` in the same act always appl
 
 ## Snapshot
 
-Snapshot version 3 (C3) holds `{tick, human, humanInput, inputs, pawns, grenades, nextGrenadeSeq, blocked,
-pendingDamage, pendingRound, bomb, round, events}`. Each pawn carries its weapon timers (`wpn`: `nextAttackTick`,
+Snapshot version 4 (C4; 3 in C3) holds `{tick, human, humanInput, inputs, pawns, grenades, nextGrenadeSeq, blocked,
+pendingDamage, pendingRound, bomb, round, events, aiSeed}`; each pawn also carries its LIVE AI state (`ai`, `aiDraws`,
+`docs/ai.md`). Each pawn carries its weapon timers (`wpn`: `nextAttackTick`,
 `deployEndTick`, `reloadEndTick`, `shotThisPress`, `grenadePrimed`), `blindUntilTick`, `nextFootstepTick` and
 `blockedBy`. `bomb` is `BombData` (state, position, planter, plant / explode / next-beep ticks, the plant and
 defuse in progress, who defused it and when); `round` is `RoundState` (round clock, time-out tick, score, winner,

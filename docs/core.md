@@ -185,7 +185,7 @@ CTs other than sp4rtan (incredibad, lokier, snakelore, zwomp) have none.
 
 The whole round with **no human**: `ReplayCore` (B1 + puppets + B3's scripted events) drives all ten pawns in `Sim2DHost` (`act = core.step(observe)`, `host.apply(act)`, `host.tick()`; the driver is `drive()` in `tools/ghost-round.ts`). Each pawn is measured up to its recorded death tick (or last sample), where B3 also kills it, and is no longer driven after its track plus the hold. Errors are 2D, against the **raw** recording at every 10 Hz sample, with the pawn position interpolated between the ticks around the sample time (positions taken after each tick's actions, so the tick-0 setup counts). "ticks > 24 behind" is the share of measured ticks more than 24 units from the raw track. `npm run ghost` writes `logs/ghost-round.jsonl` and `logs/ghost-trace.json` (`toReplayTrace`, for the replay page; snaps appear as `info` events).
 
-**2D model values; compare against the CS2 probe.** 4,517 ticks, digest `0fb55e23` (with B3 and C3).
+**2D model values; compare against the CS2 probe.** 4,517 ticks, digest `e6c2be70` (with B3, C3 and C4's sight mask; `0fb55e23` before C4: real `sees` and grenades clamped by the mask change the Observe stream, not the positions, the snaps or the Core's acts).
 
 | player | team | observed n | RMS | max (at t) | est./inf. n | RMS | max (at t) | inferred RMS | radius (min–max) | snaps (t) | ticks > 24 behind |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
@@ -326,7 +326,7 @@ For each `utility` entry (throw tick U): `set_weapon <grenade>` at U − latency
 
 ### Results (golden master, `npm run scripted`, `tests/scripted-round.test.ts`)
 
-4,517 ticks, digest `0fb55e23` (with C3's bomb, round rules and collision; `7e3523a6` before C3), identical on a second run and on replay. The driver passes the round's score (CT 11 – T 15) and clock (98.25 s) to `Sim2DHost`, like the Session.
+4,517 ticks, digest `e6c2be70` (with C4's sight mask; `0fb55e23` before C4, `7e3523a6` before C3), identical on a second run and on replay. C4 changed only the Observe stream: `sees` is real (2,063 of the 4,517 observes differ in it), and 10 grenade pops moved or changed tick because throws now stop at the sight mask's walls instead of nav holes; every Core act, position, kill, HP change, shot tick, the plant and the defuse are byte-identical. The driver passes the round's score (CT 11 – T 15) and clock (98.25 s) to `Sim2DHost`, like the Session.
 
 | t (s) | killer → victim | weapon | HS | recorded tick | `death` event | Δ |
 | ---: | --- | --- | --- | ---: | ---: | ---: |
@@ -367,7 +367,7 @@ HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/10
 
 ### Known limits
 
-- **2D line of sight.** The damage is scripted, so whether a bullet hits doesn't matter here, but it shows where the 2D map differs: the aim is right (yaw within 0.3°, the intended band), yet 6 of the 13 fire items with a target don't reach it through the 2D nav line of sight: cart ↔ Lokier (Apartments window ↔ B site), snarlbot → incredibad (Palace, a level apart), sp4rtan → snarlbot and → barely, barely → Zwomp (inferred or level-changing positions). The other 7 would hit (`host.combatLog()` lists them as blocked hits). In CS2 these become real traces.
+- **2D line of sight.** The damage is scripted, so whether a bullet hits doesn't matter here, but it shows where the 2D map differs: the aim is right (yaw within 0.3°, the intended band), yet 6 of the 13 fire items with a target didn't reach it through the 2D nav line of sight. With C4's sight mask (`docs/vision.md`, `npx tsx tools/vision-shots.ts`) 9 of 13 have sight at a shot and 10 get an engine hit (`host.combatLog()` lists them as blocked hits): cart ↔ Lokier through the Apartments window now reach. Still blocked: snarlbot → incredibad (incredibad's inferred spot; the hit still lands on his circle), sp4rtan → snarlbot (inferred route), barely → Zwomp (barely's recorded spot is a level too low) and sp4rtan → barely (a B-site pillar, ~25 units). In CS2 these become real traces.
 - **No spread or recoil** in 2D; in CS2 a sprayed AK drifts, which only matters for the human's real fights (puppet damage is scripted).
 - **Grenades** are thrown blind (see Utility). Self-damage is blocked; a teammate would be hurt only with friendly fire on.
 - **Plant and defuse** rely on the engine's rules (C3 in 2D, the game in CS2); the fallbacks cover an engine that doesn't plant or report the defuse start, not one that interrupts a defuse (a `defuse_stop` is not retried).

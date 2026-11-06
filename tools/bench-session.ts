@@ -33,7 +33,7 @@ function pct(sorted: Float64Array, q: number): number {
 }
 
 function bench(name: string, core: CoreFactory, runs: number): void {
-  const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'));
+  const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'));
   const ticks = Math.round(data.round.meta.durationSec * 64);
   for (let r = 0; r < runs; r++) {
     const s = new Session({ ...data, seed: 1, human: null, core });

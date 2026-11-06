@@ -1,6 +1,6 @@
 /**
  * Hitscan for the 2D sim. A bullet is a ray from the shooter's eye along `yaw`. In 2D it hits the first
- * enemy whose circle (`damage.pawnRadius`) it crosses with nav line of sight to the impact point; the
+ * enemy whose circle (`damage.pawnRadius`) it crosses with line of sight to the impact point; the
  * hitgroup comes from `pitch`: the band (head, chest, stomach, leg) whose aim pitch is closest to the
  * shooter's pitch, within `damage.hitToleranceDeg`, else the bullet passes over or under that pawn and
  * flies on. Bullets ignore smoke. Pitch is Source's: degrees, positive = looking down. docs/combat.md.
@@ -25,7 +25,10 @@ export interface ScanPawn {
   readonly alive: boolean;
 }
 
-/** The nav query hitscan uses (NavMesh fits). */
+/**
+ * The sight query hitscan uses: Sim2DHost passes its Sight (the radar mask plus the level check, C4), so bullets go
+ * through windows; NavMesh fits too (2D, z ignored). Both ends carry their floor z.
+ */
 export interface LosQuery {
   lineOfSight(a: NavPoint, b: NavPoint): boolean;
 }
@@ -79,7 +82,7 @@ export function pickBand(pitch: number, from: Body, to: Body, d: DamageTuning): 
 /**
  * Trace one bullet from `shooter` through `pawns` (any order; candidates are taken by ray distance, then
  * id). Skips the shooter, dead pawns and (friendly fire off) teammates. Returns the first pawn hit, or
- * null. A pawn the ray crosses but `nav.lineOfSight(shooter, impact)` rejects is behind a wall, and so is
+ * null. A pawn the ray crosses but `sight.lineOfSight(shooter, impact)` rejects is behind a wall, and so is
  * everything further along the ray.
  */
 export function traceShot(shooter: ScanPawn, pawns: readonly ScanPawn[], nav: LosQuery, d: DamageTuning): ShotHit | null {
@@ -107,7 +110,7 @@ export function traceShot(shooter: ScanPawn, pawns: readonly ScanPawn[], nav: Lo
   cands.sort((a, b) => a.enter - b.enter || (a.p.id < b.p.id ? -1 : a.p.id > b.p.id ? 1 : 0));
   const eyeZ = shooter.pos.z + eyeHeight(shooter.crouching, d);
   for (const c of cands) {
-    const impact2 = { x: shooter.pos.x + dx * c.enter, y: shooter.pos.y + dy * c.enter };
+    const impact2 = { x: shooter.pos.x + dx * c.enter, y: shooter.pos.y + dy * c.enter, z: c.p.pos.z };
     if (!nav.lineOfSight(shooter.pos, impact2)) break;
     const band = pickBand(shooter.pitch, shooter, c.p, d);
     if (band === null) continue;

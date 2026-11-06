@@ -216,10 +216,63 @@ export interface SoundTuning {
   footstepIntervalSec: number;
 }
 
+/** Vision and the 2D engine's LIVE AI (C4; docs/vision.md, docs/ai.md). */
 export interface AiTuning {
+  /** Field of view (full angle, degrees) for `sees` and flashes. */
   fovDeg: number;
+  /** Seconds from first seeing an enemy to turning on it (± reactionJitter). */
   reactionSec: number;
+  /** Standard deviation (degrees) of the aim offset drawn when a target is acquired; it settles over aimSettleSec. */
   aimErrorDeg: number;
+  /** Sight mask: a run of wall cells (radar pixels) along a sight line longer than this blocks. */
+  losWallTolerancePx: number;
+  /** Sight mask: a wall run touching either end of the line may be up to this long (a pawn's centre inside a wall pixel). */
+  losEndpointTolerancePx: number;
+  /** Level check: sample spacing (units) along the eye-to-eye line against the nav floors. */
+  losLevelStepUnits: number;
+  /** Level check: a sample counts as inside a floor only this far below it (units; nav height-model error). */
+  losLevelSlackUnits: number;
+  /** LIVE AI (2D engine only; CS2 uses the native bot). The reaction time varies by ± this fraction (seeded). */
+  reactionJitter: number;
+  /** Share of acquisitions aimed at the head band; the rest aim at the chest. */
+  headshotAimRatio: number;
+  /** Yaw and pitch turn limit (degrees per tick). */
+  turnRateDegPerTick: number;
+  /** The acquisition aim offset halves every this many seconds once the bot is on its target. */
+  aimSettleSec: number;
+  /** Standard deviation (degrees) of the extra error on each shot. */
+  aimResidualDeg: number;
+  /** Fire only when the view is within this many degrees of where the bot means to aim. */
+  fireConeDeg: number;
+  /** Semi-automatic guns fire only after this many aimSettleSec on the target (automatic guns at once). */
+  semiAutoSettleFactor: number;
+  /** Fire when the settling aim offset is within the target's angular radius; automatic guns within this multiple of it. */
+  sprayStartFactor: number;
+  /** Keep a target out of sight this long (s) before switching to another. */
+  targetLostSec: number;
+  /** Reload with no enemy in sight once the magazine is at or below this fraction. */
+  reloadClipFraction: number;
+  /** Hold WALK within this distance (units) of a known enemy position. */
+  walkNearEnemyUnits: number;
+  /** A seen or heard enemy position counts as known for this long (s). */
+  memorySec: number;
+  /** Turn toward a heard sound for this long (s). */
+  soundLookSec: number;
+  /** A waypoint or spot is reached within this distance (units). */
+  arriveUnits: number;
+  /** No progress along the path (less than stuckProgressUnits) for this long (s): re-path. */
+  stuckSec: number;
+  stuckProgressUnits: number;
+  /** After a re-path, strafe sideways this long (s). */
+  unstickSec: number;
+  /** Counter-strafe (push against the velocity) while faster than this (units/s) when engaging. */
+  counterStrafeSpeed: number;
+  /** A bomb carrier in a bombsite plants once within this distance (units) of its plant spot. */
+  plantSpotUnits: number;
+  /** A defuser walks to within this fraction of bomb.defuseRange before holding USE. */
+  defuseRangeFactor: number;
+  /** A guard spot is at most this far (units) from the planted bomb. */
+  guardMaxUnits: number;
 }
 
 /** Nav-mesh geometry tolerances (see docs/nav.md). */
@@ -335,7 +388,36 @@ const DAMAGE_KEYS = [
 const HITGROUP_MULT_KEYS = ['chest', 'stomach', 'arm', 'leg', 'neck', 'generic'] as const;
 const BAND_KEYS = ['head', 'chest', 'stomach', 'leg'] as const;
 const SOUND_KEYS = ['footstepSpeed', 'footstepIntervalSec'] as const;
-const AI_KEYS = ['fovDeg', 'reactionSec', 'aimErrorDeg'] as const;
+const AI_KEYS = [
+  'fovDeg',
+  'reactionSec',
+  'aimErrorDeg',
+  'losWallTolerancePx',
+  'losEndpointTolerancePx',
+  'losLevelStepUnits',
+  'losLevelSlackUnits',
+  'reactionJitter',
+  'headshotAimRatio',
+  'turnRateDegPerTick',
+  'aimSettleSec',
+  'aimResidualDeg',
+  'fireConeDeg',
+  'semiAutoSettleFactor',
+  'sprayStartFactor',
+  'targetLostSec',
+  'reloadClipFraction',
+  'walkNearEnemyUnits',
+  'memorySec',
+  'soundLookSec',
+  'arriveUnits',
+  'stuckSec',
+  'stuckProgressUnits',
+  'unstickSec',
+  'counterStrafeSpeed',
+  'plantSpotUnits',
+  'defuseRangeFactor',
+  'guardMaxUnits',
+] as const;
 const NAV_KEYS = ['stepHeight', 'edgeEpsilon', 'losMargin'] as const;
 
 /**
