@@ -5,6 +5,6 @@
   "seed": 1,
   "until": "end",
   "steps": [
-    { "do": "holdStill", "until": 70.6 }
+    {"do": "holdStill", "until": 70.6}
   ]
 }

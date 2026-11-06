@@ -5,11 +5,11 @@
   "seed": 1,
   "until": "end",
   "steps": [
-    { "do": "followRecording", "until": 29.7 },
-    { "do": "teleport", "pos": [-600, -560], "yaw": -99 },
-    { "do": "aimAt", "id": "zwomp" },
-    { "do": "fire", "untilDead": true, "maxSec": 2 },
-    { "do": "aimAt", "id": null },
-    { "do": "holdStill", "until": 70.6 }
+    {"do": "followRecording", "until": 29.7},
+    {"do": "teleport", "pos": [-600, -560], "yaw": -99},
+    {"do": "aimAt", "id": "zwomp"},
+    {"do": "fire", "untilDead": true, "maxSec": 2},
+    {"do": "aimAt", "id": null},
+    {"do": "holdStill", "until": 70.6}
   ]
 }

@@ -5,11 +5,11 @@
   "seed": 1,
   "until": "end",
   "steps": [
-    { "do": "followRecording", "until": 44.6 },
-    { "do": "teleport", "pos": [-560, 600], "yaw": 19 },
-    { "do": "aimAt", "id": "sp4rtan" },
-    { "do": "fire", "untilDead": true, "maxSec": 2 },
-    { "do": "aimAt", "id": null },
-    { "do": "holdStill", "until": 70.6 }
+    {"do": "followRecording", "until": 44.6},
+    {"do": "teleport", "pos": [-560, 600], "yaw": 19},
+    {"do": "aimAt", "id": "sp4rtan"},
+    {"do": "fire", "untilDead": true, "maxSec": 2},
+    {"do": "aimAt", "id": null},
+    {"do": "holdStill", "until": 70.6}
   ]
 }

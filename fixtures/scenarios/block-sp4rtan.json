@@ -5,9 +5,9 @@
   "seed": 1,
   "until": 64,
   "steps": [
-    { "do": "followRecording", "until": 57.0 },
-    { "do": "teleport", "pos": [-2070, 440], "yaw": 130 },
-    { "do": "aimAt", "id": "sp4rtan" },
-    { "do": "holdStill", "until": 64 }
+    {"do": "followRecording", "until": 57.0},
+    {"do": "teleport", "pos": [-2070, 440], "yaw": 130},
+    {"do": "aimAt", "id": "sp4rtan"},
+    {"do": "holdStill", "until": 64}
   ]
 }

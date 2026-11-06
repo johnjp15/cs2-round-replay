@@ -5,10 +5,10 @@
   "seed": 1,
   "until": "end",
   "steps": [
-    { "do": "followRecording", "until": 8.0 },
-    { "do": "teleport", "pos": [-1764, 800], "yaw": 180 },
-    { "do": "holdStill", "sec": 1.3 },
-    { "do": "walkTo", "pos": [-2096, 758] },
-    { "do": "holdStill", "until": 70.6 }
+    {"do": "followRecording", "until": 8.0},
+    {"do": "teleport", "pos": [-1764, 800], "yaw": 180},
+    {"do": "holdStill", "sec": 1.3},
+    {"do": "walkTo", "pos": [-2096, 758]},
+    {"do": "holdStill", "until": 70.6}
   ]
 }

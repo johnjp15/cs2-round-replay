@@ -5,24 +5,9 @@
   "seed": 1,
   "until": 21.5,
   "steps": [
-    {
-      "do": "followRecording",
-      "until": 15.0
-    },
-    {
-      "do": "walkTo",
-      "pos": [
-        -1390,
-        845
-      ]
-    },
-    {
-      "do": "aimAt",
-      "id": "barely"
-    },
-    {
-      "do": "holdStill",
-      "until": 21.5
-    }
+    {"do": "followRecording", "until": 15.0},
+    {"do": "walkTo", "pos": [-1390, 845]},
+    {"do": "aimAt", "id": "barely"},
+    {"do": "holdStill", "until": 21.5}
   ]
 }
