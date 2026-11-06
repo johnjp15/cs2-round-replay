@@ -37,5 +37,6 @@
   },
   "bomb": { "plantSec": 3.2, "timerSec": 40, "defuseSec": 10, "defuseKitSec": 5 },
   "grenades": { "smokeSec": 18, "molotovSec": 7, "flashSec": 3 },
-  "ai": { "fovDeg": 106, "reactionSec": 0.25, "aimErrorDeg": 2.5 }
+  "ai": { "fovDeg": 106, "reactionSec": 0.25, "aimErrorDeg": 2.5 },
+  "nav": { "stepHeight": 18, "edgeEpsilon": 1, "losMargin": 8 }
 }
