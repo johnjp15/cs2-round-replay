@@ -1,7 +1,8 @@
 /**
  * The scripted round (golden master): ReplayCore with B3's scripted events drives all ten puppets in the
- * real Sim2DHost for the whole recording, with no human. The recorded kills, HP and shot ticks must come
- * out (each event within a tick of its recorded tick), and nobody else may die. Run with
+ * real Sim2DHost (with C3's bomb, round rules and collision) for the whole recording, with no human. The
+ * recorded kills, HP, shot ticks, plant and defuse must come out (each event within a tick of its recorded
+ * tick), and nobody else may die. Run with
  * `--reporter=verbose` to see the tables (also `npm run scripted`).
  */
 import { describe, expect, it } from 'vitest';
@@ -9,7 +10,21 @@ import { PLAYER_IDS, SessionLog, replay, type PlayerId } from '../src/contracts/
 import { EventSchedule, ReplayCore, RoundModel } from '../src/core/index';
 import { NavWalkQuery } from '../src/sim2d/walk-query';
 import { GHOST_SEED, loadGhostInputs } from '../tools/ghost-round';
-import { buttonSpans, coreLogs, deaths, hpChanges, hpTable, killTable, matchShots, measureLatency, runScriptedRound, shotTable, shots } from '../tools/scripted-round';
+import {
+  actionsOfType,
+  buttonSpans,
+  coreLogs,
+  deaths,
+  hpChanges,
+  hpTable,
+  killTable,
+  matchShots,
+  measureLatency,
+  roundEvents,
+  runScriptedRound,
+  shotTable,
+  shots,
+} from '../tools/scripted-round';
 
 const inputs = loadGhostInputs();
 const run = runScriptedRound(inputs);
@@ -101,20 +116,55 @@ describe('scripted round (no human, all ten pawns puppets, the whole recording)'
     expect(n('lokier')).toBe(2);
   });
 
-  it('holds USE for the plant and the defuse in the planned windows; fallbacks are logged once', () => {
+  it('plants by USE: barely holds it from the planned tick until the planted event, which lands on 1761 ± 1; no plant action', () => {
     const pl = plan.plant;
-    const df = plan.defuse;
-    if (pl === null || df === null) throw new Error('no plant / defuse');
-    expect(buttonSpans(run.log, 'barely', 'USE')).toEqual([{ from: pl.useFrom, to: pl.useTo }]);
-    expect(buttonSpans(run.log, 'sp4rtan', 'USE')).toEqual([{ from: df.useFrom, to: df.useTo }]);
-    const fallbacks = coreLogs(run.log).filter((l) => l.text.startsWith('script: no '));
-    expect(fallbacks.map((l) => l.tick)).toEqual([pl.fallbackTick, df.fallbackTick]);
-    // The engine applies every other scripted action (weapons, gives, damage, blocks).
-    expect(run.host.unhandled().filter((n) => n.kind === 'action').map((n) => n.type)).toEqual(['plant', 'defuse_start']);
+    if (pl === null) throw new Error('no plant');
+    const planted = roundEvents(run.log).filter((e) => e.kind === 'bomb planted');
+    expect(planted).toHaveLength(1);
+    expect(planted[0]?.text).toBe('planted by barely');
+    expect(Math.abs((planted[0]?.tick ?? NaN) - 1761)).toBeLessThanOrEqual(1);
+    // USE from the planned start (1761 − 205 − latency) until the step that sees the event.
+    expect(buttonSpans(run.log, 'barely', 'USE')).toEqual([{ from: pl.useFrom, to: (planted[0]?.tick ?? NaN) - 1 }]);
+    expect(actionsOfType(run.log, 'plant')).toEqual([]);
+    expect(coreLogs(run.log).filter((l) => l.text.startsWith('script: no planted'))).toEqual([]);
+    // The engine draws barely's AK after the plant, so the Core sends no set_weapon for it.
+    const at = planted[0]?.tick ?? NaN;
+    expect(run.log.get(at)?.observe.pawns.find((p) => p.id === 'barely')?.weapon).toBe('ak47');
+    expect(actionsOfType(run.log, 'set_weapon').filter((x) => x.tick >= at && x.tick <= pl.fallbackTick && x.action.type === 'set_weapon' && x.action.id === 'barely')).toEqual([]);
   });
 
-  it.todo('plant completes: a `planted` bomb event lands on tick 1761 ± 1 and no fallback is sent (needs C3, integration in E1)');
-  it.todo('defuse completes: `defuse_start` on 3955 ± 1 and `defused` on 4275 ± 1, no fallback (needs C3, integration in E1)');
+  it('defuses by USE: defuse_start on 3955 ± 1 and defused on 4275 ± 1; no defuse_start action', () => {
+    const df = plan.defuse;
+    if (df === null) throw new Error('no defuse');
+    const ev = roundEvents(run.log).filter((e) => e.kind.startsWith('bomb defuse') || e.kind === 'bomb defused');
+    expect(ev.map((e) => [e.kind, e.text])).toEqual([
+      ['bomb defuse_start', 'defuse_start by sp4rtan'],
+      ['bomb defused', 'defused by sp4rtan'],
+    ]);
+    expect(Math.abs((ev[0]?.tick ?? NaN) - 3955)).toBeLessThanOrEqual(1);
+    expect(Math.abs((ev[1]?.tick ?? NaN) - 4275)).toBeLessThanOrEqual(1);
+    expect(buttonSpans(run.log, 'sp4rtan', 'USE')).toEqual([{ from: df.useFrom, to: (ev[1]?.tick ?? NaN) - 1 }]);
+    expect(actionsOfType(run.log, 'defuse_start')).toEqual([]);
+    expect(roundEvents(run.log).some((e) => e.kind === 'bomb exploded' || e.kind === 'bomb defuse_stop')).toBe(false);
+  });
+
+  it('the round ends once, CT by bomb_defused, 12 – 15; the post-round kill on cart still happens; no fallback, no unhandled action', () => {
+    const ends = roundEvents(run.log).filter((e) => e.kind === 'round_end');
+    expect(ends.map((e) => e.text)).toEqual(['CT bomb_defused']);
+    expect(Math.abs((ends[0]?.tick ?? NaN) - 4275)).toBeLessThanOrEqual(1);
+    const end = run.log.at(run.log.length - 1)?.observe.round;
+    expect(end).toMatchObject({ phase: 'over', winner: 'CT', reason: 'bomb_defused', score: { ct: 12, t: 15 } });
+    expect(actionsOfType(run.log, 'end_round')).toEqual([]);
+    const cart = deaths(run.log).find((d) => d.victim === 'cart');
+    expect(cart).toMatchObject({ tick: 4442, attacker: 'sp4rtan', weapon: 'ak47', headshot: false });
+    expect(cart?.tick ?? 0).toBeGreaterThan(ends[0]?.tick ?? Infinity);
+    expect(coreLogs(run.log).filter((l) => l.text.startsWith('script: '))).toEqual([]);
+    expect(run.host.unhandled().filter((n) => n.kind === 'action')).toEqual([]);
+  });
+
+  it('no puppet is body-blocked by an enemy (C3 collision) at any tick', () => {
+    expect(run.bodyBlocks).toEqual([]);
+  });
 
   it('two runs give identical digests, and the log replays identically through a fresh Core', () => {
     const again = runScriptedRound(inputs);

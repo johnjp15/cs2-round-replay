@@ -234,6 +234,38 @@ export function buttonSpans(log: SessionLog, id: PlayerId, button: Button): Butt
   return out;
 }
 
+export interface RoundEventSeen {
+  readonly tick: number;
+  /** `bomb <phase>` or `round_end`. */
+  readonly kind: string;
+  readonly text: string;
+}
+
+/** Every `bomb` and `round_end` event, at the tick of the observe it is in. */
+export function roundEvents(log: SessionLog): RoundEventSeen[] {
+  const out: RoundEventSeen[] = [];
+  for (let i = 0; i < log.length; i++) {
+    const o = log.at(i)?.observe;
+    if (o === undefined) continue;
+    for (const e of o.events) {
+      if (e.type === 'bomb') out.push({ tick: o.tick, kind: `bomb ${e.phase}`, text: `${e.phase} by ${e.id ?? '-'}` });
+      if (e.type === 'round_end') out.push({ tick: o.tick, kind: 'round_end', text: `${e.winner} ${e.reason}` });
+    }
+  }
+  return out;
+}
+
+/** Core actions of one type, with their tick. */
+export function actionsOfType(log: SessionLog, type: Action['type']): { tick: number; action: Action }[] {
+  const out: { tick: number; action: Action }[] = [];
+  for (let i = 0; i < log.length; i++) {
+    const e = log.at(i);
+    if (e === null) continue;
+    for (const a of e.act.actions) if (a.type === type) out.push({ tick: e.observe.tick, action: a });
+  }
+  return out;
+}
+
 /** Core `log` actions, with their tick. */
 export function coreLogs(log: SessionLog): { tick: number; level: string; text: string }[] {
   const out: { tick: number; level: string; text: string }[] = [];
@@ -309,6 +341,10 @@ function main(): void {
   const df = run.core.script.plan.defuse;
   if (pl !== null) console.log(`\nplant ${pl.id}: USE ${spans(buttonSpans(run.log, pl.id, 'USE'))} (plan ${pl.useFrom}–${pl.useTo}, recorded plant ${pl.tick})`);
   if (df !== null) console.log(`defuse ${df.id}: USE ${spans(buttonSpans(run.log, df.id, 'USE'))} (plan ${df.useFrom}–${df.useTo}, recorded ${df.startTick}–${df.endTick})`);
+  for (const e of roundEvents(run.log)) console.log(`${e.kind.padEnd(18)} observe tick ${e.tick} (${sec(e.tick)} s): ${e.text}`);
+  const end = run.log.at(run.log.length - 1)?.observe.round;
+  if (end !== undefined) console.log(`round at the end: ${end.phase}, ${end.winner ?? '-'} ${end.reason ?? ''}, score CT ${end.score.ct} – T ${end.score.t}, ${end.timeLeftSec} s left on the clock`);
+  console.log(`fallback actions: plant ${actionsOfType(run.log, 'plant').length}, defuse_start ${actionsOfType(run.log, 'defuse_start').length}; body blocks (enemy collision): ${run.bodyBlocks.length}`);
   console.log('\nCore logs:');
   for (const l of coreLogs(run.log)) console.log(`  ${l.tick} ${l.level} ${l.text}`);
   const notes = run.host.unhandled().filter((n) => n.kind === 'action');

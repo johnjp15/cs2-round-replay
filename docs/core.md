@@ -185,11 +185,11 @@ CTs other than sp4rtan (incredibad, lokier, snakelore, zwomp) have none.
 
 The whole round with **no human**: `ReplayCore` (B1 + puppets + B3's scripted events) drives all ten pawns in `Sim2DHost` (`act = core.step(observe)`, `host.apply(act)`, `host.tick()`; the driver is `drive()` in `tools/ghost-round.ts`). Each pawn is measured up to its recorded death tick (or last sample), where B3 also kills it, and is no longer driven after its track plus the hold. Errors are 2D, against the **raw** recording at every 10 Hz sample, with the pawn position interpolated between the ticks around the sample time (positions taken after each tick's actions, so the tick-0 setup counts). "ticks > 24 behind" is the share of measured ticks more than 24 units from the raw track. `npm run ghost` writes `logs/ghost-round.jsonl` and `logs/ghost-trace.json` (`toReplayTrace`, for the replay page; snaps appear as `info` events).
 
-**2D model values; compare against the CS2 probe.** 4,517 ticks, digest `7e3523a6` (with B3).
+**2D model values; compare against the CS2 probe.** 4,517 ticks, digest `0fb55e23` (with B3 and C3).
 
 | player | team | observed n | RMS | max (at t) | est./inf. n | RMS | max (at t) | inferred RMS | radius (min–max) | snaps (t) | ticks > 24 behind |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
-| barely | T | 588 | 12.9 | 92 (45.3 s) | 1 | 11.5 | 12 (27.9 s) | – | – | 1 (44.98) | 8.4 % |
+| barely | T | 588 | 12.9 | 92 (45.3 s) | 1 | 11.7 | 12 (27.9 s) | – | – | 1 (44.98) | 8.4 % |
 | cart | T | 683 | 13.5 | 93 (13.0 s) | 12 | 13.9 | 36 (13.4 s) | – | – | 2 (14.41, 21.09) | 6.3 % |
 | donk | T | 504 | 11.1 | 94 (14.4 s) | 0 | – | – | – | – | 1 (14.42) | 3.5 % |
 | eradicate | T | 128 | 5.7 | 32 (11.3 s) | 0 | – | – | – | – | 0 | 1.6 % |
@@ -202,7 +202,7 @@ The whole round with **no human**: `ReplayCore` (B1 + puppets + B3's scripted ev
 
 The test asserts: observed RMS < 24 for every T; inferred RMS < the smallest uncertainty radius of that CT's inferred samples; every snap at a teleport point and logged once; fewer than 10 snaps; a second run gives the same digest and the log replays identically through a fresh Core.
 
-**What B3 changed** (B2 alone: digest `1fac160b` on the same `main`): the aim and grenade looks go through `withLook`, so the paths hardly move. cart 13.7 → 13.5 and donk 11.3 → 11.1 RMS (holding a grenade for a second raises the speed cap), sp4rtan 23.5 → 29.2 (the AK, above), and barely's one estimated sample at 27.9 s 0.7 → 11.5 units, because he stands still for the plant until 27.52 s while the recording has him walk off at 27.5 s. Every other cell is unchanged.
+**What B3 changed** (B2 alone: digest `1fac160b` on the same `main`): the aim and grenade looks go through `withLook`, so the paths hardly move. cart 13.7 → 13.5 and donk 11.3 → 11.1 RMS (holding a grenade for a second raises the speed cap), sp4rtan 23.5 → 29.2 (the AK, above), and barely's one estimated sample at 27.9 s 0.7 → 11.5 units, because he stands still for the plant until 27.52 s while the recording has him walk off at 27.5 s (11.7 with C3, whose plant locks his movement). Every other cell is unchanged, with and without C3.
 
 **Snaps (6)**, all unseen (no human), each at a teleport point:
 
@@ -267,6 +267,8 @@ An event *lands* on tick t when it is in the Observe whose `tick` is t (that is 
 
 The Core sends every scripted input `inputLatencyTicks` (1) early and every scripted action `actionLatencyTicks` (1) early, so its effect lands on the recorded tick. In CS2 the input latency is measured by probe P3 (findings F7, F8 in `docs/cs2-adapter.md`); set the two keys from it.
 
+C3's docs and tests (`docs/combat.md`, `tests/bomb.test.ts`) count an event at the engine tick that *processed* it, one less than the observe tick used here. `RoundObs.endTick` and `bomb.plantTick` are processed ticks too: the defuse's `round_end` is in observe 4275 with `endTick` 4274.
+
 ### Aim
 
 - **Engagements.** Every fire item with a target gives an aim window [first press − `preAimSec`, last press], and every damage entry one at [its tick − input latency − `preAimSec`, its tick − input latency] (act ticks). A shooter's overlapping or touching windows at the same target merge into one engagement (`plan.engagements`).
@@ -317,14 +319,14 @@ For each `utility` entry (throw tick U): `set_weapon <grenade>` at U − latency
 
 ### Plant and defuse
 
-- **barely** (plant tick 1761): `set_weapon c4` one c4 deploy (`damage.defaultDeploySec`, 1 s) before the USE window; `USE` and no stick (no forward, side, `WALK` or `DUCK`) from `plantTick − round(plantSec × 64) − input latency` (1555) to `plantTick` (1761), released as soon as a `bomb` event with phase `planted` arrives. The engine plants after `plantSec` (C3). If no `planted` event has arrived by `plantTick + plantFallbackTicks` (1764), the Core sends `plant {id, pos}` and logs it. After the plant (event or fallback) it draws the recorded weapon again (AK) if the pawn still holds something else.
+- **barely** (plant tick 1761): `set_weapon c4` one c4 deploy (`damage.defaultDeploySec`, 1 s) before the USE window (C3's engine needs no deploy for the c4; a CS2 draw does); `USE` and no stick (no forward, side, `WALK` or `DUCK`) from `plantTick − round(plantSec × 64) − input latency` (1555) to `plantTick` (1761), released as soon as a `bomb` event with phase `planted` arrives. If none has arrived by `plantTick + plantFallbackTicks` (1764), the Core sends `plant {id, pos}` and logs it. After the plant (event or fallback) it draws the recorded weapon again (AK) if the pawn still holds something else; C3's engine already draws it, so in the 2D sim the Core sends nothing.
 - **sp4rtan** (defuse 3955 → 4275): looks at the bomb (yaw and pitch, at the aim turn rate) from `preAimSec` before the USE window; `USE` and no stick from `defuseStart − input latency` (3954) to the scheduled defuse end (4275), released on a `defused` or `exploded` event. If the engine hasn't reported `defuse_start` by `defuseStart + defuseFallbackTicks` (3957), the Core sends `defuse_start {id}` and logs it.
-- Neither is scripted for the human's pawn, nor for a dead or LIVE one.
-- Until C3 merges, `Sim2DHost` ignores `USE`, `plant` and `defuse_start`, so the golden master shows both fallbacks; the USE windows are tested, the completion is `it.todo` (E1).
+- Neither is scripted for the human's pawn, nor for a dead or LIVE one. The Core never sends `end_round`: the engine ends the round (C3: on the defuse, `round_end {CT, bomb_defused}`).
+- **With C3's engine** (`docs/combat.md`, "Bomb and round rules"): barely's USE starts the plant on engine tick 1555 inside Bombsite B; it completes 205 ticks later, on engine tick 1760, so `planted` lands on observe tick **1761**, and USE is released there (held 1555–1760). sp4rtan's defuse (kit, 320 ticks) starts on engine tick 3954, so `defuse_start` lands on **3955** and `defused` with `round_end {CT, bomb_defused}` on **4275** (USE held 3954–4274). Neither fallback fires. The round ends 12 – 15 with 0.71875 s on the bomb timer (the recording: "defused with 0.72 s left"), and the post-round kill on cart at 4442 still happens.
 
 ### Results (golden master, `npm run scripted`, `tests/scripted-round.test.ts`)
 
-4,517 ticks, digest `7e3523a6`, identical on a second run and on replay.
+4,517 ticks, digest `0fb55e23` (with C3's bomb, round rules and collision; `7e3523a6` before C3), identical on a second run and on replay. The driver passes the round's score (CT 11 – T 15) and clock (98.25 s) to `Sim2DHost`, like the Session.
 
 | t (s) | killer → victim | weapon | HS | recorded tick | `death` event | Δ |
 | ---: | --- | --- | --- | ---: | ---: | ---: |
@@ -338,7 +340,16 @@ For each `utility` entry (throw tick U): `set_weapon <grenade>` at U − latency
 | 58.85 | sp4rtan → barely | ak47 | yes | 3766 | 3766 | 0 |
 | 69.40 | sp4rtan → cart | ak47 | | 4442 | 4442 | 0 |
 
-HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/100 → 27/93 (1184) → 0 (4442); snarlbot 44 from the setup; nobody else is hurt before their kill, and sp4rtan ends on 100. Shots: all 33 recorded exact-time shots land within a tick (Δ −1: 5, 0: 20, +1: 8; none further). Per shot: `npm run scripted`.
+| event | recorded tick | observe tick | Δ |
+| --- | ---: | ---: | ---: |
+| `bomb planted` (barely, by USE) | 1761 | 1761 | 0 |
+| `bomb defuse_start` (sp4rtan, by USE) | 3955 | 3955 | 0 |
+| `bomb defused` (sp4rtan) | 4275 | 4275 | 0 |
+| `round_end` CT `bomb_defused` (once; score 12 – 15) | 4275 | 4275 | 0 |
+
+HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/100 → 27/93 (1184) → 0 (4442); snarlbot 44 from the setup; nobody else is hurt before their kill, and sp4rtan ends on 100. Shots: all 33 recorded exact-time shots land within a tick (Δ −1: 5, 0: 20, +1: 8; none further). Per shot: `npm run scripted`. No fallback, no `script:` log, and no action the host leaves unhandled.
+
+**Collision** (C3: enemies solid, centres ≥ 32 apart): no puppet is body-blocked at any tick (`GhostRun.bodyBlocks`, from `host.blockedBy`, is empty; asserted). Against the same run without C3, positions differ by at most 1.7 units (sp4rtan after the defuse lock, barely around the plant lock) and nobody's distance to the recorded track grows by more than 0.2 units, so no kill, shot or HP tick moves.
 
 ### Tunables (`data/tuning.json` → `replay`, B3)
 
@@ -359,4 +370,4 @@ HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/10
 - **2D line of sight.** The damage is scripted, so whether a bullet hits doesn't matter here, but it shows where the 2D map differs: the aim is right (yaw within 0.3°, the intended band), yet 6 of the 13 fire items with a target don't reach it through the 2D nav line of sight: cart ↔ Lokier (Apartments window ↔ B site), snarlbot → incredibad (Palace, a level apart), sp4rtan → snarlbot and → barely, barely → Zwomp (inferred or level-changing positions). The other 7 would hit (`host.combatLog()` lists them as blocked hits). In CS2 these become real traces.
 - **No spread or recoil** in 2D; in CS2 a sprayed AK drifts, which only matters for the human's real fights (puppet damage is scripted).
 - **Grenades** are thrown blind (see Utility). Self-damage is blocked; a teammate would be hurt only with friendly fire on.
-- **Plant and defuse completion** depend on C3's engine rules; the fallbacks cover an engine that doesn't plant or report the defuse start, not one that interrupts a defuse.
+- **Plant and defuse** rely on the engine's rules (C3 in 2D, the game in CS2); the fallbacks cover an engine that doesn't plant or report the defuse start, not one that interrupts a defuse (a `defuse_stop` is not retried).
