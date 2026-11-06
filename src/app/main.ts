@@ -9,13 +9,13 @@
  *
  * URL parameters: `?seed=<int>` (default 1); `?human=cart|none` (default cart, or none on touch-only
  * devices, which have no controls for the human yet).
+ *
+ * Data: `loadAssets()` fetches the round, nav and sight-mask JSON and the radar (assets.ts). The single-file
+ * build (vite.single.config.ts) redirects that import to assets-embedded.ts, which reads them from the page.
  */
-import roundUrl from '../../data/round.json?url';
-import navUrl from '../../data/mirage-nav.json?url';
-import visionUrl from '../../data/mirage-vismask.json?url';
-import radarUrl from '../../data/mirage-radar.jpg';
 import tuningJson from '../../data/tuning.json';
 import { isPlayerId, type PlayerId } from '../contracts/index';
+import { loadAssets } from './assets';
 import type { Camera } from './camera';
 import { CameraInput } from './camera-dom';
 import type { EffectsSource } from './effects';
@@ -65,19 +65,6 @@ function el<T extends HTMLElement>(id: string, type: new () => T): T {
   const e = document.getElementById(id);
   if (!(e instanceof type)) throw new Error(`index.html: #${id} missing`);
   return e;
-}
-
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-  return (await res.json()) as unknown;
-}
-
-async function loadImage(url: string): Promise<HTMLImageElement> {
-  const img = new Image();
-  img.src = url;
-  await img.decode();
-  return img;
 }
 
 function download(name: string, text: string, type: string): void {
@@ -388,9 +375,9 @@ async function boot(): Promise<void> {
     const params = new URLSearchParams(window.location.search);
     const seedParam = Number(params.get('seed') ?? '1');
     const seed = Number.isInteger(seedParam) ? seedParam : 1;
-    const [roundJson, navJson, visionJson, radar] = await Promise.all([fetchJson(roundUrl), fetchJson(navUrl), fetchJson(visionUrl), loadImage(radarUrl)]);
-    const data = parseSessionData(roundJson, navJson, tuningJson, visionJson);
-    new App(data, radar, seed, initialHuman(params));
+    const a = await loadAssets();
+    const data = parseSessionData(a.round, a.nav, tuningJson, a.vision);
+    new App(data, a.radar, seed, initialHuman(params));
     status.hidden = true;
   } catch (err) {
     status.textContent = `Could not start: ${err instanceof Error ? err.message : String(err)}`;
