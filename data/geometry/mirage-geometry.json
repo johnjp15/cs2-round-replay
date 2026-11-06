@@ -1,0 +1,81 @@
+{
+  "format": "cs2-round-replay/geometry@1",
+  "note": "Mirage collision geometry for 3D movement (G2): the CS2 physics mesh from awpy-data 2000942, quantized and re-encoded. Binary layout: src/sim2d/geometry.ts (G2GM). Built by tools/extract-geometry.ts; see docs/geometry.md. Derived from Valve game files: private repo / encrypted pages only.",
+  "binary": {
+    "file": "data/geometry/mirage-geometry.bin",
+    "magic": "G2GM",
+    "version": 1,
+    "bytes": 428400,
+    "sha256": "4456186c18d2f9ff161dde5120ca0b10c36889bbc0f6cd6ebe02ada0a367ad6a",
+    "gzipBytes": 234580,
+    "gzipBase64Bytes": 312776
+  },
+  "sources": [
+    {
+      "file": "data/source/cs2/de_mirage.mesh",
+      "sha256": "d5e3aabe17583f07ca899236d015ecc46f7e542fa093ada4782944941b41e679"
+    },
+    {
+      "file": "data/source/cs2/de_mirage.png",
+      "sha256": "c8032f6c83ffca63c0a20ebdcc598a0e1aa618efd746e381e2db26f33a4a964f"
+    }
+  ],
+  "params": {
+    "quant": 8
+  },
+  "stats": {
+    "sourceVertices": 44159,
+    "sourceTriangles": 73290,
+    "mergedVertices": 33,
+    "unusedVertices": 239,
+    "degenerateTriangles": 133,
+    "duplicateTriangles": 14,
+    "vertices": 43887,
+    "triangles": 73143
+  },
+  "bounds": {
+    "minX": -4096,
+    "minY": -3864,
+    "minZ": -448,
+    "maxX": 1824,
+    "maxY": 2048,
+    "maxZ": 771.125
+  },
+  "queries": {
+    "cellSize": 32,
+    "overlapEps": 0.0001,
+    "traceSkin": 0.03125,
+    "walkableNz": 0.7,
+    "stepHeight": 18,
+    "standingHull": {
+      "halfWidth": 16,
+      "height": 72
+    },
+    "crouchingHull": {
+      "halfWidth": 16,
+      "height": 54
+    }
+  },
+  "heightImage": {
+    "file": "data/geometry/mirage-height.png",
+    "rgbaSha256": "9730e6d21909596283e807cc8e78ae3df72990238b7ffa75252faa33e6e996b8",
+    "pixels": 285337,
+    "originX": -3230,
+    "originY": 1713,
+    "unitsPerPx": 5,
+    "size": 1024,
+    "maskGrow": 6,
+    "jumpUp": 64,
+    "zLow": -370,
+    "zHigh": 30,
+    "levelStats": {
+      "maskPixels": 302397,
+      "grownPixels": 363214,
+      "levels": 571564,
+      "reachableLevels": 320749,
+      "walkEdges": 293098,
+      "dropEdges": 26590,
+      "jumpEdges": 1052
+    }
+  }
+}

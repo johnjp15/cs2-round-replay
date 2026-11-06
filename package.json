@@ -26,6 +26,7 @@
     "harness": "tsx tools/harness.ts",
     "fixtures:update": "tsx tools/golden-fixtures.ts",
     "extract:vismask": "tsx tools/extract-vismask.ts",
+    "geometry:extract": "tsx tools/extract-geometry.ts",
     "vision": "tsx tools/vision-labels.ts",
     "stage:web-apps": "bash tools/stage-web-apps.sh",
     "check:locked": "tsx tools/e2e-locked.ts"
