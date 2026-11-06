@@ -1,6 +1,6 @@
 # C# port notes
 
-Things in `src/contracts` (and, at the end, `src/core`) that need care when ported to C# (CS2 server plugin). The session logs written by the TypeScript build are the fixtures: a correct port reproduces them byte for byte.
+Things in `src/contracts` (and, at the end, `src/core`) that need care when ported to C# (CS2 server plugin). The session logs written by the TypeScript build are the fixtures: a correct port reproduces them byte for byte. The fixtures, their walk oracle and the exact replay contract are in `docs/golden.md` (E1): `fixtures/golden/`, `manifest.json`.
 
 ## Types
 
@@ -51,7 +51,7 @@ The log format is defined by this function; `System.Text.Json` defaults do not m
 ## Determinism
 
 - Feed Core canonical observes (`parse(stableStringify(observe))`, i.e. numbers already rounded to 6 decimals) so that live runs and replays see identical input.
-- `Math.cos`/`Math.sin` etc. are not guaranteed bit-identical between V8 and .NET; Core logic that depends on them should round (or compare with tolerance) before branching. Plain `+ - * /` and `Math.Floor`/`Math.Sqrt` are IEEE-exact on both.
+- `Math.cos`/`Math.sin` etc. are not guaranteed bit-identical between V8 and .NET; Core logic that depends on them should round (or compare with tolerance) before branching. Plain `+ - * /` and `Math.Floor`/`Math.Sqrt` are IEEE-exact on both. Measured (E1, `docs/golden.md` "Cross-engine determinism"): perturbing every `cos`/`sin`/`atan2` result in the Core by up to 65,536 ulps changes no act in the fixtures, so .NET's `Math.Sin`/`Cos`/`Atan2` should reproduce them.
 - Integer bit math (`>>> 0`, `Math.imul`) → `uint` with `unchecked`.
 
 ## Core (src/core)

@@ -298,6 +298,9 @@ Screenshots and downloads go to `logs/browser-check/` (gitignored). Results in h
   and the desktop log (with a human) replays identically in Node against the app's Core (`defaultCore`:
   with the nav walk query; the check used a bare `ReplayCore` before, which stopped matching when B2
   turned the puppets on).
+- **Golden parity** (E1, `docs/golden.md`; `--only parity` runs just this): the no-human round played by the
+  page at 4× has, through tick 1280 (20 s), the digest of the Node headless harness (`tools/harness.ts`) run with
+  the controls the page logged (`045fe7ec`), and so does the page's whole log (1,293 lines, `ba029b1a`).
 - No console errors, and no requests outside the page's origin.
 
 **Safari (macOS / iOS) was not tested**: there is no WebKit in this environment. Things to check on

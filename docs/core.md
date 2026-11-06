@@ -181,9 +181,9 @@ CTs other than sp4rtan (incredibad, lokier, snakelore, zwomp) have none.
 8. **Speed**: wish speed = min(cap, |ahead − pawn| / lookahead), cap = run speed of the held weapon (observed) × WALK / DUCK factors. A pawn on the reference then gets exactly the recorded velocity, and lag is fed back with gain 1 / lookahead.
 9. **Stick**: the steer direction in the frame of this tick's yaw: forward = dot(dir, (cos yaw, sin yaw)), side = dot(dir, (sin yaw, −cos yaw)) (+side = strafe right), scaled by wish speed / cap and rounded to 6 decimals. **B3:** forward/side are relative to `yaw`, so aim through `withLook(input, yaw, pitch)` (which re-expresses the stick) and write the commanded yaw back to `puppet(id).state.yaw` so the turn limit continues from it.
 
-### Ghost round (`tests/ghost-round.test.ts`, `npm run ghost`)
+### Ghost round (`tests/golden-round.test.ts`, `npm run ghost`)
 
-The whole round with **no human**: `ReplayCore` (B1 + puppets + B3's scripted events) drives all ten pawns in `Sim2DHost` (`act = core.step(observe)`, `host.apply(act)`, `host.tick()`; the driver is `drive()` in `tools/ghost-round.ts`). Each pawn is measured up to its recorded death tick (or last sample), where B3 also kills it, and is no longer driven after its track plus the hold. Errors are 2D, against the **raw** recording at every 10 Hz sample, with the pawn position interpolated between the ticks around the sample time (positions taken after each tick's actions, so the tick-0 setup counts). "ticks > 24 behind" is the share of measured ticks more than 24 units from the raw track. `npm run ghost` writes `logs/ghost-round.jsonl` and `logs/ghost-trace.json` (`toReplayTrace`, for the replay page; snaps appear as `info` events).
+The whole round with **no human**: `ReplayCore` (B1 + puppets + B3's scripted events) drives all ten pawns in `Sim2DHost` (`act = core.step(observe)`, `host.apply(act)`, `host.tick()`; since E1 the driver is the headless harness, `runHarness` in `tools/harness.ts`, which runs the app's `Session`; `docs/golden.md`). Each pawn is measured up to its recorded death tick (or last sample), where B3 also kills it, and is no longer driven after its track plus the hold. Errors are 2D, against the **raw** recording at every 10 Hz sample, with the pawn position interpolated between the ticks around the sample time (positions taken after each tick's actions, so the tick-0 setup counts). "ticks > 24 behind" is the share of measured ticks more than 24 units from the raw track. `npm run ghost` writes `logs/ghost-round.jsonl` and `logs/ghost-trace.json` (`toReplayTrace`, for the replay page; snaps appear as `info` events).
 
 **2D model values; compare against the CS2 probe.** 4,517 ticks, digest `e6c2be70` (with B3, C3 and C4's sight mask; `0fb55e23` before C4: real `sees` and grenades clamped by the mask change the Observe stream, not the positions, the snaps or the Core's acts).
 
@@ -200,7 +200,7 @@ The whole round with **no human**: `ReplayCore` (B1 + puppets + B3's scripted ev
 | sp4rtan | CT | 87 | 29.2 | 149 (58.6 s) | 617 | 41.7 | 450 (19.4 s) | 43.0 | 120–320 | 2 (18.20, 19.50) | 5.5 % |
 | zwomp | CT | 4 | 4.4 | 8 (43.9 s) | 439 | 3.3 | 17 (35.9 s) | 3.3 | 240–450 | 0 | 0.0 % |
 
-The test asserts: observed RMS < 24 for every T; inferred RMS < the smallest uncertainty radius of that CT's inferred samples; every snap at a teleport point and logged once; fewer than 10 snaps; a second run gives the same digest and the log replays identically through a fresh Core.
+The test asserts: observed RMS < 24 for every T; inferred RMS < the smallest uncertainty radius of that CT's inferred samples; exactly the six snaps below, each at a teleport point and logged once; the log replays identically through a fresh Core and (E1) equals the committed fixture `fixtures/golden/round-nohuman.jsonl.gz` byte for byte (`docs/golden.md`).
 
 **What B3 changed** (B2 alone: digest `1fac160b` on the same `main`): the aim and grenade looks go through `withLook`, so the paths hardly move. cart 13.7 → 13.5 and donk 11.3 → 11.1 RMS (holding a grenade for a second raises the speed cap), sp4rtan 23.5 → 29.2 (the AK, above), and barely's one estimated sample at 27.9 s 0.7 → 11.5 units, because he stands still for the plant until 27.52 s while the recording has him walk off at 27.5 s (11.7 with C3, whose plant locks his movement). Every other cell is unchanged, with and without C3.
 
@@ -257,7 +257,7 @@ B3 makes the REPLAY puppets act the recording: they aim and shoot on the recorde
 
 ### Latency and "the tick an event lands on"
 
-An event *lands* on tick t when it is in the Observe whose `tick` is t (that is what the Core, the app and `toReplayTrace` see). The driver runs observe(k) → `core.step` → `host.apply(act)` → `host.tick()`, and the engine's tick k emits its events into observe(k + 1). Measured in `Sim2DHost` (`measureLatency` in `tools/scripted-round.ts`, asserted in `tests/scripted-round.test.ts`):
+An event *lands* on tick t when it is in the Observe whose `tick` is t (that is what the Core, the app and `toReplayTrace` see). The driver runs observe(k) → `core.step` → `host.apply(act)` → `host.tick()`, and the engine's tick k emits its events into observe(k + 1). Measured in `Sim2DHost` (`measureLatency` in `tools/scripted-round.ts`, asserted in `tests/golden-round.test.ts`):
 
 | what | from | to | latency |
 | --- | --- | --- | ---: |
@@ -324,7 +324,7 @@ For each `utility` entry (throw tick U): `set_weapon <grenade>` at U − latency
 - Neither is scripted for the human's pawn, nor for a dead or LIVE one. The Core never sends `end_round`: the engine ends the round (C3: on the defuse, `round_end {CT, bomb_defused}`).
 - **With C3's engine** (`docs/combat.md`, "Bomb and round rules"): barely's USE starts the plant on engine tick 1555 inside Bombsite B; it completes 205 ticks later, on engine tick 1760, so `planted` lands on observe tick **1761**, and USE is released there (held 1555–1760). sp4rtan's defuse (kit, 320 ticks) starts on engine tick 3954, so `defuse_start` lands on **3955** and `defused` with `round_end {CT, bomb_defused}` on **4275** (USE held 3954–4274). Neither fallback fires. The round ends 12 – 15 with 0.71875 s on the bomb timer (the recording: "defused with 0.72 s left"), and the post-round kill on cart at 4442 still happens.
 
-### Results (golden master, `npm run scripted`, `tests/scripted-round.test.ts`)
+### Results (golden master, `npm run scripted`, `tests/golden-round.test.ts`)
 
 4,517 ticks, digest `e6c2be70` (with C4's sight mask; `0fb55e23` before C4, `7e3523a6` before C3), identical on a second run and on replay. C4 changed only the Observe stream: `sees` is real (2,063 of the 4,517 observes differ in it), and 10 grenade pops moved or changed tick because throws now stop at the sight mask's walls instead of nav holes; every Core act, position, kill, HP change, shot tick, the plant and the defuse are byte-identical. The driver passes the round's score (CT 11 – T 15) and clock (98.25 s) to `Sim2DHost`, like the Session.
 

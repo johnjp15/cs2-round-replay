@@ -22,6 +22,8 @@
     "check:browser": "tsx tools/browser-check.ts",
     "ghost": "tsx tools/ghost-round.ts",
     "scripted": "tsx tools/scripted-round.ts",
+    "harness": "tsx tools/harness.ts",
+    "fixtures:update": "tsx tools/golden-fixtures.ts",
     "extract:vismask": "tsx tools/extract-vismask.ts",
     "vision": "tsx tools/vision-labels.ts"
   },

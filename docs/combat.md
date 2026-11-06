@@ -452,7 +452,7 @@ it for tests and debugging, along with the explode and next-beep ticks.
   hull-to-world collision beyond the nav mesh (`docs/movement.md`).
 - In the B2 ghost round (nobody died yet), sp4rtan was held up for 6 ticks at about 50.7 s by eradicate, who
   should have been dead since 12.75 s. With B3's scripted deaths no puppet is body-blocked at any tick of the
-  ghost round (`tests/scripted-round.test.ts`).
+  ghost round (`tests/golden-round.test.ts`).
 
 [rg-grenade]: https://github.com/s1lentq/ReGameDLL_CS/blob/70307312cde05cec5d73a3d3a384b4bdac3d5fe2/regamedll/dlls/ggrenade.cpp
 [rg-combat]: https://github.com/s1lentq/ReGameDLL_CS/blob/70307312cde05cec5d73a3d3a384b4bdac3d5fe2/regamedll/dlls/combat.cpp

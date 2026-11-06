@@ -32,7 +32,7 @@ function posAt(run: ScriptedRun, tick: number, id: PlayerId): Vec3 | null {
 
 export function checkFireItems(run: ScriptedRun): FireCheck[] {
   const sight = run.host.sightQuery();
-  const nav = run.inputs.nav;
+  const nav = run.data.nav;
   const out: FireCheck[] = [];
   const plan = run.core.script.plan;
   const combat = run.host.combatLog();
