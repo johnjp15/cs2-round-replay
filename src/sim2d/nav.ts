@@ -3,21 +3,17 @@
  * string pulling, line of sight and wall-sliding movement clamps. Pure and deterministic (no DOM,
  * no randomness, no object-key iteration). Built from data/mirage-nav.json; see docs/nav.md.
  */
+import type { NavTuning, Tuning, Vec3 } from '../contracts/index';
 import { RectGrid, rectContains, type Rect } from './nav-grid';
 
-/** A position in the Mirage world frame (Source units). `z` is optional on input. */
-export interface NavPoint {
-  x: number;
-  y: number;
-  z?: number;
-}
+/**
+ * Input position: the shared contracts `Vec3`, with `z` optional (without it, stacked-area lookups
+ * ignore height). Any `Vec3` is a `NavPoint`.
+ */
+export type NavPoint = Pick<Vec3, 'x' | 'y'> & Partial<Pick<Vec3, 'z'>>;
 
-/** Output position: always carries the nav-mesh height. */
-export interface NavPos {
-  x: number;
-  y: number;
-  z: number;
-}
+/** Output position: a contracts `Vec3` that always carries the nav-mesh height. */
+export type NavPos = Vec3;
 
 /**
  * One nav area: axis-aligned rectangle with heights z1 at corner (x1, y1) and z2 at corner (x2, y2);
@@ -40,15 +36,8 @@ export interface NavData {
   areas: NavArea[];
 }
 
-/** Tunables (data/tuning.json → `nav`). */
-export interface NavOptions {
-  /** Max height difference (units) along a shared edge for two areas to be neighbours. */
-  stepHeight: number;
-  /** Max gap (units) between two edges that still counts as touching; walkable space is the union of areas grown by half of this. */
-  edgeEpsilon: number;
-  /** Line of sight tolerates the segment passing within this many units of walkable space. */
-  losMargin: number;
-}
+/** Tunables: the `nav` section of data/tuning.json (`Tuning.nav`). */
+export type NavOptions = NavTuning;
 
 /** A connection between two neighbouring areas: the shared edge segment (degenerate for overlaps). */
 export interface NavPortal {
@@ -203,7 +192,7 @@ export class NavMesh {
    * direct move (each itself cut to its longest walkable prefix); the one ending nearest `to` wins
    * (ties: x, then y, then direct). If `from` is not walkable, returns `from` unchanged.
    */
-  clampMove(from: NavPoint, to: NavPoint): NavPos {
+  clampMove(from: NavPoint, to: NavPoint): Vec3 {
     if (!this.isWalkable(from)) return this.pos(from.x, from.y, from);
     if (this.segmentWalkable(from, to)) return this.pos(to.x, to.y, to);
     const cands: [number, number][] = [
@@ -232,7 +221,7 @@ export class NavMesh {
    * midpoints, then greedy string pulling: each waypoint jumps to the furthest later corridor point it
    * can reach in a straight walkable line. Every segment of the result is walkable. null if no route.
    */
-  path(a: NavPoint, b: NavPoint): NavPos[] | null {
+  path(a: NavPoint, b: NavPoint): Vec3[] | null {
     const sa = this.snap(a);
     const sb = this.snap(b);
     const n = this.areas.length;
@@ -286,7 +275,7 @@ export class NavMesh {
     cy.push(sb.y);
 
     // Greedy string pull. Consecutive corridor points share a convex area, so j = i + 1 always works.
-    const out: NavPos[] = [this.pos(sa.x, sa.y, sa)];
+    const out: Vec3[] = [this.pos(sa.x, sa.y, sa)];
     let i = 0;
     const last = cx.length - 1;
     while (i < last) {
@@ -311,7 +300,7 @@ export class NavMesh {
 
   // ---- internals -----------------------------------------------------------------------------
 
-  private pos(x: number, y: number, hint: NavPoint | null): NavPos {
+  private pos(x: number, y: number, hint: NavPoint | null): Vec3 {
     const z = this.zAt(hint !== null && hint.z !== undefined ? { x, y, z: hint.z } : { x, y });
     return { x, y, z };
   }
@@ -391,15 +380,10 @@ export class NavMesh {
   }
 }
 
-/** Read the `nav` section of data/tuning.json (parsed). Throws NavError on a missing or non-numeric key. */
-export function navOptionsFromTuning(tuningJson: unknown): NavOptions {
-  const nav = asObject(asObject(tuningJson, 'tuning')['nav'], 'nav');
-  const n = (k: string): number => {
-    const v = nav[k];
-    if (typeof v !== 'number' || !Number.isFinite(v)) throw new NavError(`nav.${k}: expected a finite number`);
-    return v;
-  };
-  return { stepHeight: n('stepHeight'), edgeEpsilon: n('edgeEpsilon'), losMargin: n('losMargin') };
+/** Nav options from parsed tuning (`parseTuning(json).nav`; parseTuning validates the section). */
+export function navOptionsFromTuning(tuning: Pick<Tuning, 'nav'>): NavOptions {
+  const { stepHeight, edgeEpsilon, losMargin } = tuning.nav;
+  return { stepHeight, edgeEpsilon, losMargin };
 }
 
 /** Height of area a at (x, y): linear in the projection onto the (x1,y1)→(x2,y2) diagonal, clamped to [0, 1]. */

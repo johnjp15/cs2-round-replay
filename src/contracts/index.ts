@@ -9,6 +9,7 @@ export type {
   BombTuning,
   GrenadeTuning,
   AiTuning,
+  NavTuning,
 } from './tuning';
 
 export {

@@ -127,8 +127,10 @@ mesh ≈ 12 ms.
 | `edgeEpsilon` | 1 | Max gap that still counts as touching; walkable space grows by half of it. |
 | `losMargin` | 8 | LOS tolerance around walkable space. |
 
-`src/contracts/tuning.ts` ignores unknown keys, so it was not changed; `navOptionsFromTuning()` in
-`src/sim2d/nav.ts` reads and validates the `nav` section. A4 may move this into the `Tuning` type later.
+The section is part of the `Tuning` type (`Tuning.nav`, validated by `parseTuning` in
+`src/contracts/tuning.ts`); `navOptionsFromTuning(parseTuning(json))` in `src/sim2d/nav.ts` turns it into
+`NavOptions`. Positions use the contracts `Vec3`: `NavPos` is an alias of `Vec3`, and inputs are `NavPoint`
+(a `Vec3` whose `z` may be omitted).
 
 ## Place names
 

@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { parseTuning } from '../src/contracts/tuning';
 import { NavMesh, navOptionsFromTuning, type NavPoint } from '../src/sim2d/nav';
 
 const navJson = JSON.parse(readFileSync(new URL('../data/mirage-nav.json', import.meta.url), 'utf8')) as unknown;
-const tuningJson = JSON.parse(readFileSync(new URL('../data/tuning.json', import.meta.url), 'utf8')) as unknown;
-const nav = NavMesh.fromJson(navJson, navOptionsFromTuning(tuningJson));
+const tuningJson = JSON.parse(readFileSync(new URL('../data/tuning.json', import.meta.url), 'utf8')) as Record<string, unknown>;
+const tuning = parseTuning(tuningJson);
+const nav = NavMesh.fromJson(navJson, navOptionsFromTuning(tuning));
 
 const P = (x: number, y: number): NavPoint => ({ x, y });
 
@@ -101,7 +103,7 @@ describe('NavMesh paths', () => {
     const a = nav.path(P(-1982, 311), P(240, -1500));
     const b = nav.path(P(-1982, 311), P(240, -1500));
     expect(a).toEqual(b);
-    const fresh = NavMesh.fromJson(navJson, navOptionsFromTuning(tuningJson));
+    const fresh = NavMesh.fromJson(navJson, navOptionsFromTuning(tuning));
     expect(fresh.path(P(-1982, 311), P(240, -1500))).toEqual(a);
   });
 
@@ -170,10 +172,11 @@ describe('NavMesh clampMove', () => {
 
 describe('navOptionsFromTuning', () => {
   it('reads data/tuning.json nav section', () => {
-    expect(navOptionsFromTuning(tuningJson)).toEqual({ stepHeight: 18, edgeEpsilon: 1, losMargin: 8 });
+    expect(navOptionsFromTuning(tuning)).toEqual({ stepHeight: 18, edgeEpsilon: 1, losMargin: 8 });
   });
 
-  it('rejects a missing key', () => {
-    expect(() => navOptionsFromTuning({ nav: { stepHeight: 18, edgeEpsilon: 1 } })).toThrow(/nav\.losMargin/);
+  it('rejects a missing key (validated by parseTuning)', () => {
+    const broken = { ...tuningJson, nav: { stepHeight: 18, edgeEpsilon: 1 } };
+    expect(() => navOptionsFromTuning(parseTuning(broken))).toThrow(/nav\.losMargin/);
   });
 });
