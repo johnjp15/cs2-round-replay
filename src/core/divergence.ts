@@ -364,13 +364,18 @@ function bandOf(hitgroup: string): AimBand {
   return hitgroup === 'head' || hitgroup === 'stomach' || hitgroup === 'leg' ? hitgroup : 'chest';
 }
 
-/** The track position at `tick`, clamped to the first and last sample. */
+/**
+ * The track position at `tick`, clamped by tick to the first and last sample (a sample's tick is round(t × 64), so
+ * tick / 64 can fall just before its t; at or after the last sample's tick this is that sample, exactly).
+ */
 export function trackPosAt(model: RoundModel, id: PlayerId, tick: number): Vec3 {
-  const p = model.trackAtTick(id, tick);
-  if (p !== null) return p.pos;
   const s = model.track(id);
-  const q = (tick < (s[0] as TrackSample).tick ? s[0] : s[s.length - 1]) as TrackSample;
-  return { x: q.x, y: q.y, z: q.z };
+  const first = s[0] as TrackSample;
+  const last = s[s.length - 1] as TrackSample;
+  const q = tick <= first.tick ? first : tick >= last.tick ? last : null;
+  if (q !== null) return { x: q.x, y: q.y, z: q.z };
+  const p = model.trackAtTick(id, tick);
+  return p === null ? { x: last.x, y: last.y, z: last.z } : p.pos;
 }
 
 /** The scheduled encounters of the round: every non-lethal recorded hit on the default human by an enemy. */
