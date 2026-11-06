@@ -172,7 +172,7 @@ describe('NavMesh clampMove', () => {
 
 describe('navOptionsFromTuning', () => {
   it('reads data/tuning.json nav section', () => {
-    expect(navOptionsFromTuning(tuning)).toEqual({ stepHeight: 18, edgeEpsilon: 1, losMargin: 8 });
+    expect(navOptionsFromTuning(tuning)).toEqual({ stepHeight: 18, edgeEpsilon: 1, losMargin: 8, dropHeight: 200 });
   });
 
   it('rejects a missing key (validated by parseTuning)', () => {

@@ -181,7 +181,7 @@
     "blastMarginUnits": 64,
     "defuseMarginSec": 0.25
   },
-  "nav": { "stepHeight": 18, "edgeEpsilon": 1, "losMargin": 8 },
+  "nav": { "stepHeight": 18, "edgeEpsilon": 1, "losMargin": 8, "dropHeight": 200 },
   "collision": { "pawnRadius": 16, "solidTeammates": false },
   "round": { "timeSec": 115 }
 }

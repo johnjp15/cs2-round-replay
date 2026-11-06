@@ -73,9 +73,17 @@ const UNCONNECTED_COST = 1000;
 const DETOUR_GRID = 8;
 const DETOUR_REACH = 160;
 const DETOUR_MAX_RATIO = 2.5;
-const DETOUR_SLACK = 160;
-const DETOUR_SPREAD: readonly number[] = [4, 6, 8, 12];
+const DETOUR_SLACK = 256;
+const DETOUR_SPREAD: readonly number[] = [4, 6, 8, 12, 16, 20, 25, 30];
+/** detour: the longest step between samples (units per 0.1 s) a spread may have: a little under the AK's 215 u/s. */
+const DETOUR_MAX_STEP = 21;
+/** frozenTick: margin around a plant or defuse, the plant's duration (tuning.bomb.plantSec), and the round's defuser (round.json's bomb has no defuser field; docs/round-data.md: sp4rtan). */
+const FROZEN_MARGIN_SEC = 1;
+const PLANT_SEC = 3.2;
+const DEFUSER: PlayerId = 'sp4rtan';
 const DETOUR_MAX_NODES = 6000;
+/** detour: the highest drop it walks off (below sv_falldamage's 222). */
+const DETOUR_DROP = 200;
 const DETOUR_STEPS: readonly [number, number][] = [
   [1, 0],
   [-1, 0],
@@ -86,6 +94,18 @@ const DETOUR_STEPS: readonly [number, number][] = [
   [-1, 1],
   [-1, -1],
 ];
+
+/**
+ * Samples a detour must not move: the planter from FROZEN_MARGIN_SEC before his plant starts (plant time before the
+ * recorded plant) to after it, the defuser from before his defuse to its end. Their positions are the bomb's.
+ */
+function frozenTick(round: RoundData, id: PlayerId, tick: number): boolean {
+  const b = round.bomb;
+  const margin = Math.round(FROZEN_MARGIN_SEC * 64);
+  if (id === b.carrier && b.plantTick !== null && tick >= b.plantTick - Math.round(PLANT_SEC * 64) - margin && tick <= b.plantTick + margin) return true;
+  if (b.defuseStartTick !== null && b.defuseTick !== null && id === DEFUSER && tick >= b.defuseStartTick - margin && tick <= b.defuseTick) return true;
+  return false;
+}
 
 /** Consecutive snapped samples that aren't in a clear hull line. */
 function countUnconnected(g: MapGeometry, s: readonly SnappedSample[], step: number): number {
@@ -264,31 +284,51 @@ export class Snapper {
 
   /**
    * Pass 3: the way round an obstacle between samples i − 1 and i: an A* search on a DETOUR_GRID-unit grid of allowed
-   * standing spots (each step a clear hull line, levels within a step), out to DETOUR_REACH from the gap. If one is
+   * standing spots (each step a clear hull line, up at most a step or down a ledge up to DETOUR_DROP), out to
+   * DETOUR_REACH from the gap. If one is
    * found and is at most DETOUR_MAX_RATIO times as long as the gap (or the gap plus DETOUR_SLACK units), the samples
    * i − n .. i + n − 1 are spread evenly by length along the polyline through them and the detour (each still 0.1 s
    * apart, so the puppet runs it a little faster), for the first n of DETOUR_SPREAD that leaves every two consecutive
-   * samples in a clear hull line. Returns the new track, or null.
+   * samples in a clear hull line and no step longer than DETOUR_MAX_STEP (else the valid n with the shortest longest
+   * step). Returns the new track, or null.
    */
-  detour(snapped: readonly SnappedSample[], i: number): SnappedSample[] | null {
+  detour(snapped: readonly SnappedSample[], i: number, frozen: (j: number) => boolean = () => false): SnappedSample[] | null {
     const a = snapped[i - 1] as SnappedSample;
     const b = snapped[i] as SnappedSample;
     const gap = Math.hypot(b.x - a.x, b.y - a.y);
     const maxLen = Math.max(gap * DETOUR_MAX_RATIO, gap + DETOUR_SLACK);
     const path = this.astar(a, b, maxLen);
     if (path === null) return null;
-    // Spread over more samples on each side until the samples are in clear lines (closer samples cut corners less).
+    // Spread over enough samples on each side that the samples are in clear lines (closer samples cut corners less) and
+    // no step is faster than a player runs (else the puppet falls behind and snaps); the slowest valid spread if none is.
+    let best: SnappedSample[] | null = null;
+    let bestStep = Infinity;
     for (const spread of DETOUR_SPREAD) {
-      const out = this.spread(snapped, i, path, spread);
-      if (out !== null) return out;
+      // Never into a frozen sample (a planter's plant, a defuser's defuse): the spread stops short of it on that side.
+      let before = 0;
+      while (before < spread && i - before - 1 >= 0 && !frozen(i - before - 1)) before++;
+      let after = 0;
+      while (after < spread && i + after < snapped.length && !frozen(i + after)) after++;
+      if (before === 0 || after === 0) continue;
+      const out = this.spread(snapped, i, path, before, after);
+      if (out === null) continue;
+      let step = 0;
+      const lo = Math.max(1, i - before);
+      const hi = Math.min(out.length - 1, i + after);
+      for (let j = lo; j <= hi; j++) step = Math.max(step, Math.hypot((out[j] as SnappedSample).x - (out[j - 1] as SnappedSample).x, (out[j] as SnappedSample).y - (out[j - 1] as SnappedSample).y));
+      if (step <= DETOUR_MAX_STEP) return out;
+      if (step < bestStep) {
+        bestStep = step;
+        best = out;
+      }
     }
-    return null;
+    return best;
   }
 
   /** `detour`'s spreading of samples i − spread .. i + spread − 1 along the polyline through them and `path`; null if not in clear lines. */
-  private spread(snapped: readonly SnappedSample[], i: number, path: readonly { x: number; y: number; z: number }[], spread: number): SnappedSample[] | null {
-    const lo = Math.max(0, i - spread);
-    const hi = Math.min(snapped.length - 1, i + spread - 1);
+  private spread(snapped: readonly SnappedSample[], i: number, path: readonly { x: number; y: number; z: number }[], before: number, after: number): SnappedSample[] | null {
+    const lo = Math.max(0, i - before);
+    const hi = Math.min(snapped.length - 1, i + after - 1);
     const pts: { x: number; y: number; z: number }[] = [];
     for (let j = lo; j < i; j++) pts.push(snapped[j] as SnappedSample);
     for (const q of path.slice(1, -1)) pts.push(q);
@@ -364,9 +404,16 @@ export class Snapper {
       parent: Node | null;
     }
     const level = new Map<number, number | null>();
+    // Where a hull walking in from height `near` comes to rest: the highest allowed standing level at most a step up
+    // (walking, stairs) or any way down to DETOUR_DROP (walking off a ledge).
     const levelAt = (ix: number, iy: number, near: number): number | null => {
-      const k = key(ix, iy);
-      if (!level.has(k)) level.set(k, this.levels(ix * G, iy * G, near, this.step)[0] ?? null);
+      const k = key(ix, iy) * 1024 + Math.floor(near / 8 + 512);
+      if (!level.has(k)) {
+        const lo = near - DETOUR_DROP;
+        const hi = near + this.step;
+        const lv = this.levels(ix * G, iy * G, (lo + hi) / 2, (hi - lo) / 2).filter((z) => z <= hi);
+        level.set(k, lv.length === 0 ? null : Math.max(...lv));
+      }
       return level.get(k) ?? null;
     };
     const best = new Map<number, number>();
@@ -495,7 +542,7 @@ export function buildTracks(): SnapProducts {
     // the samples around the gap along the way, unless the way round is too long (then the gap stays: the puppet snaps).
     for (let i = 1; i < snapped.length; i++) {
       if (hullLineClear(g, snapped[i - 1] as SnappedSample, snapped[i] as SnappedSample, m.stepSize)) continue;
-      const next = snapper.detour(snapped, i);
+      const next = snapper.detour(snapped, i, (j) => frozenTick(round, id, (tr.samples[j] as { tick: number }).tick));
       if (next !== null) {
         snapped = next;
         detoured++;

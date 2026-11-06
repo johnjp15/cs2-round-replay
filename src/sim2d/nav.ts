@@ -86,7 +86,7 @@ export class NavMesh {
     });
     this.places = [...data.places];
     this.areas = areas;
-    this.options = { stepHeight: options.stepHeight, edgeEpsilon: options.edgeEpsilon, losMargin: options.losMargin };
+    this.options = { stepHeight: options.stepHeight, edgeEpsilon: options.edgeEpsilon, losMargin: options.losMargin, dropHeight: options.dropHeight };
     this.areaGrid = new RectGrid(areas, GRID_CELL);
     this.walkGrid = new RectGrid(areas.map((a) => grow(a, options.edgeEpsilon / 2)), GRID_CELL);
     this.losGrid = new RectGrid(areas.map((a) => grow(a, options.losMargin)), GRID_CELL);
@@ -355,7 +355,9 @@ export class NavMesh {
   /**
    * Neighbours share an edge segment longer than eps (gap ≤ eps across it), or overlap with an
    * interior longer than eps on both axes; and their heights differ by ≤ stepHeight at the ends
-   * and middle of the shared segment (or the corners and centre of the overlap).
+   * and middle of the shared segment (or the corners and centre of the overlap). G3: or, across a
+   * shared edge only, b is lower than a by more than stepHeight and at most dropHeight at every one
+   * of those points (a drop off a ledge: one way, a → b).
    */
   private portalBetween(a: NavArea, b: NavArea, eps: number): NavPortal | null {
     const gx = Math.max(b.x1 - a.x2, a.x1 - b.x2);
@@ -383,20 +385,26 @@ export class NavMesh {
       return null;
     }
     let minDz = Infinity;
+    let minDrop = Infinity;
+    let maxDrop = -Infinity;
     for (const [x, y] of pts) {
       const za = areaZ(a, clamp(x, a.x1, a.x2), clamp(y, a.y1, a.y2));
       const zb = areaZ(b, clamp(x, b.x1, b.x2), clamp(y, b.y1, b.y2));
       minDz = Math.min(minDz, Math.abs(za - zb));
+      minDrop = Math.min(minDrop, za - zb);
+      maxDrop = Math.max(maxDrop, za - zb);
     }
-    if (minDz > this.options.stepHeight) return null;
+    const overlap = gx < -eps && gy < -eps;
+    const drop = !overlap && minDrop > this.options.stepHeight && maxDrop <= this.options.dropHeight;
+    if (minDz > this.options.stepHeight && !drop) return null;
     return { to: b.id, ax: seg[0], ay: seg[1], bx: seg[2], by: seg[3], mx: (seg[0] + seg[2]) / 2, my: (seg[1] + seg[3]) / 2 };
   }
 }
 
 /** Nav options from parsed tuning (`parseTuning(json).nav`; parseTuning validates the section). */
 export function navOptionsFromTuning(tuning: Pick<Tuning, 'nav'>): NavOptions {
-  const { stepHeight, edgeEpsilon, losMargin } = tuning.nav;
-  return { stepHeight, edgeEpsilon, losMargin };
+  const { stepHeight, edgeEpsilon, losMargin, dropHeight } = tuning.nav;
+  return { stepHeight, edgeEpsilon, losMargin, dropHeight };
 }
 
 /** Height of area a at (x, y): linear in the projection onto the (x1,y1)→(x2,y2) diagonal, clamped to [0, 1]. */

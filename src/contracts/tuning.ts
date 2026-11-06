@@ -371,6 +371,11 @@ export interface NavTuning {
   edgeEpsilon: number;
   /** Line of sight tolerates the segment passing within this many units of walkable space. */
   losMargin: number;
+  /**
+   * G3: an area may lead down to an edge-neighbour this much lower (a one-way drop off a ledge, e.g. the Balcony onto
+   * B site); 0 = no drops. Paths (the LIVE AI, G1's pathLength) use them; the 3D movement falls the rest of the way.
+   */
+  dropHeight: number;
 }
 
 export interface Tuning {
@@ -552,7 +557,7 @@ const AI_KEYS = [
   'blastMarginUnits',
   'defuseMarginSec',
 ] as const;
-const NAV_KEYS = ['stepHeight', 'edgeEpsilon', 'losMargin'] as const;
+const NAV_KEYS = ['stepHeight', 'edgeEpsilon', 'losMargin', 'dropHeight'] as const;
 
 /**
  * Validate parsed tuning JSON (or a JSON string) and return a typed copy.
