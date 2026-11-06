@@ -10,3 +10,96 @@ export type {
   GrenadeTuning,
   AiTuning,
 } from './tuning';
+
+export {
+  PLAYER_IDS,
+  TEAMS,
+  WEAPON_IDS,
+  BUTTONS,
+  HITGROUPS,
+  MODES,
+  SOUND_KINDS,
+  BOMB_PHASES,
+  ROUND_END_REASONS,
+  LOG_LEVELS,
+  isPlayerId,
+  compareOrdinal,
+  sortById,
+  sortIds,
+  sortButtons,
+} from './types';
+export type {
+  PlayerId,
+  Team,
+  WeaponId,
+  Button,
+  Hitgroup,
+  Mode,
+  SettableMode,
+  SoundKind,
+  BombPhase,
+  RoundEndReason,
+  LogLevel,
+  Vec3,
+  Ammo,
+  PawnObs,
+  DamageEvent,
+  ShotEvent,
+  DeathEvent,
+  SoundEvent,
+  BombEvent,
+  RoundEndEvent,
+  ObsEvent,
+  Observe,
+  PawnInput,
+  Goal,
+  DamageAction,
+  BlockDamageAction,
+  UnblockDamageAction,
+  SetModeAction,
+  SetWeaponAction,
+  GiveAction,
+  SetHpAction,
+  TeleportAction,
+  PlantAction,
+  DefuseStartAction,
+  DefuseStopAction,
+  EndRoundAction,
+  LogAction,
+  Action,
+  ActionType,
+  PawnStatus,
+  Act,
+  StartControl,
+  RestartControl,
+  SeekControl,
+  CheckpointControl,
+  RewindControl,
+  PauseControl,
+  SpeedControl,
+  Control,
+  ControlType,
+} from './types';
+
+export type { IHost, ICore, HostSnapshot, CoreSnapshot } from './host';
+
+export {
+  JsonError,
+  stableStringify,
+  parseJsonLine,
+  formatNumber,
+  roundNumber,
+  canonicalize,
+  toJsonValue,
+  fnv1a32Hex,
+} from './json';
+export type { JsonValue, JsonPrimitive, JsonObject } from './json';
+
+export { SessionLog } from './session-log';
+export type { LogEntry } from './session-log';
+
+export { replay, MAX_REPLAY_DIFFS } from './replayer';
+export type { ReplayResult, ReplayDiff } from './replayer';
+
+export { toReplayTrace, DISPLAY_IDS, TRACE_SAMPLE_TICKS } from './trace';
+export type { ReplayTrace, TraceSample, TraceKill, TraceEvent, TracePlayer } from './trace';
