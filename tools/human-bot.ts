@@ -4,7 +4,8 @@
  *
  *   followRecording(untilT)  play the pawn's own recording until t (a shadow puppet, as tools/follow-script.ts)
  *   walkTo(pos, walk?)       walk there: straight if the 2D line is walkable, else along a nav path
- *   aimAt(id, band?)         look at a pawn's head (or another band) with B3's aim math, until changed; null = stop
+ *   aimAt(id, band?, offsetDeg?)  look at a pawn's head (or another band) with B3's aim math, until changed; null =
+ *                            stop. G1: `offsetDeg` (default 0) aims that many degrees left (+) of it, so a spray misses
  *   fire(untilDead, maxSec)  hold ATTACK while the aim target is in sight and the aim is on it
  *   holdStill(sec | until)   no stick (the aim, if any, goes on)
  *   throw(kind, at)          draw a grenade, look at a point with the pitch that lands it there, pull and release
@@ -65,7 +66,7 @@ export type XY = readonly [number, number];
 export type BotStep =
   | { readonly do: 'followRecording'; readonly until: number }
   | { readonly do: 'walkTo'; readonly pos: XY; readonly walk: boolean }
-  | { readonly do: 'aimAt'; readonly id: PlayerId | null; readonly band: AimBand }
+  | { readonly do: 'aimAt'; readonly id: PlayerId | null; readonly band: AimBand; readonly offsetDeg: number }
   | { readonly do: 'fire'; readonly untilDead: boolean; readonly maxSec: number }
   | { readonly do: 'holdStill'; readonly sec: number | null; readonly until: number | null }
   | { readonly do: 'throw'; readonly kind: GrenadeId; readonly at: XY }
@@ -110,7 +111,7 @@ function keys(o: Record<string, unknown>, allowed: readonly string[], where: str
   for (const k of Object.keys(o)) if (!allowed.includes(k)) throw new ScenarioError(`${where}: unknown key "${k}"`);
 }
 
-/** Validate one step (`{do, …}`); defaults: walkTo walk false, aimAt band head, fire untilDead true / maxSec 3. */
+/** Validate one step (`{do, …}`); defaults: walkTo walk false, aimAt band head and offsetDeg 0, fire untilDead true / maxSec 3. */
 export function parseStep(v: unknown, where: string): BotStep {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new ScenarioError(`${where}: expected an object`);
   const o = v as Record<string, unknown>;
@@ -122,12 +123,13 @@ export function parseStep(v: unknown, where: string): BotStep {
       keys(o, ['do', 'pos', 'walk'], where);
       return { do: 'walkTo', pos: xy(o['pos'], `${where}.pos`), walk: o['walk'] === true };
     case 'aimAt': {
-      keys(o, ['do', 'id', 'band'], where);
+      keys(o, ['do', 'id', 'band', 'offsetDeg'], where);
       const id = o['id'];
       if (id !== null && (typeof id !== 'string' || !isPlayerId(id))) throw new ScenarioError(`${where}.id: expected a player id or null`);
       const band = o['band'] ?? 'head';
       if (!(AIM_BANDS as readonly unknown[]).includes(band)) throw new ScenarioError(`${where}.band: expected ${AIM_BANDS.join(' ')}`);
-      return { do: 'aimAt', id, band: band as AimBand };
+      const offsetDeg = o['offsetDeg'] === undefined ? 0 : num(o['offsetDeg'], `${where}.offsetDeg`);
+      return { do: 'aimAt', id, band: band as AimBand, offsetDeg };
     }
     case 'fire':
       keys(o, ['do', 'untilDead', 'maxSec'], where);
@@ -219,7 +221,7 @@ export class HumanBot implements HumanDriver {
   private shadowWeapon: WeaponId | null = null;
   private cur: Running | null = null;
   private nextIndex = 0;
-  private look: { id: PlayerId; band: AimBand } | null = null;
+  private look: { id: PlayerId; band: AimBand; offsetDeg: number } | null = null;
   private yaw: number;
   private pitch = 0;
 
@@ -250,8 +252,8 @@ export class HumanBot implements HumanDriver {
     this.steps.push({ do: 'walkTo', pos, walk });
     return this;
   }
-  aimAt(id: PlayerId | null, band: AimBand = 'head'): this {
-    this.steps.push({ do: 'aimAt', id, band });
+  aimAt(id: PlayerId | null, band: AimBand = 'head', offsetDeg = 0): this {
+    this.steps.push({ do: 'aimAt', id, band, offsetDeg });
     return this;
   }
   fire(untilDead = true, maxSec = 3): this {
@@ -310,7 +312,7 @@ export class HumanBot implements HumanDriver {
         continue;
       }
       if (step.do === 'aimAt') {
-        this.look = step.id === null ? null : { id: step.id, band: step.band };
+        this.look = step.id === null ? null : { id: step.id, band: step.band, offsetDeg: step.offsetDeg };
         this.end(tick);
         continue;
       }
@@ -377,16 +379,27 @@ export class HumanBot implements HumanDriver {
     const t = pawn(o, this.look.id);
     if (t === undefined || !t.alive) return prev;
     const d = this.tuning.damage;
-    return lookToward(prev, me.pos, me.crouching, bandPoint(t.pos, t.crouching, this.look.band, d), d, this.tuning.replay.aimTurnRateDegPerTick);
+    return lookToward(prev, me.pos, me.crouching, this.aimPoint(me, t), d, this.tuning.replay.aimTurnRateDegPerTick);
   }
 
-  /** True when `look` is on the aim target's band point (within AIM_ON_DEG) and the target is in sight. */
+  /** The aim target's band point, turned `offsetDeg` about the shooter (counter-clockwise: to its left). */
+  private aimPoint(me: PawnObs, t: PawnObs): Vec3 {
+    const look = this.look as { band: AimBand; offsetDeg: number };
+    const p = bandPoint(t.pos, t.crouching, look.band, this.tuning.damage);
+    if (look.offsetDeg === 0) return p;
+    const a = (look.offsetDeg * Math.PI) / 180;
+    const dx = p.x - me.pos.x;
+    const dy = p.y - me.pos.y;
+    return { x: me.pos.x + dx * Math.cos(a) - dy * Math.sin(a), y: me.pos.y + dx * Math.sin(a) + dy * Math.cos(a), z: p.z };
+  }
+
+  /** True when `look` is on the aim point (the target's band point, turned by the offset; within AIM_ON_DEG) and the target is in sight. */
   private onTarget(o: Observe, me: PawnObs, look: Look): boolean {
     if (this.look === null) return false;
     const t = pawn(o, this.look.id);
     if (t === undefined || !t.alive || !me.sees.includes(t.id)) return false;
     const d = this.tuning.damage;
-    const p = bandPoint(t.pos, t.crouching, this.look.band, d);
+    const p = this.aimPoint(me, t);
     return Math.abs(yawDelta(look.yaw, bearing(me.pos, p))) <= AIM_ON_DEG && Math.abs(look.pitch - pitchTo(me.pos, me.crouching, p, d)) <= AIM_ON_DEG;
   }
 
@@ -500,7 +513,7 @@ export function describeStep(s: BotStep): string {
     case 'walkTo':
       return `walkTo(${s.pos[0]}, ${s.pos[1]}${s.walk ? ', walk' : ''})`;
     case 'aimAt':
-      return `aimAt(${s.id ?? 'none'}${s.band === 'head' ? '' : `, ${s.band}`})`;
+      return `aimAt(${s.id ?? 'none'}${s.band === 'head' ? '' : `, ${s.band}`}${s.offsetDeg === 0 ? '' : `, ${s.offsetDeg}°`})`;
     case 'fire':
       return `fire(${s.untilDead ? 'until dead, ' : ''}max ${s.maxSec} s)`;
     case 'holdStill':
@@ -520,14 +533,16 @@ export function describeStep(s: BotStep): string {
 
 export interface TimelineEvent {
   readonly tick: number;
-  /** `live`, `death`, `encounter`, `bomb`, `round_end`, `dropped` (B3's dropped scripted item). */
+  /** `live`, `rejoin` (G1: heading back, or back on the tape), `death`, `encounter`, `bomb`, `round_end`, `dropped` (B3's dropped scripted item). */
   readonly kind: string;
   readonly text: string;
 }
 
 /**
  * The compact scenario timeline from a run's log: every switch to LIVE (the Core's log line, which names the trigger),
- * the encounters' log lines, B3's drops (`script: dropped …`), deaths, bomb events and the round end, in tick order.
+ * G1's rejoin lines (`<id> rejoin: …` when a LIVE pawn heads back, `<id> REPLAY: rejoined …` when it is back, and a
+ * late plant), the encounters' log lines, B3's drops (`script: dropped …`), deaths, bomb events and the round end, in
+ * tick order.
  */
 export function timeline(entries: readonly LogEntry[]): TimelineEvent[] {
   const out: TimelineEvent[] = [];
@@ -541,6 +556,7 @@ export function timeline(entries: readonly LogEntry[]): TimelineEvent[] {
     for (const a of e.act.actions) {
       if (a.type !== 'log') continue;
       if (/^[a-z0-9]+ LIVE: /.test(a.text)) out.push({ tick: o.tick, kind: 'live', text: a.text });
+      else if (/^[a-z0-9]+ (REPLAY: rejoined|rejoin: )/.test(a.text) || a.text.startsWith('script: plant by ')) out.push({ tick: o.tick, kind: 'rejoin', text: a.text });
       else if (a.text.startsWith('encounter ')) out.push({ tick: o.tick, kind: 'encounter', text: a.text });
       else if (a.text.startsWith('script: dropped')) out.push({ tick: o.tick, kind: 'dropped', text: a.text });
     }
@@ -552,16 +568,26 @@ export function formatTimeline(events: readonly TimelineEvent[]): string {
   return events.map((e) => `${(e.tick / 64).toFixed(2).padStart(6)} s  ${String(e.tick).padStart(4)}  ${e.kind.padEnd(9)} ${e.text}`).join('\n');
 }
 
-/** Which pawns went LIVE in a run, with the tick and trigger from the status. */
+/**
+ * Every switch to LIVE in a run, with the tick and trigger from the status (a pawn that rejoined its recording, G1,
+ * can switch again: one entry per switch).
+ */
 export function liveSwitches(entries: readonly LogEntry[]): { id: PlayerId; tick: number; trigger: string | null }[] {
   const out: { id: PlayerId; tick: number; trigger: string | null }[] = [];
-  const seen = new Set<PlayerId>();
   for (const e of entries) {
     for (const s of e.act.status) {
-      if (s.mode !== 'LIVE' || seen.has(s.id)) continue;
-      seen.add(s.id);
+      if (s.mode !== 'LIVE' || s.sinceTick !== e.observe.tick) continue;
       out.push({ id: s.id, tick: e.observe.tick, trigger: s.trigger });
     }
   }
   return out.sort((a, b) => a.tick - b.tick || PLAYER_IDS.indexOf(a.id) - PLAYER_IDS.indexOf(b.id));
+}
+
+/** G1: every rejoin (LIVE → REPLAY) in a run, from the status (mode REPLAY with trigger `rejoin` starting on its tick). */
+export function rejoins(entries: readonly LogEntry[]): { id: PlayerId; tick: number }[] {
+  const out: { id: PlayerId; tick: number }[] = [];
+  for (const e of entries) {
+    for (const s of e.act.status) if (s.mode === 'REPLAY' && s.trigger === 'rejoin' && s.sinceTick === e.observe.tick) out.push({ id: s.id, tick: e.observe.tick });
+  }
+  return out;
 }

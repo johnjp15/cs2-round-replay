@@ -16,12 +16,12 @@ import type { NavMesh, NavPoint } from './nav';
 import type { Sight } from './vision';
 import { fallbackWeapon, gunStats, isGrenade } from './weapons';
 
-/** The roles `goal.role` may name (any other string behaves as `hold`). docs/ai.md. */
-export const AI_ROLES = ['hold', 'take_site', 'plant', 'guard_bomb', 'retake', 'defuse', 'rotate', 'hunt'] as const;
+/** The roles `goal.role` may name (any other string behaves as `hold`). docs/ai.md. G1 added `rejoin`. */
+export const AI_ROLES = ['hold', 'take_site', 'plant', 'guard_bomb', 'retake', 'defuse', 'rotate', 'hunt', 'rejoin'] as const;
 export type AiRole = (typeof AI_ROLES)[number];
 
 /** What the pawn is doing (aiDebug). */
-export type AiBehaviour = 'route' | 'moving' | 'holding' | 'planting' | 'guarding' | 'defusing' | 'hunting' | 'reacting' | 'fighting' | 'searching' | 'escaping';
+export type AiBehaviour = 'route' | 'moving' | 'holding' | 'planting' | 'guarding' | 'defusing' | 'hunting' | 'reacting' | 'fighting' | 'searching' | 'escaping' | 'rejoining';
 
 const DEG = Math.PI / 180;
 
@@ -748,6 +748,19 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
     case 'rotate':
     case 'hold':
       return holdAt(defaultSpot());
+    case 'rejoin': {
+      // G1: heading back to its recorded track (the Core picked `goal.hold` so it arrives in time): run there, never
+      // WALK (time matters more than noise here), and wait; the Core switches it to REPLAY on the way or there.
+      // It keeps what it holds (the Core may have drawn the c4 for a planter going back into his plant window);
+      // a fight draws the best gun as always.
+      const spot = defaultSpot();
+      if (dist2d(self.pos, spot) > arrive) {
+        s.holdYaw = null;
+        return { ...plan('rejoining', spot, null, false, null), walk: false };
+      }
+      s.holdYaw ??= roundNumber(holdFacing(ctx, s, spot));
+      return { ...plan('rejoining', null, s.holdYaw, false, null), walk: false };
+    }
   }
 }
 

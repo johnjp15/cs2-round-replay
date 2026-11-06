@@ -154,11 +154,11 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 | --- | --- | ---: | ---: | --- |
 | `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 966,125 | (see manifest) | `e9a228d9` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 27,859 calls | 413,961 | | `9517e48f` |
-| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–1280 (20 s) | 279,872 | (see manifest) | `4f8bc45c` |
-| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 12,770 calls | 129,333 | | `84734d9c` |
-| `manifest.json` | One entry per fixture | 1,846 | | |
+| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 605,544 | (see manifest) | `2923a71d` |
+| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 20,464 calls, and 1 rejoin path query (tick 1484) | 269,421 | | `25917ddf` |
+| `manifest.json` | One entry per fixture | 2,111 | | |
 
-With the two scripts (402 KB) everything under `fixtures/` is 2.19 MB; `tests/fixtures.test.ts` keeps the golden
+With the two scripts (402 KB) everything under `fixtures/` is 2.66 MB; `tests/fixtures.test.ts` keeps the golden
 files under 3 MB. **Nothing is strided**: every line is a complete SessionLog line (`{act, controls, observe}`) for
 every tick. A trimmed "observe + act only" variant would save nothing (`controls` is `[]` on every line but the
 first), so there is none.
@@ -169,7 +169,11 @@ first), so there is none.
 - **Walk oracle** (`<name>.walk.jsonl.gz`): every `WalkQuery.isWalkableLine(a, b)` call the Core made, one line per
   tick that made any: `{"calls":[{"a":{x,y,z},"b":{x,y,z},"walkable":true},…],"tick":12}`, calls in the Core's call
   order, numbers as the log writes them (6 decimals). It lets a Core port be tested without porting the 2D nav mesh
-  (the CS2 plugin's walk query is a different implementation, so the answers have to come from somewhere).
+  (the CS2 plugin's walk query is a different implementation, so the answers have to come from somewhere). G1: a
+  tick on which the rejoin planner asked `WalkQuery.pathLength(a, b)` also has
+  `"paths":[{"a":{x,y,z},"b":{x,y,z},"length":207.014072},…]` (length null = no path), in call order; the key is
+  absent on every other tick, so oracles without rejoin plans are unchanged. A port answers `pathLength` calls from
+  `paths` the same way, in order.
 - **gzip**: level 9, header with mtime 0, no file name and OS byte 255 (unknown), so the header doesn't depend on
   the machine. The deflate stream itself may differ between zlib builds (Node bundles Chromium's zlib, which picks
   code paths by CPU features); therefore `fixtures:update` keeps a committed file whose *uncompressed* content is
@@ -289,6 +293,15 @@ D1's spectate check (phone viewport, 1×) still compares a whole page log with a
 tested (no WebKit here).
 
 ## History
+
+- G1 (rejoin, LIVE → REPLAY): no-human `e9a228d9` unchanged (nobody leaves the tape, so no rejoin, no path query; the
+  manifest entry changed only for the new `tuningHash`). cart-idle was unchanged too at 20 s (`4f8bc45c`: the first
+  LIVE switch is Lokier's at 21.80 s), so its spec now runs **45 s** to cover G1 for the port: `4f8bc45c` (1,281 lines)
+  → `2923a71d` (2,881 lines), walk oracle `84734d9c` → `25917ddf`. Its first 1,281 lines, and its walk oracle's first
+  lines up to tick 1280, are byte-identical to the 20 s fixture; the rest has Lokier outliving his recording, barely
+  killing him and rejoining (23.19 s, the one path query: his walk to the plant spot), the plant on its recorded tick,
+  sp4rtan killing cart on his flank (40.58 s) and rejoining, and barely going LIVE on sp4rtan's gunfire and rejoining
+  again. The follow script is unchanged (no switch, so no rejoin).
 
 - C4 (#16) made `sees` real (radar sight mask) and clamps grenade throws at the mask's walls: the no-human digest went `0fb55e23` → `e6c2be70` and cart-idle `6505c774` → `76ee296f`. Core acts, positions, kills, HP, shots, plant and defuse are unchanged. The harness must pass `vision` to `Session` (as the app does): `parseSessionData` defaults the mask to null, which silently falls back to nav line of sight.
 - F (fidelity and polish) adds **cover** to the sight mask (`docs/vision.md`): no-human `e6c2be70` → `e9a228d9`, cart-idle `868f56db` → `4f8bc45c`; both walk oracles unchanged. `tools/fixture-diff.ts` against B4's fixtures: **0 Core acts differ**, no controls, positions, HP, events (kills, damage, shots, the plant, the defuse) or round state differ; only `sees`, on 123 of 4,517 lines (from tick 940) and 17 of 1,281. Every change is a pair that no longer sees the other across a box: donk → barely (teammates in the Apartments) 14.69–14.94 s, 17 ticks, in both fixtures; barely → cart (teammates) on 48 ticks between 23.1 and 50.9 s; cart ↔ sp4rtan on 58 ticks between 63.3 and 65.1 s (the B-site stack between cart at the Shop door and the defusing sp4rtan, low for cover). The follow script changes from 65.55 s (tick 4195, the first missed engagement, `tools/follow-aim.ts`) and runs to the end (4,321 → 4,460 entries): cart no longer dies in the explosion. Merged after B5 (whose checkpoints change no digest) the digests are the same; the manifest changed only for the merged `tuningHash` (B5's `replay.checkpoint*` and F's `ai` keys), and `tools/fixture-diff.ts` against B5's main gives the same result (0 acts, `sees` only).

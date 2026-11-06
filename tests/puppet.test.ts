@@ -22,7 +22,7 @@ import { nav, roster } from './sim2d-fixtures';
 
 const tuning = loadTuning();
 const r = tuning.replay;
-const OPEN: WalkQuery = { isWalkableLine: () => true };
+const OPEN: WalkQuery = { isWalkableLine: () => true, pathLength: (a, b) => Math.hypot(b.x - a.x, b.y - a.y) };
 /** AK run speed for every sample. */
 const AK = 215;
 

@@ -7,7 +7,8 @@
  * Each fixture is a harness run (tools/harness.ts) written as
  * - `<name>.jsonl.gz`: the SessionLog, every tick, full observe + act + controls (gzip, deterministic header);
  * - `<name>.walk.jsonl.gz`: the walk oracle, every `WalkQuery.isWalkableLine` call the Core made, per tick, in call
- *   order, with the answer, so a Core port can be tested without porting the 2D nav mesh;
+ *   order, with the answer (and G1's `pathLength` calls, on the ticks that made any), so a Core port can be tested
+ *   without porting the 2D nav mesh;
  * - an entry in `manifest.json`: digest, tick count, seed, the hashes of the inputs and the commit.
  *
  * Re-running is idempotent: a fixture whose content is unchanged keeps its bytes and its manifest entry (commit
@@ -33,6 +34,7 @@ import {
   runHarness,
   type HarnessData,
   type HarnessRun,
+  type PathCall,
   type WalkCall,
 } from './harness';
 
@@ -64,10 +66,11 @@ export const FIXTURE_SPECS: readonly FixtureSpec[] = [
   },
   {
     name: 'round-cart-idle',
-    description: 'Human cart stands still in Back Alley (fixtures/scripts/cart-idle.json) for 20 s: the Core skips him and his scripted damage.',
+    description:
+      'Human cart stands still in Back Alley (fixtures/scripts/cart-idle.json) for 45 s: the Core skips him and his scripted damage; Lokier outlives his recording, barely kills him and rejoins (G1), sp4rtan kills cart on his flank and rejoins, barely hears it, goes LIVE and rejoins again (rejoin path queries in the walk oracle).',
     human: 'cart',
     script: 'fixtures/scripts/cart-idle.json',
-    until: 20,
+    until: 45,
     seed: DEFAULT_SEED,
   },
 ];
@@ -126,18 +129,31 @@ export function gunzipText(buf: Buffer): string {
   return gunzipSync(buf).toString('utf8');
 }
 
-/** The walk oracle: one line per tick that made calls, `{"calls":[{"a":Vec3,"b":Vec3,"walkable":bool},…],"tick":k}`. */
-export function walkOracleText(calls: readonly WalkCall[]): string {
+/**
+ * The walk oracle: one line per tick that made calls, `{"calls":[{"a":Vec3,"b":Vec3,"walkable":bool},…],"tick":k}`;
+ * G1: a tick that asked `pathLength` too also has `"paths":[{"a":Vec3,"b":Vec3,"length":number|null},…]` (absent
+ * otherwise, so oracles without rejoin plans are unchanged).
+ */
+export function walkOracleText(calls: readonly WalkCall[], paths: readonly PathCall[] = []): string {
+  // Both lists are in call order, so in tick order: merge them tick by tick.
   const lines: string[] = [];
   let i = 0;
-  while (i < calls.length) {
-    const tick = (calls[i] as WalkCall).tick;
+  let j = 0;
+  while (i < calls.length || j < paths.length) {
+    const ci = calls[i];
+    const pj = paths[j];
+    const tick = ci === undefined ? (pj as PathCall).tick : pj === undefined ? ci.tick : Math.min(ci.tick, pj.tick);
     const row: { a: WalkCall['a']; b: WalkCall['b']; walkable: boolean }[] = [];
     for (; i < calls.length && (calls[i] as WalkCall).tick === tick; i++) {
       const c = calls[i] as WalkCall;
       row.push({ a: c.a, b: c.b, walkable: c.walkable });
     }
-    lines.push(stableStringify({ calls: row, tick }));
+    const prow: { a: PathCall['a']; b: PathCall['b']; length: number | null }[] = [];
+    for (; j < paths.length && (paths[j] as PathCall).tick === tick; j++) {
+      const c = paths[j] as PathCall;
+      prow.push({ a: c.a, b: c.b, length: c.length });
+    }
+    lines.push(stableStringify(prow.length === 0 ? { calls: row, tick } : { calls: row, paths: prow, tick }));
   }
   return lines.length === 0 ? '' : lines.join('\n') + '\n';
 }
@@ -145,6 +161,8 @@ export function walkOracleText(calls: readonly WalkCall[]): string {
 export interface OracleTick {
   readonly tick: number;
   readonly calls: readonly { readonly a: WalkCall['a']; readonly b: WalkCall['b']; readonly walkable: boolean }[];
+  /** G1: `pathLength` calls, only on ticks that made any. */
+  readonly paths?: readonly { readonly a: PathCall['a']; readonly b: PathCall['b']; readonly length: number | null }[];
 }
 
 export function parseWalkOracle(text: string): OracleTick[] {
@@ -194,7 +212,7 @@ export function updateFixtures(data: HarnessData, write: boolean, root = ROOT): 
   for (const spec of FIXTURE_SPECS) {
     const run = runFixture(data, spec, root);
     const text = run.log.toText();
-    const walkText = walkOracleText(run.walk ?? []);
+    const walkText = walkOracleText(run.walk ?? [], run.paths ?? []);
     const file = `${spec.name}.jsonl.gz`;
     const walkFile = `${spec.name}.walk.jsonl.gz`;
     const logPath = resolve(root, GOLDEN_DIR, file);

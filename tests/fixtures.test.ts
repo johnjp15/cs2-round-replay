@@ -27,14 +27,36 @@ const STALE = 'run `npm run fixtures:update` and explain the diff in the PR';
 class OracleWalk implements WalkQuery {
   tick = -1;
   private next = 0;
+  private nextPath = 0;
   private readonly calls: { tick: number; a: Vec3; b: Vec3; walkable: boolean }[];
+  private readonly paths: { tick: number; a: Vec3; b: Vec3; length: number | null }[];
   private readonly nav: NavWalkQuery;
   problems: string[] = [];
   count = 0;
+  pathCount = 0;
 
   constructor(oracle: readonly OracleTick[], nav: NavWalkQuery) {
     this.calls = oracle.flatMap((t) => t.calls.map((c) => ({ tick: t.tick, a: c.a, b: c.b, walkable: c.walkable })));
+    this.paths = oracle.flatMap((t) => (t.paths ?? []).map((c) => ({ tick: t.tick, a: c.a, b: c.b, length: c.length })));
     this.nav = nav;
+  }
+
+  /** G1: the rejoin planner's path queries, checked the same way. */
+  pathLength(a: Vec3, b: Vec3): number | null {
+    const want = this.paths[this.nextPath++];
+    const real = this.nav.pathLength(a, b);
+    this.pathCount++;
+    if (this.problems.length < 5) {
+      const q = stableStringify({ a, b, tick: this.tick });
+      if (want === undefined) this.problems.push(`extra path call ${q}`);
+      else if (q !== stableStringify({ a: want.a, b: want.b, tick: want.tick })) this.problems.push(`path call ${this.nextPath - 1}: ${q} != oracle ${stableStringify(want)}`);
+      else if (real !== want.length) this.problems.push(`path call ${this.nextPath - 1}: nav says ${String(real)}, oracle ${String(want.length)}`);
+    }
+    return real;
+  }
+
+  get pathsRemaining(): number {
+    return this.paths.length - this.nextPath;
   }
 
   isWalkableLine(a: Vec3, b: Vec3): boolean {
@@ -127,6 +149,7 @@ for (const spec of FIXTURE_SPECS) {
       expect(result).toMatchObject({ identical: true, mismatchCount: 0, ticks: f.ticks });
       expect(walk.problems, STALE).toEqual([]);
       expect({ count: walk.count, remaining: walk.remaining }).toEqual({ count: f.walkCalls, remaining: 0 });
+      expect(walk.pathsRemaining).toBe(0);
     });
 
     if (spec.human !== null) {

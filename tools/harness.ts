@@ -327,6 +327,8 @@ export interface HarnessOptions {
    * its speed buttons are used; they are logged on that tick's line. Default none (the Session sends `start` itself).
    */
   readonly controls?: readonly { readonly tick: number; readonly control: Control }[];
+  /** The Core to run (default: the app's `defaultCore`), e.g. a variant with G1's rejoin off. Not with `recordWalk`. */
+  readonly core?: CoreFactory;
 }
 
 export const NO_HUMAN: HarnessOptions = { human: null, driver: null, lastTick: 'end', seed: DEFAULT_SEED };
@@ -353,6 +355,14 @@ export interface WalkCall {
   readonly walkable: boolean;
 }
 
+/** G1: one `WalkQuery.pathLength` call the Core made while stepping `tick` (the rejoin planner). */
+export interface PathCall {
+  readonly tick: number;
+  readonly a: Vec3;
+  readonly b: Vec3;
+  readonly length: number | null;
+}
+
 export interface HarnessRun {
   readonly options: HarnessOptions;
   readonly data: SessionData;
@@ -372,8 +382,10 @@ export interface HarnessRun {
   readonly snaps: readonly Snap[];
   /** Body blocks (C3 collision): a pawn whose move on `tick` an enemy cut short (`host.blockedBy`), in order. */
   readonly bodyBlocks: readonly BodyBlock[];
-  /** Every WalkQuery call in order (with `recordWalk`), else null. */
+  /** Every WalkQuery.isWalkableLine call in order (with `recordWalk`), else null. */
   readonly walk: readonly WalkCall[] | null;
+  /** G1: every WalkQuery.pathLength call in order (with `recordWalk`), else null. */
+  readonly paths: readonly PathCall[] | null;
   /** Problems with the human's commands (a weapon that can't be selected), in order. */
   readonly warnings: readonly string[];
   /** Wall time (ms): building the Session, the ticks (steps plus the bookkeeping: reading back the log). */
@@ -384,6 +396,7 @@ export interface HarnessRun {
 class RecordingWalk implements WalkQuery {
   tick = 0;
   readonly calls: WalkCall[] = [];
+  readonly paths: PathCall[] = [];
   private readonly inner: WalkQuery;
 
   constructor(inner: WalkQuery) {
@@ -394,6 +407,12 @@ class RecordingWalk implements WalkQuery {
     const walkable = this.inner.isWalkableLine(a, b);
     this.calls.push({ tick: this.tick, a: { x: a.x, y: a.y, z: a.z }, b: { x: b.x, y: b.y, z: b.z }, walkable });
     return walkable;
+  }
+
+  pathLength(a: Vec3, b: Vec3): number | null {
+    const length = this.inner.pathLength(a, b);
+    this.paths.push({ tick: this.tick, a: { x: a.x, y: a.y, z: a.z }, b: { x: b.x, y: b.y, z: b.z }, length });
+    return length;
   }
 }
 
@@ -419,7 +438,8 @@ export function runHarness(data: SessionData, options: HarnessOptions): HarnessR
   const t0 = performance.now();
   // The app's Core (defaultCore), or the same Core with the walk query wrapped by a recorder.
   const recorder = options.recordWalk === true ? new RecordingWalk(new NavWalkQuery(data.nav)) : null;
-  const core: CoreFactory = recorder === null ? defaultCore : (p) => new ReplayCore(p.model, p.schedule, p.tuning, p.seed, recorder);
+  if (recorder !== null && options.core !== undefined) throw new Error('runHarness: core and recordWalk do not mix');
+  const core: CoreFactory = recorder === null ? (options.core ?? defaultCore) : (p) => new ReplayCore(p.model, p.schedule, p.tuning, p.seed, recorder);
   const session = new Session({ round: data.round, nav: data.nav, tuning: data.tuning, vision: data.vision, seed, human, core });
   const ticks = roundTicks(session.model, data.tuning.replay.holdLastPositionSec);
   const last = options.lastTick === 'end' ? ticks - 1 : options.lastTick;
@@ -487,6 +507,7 @@ export function runHarness(data: SessionData, options: HarnessOptions): HarnessR
     snaps,
     bodyBlocks,
     walk: recorder === null ? null : recorder.calls,
+    paths: recorder === null ? null : recorder.paths,
     warnings,
     ms: { construct: t1 - t0, ticks: t2 - t1 },
   };

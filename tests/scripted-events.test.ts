@@ -47,7 +47,7 @@ const tuning = loadTuning();
 const model = new RoundModel(round);
 const schedule = new EventSchedule(round);
 const plan = new ScriptPlan(model, schedule, tuning);
-const OPEN: WalkQuery = { isWalkableLine: () => true };
+const OPEN: WalkQuery = { isWalkableLine: () => true, pathLength: (a, b) => Math.hypot(b.x - a.x, b.y - a.y) };
 const START = new Map<number, readonly Control[]>([[0, [{ type: 'start' }]]]);
 
 // ---------------------------------------------------------------------------
