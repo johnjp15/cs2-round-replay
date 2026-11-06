@@ -6,14 +6,18 @@
  *
  * - Top centre: score with team names, and the round clock, which turns into the red bomb timer
  *   (with a draining bar) after the plant.
- * - Top right: the kill feed, "killer [weapon] victim" with a headshot mark, team colours.
- * - Left: the status panel (Tab): each pawn's mode, trigger and since-time, and the last 20 Core logs.
+ * - Top right: the kill feed, "killer [weapon] victim" with a headshot mark, team colours. Wherever it would
+ *   cover the scoreboard (or the collapsed panel button), it moves down below it.
+ * - Left: the status panel (Tab): each pawn's mode, trigger and since-time, for a LIVE pawn the 2D engine's AI
+ *   state (behaviour, target, goal: Sim2DHost.aiDebug), and the last 20 Core logs.
  * - Bottom left: cart's HP, armor, weapon and ammo.
  * - Bottom right: frame rate and tick rate.
+ *
+ * `occupiedRects()` reports where all this is on the stage, so the renderer keeps pawn labels out of it.
  */
 import type { PlayerId, RoundData, Team } from '../contracts/index';
 import type { RoundClock } from '../core/index';
-import { clockView, scoreView, statusBadge, youView, weaponName, type ClockView } from './hud-model';
+import { aiDebugLine, clockView, rectsOverlap, scoreView, statusBadge, youView, weaponName, type AiDebugSource, type ClockView, type ScreenRect } from './hud-model';
 import type { KillEntry, Scene } from './scene';
 
 export interface HudFrame {
@@ -31,7 +35,12 @@ export interface HudFrame {
   readonly tick: number;
   readonly fps: number;
   readonly tps: number;
+  /** The 2D engine's LIVE AI debug view (Sim2DHost.aiDebug) for the status panel; null or absent: none. */
+  readonly ai?: AiDebugSource | null;
 }
+
+/** Space kept between the kill feed and what it moves below (CSS px). */
+const FEED_GAP = 6;
 
 function el<T extends HTMLElement>(id: string, type: new () => T): T {
   const e = document.getElementById(id);
@@ -72,6 +81,10 @@ export class Hud {
   private readonly youWeapon: HTMLElement;
   private readonly youAmmo: HTMLElement;
   private readonly perf: HTMLElement;
+  private readonly scoreboard: HTMLElement;
+  private readonly panelToggle: HTMLElement;
+  /** The HUD's rectangles after the last update (stage CSS px). */
+  private occupied: ScreenRect[] = [];
   private readonly last = new Map<HTMLElement, string>();
   private readonly lastAttr = new Map<HTMLElement, Map<string, string>>();
 
@@ -96,6 +109,8 @@ export class Hud {
     this.youWeapon = el('you-weapon', HTMLElement);
     this.youAmmo = el('you-ammo', HTMLElement);
     this.perf = el('perf', HTMLElement);
+    this.scoreboard = el('scoreboard', HTMLElement);
+    this.panelToggle = el('panel-toggle', HTMLElement);
     el('ct-name', HTMLElement).textContent = round.meta.teams.CT;
     el('t-name', HTMLElement).textContent = round.meta.teams.T;
     el('panel-toggle', HTMLButtonElement).addEventListener('click', (e) => {
@@ -119,6 +134,57 @@ export class Hud {
     }
     this.updateYou(f);
     this.text(this.perf, `${Math.round(f.fps)} fps   ${Math.round(f.tps)} ticks/s   tick ${o.tick}`);
+    this.placeKillFeed(f.panelOpen);
+    this.occupied = this.measure();
+  }
+
+  /**
+   * Where the HUD is on the stage (CSS px, the canvas's coordinates), as of the last update: the scoreboard, the
+   * kill feed (when it has rows), the status panel (its button when collapsed), your status and the rates.
+   */
+  occupiedRects(): readonly ScreenRect[] {
+    return this.occupied;
+  }
+
+  private measure(): ScreenRect[] {
+    const base = this.root.getBoundingClientRect();
+    const out: ScreenRect[] = [];
+    const add = (e: HTMLElement): void => {
+      const r = e.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) out.push({ x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height });
+    };
+    add(this.scoreboard);
+    if (this.killfeed.childElementCount > 0) add(this.killfeed);
+    add(this.panel);
+    add(this.you);
+    if (this.perf.textContent !== '') add(this.perf);
+    return out;
+  }
+
+  /**
+   * Keep the kill feed off the scoreboard: from its CSS spot (top right), it moves down below the scoreboard if it
+   * would cover it (desktop windows narrower than about 1,100 px, phones in landscape), and below the panel button
+   * too when the panel is collapsed and they meet (phones). An open panel sits above the feed (CSS z-index).
+   */
+  private placeKillFeed(panelOpen: boolean): void {
+    const feed = this.killfeed;
+    // Measure from the CSS position (top right), then push down past whatever it meets (at most twice).
+    feed.style.top = '';
+    if (feed.childElementCount === 0) return;
+    const box = (e: HTMLElement): ScreenRect => {
+      const r = e.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
+    };
+    const obstacles = [box(this.scoreboard), ...(panelOpen ? [] : [box(this.panelToggle)])];
+    let r = box(feed);
+    let top: number | null = null;
+    for (let pass = 0; pass < 2; pass++) {
+      const hit = obstacles.find((o) => rectsOverlap(r, o));
+      if (hit === undefined) break;
+      top = hit.y + hit.h + FEED_GAP;
+      r = { ...r, y: top };
+    }
+    if (top !== null) feed.style.top = `${Math.round(top - this.root.getBoundingClientRect().top)}px`;
   }
 
   private updateClock(f: HudFrame, c: ClockView): void {
@@ -171,6 +237,9 @@ export class Hud {
             `<td class="trig">${trigger === null ? '<span class="none">–</span>' : escapeHtml(trigger)}</td>` +
             `<td class="since">${since}</td></tr>`,
         );
+        // LIVE: what the 2D engine's AI is doing (behaviour, target, goal). 2D debug; the Core doesn't see it.
+        const line = badge.tone === 'alert' && f.ai !== undefined && f.ai !== null && p.alive ? aiDebugLine(f.ai.aiDebug(p.id)) : null;
+        if (line !== null) rows.push(`<tr class="${teamClass(team)} ai"><td colspan="4">${escapeHtml(line)}</td></tr>`);
       }
     }
     return rows.join('');

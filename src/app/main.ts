@@ -20,7 +20,7 @@ import type { Camera } from './camera';
 import { CameraInput } from './camera-dom';
 import type { EffectsSource } from './effects';
 import { Hud } from './hud';
-import { overlayForKey, toggleOverlay, type OverlayKey, type Overlays } from './hud-model';
+import { overlayForKey, toggleOverlay, type OverlayKey, type Overlays, type ScreenRect } from './hud-model';
 import { humanInput, yawToward } from './input';
 import { InputDom } from './input-dom';
 import { FixedLoop, RateMeter, TICK_MS } from './loop';
@@ -46,6 +46,8 @@ export interface AppStats {
   readonly camera: Camera;
   /** Radar cache rebuilds since load. */
   readonly radarRebuilds: number;
+  /** The last frame's pawn labels (canvas CSS px) and the HUD's rectangles they keep out of; labels left out. */
+  readonly labels: { readonly drawn: readonly ScreenRect[]; readonly dropped: number; readonly hud: readonly ScreenRect[] };
 }
 
 declare global {
@@ -313,6 +315,8 @@ class App {
       fovDeg: s.tuning.ai.fovDeg,
       blind: s.host,
       nowMs: now,
+      avoid: this.hud.occupiedRects(),
+      ai: s.host,
     });
     this.hud.update({
       scene: this.scene,
@@ -325,6 +329,7 @@ class App {
       tick: this.scene.renderTick(alpha),
       fps: this.fpsMeter.rate(now),
       tps: this.tpsMeter.rate(now),
+      ai: s.host,
     });
     this.updateCursor();
     requestAnimationFrame(this.frame);
@@ -365,6 +370,7 @@ class App {
       overlays: this.overlays,
       camera: this.renderer.camera,
       radarRebuilds: this.renderer.cacheRebuilds,
+      labels: { ...this.renderer.labelStats, hud: this.hud.occupiedRects() },
     };
   }
 }

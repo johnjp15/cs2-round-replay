@@ -12,15 +12,16 @@
  * - **Interpolation**: every pawn is drawn `alpha` (= loop.pending / TICK_MS) of the way from the
  *   previous observe to the current one (Scene.pose), so 64 Hz motion is smooth on 60–120 Hz displays.
  *
- * Layers, bottom to top: radar · smokes and fires · recorded tracks · bomb · death crosses · tracers ·
- * view wedges · recorded ghost · pawns and HP bars · flying grenades and pops · labels and badges ·
- * aim line.
+ * Layers, bottom to top: radar · smokes and fires · recorded tracks (and, with them, each LIVE pawn's way
+ * to its next waypoint) · bomb · death crosses · tracers · view wedges · recorded ghost · pawns and HP bars ·
+ * flying grenades and pops · labels and badges · aim line. Labels keep out of the HUD's rectangles
+ * (`RenderFrame.avoid`): a label that can't is dropped and the dot stays.
  */
 import type { MapTransform, PawnObs, PlayerId, RoundData, Team } from '../contracts/index';
 import type { RoundClock, RoundModel } from '../core/index';
 import { cameraView, clampCamera, followTarget, fullCamera, panBy, zoomAt, FOLLOW_ZOOM, MIN_ZOOM, type Camera, type Viewport } from './camera';
 import { effectPrimitives, popPrimitives, tracerPrimitive, unitsToPx, type BlindSource, type Primitive } from './effects';
-import { bombCarrier, roundStateOf, statusBadge, type Badge, type Overlays } from './hud-model';
+import { bombCarrier, chooseLabelSpot, rectsOverlap, roundStateOf, statusBadge, type AiDebugSource, type Badge, type Overlays, type ScreenRect } from './hud-model';
 import { worldToRadar, worldToScreen, yawToScreenDir, type Point2, type View } from './radar';
 import type { Pose, Scene } from './scene';
 import { DISPLAY_FONT, PALETTE, teamColor } from './style';
@@ -42,6 +43,10 @@ export interface RenderFrame {
   readonly blind: BlindSource | null;
   /** Wall time (ms), for camera easing and UI pulses. */
   readonly nowMs: number;
+  /** Where the HUD is (CSS px, canvas coordinates; Hud.occupiedRects): labels keep out. Default none. */
+  readonly avoid?: readonly ScreenRect[];
+  /** The 2D engine's LIVE AI debug view (Sim2DHost.aiDebug): with the tracks overlay, each LIVE pawn's path. */
+  readonly ai?: AiDebugSource | null;
 }
 
 /** The pawn the follow camera and the ghost track. */
@@ -78,6 +83,8 @@ export class Renderer {
   private readonly textWidths = new Map<string, number>();
   /** prefers-reduced-motion: no expanding pulse rings (LIVE, bomb, fresh deaths); the static marks stay. */
   private readonly calm: boolean;
+  /** The last frame's name labels: where they went, and how many were left out to keep clear of the HUD. */
+  private labels: { drawn: ScreenRect[]; dropped: number } = { drawn: [], dropped: 0 };
 
   constructor(canvas: HTMLCanvasElement, radar: CanvasImageSource | null, round: Pick<RoundData, 'meta' | 'players'>) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -105,6 +112,11 @@ export class Renderer {
   /** Radar cache rebuilds so far (for the browser check). */
   get cacheRebuilds(): number {
     return this.cache.rebuilds;
+  }
+
+  /** The last frame's labels (CSS px) and how many were dropped (for the browser check). */
+  get labelStats(): { readonly drawn: readonly ScreenRect[]; readonly dropped: number } {
+    return this.labels;
   }
 
   /** Match the backing store to the canvas's CSS size × devicePixelRatio. */
@@ -178,6 +190,7 @@ export class Renderer {
     // Smokes and fires, under everything else.
     for (const e of scene.effects) if (e.phase !== 'flying') this.prims(effectPrimitives(e, v, tick, scene.bornTick(e)));
     if (f.overlays.tracks) this.drawTracks(f, poses, tick, r);
+    if (f.overlays.tracks && f.ai !== undefined && f.ai !== null) this.drawAiPaths(f, f.ai, poses, r);
     this.drawBomb(f, tick, r);
     // Dead pawns: a cross at the death spot.
     for (const p of scene.cur.pawns) if (!p.alive) this.drawDeath(p, poses.get(p.id), scene.deaths.get(p.id) ?? null, tick, r);
@@ -204,7 +217,11 @@ export class Renderer {
     for (const e of scene.effects) if (e.phase === 'flying') this.prims(effectPrimitives(e, v, tick, null));
     for (const p of scene.pops) this.prims(popPrimitives(p, v, tick));
     this.drawLabels(f, poses, r);
-    if (ghostNote !== null) haloText(ctx, ghostNote.text, ghostNote.x, ghostNote.y, `600 ${labelSize(r) - 1}px ${DISPLAY_FONT}`, PALETTE.human, 'center', 'top');
+    if (ghostNote !== null) {
+      const font = `600 ${labelSize(r) - 1}px ${DISPLAY_FONT}`;
+      const w = this.textWidth(ghostNote.text, font);
+      if (this.clearOfHud(f, { x: ghostNote.x - w / 2, y: ghostNote.y, w, h: labelSize(r) })) haloText(ctx, ghostNote.text, ghostNote.x, ghostNote.y, font, PALETTE.human, 'center', 'top');
+    }
     if (f.aim !== null && f.human !== null) {
       const pose = poses.get(f.human);
       if (pose !== undefined && scene.pawn(f.human)?.alive === true) this.drawAim(pose, f.aim, r);
@@ -303,6 +320,46 @@ export class Renderer {
     }
   }
 
+  /** True if a rectangle (CSS px) is clear of the HUD's rectangles. */
+  private clearOfHud(f: RenderFrame, rect: ScreenRect): boolean {
+    return !(f.avoid ?? []).some((a) => rectsOverlap(rect, a, 2));
+  }
+
+  /**
+   * With the tracks overlay: each LIVE pawn's way on (Sim2DHost.aiDebug's path, from its next waypoint on) as a
+   * faint dashed magenta line from the pawn, with a small ring at the next waypoint. 2D debug only.
+   */
+  private drawAiPaths(f: RenderFrame, ai: AiDebugSource, poses: ReadonlyMap<PlayerId, Pose>, r: number): void {
+    const { ctx } = this;
+    const v = this.viewValue;
+    for (const p of f.scene.cur.pawns) {
+      if (!p.alive) continue;
+      const d = ai.aiDebug(p.id);
+      const next = d?.path[0];
+      if (d === null || next === undefined) continue;
+      const s0 = worldToScreen(v, poses.get(p.id) ?? p.pos);
+      ctx.beginPath();
+      ctx.moveTo(s0.x, s0.y);
+      for (const q of d.path) {
+        const s = worldToScreen(v, q);
+        ctx.lineTo(s.x, s.y);
+      }
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1.25;
+      ctx.strokeStyle = PALETTE.live;
+      ctx.globalAlpha = 0.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const n = worldToScreen(v, next);
+      ctx.globalAlpha = 0.75;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, Math.max(2.5, r * 0.35), 0, TAU);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
   /** The planted bomb: a blinking dot that blinks faster as the timer runs down, and the time left. */
   private drawBomb(f: RenderFrame, tick: number, r: number): void {
     const scene = f.scene;
@@ -350,7 +407,9 @@ export class Renderer {
     }
     if (!done) {
       const text = f.clock.hudBomb(scene.cur.tick, plantTick);
-      haloText(ctx, text, s.x + size + 6, s.y, `700 ${labelSize(r) + 1}px ${DISPLAY_FONT}`, PALETTE.bomb, 'left', 'middle');
+      const font = `700 ${labelSize(r) + 1}px ${DISPLAY_FONT}`;
+      const h = labelSize(r) + 2;
+      if (this.clearOfHud(f, { x: s.x + size + 6, y: s.y - h / 2, w: this.textWidth(text, font), h })) haloText(ctx, text, s.x + size + 6, s.y, font, PALETTE.bomb, 'left', 'middle');
     }
   }
 
@@ -538,7 +597,10 @@ export class Renderer {
     }
   }
 
-  /** Names above the pawns with their mode badges, nudged apart where they would overlap. */
+  /**
+   * Names above the pawns with their mode badges, nudged apart where they would overlap, and kept out of the HUD
+   * (`chooseLabelSpot`): where every spot around a pawn is under the HUD, its text is left out (the dot stays).
+   */
   private drawLabels(f: RenderFrame, poses: ReadonlyMap<PlayerId, Pose>, r: number): void {
     const { ctx } = this;
     const v = this.viewValue;
@@ -546,7 +608,11 @@ export class Renderer {
     const font = `600 ${size}px ${DISPLAY_FONT}`;
     const smallFont = `700 ${Math.max(8, size - 3)}px ${DISPLAY_FONT}`;
     const spelled = this.cam.zoom >= 2;
-    const placed: Rect[] = [];
+    const placed: ScreenRect[] = [];
+    // The HUD, and the outside of the canvas (a label half off the edge is as unreadable).
+    const { width: cw, height: ch } = this.vp;
+    const avoid: ScreenRect[] = [...(f.avoid ?? []), { x: -1e4, y: -1e4, w: 1e4, h: 3e4 }, { x: cw, y: -1e4, w: 1e4, h: 3e4 }, { x: -1e4, y: -1e4, w: 3e4, h: 1e4 }, { x: -1e4, y: ch, w: 3e4, h: 1e4 }];
+    let dropped = 0;
     // Living first so they get the best spots; the human first of all.
     const pawns = [...f.scene.cur.pawns].sort((a, b) => labelRank(a, f.human) - labelRank(b, f.human));
     for (const p of pawns) {
@@ -567,12 +633,11 @@ export class Renderer {
         { x: s.x - r - 6 - w, y: s.y - h / 2 },
         { x: s.x - w / 2, y: s.y - lift - 2 * h },
       ];
-      let at = candidates[0] as Point2;
-      for (const c of candidates) {
-        if (!placed.some((q) => overlaps(q, c.x, c.y, w, h))) {
-          at = c;
-          break;
-        }
+      const at = chooseLabelSpot(candidates, w, h, placed, avoid);
+      if (at === null) {
+        // Only the HUD counts as dropped; a pawn off or at the edge of the canvas just has no room.
+        if (s.x >= 0 && s.y >= 0 && s.x <= cw && s.y <= ch) dropped++;
+        continue;
       }
       placed.push({ x: at.x, y: at.y, w, h });
       const color = !p.alive ? PALETTE.dead : badge.tone === 'human' ? PALETTE.human : PALETTE.sand;
@@ -614,6 +679,7 @@ export class Renderer {
         ctx.globalAlpha = 1;
       }
     }
+    this.labels = { drawn: placed, dropped };
   }
 
   private drawAim(pose: Pose, aim: Point2, r: number): void {
@@ -707,17 +773,6 @@ class RadarCache {
     this.rh = rh;
     this.rebuilds++;
   }
-}
-
-interface Rect {
-  readonly x: number;
-  readonly y: number;
-  readonly w: number;
-  readonly h: number;
-}
-
-function overlaps(q: Rect, x: number, y: number, w: number, h: number): boolean {
-  return x < q.x + q.w + 2 && x + w + 2 > q.x && y < q.y + q.h && y + h > q.y;
 }
 
 /** Disc radius (CSS px): grows gently with zoom. */

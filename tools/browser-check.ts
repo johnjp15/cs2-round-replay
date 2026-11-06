@@ -16,7 +16,12 @@
  *     coming through Apartments; checks that the wheel zooms about the cursor;
  *  5. follow camera zoomed in on cart: throws a smoke and fires a burst, checks that aiming through
  *     the zoomed view turns cart toward the cursor, screenshot (c) with the smoke and the tracers;
- *  6. an iPhone-sized viewport (390×844, touch, DPR 3): starts in spectate mode, screenshot (d);
+ *  6. an iPhone-sized viewport (390×844, touch, DPR 3): starts in spectate mode, screenshot (d); then zoomed in
+ *     about the Ts near the top of the map, no pawn label may overlap the HUD (scoreboard, kill feed, panel,
+ *     status card), screenshot (d2);
+ *  6b. labels and the HUD on the desktop: at 1000×700 the kill feed (three kills at 12.8 s) must not cover the
+ *     scoreboard, screenshot (e); with cart idle the 2D AI's LIVE pawns show their behaviour, target and goal in
+ *     the status panel and their path with the tracks overlay, screenshot (f);
  *  7. checks determinism: the phone's spectate log has the same digest as a Node run of the same
  *     length, and the desktop's downloaded log (with a human) replays identically against a fresh Core;
  *  8. golden parity (E1): the no-human round runs in the page (`?human=none`, the app's own loop at 4×) to
@@ -50,6 +55,14 @@ interface Stats {
   overlays: { follow: boolean; ghost: boolean; tracks: boolean; panel: boolean };
   camera: { zoom: number; cx: number; cy: number };
   radarRebuilds: number;
+  labels: { drawn: readonly Box[]; dropped: number; hud: readonly Box[] };
+}
+
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 function arg(name: string, fallback: string): string {
@@ -110,6 +123,14 @@ async function shoot(page: Page, name: string): Promise<void> {
 
 async function waitTick(page: Page, tick: number, ms = 30_000): Promise<void> {
   await page.waitForFunction((k) => (window.__cs2replay?.stats().tick ?? 0) >= k, tick, { timeout: ms });
+}
+
+/** Problems if any pawn label of the last frame overlaps one of the HUD's rectangles. */
+async function labelsClearOfHud(page: Page, what: string, problems: string[]): Promise<void> {
+  const st = await stats(page);
+  const hit = st.labels.drawn.filter((l) => st.labels.hud.some((r) => l.x < r.x + r.w && l.x + l.w > r.x && l.y < r.y + r.h && l.y + l.h > r.y));
+  console.log(`${what}: ${st.labels.drawn.length} labels drawn, ${st.labels.dropped} left out under the HUD, ${hit.length} overlapping it (HUD rects ${st.labels.hud.length})`);
+  if (hit.length > 0) problems.push(`${what}: ${hit.length} pawn labels overlap the HUD`);
 }
 
 async function clockText(page: Page): Promise<string> {
@@ -407,7 +428,96 @@ async function main(): Promise<void> {
       const log = window.__cs2replay?.session().log();
       return log === undefined ? null : { lines: log.length, digest: log.digest() };
     });
+    // (d2) Zoomed in about the Ts coming out of T spawn and dragged up under the scoreboard and the kill feed.
+    const tsAt = async (): Promise<{ x: number; y: number }> => {
+      const p = await phone.evaluate(() => {
+        const o = window.__cs2replay?.session().observe();
+        const ts = (o?.pawns ?? []).filter((q) => q.team === 'T' && q.alive);
+        const x = ts.reduce((a, q) => a + q.pos.x, 0) / Math.max(1, ts.length);
+        const y = ts.reduce((a, q) => a + q.pos.y, 0) / Math.max(1, ts.length);
+        return window.__cs2replay?.screenOf(x, y);
+      });
+      if (p === undefined) throw new Error('no screenOf');
+      return p;
+    };
+    const top = await tsAt();
+    await phone.mouse.move(top.x, top.y);
+    for (let i = 0; i < 12; i++) await phone.mouse.wheel(0, -100);
+    await phone.waitForTimeout(100);
+    // Then drag the map up so the Ts sit just under the scoreboard (y ≈ 95).
+    const zoomedTs = await tsAt();
+    const grab = { x: zoomedTs.x, y: zoomedTs.y + 120 };
+    await phone.mouse.move(grab.x, grab.y);
+    await phone.mouse.down();
+    await phone.mouse.move(grab.x, grab.y - (zoomedTs.y - 95) / 2, { steps: 4 });
+    await phone.mouse.move(grab.x, grab.y - (zoomedTs.y - 95), { steps: 4 });
+    await phone.mouse.up();
+    await phone.waitForTimeout(300);
+    const draggedTs = await tsAt();
+    console.log(`phone: the Ts at (${top.x.toFixed(0)}, ${top.y.toFixed(0)}), after zooming (${zoomedTs.x.toFixed(0)}, ${zoomedTs.y.toFixed(0)}), after the drag (${draggedTs.x.toFixed(0)}, ${draggedTs.y.toFixed(0)})`);
+    const phoneZoom = await stats(phone);
+    console.log(`phone zoomed: zoom ${phoneZoom.camera.zoom.toFixed(2)} about the Ts (${top.x.toFixed(0)}, ${top.y.toFixed(0)})`);
+    if (phoneZoom.camera.zoom < 2) problems.push(`phone: the wheel did not zoom (${phoneZoom.camera.zoom})`);
+    await labelsClearOfHud(phone, 'phone zoomed', problems);
+    await shoot(phone, 'd2-phone-zoomed-labels');
     await phone.close();
+
+    // 6b. (e) A narrower desktop window: the kill feed moves below the scoreboard instead of covering it.
+    const narrow = await browser.newPage({ viewport: { width: 900, height: 700 } });
+    watch(narrow, problems);
+    await narrow.goto(ORIGIN + '/?human=none');
+    await narrow.waitForFunction(() => window.__cs2replay !== undefined);
+    await narrow.click('button[data-speed="4"]');
+    await narrow.click('#start');
+    await waitTick(narrow, Math.round(12.8 * 64));
+    await narrow.click('#pause');
+    await narrow.waitForTimeout(200);
+    // No named functions inside evaluate() (tsx's __name helper isn't in the page).
+    const boxes = await narrow.evaluate(() => {
+      const [feed, board] = ['killfeed', 'scoreboard'].map((id) => {
+        const b = document.getElementById(id)?.getBoundingClientRect();
+        return b === undefined ? null : { x: b.left, y: b.top, w: b.width, h: b.height };
+      });
+      return { feed: feed ?? null, board: board ?? null, rows: document.querySelectorAll('#killfeed li').length };
+    });
+    const meets = (a: Box | null, b: Box | null): boolean =>
+      a !== null && b !== null && a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    console.log(`narrow desktop 900×700: kill feed ${boxes.rows} rows at y ${boxes.feed?.y.toFixed(0)}–${((boxes.feed?.y ?? 0) + (boxes.feed?.h ?? 0)).toFixed(0)}, scoreboard to y ${((boxes.board?.y ?? 0) + (boxes.board?.h ?? 0)).toFixed(0)}, overlap ${meets(boxes.feed, boxes.board)}`);
+    if (boxes.rows < 2) problems.push(`narrow desktop: expected kills in the feed at 12.8 s, got ${boxes.rows}`);
+    if (meets(boxes.feed, boxes.board)) problems.push('narrow desktop: the kill feed covers the scoreboard');
+    await labelsClearOfHud(narrow, 'narrow desktop', problems);
+    await shoot(narrow, 'e-desktop-narrow-killfeed');
+    await narrow.close();
+
+    // (f) LIVE pawns' AI state in the status panel and their paths (tracks on): cart stays in Back Alley, so Lokier
+    //     outlives his recording at 21.8 s and goes LIVE, and the Ts who see him follow.
+    const live = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+    watch(live, problems);
+    await live.goto(ORIGIN + '/');
+    await live.waitForFunction(() => window.__cs2replay !== undefined);
+    await live.keyboard.press('t');
+    await live.click('button[data-speed="4"]');
+    await live.click('#start');
+    await live.waitForFunction(
+      () => {
+        const s = window.__cs2replay?.session();
+        return s !== undefined && s.observe().pawns.filter((p) => s.host.aiDebug(p.id) !== null).length >= 2;
+      },
+      null,
+      { timeout: 60_000 },
+    );
+    await live.click('#pause');
+    await live.waitForTimeout(200);
+    const panel = await live.evaluate(() => {
+      const s = window.__cs2replay?.session();
+      const n = s === undefined ? 0 : s.observe().pawns.filter((p) => p.alive && s.host.aiDebug(p.id) !== null).length;
+      return { live: n, rows: [...document.querySelectorAll('#pawn-rows tr.ai td')].map((td) => td.textContent ?? '') };
+    });
+    console.log(`LIVE AI in the panel at ${await clockText(live)} (${panel.live} LIVE): ${panel.rows.map((t) => JSON.stringify(t)).join(', ')}`);
+    if (panel.live < 1 || panel.rows.length !== panel.live) problems.push(`status panel: ${panel.rows.length} AI lines for ${panel.live} LIVE pawns`);
+    await labelsClearOfHud(live, 'desktop with the panel open', problems);
+    await shoot(live, 'f-desktop-live-aidebug');
+    await live.close();
 
     // 7. Determinism, Node vs. Chrome.
     const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'));

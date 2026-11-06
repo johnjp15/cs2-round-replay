@@ -223,3 +223,71 @@ export function youView(p: PawnObs): YouView {
     band: hpBand(p.alive ? p.hp : 0),
   };
 }
+
+// ---- labels clear of the HUD (F) ---------------------------------------------------------------------
+
+/** A screen rectangle (CSS px, canvas = stage coordinates). */
+export interface ScreenRect {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
+/** True if the two rectangles overlap, with `padX` px kept free left and right. */
+export function rectsOverlap(a: ScreenRect, b: ScreenRect, padX = 0): boolean {
+  return a.x < b.x + b.w + padX && a.x + a.w + padX > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+/**
+ * Where a pawn's name label goes, of `candidates` (top-left corners, in preference order) for a `w` × `h` label: the
+ * first that overlaps neither a label already placed (2 px apart) nor a HUD rectangle in `avoid`; else the first that
+ * keeps clear of the HUD (it may overlap another label, as before); else null: the label would sit under the
+ * scoreboard, the kill feed, the panel or the status card, so the text is dropped and only the pawn's dot shows.
+ */
+export function chooseLabelSpot(
+  candidates: readonly { readonly x: number; readonly y: number }[],
+  w: number,
+  h: number,
+  placed: readonly ScreenRect[],
+  avoid: readonly ScreenRect[],
+): { x: number; y: number } | null {
+  const clearOfHud = (c: { x: number; y: number }): boolean => !avoid.some((a) => rectsOverlap({ x: c.x, y: c.y, w, h }, a, 2));
+  let fallback: { x: number; y: number } | null = null;
+  for (const c of candidates) {
+    if (!clearOfHud(c)) continue;
+    if (!placed.some((q) => rectsOverlap({ x: c.x, y: c.y, w, h }, q, 2))) return { x: c.x, y: c.y };
+    fallback ??= { x: c.x, y: c.y };
+  }
+  return fallback;
+}
+
+// ---- LIVE AI in the status panel (F; 2D debug only) --------------------------------------------------
+
+/** What the status panel reads of `Sim2DHost.aiDebug(id)` (the 2D engine's LIVE AI; CS2 has its own bot state). */
+export interface AiDebugView {
+  readonly role: string;
+  readonly behaviour: string;
+  readonly target: PlayerId | null;
+  readonly targetVisible: boolean;
+  readonly dest: Vec3 | null;
+  readonly path: readonly Vec3[];
+}
+
+/** Anything that answers aiDebug (Sim2DHost); null for pawns that aren't LIVE. */
+export interface AiDebugSource {
+  aiDebug(id: PlayerId): (AiDebugView & { readonly id: PlayerId }) | null;
+}
+
+/**
+ * The status panel's line for a LIVE pawn: its behaviour, target and goal, e.g.
+ * "fighting · target sp4rtan · defuse → (-1982, 311)". null when it isn't LIVE (no debug view).
+ */
+export function aiDebugLine(d: AiDebugView | null): string | null {
+  if (d === null) return null;
+  const parts: string[] = [d.behaviour];
+  if (d.target !== null) parts.push(`target ${d.target}${d.targetVisible ? '' : ' (out of sight)'}`);
+  const dest = d.dest === null ? '' : ` → (${Math.round(d.dest.x)}, ${Math.round(d.dest.y)})`;
+  parts.push(`${d.role}${dest}`);
+  return parts.join(' · ');
+}
