@@ -303,6 +303,10 @@ export interface AiTuning {
   defuseRangeFactor: number;
   /** A guard spot is at most this far (units) from the planted bomb. */
   guardMaxUnits: number;
+  /** Leaving the bomb's blast: go at least this far (units, 3D) beyond bomb.radius. */
+  blastMarginUnits: number;
+  /** A CT starts (or keeps going for) a defuse only if it can finish this long (s) before the explosion. */
+  defuseMarginSec: number;
 }
 
 /** Nav-mesh geometry tolerances (see docs/nav.md). */
@@ -459,6 +463,8 @@ const AI_KEYS = [
   'plantSpotUnits',
   'defuseRangeFactor',
   'guardMaxUnits',
+  'blastMarginUnits',
+  'defuseMarginSec',
 ] as const;
 const NAV_KEYS = ['stepHeight', 'edgeEpsilon', 'losMargin'] as const;
 

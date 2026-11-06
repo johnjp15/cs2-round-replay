@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, fnv1a32Hex, parseRound, stableStringify, type Act, type Action, type Goal, type Observe, type PawnInput, type PlayerId, type Vec3 } from '../src/contracts/index';
 import { RoundModel, startActions } from '../src/core/index';
-import { nearestBombsitePoint } from '../src/sim2d/ai';
+import { escapeSpot, nearestBombsitePoint } from '../src/sim2d/ai';
 import { Sim2DHost } from '../src/sim2d/host';
 import { NavMesh } from '../src/sim2d/nav';
 import { VisMask, visOptionsFromTuning } from '../src/sim2d/vision';
@@ -174,6 +174,121 @@ describe('LIVE AI: bomb', () => {
     expect(pawnOf(before, 'barely').weapon).toBe('c4');
     expect(h.aiDebug('barely')?.behaviour).toBe('planting');
     console.log(`[live-ai] plant: from the Apartments, planted at ${(end.tick / 64).toFixed(2)} s at (${pos.x.toFixed(0)}, ${pos.y.toFixed(0)})`);
+  });
+});
+
+describe('LIVE AI: the bomb after the round, and a defuse too late', () => {
+  const BOMB: Vec3 = { x: -1982, y: 311, z: -160 };
+  const clear = tuning.bomb.radius + tuning.ai.blastMarginUnits;
+  const d3 = (a: Vec3, b: Vec3): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  const exploded = (o: Observe): boolean => o.events.some((e) => e.type === 'bomb' && e.phase === 'exploded');
+
+  /** barely plants on B (plant action); returns the host on the tick after the plant, and the explode tick. */
+  function planted(seed: number, keep: readonly PlayerId[]): { h: Sim2DHost; explodeTick: number } {
+    const h = scenario(seed, ['barely', ...keep]);
+    h.apply(act([{ type: 'teleport', id: 'barely', pos: at(-1990, 330), yaw: 0 }, { type: 'plant', id: 'barely', pos: BOMB }]));
+    h.tick();
+    const explodeTick = h.bombState().explodeTick as number;
+    expect(h.observe().round.phase).toBe('planted');
+    return { h, explodeTick };
+  }
+
+  it('escapeSpot: the nearest way out by the nav mesh, at least radius + margin from the bomb (3D)', () => {
+    const from = at(-1990, 330);
+    const spot = escapeSpot(nav, from, BOMB, clear) as Vec3;
+    expect(d3(spot, BOMB)).toBeGreaterThanOrEqual(clear);
+    expect(nav.isWalkable(spot)).toBe(true);
+    const path = nav.path(from, spot) as Vec3[];
+    console.log(`[live-ai] escape from the B plant: (${spot.x.toFixed(0)}, ${spot.y.toFixed(0)}, ${spot.z.toFixed(0)}), ${d3(spot, BOMB).toFixed(0)} u from the bomb, ${NavMesh.pathLength(path).toFixed(0)} u to walk`);
+    // Already clear: stay.
+    const far = at(1245, -342);
+    expect(escapeSpot(nav, far, BOMB, clear)).toEqual(far);
+  });
+
+  it('after a T elimination win with the bomb ticking, a LIVE guard leaves the blast radius, holds, and survives', () => {
+    const { h, explodeTick } = planted(3, ['sp4rtan']);
+    // The last CT dies: T win by elimination, the bomb still ticks.
+    h.apply(act([{ type: 'set_hp', id: 'sp4rtan', hp: 0, armor: 0, helmet: false }, live('barely', { route: [], role: 'guard_bomb', hold: at(-1556, 781) })]));
+    h.tick();
+    expect(h.observe().round).toMatchObject({ phase: 'over', winner: 'T', reason: 'elimination' });
+    const behaviours = new Set<string>();
+    const obs = run(h, explodeTick + 64, (o) => {
+      behaviours.add(h.aiDebug('barely')?.behaviour ?? '');
+      return exploded(o);
+    });
+    const end = obs[obs.length - 1] as Observe;
+    expect(exploded(end)).toBe(true);
+    const b = pawnOf(end, 'barely');
+    expect(b).toMatchObject({ alive: true, hp: 100 });
+    expect(d3(b.pos, BOMB)).toBeGreaterThanOrEqual(tuning.bomb.radius);
+    expect([...behaviours]).toEqual(expect.arrayContaining(['escaping', 'holding']));
+    expect(behaviours.has('guarding')).toBe(false);
+    // Holds there: no movement over the last second before the blast, and none after it.
+    const before = obs[obs.length - 65] as Observe;
+    expect(Math.hypot(pawnOf(before, 'barely').pos.x - b.pos.x, pawnOf(before, 'barely').pos.y - b.pos.y)).toBeLessThan(1);
+    const after = run(h, 128, () => false);
+    expect(pawnOf(after[after.length - 1] as Observe, 'barely').pos).toEqual(b.pos);
+    expect(h.aiDebug('barely')?.behaviour).toBe('holding');
+    console.log(`[live-ai] post-round escape: barely holds ${d3(b.pos, BOMB).toFixed(0)} u from the bomb when it explodes at ${(explodeTick / 64).toFixed(2)} s`);
+  });
+
+  it('a CT the round is over for (forced end_round) leaves too instead of defusing', () => {
+    const { h, explodeTick } = planted(4, ['sp4rtan']);
+    h.apply(act([{ type: 'teleport', id: 'sp4rtan', pos: at(-1939, 150), yaw: 90 }, { type: 'set_hp', id: 'barely', hp: 0, armor: 0, helmet: false }, { type: 'end_round', winner: 'T', reason: 'elimination' }, live('sp4rtan', { route: [], role: 'defuse', hold: null })]));
+    h.tick();
+    expect(h.observe().round.phase).toBe('over');
+    const obs = run(h, explodeTick + 64, exploded);
+    const end = obs[obs.length - 1] as Observe;
+    expect(obs.some((o) => o.events.some((e) => e.type === 'bomb' && e.phase === 'defuse_start'))).toBe(false);
+    expect(pawnOf(end, 'sp4rtan')).toMatchObject({ alive: true, hp: 100 });
+    expect(d3(pawnOf(end, 'sp4rtan').pos, BOMB)).toBeGreaterThanOrEqual(tuning.bomb.radius);
+  });
+
+  /** sp4rtan (kit) goes LIVE `dist` units from the bomb with `leftSec` on the timer; all Ts dead (the round goes on). */
+  function lateRetake(leftSec: number): { h: Sim2DHost; explodeTick: number; obs: Observe[] } {
+    const { h, explodeTick } = planted(5, ['sp4rtan']);
+    h.apply(act([{ type: 'teleport', id: 'sp4rtan', pos: at(-1700, -400), yaw: 90 }, { type: 'set_hp', id: 'barely', hp: 0, armor: 0, helmet: false }]));
+    run(h, explodeTick - Math.round(leftSec * 64) - h.observe().tick, () => false);
+    expect(h.observe().round.phase).toBe('planted');
+    h.apply(act([live('sp4rtan', { route: [], role: 'defuse', hold: null })]));
+    const obs = run(h, explodeTick + 64, (o) => o.events.some((e) => e.type === 'bomb' && (e.phase === 'defused' || e.phase === 'exploded')));
+    return { h, explodeTick, obs };
+  }
+
+  it('a LIVE CT with a kit who cannot walk there and defuse in time gives it up and saves himself', () => {
+    // 6 s left; the walk is ~700 units (3.1 s at 225 u/s with the AK) + 5 s with the kit > 6 s.
+    const { h, obs } = lateRetake(6);
+    const end = obs[obs.length - 1] as Observe;
+    expect(exploded(end)).toBe(true);
+    expect(obs.some((o) => o.events.some((e) => e.type === 'bomb' && e.phase === 'defuse_start'))).toBe(false);
+    const sp = pawnOf(end, 'sp4rtan');
+    expect(sp.alive).toBe(true);
+    expect(d3(sp.pos, BOMB)).toBeGreaterThanOrEqual(tuning.bomb.radius);
+    expect(end.round).toMatchObject({ winner: 'T', reason: 'bomb_exploded' });
+    expect(h.aiDebug('sp4rtan')?.behaviour).toBe('holding');
+  });
+
+  it('with enough time (12 s) the same CT walks there and defuses', () => {
+    const { obs } = lateRetake(12);
+    const end = obs[obs.length - 1] as Observe;
+    expect(end.events).toContainEqual({ type: 'bomb', phase: 'defused', id: 'sp4rtan', pos: BOMB });
+  });
+
+  it('a defuse in progress that cannot finish before the explosion is dropped (USE released), and he runs', () => {
+    // zwomp has no kit (10 s); he starts defusing as a REPLAY pawn with 9.5 s left, then goes LIVE.
+    const { h, explodeTick } = planted(6, ['zwomp']);
+    h.apply(act([{ type: 'teleport', id: 'zwomp', pos: at(-1990, 300), yaw: 90 }, { type: 'set_hp', id: 'barely', hp: 0, armor: 0, helmet: false }]));
+    const use: PawnInput = { id: 'zwomp', forward: 0, side: 0, yaw: 90, pitch: 60, buttons: ['USE'] };
+    run(h, explodeTick - Math.round(9.5 * 64) - h.observe().tick, () => false);
+    run(h, 4, () => false, () => [use]);
+    expect(h.bombState().defuse).toMatchObject({ id: 'zwomp' });
+    h.apply(act([live('zwomp', { route: [], role: 'defuse', hold: null })], [use]));
+    const obs = run(h, explodeTick + 64, exploded);
+    expect(obs.slice(0, 3).some((o) => o.events.some((e) => e.type === 'bomb' && e.phase === 'defuse_stop' && e.id === 'zwomp'))).toBe(true);
+    expect(obs.some((o) => o.events.some((e) => e.type === 'bomb' && e.phase === 'defused'))).toBe(false);
+    const z = pawnOf(obs[obs.length - 1] as Observe, 'zwomp');
+    expect(z.alive).toBe(true);
+    console.log(`[live-ai] dropped defuse: zwomp is ${d3(z.pos, BOMB).toFixed(0)} u from the bomb at the explosion, ${z.hp} HP`);
   });
 });
 
