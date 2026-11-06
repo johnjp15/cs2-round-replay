@@ -58,6 +58,7 @@ function pawn(id: PlayerId, x: number, y: number, yaw = 0): PawnObs {
     weapon: 'ak47',
     ammo: { clip: 30, reserve: 90 },
     crouching: false,
+    onGround: true,
     sees: [],
   };
 }

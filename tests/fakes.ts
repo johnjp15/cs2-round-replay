@@ -115,6 +115,7 @@ export class ScriptedHost implements IHost {
           weapon: p.team === 'T' ? 'ak47' : 'm4a4',
           ammo: { clip: 30, reserve: 90 },
           crouching: false,
+          onGround: true,
           sees: alive.filter((id) => id !== p.id && p.alive),
         })),
       ),

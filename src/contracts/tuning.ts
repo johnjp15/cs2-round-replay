@@ -17,6 +17,37 @@ export interface MovementTuning {
   accelScaleFloor: number;
   /** Run speed (units/s) by weapon id. */
   runSpeedByWeapon: Record<string, number>;
+  // G3: 3D movement on the CS2 mesh (docs/movement.md "3D movement"; CS2 convar defaults unless marked estimated).
+  /** `sv_gravity` (units/s²). */
+  gravity: number;
+  /** `sv_jump_impulse`: upward speed of a jump (units/s); apex = impulse² / (2 × gravity) = 57. */
+  jumpImpulse: number;
+  /** `sv_airaccelerate`. */
+  airAccelerate: number;
+  /** `sv_air_max_wishspeed`: the wish speed air acceleration can reach along the wish direction (units/s). */
+  airMaxWishSpeed: number;
+  /** `sv_maxvelocity`: per-axis velocity bound (units/s). */
+  maxVelocity: number;
+  /** `sv_stepsize`: the highest step walked up without a jump (units). */
+  stepSize: number;
+  /** `sv_standable_normal`: a surface is ground if its normal's z is at least this. */
+  standableNormal: number;
+  /** Estimated: how far the feet tuck up when a pawn ducks in the air (units; CS:GO's crouch jump clears 9–11 more). */
+  airDuckLift: number;
+  /** `sv_staminamax`: the largest landing speed penalty (percent). */
+  staminaMax: number;
+  /** `sv_staminalandcost`: landing penalty (percent) per unit/s of downward speed at landing (formula estimated). */
+  staminaLandCost: number;
+  /** `sv_staminarecoveryrate`: penalty recovered per second. */
+  staminaRecoveryRate: number;
+  /** Source SDK `PLAYER_MAX_SAFE_FALL_SPEED`: landing faster than this hurts (units/s). */
+  fallSafeSpeed: number;
+  /** Source SDK `PLAYER_FATAL_FALL_SPEED`: landing this fast deals 100 HP (linear in between). */
+  fallFatalSpeed: number;
+  /** `sv_falldamage_scale`. */
+  fallDamageScale: number;
+  /** `sv_min_jump_landing_sound`: landings at least this fast make a `land` sound (units/s). */
+  landSoundSpeed: number;
 }
 
 /** Puppet (REPLAY pawn) control. See docs/core.md "Puppets". */
@@ -364,7 +395,29 @@ export class TuningError extends Error {
   }
 }
 
-const MOVEMENT_KEYS = ['svAccelerate', 'svFriction', 'svStopSpeed', 'walkFactor', 'crouchFactor', 'accelScaleFloor'] as const;
+const MOVEMENT_KEYS = [
+  'svAccelerate',
+  'svFriction',
+  'svStopSpeed',
+  'walkFactor',
+  'crouchFactor',
+  'accelScaleFloor',
+  'gravity',
+  'jumpImpulse',
+  'airAccelerate',
+  'airMaxWishSpeed',
+  'maxVelocity',
+  'stepSize',
+  'standableNormal',
+  'airDuckLift',
+  'staminaMax',
+  'staminaLandCost',
+  'staminaRecoveryRate',
+  'fallSafeSpeed',
+  'fallFatalSpeed',
+  'fallDamageScale',
+  'landSoundSpeed',
+] as const;
 const REPLAY_KEYS = [
   'lookaheadSec',
   'driftNudgeUnits',

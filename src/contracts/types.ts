@@ -127,6 +127,11 @@ export interface PawnObs {
   readonly weapon: WeaponId;
   readonly ammo: Ammo;
   readonly crouching: boolean;
+  /**
+   * G3: standing on walkable ground (CS2: FL_ONGROUND / a ground entity). False from a jump's take-off or a ledge
+   * until the landing; `vel.z` is then the vertical speed (0 on the ground).
+   */
+  readonly onGround: boolean;
   /** Pawns in line of sight and within FOV (engine-computed), sorted. */
   readonly sees: readonly PlayerId[];
 }

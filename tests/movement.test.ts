@@ -22,7 +22,7 @@ const T_SPAWN = { x: 1362.5, y: 175 };
 const B_OPEN = { x: -1700, y: 400 };
 
 function at(x: number, y: number, yaw = 0): MoveState {
-  return { pos: { x, y, z: nav.zAt({ x, y }) }, vel: { x: 0, y: 0, z: 0 }, yaw, pitch: 0, crouching: false };
+  return { pos: { x, y, z: nav.zAt({ x, y }) }, vel: { x: 0, y: 0, z: 0 }, yaw, pitch: 0, crouching: false, onGround: true, jumpHeld: false, stamina: 0 };
 }
 
 function input(forward: number, side: number, yaw: number, buttons: Button[] = []): MoveInput {

@@ -73,6 +73,7 @@ describe('names and bands', () => {
       weapon: 'ak47',
       ammo: { clip: 12, reserve: 60 },
       crouching: false,
+      onGround: true,
       sees: [],
     };
     expect(youView(p)).toEqual({ id: 'cart', team: 'T', alive: true, hp: 27, armor: 64, weapon: 'AK-47', ammo: '12 / 60', band: 'hurt' });

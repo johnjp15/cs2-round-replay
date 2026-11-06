@@ -34,6 +34,7 @@ function pawn(id: PlayerId, team: Team, x: number, y: number, yaw = 0, extra: Pa
     weapon: 'ak47',
     ammo: { clip: 30, reserve: 90 },
     crouching: false,
+    onGround: true,
     sees: [],
     ...extra,
   };
