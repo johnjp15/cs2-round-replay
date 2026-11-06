@@ -1,5 +1,7 @@
 # Publishing the sim at johnjp15.github.io/cs2/sim/
 
+> **Status (2026-11-06):** John chose the automatic option. `cs2-deploy.yml` is installed in web-apps (web-apps PR #1) and `stage-web-apps.yml` is installed here. What's left is three secrets, which John adds himself: `CS2_PASSWORD` and `PAGES_TOKEN` in web-apps, and `WEB_APPS_TOKEN` here. Until `WEB_APPS_TOKEN` exists, the stage workflow skips with a warning.
+
 The sim is published as one more page of John's password-locked cs2 pages. Their source is in the private
 **web-apps** repo, under `cs2/`. Its `cs2/tools/deploy.sh` encrypts every page and writes the result to the public
 **johnjp15/johnjp15.github.io** repo (branch `master`), which GitHub Pages serves.
