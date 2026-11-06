@@ -18,6 +18,8 @@
     "extract:round": "tsx tools/extract-round.ts",
     "validate:round": "tsx tools/validate-round.ts",
     "extract:nav": "tsx tools/extract-nav.ts",
+    "bench:session": "tsx tools/bench-session.ts",
+    "check:browser": "tsx tools/browser-check.ts",
     "ghost": "tsx tools/ghost-round.ts"
   },
   "repository": {
@@ -30,6 +32,7 @@
     "eslint": "^10.14.0",
     "eslint-plugin-import-x": "^4.17.1",
     "globals": "^17.14.0",
+    "playwright-core": "1.63.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.1",
