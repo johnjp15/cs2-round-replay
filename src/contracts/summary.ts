@@ -11,11 +11,13 @@ import type { PlayerId, RoundEndReason, Score, Team, WeaponId } from './types';
  * - `same`: the same killer killed the same victim within `SummaryOptions.sameTicks` of the recorded tick;
  * - `shifted`: the same killer and victim, earlier or later (`deltaTicks`);
  * - `missed`: it didn't happen (the victim survived, or someone else killed him: that death is a `new` row);
+ * - `pending`: not yet: the log ends before its recorded tick (+ `sameTicks`) with killer and victim alive (the
+ *   overlay opens 2 s after the round end, before the 69.4 s post-round kill);
  * - `new`: a death the recording doesn't have (`killer` null = the world: the bomb, fire without a thrower).
  */
-export type KillStatus = 'same' | 'shifted' | 'missed' | 'new';
+export type KillStatus = 'same' | 'shifted' | 'missed' | 'pending' | 'new';
 
-export const KILL_STATUSES = ['same', 'shifted', 'missed', 'new'] as const;
+export const KILL_STATUSES = ['same', 'shifted', 'missed', 'pending', 'new'] as const;
 
 export interface KillRow {
   readonly status: KillStatus;
@@ -85,7 +87,7 @@ export interface PlayerStats {
 }
 
 /**
- * - `tape`: the recorded result, and every recorded kill `same`, nothing new;
+ * - `tape`: the recorded result, and every recorded kill `same` (or still `pending`), nothing new;
  * - `same_result`: the recorded winner and reason, but kills differ;
  * - `changed`: another winner or reason;
  * - `unfinished`: no round end in the log yet.

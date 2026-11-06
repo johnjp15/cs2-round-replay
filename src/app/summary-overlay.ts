@@ -24,7 +24,7 @@ export function summaryDue(round: RoundObs, tick: number, delayTicks: number): b
 
 export interface KillRowView {
   readonly status: KillStatus;
-  /** "same", "Δt", "✗", "new" (short label for the status column). */
+  /** "same", "Δt", "✗", "soon", "new" (short label for the status column). */
   readonly label: string;
   readonly killer: string;
   readonly killerTeam: Team | null;
@@ -62,7 +62,7 @@ export interface SummaryView {
   readonly stats: readonly StatView[];
 }
 
-const LABELS: Readonly<Record<KillStatus, string>> = { same: 'same', shifted: 'Δt', missed: '✗', new: 'new' };
+const LABELS: Readonly<Record<KillStatus, string>> = { same: 'same', shifted: 'Δt', missed: '✗', pending: 'soon', new: 'new' };
 
 function resultText(r: RoundSummary['result']): string {
   if (r.winner === null || r.reason === null || r.endTick === null) return `round still on · ${r.score.ct}–${r.score.t}`;
@@ -80,6 +80,7 @@ function bombText(b: RoundSummary['bomb']): string {
 function noteOf(k: KillRow): string {
   if (k.status === 'shifted') return k.text;
   if (k.status === 'missed') return k.text.replace(/^didn't happen: /, '');
+  if (k.status === 'pending') return k.postRound ? 'after the round, not yet' : 'not yet';
   if (k.status === 'new') return k.killer === null ? 'the bomb' : k.postRound ? 'after the round' : '';
   return k.postRound ? 'after the round' : '';
 }

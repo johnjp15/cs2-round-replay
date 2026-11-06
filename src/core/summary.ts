@@ -6,7 +6,8 @@
  * - Result: winner, reason and score from the log's `round_end` (else the last observe's round state), against the
  *   recording (CT `bomb_defused`, 12 – 15, from `meta.scoreAfter` and `bomb`).
  * - Kills: each recorded kill (kill feed) against this run's `death` events: `same` (same killer and victim within
- *   `sameTicks`), `shifted` (Δt), `missed` (didn't happen, with why), and every other death as `new`.
+ *   `sameTicks`), `shifted` (Δt), `missed` (didn't happen, with why), `pending` (the log ends before it), and every
+ *   other death as `new`.
  * - LIVE switches (B4): from `status` (mode LIVE starting on its tick) and the Core's `<id> LIVE: <reason>` log line.
  * - One player's stats (the human's pawn, else the default human cart): kills, damage dealt and taken, time alive,
  *   RMS 2D distance from his recorded track while alive.
@@ -138,8 +139,8 @@ function killerText(attacker: PlayerId | null, weapon: WeaponId | null): string 
   return weapon === null ? 'the bomb' : `the world (${weapon})`;
 }
 
-/** Recorded kills against run deaths (see KillRow), sorted by time. */
-export function compareKills(model: RoundModel, deaths: readonly RunDeath[], sameTicks: number): KillRow[] {
+/** Recorded kills against run deaths (see KillRow), sorted by time. `lastTick`: the log's last observe tick. */
+export function compareKills(model: RoundModel, deaths: readonly RunDeath[], sameTicks: number, lastTick: number): KillRow[] {
   const used = new Set<number>();
   const rows: { row: KillRow; at: number; order: number }[] = [];
   model.kills.forEach((k, order) => {
@@ -162,7 +163,14 @@ export function compareKills(model: RoundModel, deaths: readonly RunDeath[], sam
     if (d !== null && d.tick <= k.tick) why = `${k.victim} died to ${killerText(d.attacker, d.weapon)} at ${secText(d.tick)} s`;
     else if (killerDeath !== undefined && killerDeath.tick < k.tick) why = `${k.killer} was dead (${secText(killerDeath.tick)} s)`;
     else if (d !== null) why = `${k.victim} died to ${killerText(d.attacker, d.weapon)} at ${secText(d.tick)} s`;
-    else why = `${k.victim} survived`;
+    else if (lastTick < k.tick + sameTicks) {
+      rows.push({
+        row: { status: 'pending', killer: k.killer, victim: k.victim, weapon: k.weapon, headshot: k.hs, recordedTick: k.tick, runTick: null, deltaTicks: null, postRound: k.postRound, text: `not yet (recorded ${secText(k.tick)} s)` },
+        at: k.tick,
+        order,
+      });
+      return;
+    } else why = `${k.victim} survived`;
     rows.push({
       row: { status: 'missed', killer: k.killer, victim: k.victim, weapon: k.weapon, headshot: k.hs, recordedTick: k.tick, runTick: null, deltaTicks: null, postRound: k.postRound, text: `didn't happen: ${why}` },
       at: k.tick,
@@ -286,7 +294,7 @@ function headlineOf(verdict: SummaryVerdict, result: RoundResult, recorded: Roun
   const left = bomb.marginSec !== null && result.reason === 'bomb_defused' ? `, ${fixed2(bomb.marginSec)} s left` : '';
   if (verdict === 'tape') return `Played it like the tape: ${short}${left}`;
   if (verdict === 'same_result') {
-    const changed = kills.filter((k) => k.status !== 'same').length;
+    const changed = kills.filter((k) => k.status !== 'same' && k.status !== 'pending').length;
     const recLeft = recBomb.marginSec !== null && left !== '' && fixed2(recBomb.marginSec) !== fixed2(bomb.marginSec ?? 0) ? ` (recorded ${fixed2(recBomb.marginSec)} s)` : '';
     return `Same result, different round: ${short}${left}${recLeft}; ${changed} kill${changed === 1 ? '' : 's'} changed`;
   }
@@ -308,11 +316,11 @@ export function summarize(model: RoundModel, log: SessionLog | readonly LogEntry
   const recorded = recordedResult(model);
   const bomb = runBomb(entries);
   const recBomb = recordedBomb(model);
-  const kills = compareKills(model, deaths, opts.sameTicks);
+  const last = entries[entries.length - 1];
+  const kills = compareKills(model, deaths, opts.sameTicks, last === undefined ? -1 : last.observe.tick);
   const sameResult = result.winner === recorded.winner && result.reason === recorded.reason;
   const verdict: SummaryVerdict =
-    result.winner === null ? 'unfinished' : !sameResult ? 'changed' : kills.every((k) => k.status === 'same') ? 'tape' : 'same_result';
-  const last = entries[entries.length - 1];
+    result.winner === null ? 'unfinished' : !sameResult ? 'changed' : kills.every((k) => k.status === 'same' || k.status === 'pending') ? 'tape' : 'same_result';
   return {
     headline: headlineOf(verdict, result, recorded, bomb, recBomb, kills, human !== null),
     verdict,

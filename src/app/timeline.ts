@@ -95,6 +95,8 @@ export interface TimelineCallbacks {
  */
 export class TimelineDom {
   private readonly bar: HTMLElement;
+  /** The visible track inside the bar's padding: pointer positions map onto it, like the marks. */
+  private readonly track: HTMLElement;
   private readonly fill: HTMLElement;
   private readonly tape: HTMLElement;
   private readonly marks: HTMLElement;
@@ -116,6 +118,7 @@ export class TimelineDom {
       return e;
     };
     this.bar = q('#scrub');
+    this.track = q('.scrub-track');
     this.fill = q('.scrub-fill');
     this.tape = q('.scrub-tape');
     this.marks = q('.scrub-marks');
@@ -173,7 +176,7 @@ export class TimelineDom {
   }
 
   private tickAt(e: PointerEvent): number {
-    const r = this.bar.getBoundingClientRect();
+    const r = this.track.getBoundingClientRect();
     return pointerToTick(e.clientX, r.left, r.width, this.span);
   }
 

@@ -71,11 +71,16 @@ describe('summary of the golden round (no human)', () => {
     const partial = summarize(model, goldenEntries.slice(0, 3000));
     expect(partial.verdict).toBe('unfinished');
     expect(partial.headline).toBe('Round still on (recorded: CT defuse)');
-    expect(partial.kills.filter((k) => k.status === 'missed').map((k) => k.text)).toEqual([
-      "didn't happen: donk survived",
-      "didn't happen: barely survived",
-      "didn't happen: cart survived",
-    ]);
+    expect(partial.kills.filter((k) => k.status === 'pending').map((k) => k.text)).toEqual(['not yet (recorded 50.34 s)', 'not yet (recorded 58.84 s)', 'not yet (recorded 69.41 s)']);
+    // The overlay's moment: 2 s after the round end, before the post-round kill (69.4 s) — still the tape.
+    const due = summarize(model, goldenEntries.slice(0, 4275 + 128 + 1));
+    expect(due.headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
+    expect(due.kills.at(-1)).toMatchObject({ status: 'pending', victim: 'cart', postRound: true });
+    // Cut after it, with cart never killed: it didn't happen.
+    const noKill = goldenEntries.map((e) => (e.observe.tick === 4442 ? { ...e, observe: { ...e.observe, events: e.observe.events.filter((ev) => ev.type !== 'death') } } : e));
+    const nk = summarize(model, noKill);
+    expect(nk.kills.at(-1)).toMatchObject({ status: 'missed', text: "didn't happen: cart survived" });
+    expect(nk.verdict).toBe('same_result');
   });
 
   it('a kill moved by 11 ticks is shifted: same result, different round', () => {
