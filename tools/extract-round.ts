@@ -25,7 +25,7 @@ import {
   type PlayerId,
   type PovSegment,
   type Radio,
-  type Round,
+  type RoundData,
   type RoundEvent,
   type Shot,
   type ShotKind,
@@ -39,7 +39,7 @@ import {
   type WeaponId,
   type WeaponTimelinePoint,
   type YawSample,
-} from './round-types';
+} from '../src/contracts/index';
 
 // ---------- source shapes (the web-apps page's embedded JSON) ----------
 
@@ -242,8 +242,7 @@ function rowToSample(r: number[]): TrackSample {
   const confidence = flagConfidence(flag);
   const s: TrackSample = { t, tick: toTick(t), x, y, z, confidence };
   const unc = r[5];
-  if (unc !== undefined && confidence !== 'observed') s.uncertainty = unc;
-  return s;
+  return unc !== undefined && confidence !== 'observed' ? { ...s, uncertainty: unc } : s;
 }
 
 function onGrid(t: number): boolean {
@@ -281,9 +280,7 @@ function buildTrack(rows: number[][], yaw: YawSample[]): Track {
       confidence: worse.confidence,
     };
     const unc = Math.max(a.uncertainty ?? -1, b.uncertainty ?? -1);
-    if (unc >= 0 && s.confidence !== 'observed') s.uncertainty = unc;
-    s.resampled = true;
-    samples.push(s);
+    samples.push(unc >= 0 && s.confidence !== 'observed' ? { ...s, uncertainty: unc, resampled: true } : { ...s, resampled: true });
   }
   return {
     samples,
@@ -430,7 +427,7 @@ export interface ExtractInputs {
 }
 
 export interface ExtractOutputs {
-  round: Round;
+  round: RoundData;
   json: string;
   radar: Buffer;
 }
@@ -607,7 +604,7 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
   };
 
   const points = (rows: [number, number][]): TimelinePoint[] => rows.map(([t, value]) => ({ t, tick: toTick(t), value }));
-  const timelines: Round['timelines'] = {
+  const timelines: RoundData['timelines'] = {
     hp: sortedRecord(byId(src.hp).map(([id, rows]): [PlayerId, TimelinePoint[]] => [id, points(rows)])),
     money: sortedRecord(byId(src.money).map(([id, rows]): [PlayerId, TimelinePoint[]] => [id, points(rows)])),
     weapon: sortedRecord(
@@ -634,7 +631,7 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
   );
 
   const m = src.meta;
-  const round: Round = {
+  const round: RoundData = {
     meta: {
       clock0: m.clock0,
       bombTimerSec: m.bombTime,

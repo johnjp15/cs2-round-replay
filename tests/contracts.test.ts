@@ -40,7 +40,7 @@ const ACTIONS: { readonly [K in ActionType]: Extract<Action, { type: K }> } = {
   set_mode: { type: 'set_mode', id: 'zwomp', mode: 'LIVE', goal: { route: [v(1, 2, 3), v(4, 5, 6)], role: 'hold', hold: v(4, 5, 6) } },
   set_weapon: { type: 'set_weapon', id: 'sp4rtan', weapon: 'deagle' },
   give: { type: 'give', id: 'sp4rtan', item: 'ak47', clip: 12, reserve: 60 },
-  set_hp: { type: 'set_hp', id: 'lokier', hp: 42, armor: 0 },
+  set_hp: { type: 'set_hp', id: 'lokier', hp: 42, armor: 0, helmet: false },
   teleport: { type: 'teleport', id: 'barely', pos: v(-473, 647, -82), yaw: 180 },
   plant: { type: 'plant', id: 'cart', pos: v(-1800, 300, -160) },
   defuse_start: { type: 'defuse_start', id: 'sp4rtan' },

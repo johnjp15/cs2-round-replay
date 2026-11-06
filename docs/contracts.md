@@ -14,7 +14,7 @@ Act (Core → engine, same tick):
   - `damage {attacker, victim, amount, armor, hitgroup, weapon, lethal}` — scripted damage, engine applies it exactly
   - `block_damage {attacker, victim}` / `unblock_damage` — engine must not apply its own bullet damage for that pair while blocked
   - `set_mode {id, mode: REPLAY|LIVE, goal {route: pos[], role, hold: pos}}`
-  - `set_weapon {id, weapon}`, `give {id, item, clip, reserve}`, `set_hp {id, hp, armor}`
+  - `set_weapon {id, weapon}`, `give {id, item, clip, reserve}`, `set_hp {id, hp, armor, helmet}`
   - `teleport {id, pos, yaw}` (setup, rewinds, unseen snaps only)
   - `plant {id, pos}`, `defuse_start {id}`, `defuse_stop {id}`
   - `end_round {winner, reason}`
@@ -33,8 +33,9 @@ The spec above is implemented in `src/contracts/` (re-exported from `src/contrac
 
 | File | Contents |
 | --- | --- |
-| `types.ts` | `PlayerId`, `Team`, `Vec3`, `WeaponId`, `Button`, `Hitgroup`, `Mode`, `PawnObs`, `ObsEvent`, `Observe`, `PawnInput`, `Action`, `PawnStatus`, `Act`, `Control`; const arrays (`PLAYER_IDS`, `BUTTONS`, …); `sortById`, `sortIds`, `sortButtons`, `compareOrdinal` |
+| `types.ts` | `PlayerId`, `Team`, `Vec3`, `WeaponId`, `ItemId`, `Button`, `Hitgroup`, `Mode`, `PawnObs`, `ObsEvent`, `Observe`, `PawnInput`, `Action`, `PawnStatus`, `Act`, `Control`; const arrays (`PLAYER_IDS`, `BUTTONS`, …); `sortById`, `sortIds`, `sortButtons`, `compareOrdinal` |
 | `host.ts` | `IHost`, `ICore`, `HostSnapshot`, `CoreSnapshot` |
+| `round.ts` | The shape of `data/round.json` (`RoundData`, `Player`, `Kit`, `Track`, `TrackSample`, `Shot`, `Kill`, `Damage`, `Utility`, `Radio`, `Chat`, `Bomb`, …; `Confidence`, `GrenadeId`, `ShotKind`), `parseRound`, `RoundDataError`, `TICKS_PER_SEC`, `toTick`. No file I/O. Field reference: `docs/round-data.md`. |
 | `json.ts` | `JsonValue`, `stableStringify`, `parseJsonLine`, `formatNumber`, `roundNumber`, `canonicalize`, `toJsonValue`, `fnv1a32Hex` |
 | `session-log.ts` | `SessionLog` (`append`, `lines`, `toText`, `fromText`, `get`, `at`, `length`, `digest`) |
 | `replayer.ts` | `replay(log, core)` → `{identical, firstMismatchTick, diffs (≤ 20), mismatchCount, ticks}` |
@@ -46,13 +47,15 @@ Details the spec left open, as decided:
 
 - **No optional fields.** Every field is always present; "absent" is `null` (fits `exactOptionalPropertyTypes` and C# records). All fields and arrays are `readonly`.
 - **Unions** are discriminated by a string `type` field whose value is the spec name (`damage`, `block_damage`, `round_end`, …). Damage *event* and damage *action* both use `type: 'damage'`; they live in different unions.
-- **Spellings.** Player ids lowercase; teams `T`/`CT`; weapons `ak47 awp ssg08 deagle m4a4 knife c4 smoke flash he molotov`; buttons upper case; hitgroups `head chest stomach arm leg`; modes `REPLAY LIVE DEAD`. New, not in the spec: `SoundKind` = `footstep land shot reload grenade bomb`; `RoundEndReason` = `elimination bomb_exploded bomb_defused time`; `LogLevel` = `debug info warn error`.
+- **Spellings.** Player ids lowercase; teams `T`/`CT`; weapons `ak47 awp ssg08 deagle m4a4 glock knife c4 smoke flash he molotov` (`glock` added in B1: donk's secondary); items (`ItemId`) are the weapons plus `defuser`; buttons upper case; hitgroups `head chest stomach arm leg`; modes `REPLAY LIVE DEAD`. New, not in the spec: `SoundKind` = `footstep land shot reload grenade bomb`; `RoundEndReason` = `elimination bomb_exploded bomb_defused time`; `LogLevel` = `debug info warn error`.
 - **Observe.** `pawns` holds all ten pawns (dead ones too), sorted by id; `human` is a `PlayerId | null` (not an object). `vel` is a `Vec3` in units/s. A dead pawn reports its last weapon. `sees` is sorted and de-duplicated. `events` keep engine emission order.
 - **Event fields.** `damage.attacker`, `damage.weapon`, `death.attacker`, `death.weapon` may be `null` (world damage). `bomb` is `{phase, id, pos}`: `phase` is one of the five spec states, `id` the planter/defuser (null for `exploded`), `pos` the bomb position or null. `damage.amount` = HP removed, `damage.armor` = armor removed.
 - **Act.** `inputs` has one entry per REPLAY pawn, sorted by id; `buttons` in `BUTTONS` order (`sortButtons`). `actions` keep Core order and the engine applies them in that order. `status` has all ten pawns sorted by id; `trigger` is a free string or null; `sinceTick` is the tick the mode began.
 - **set_mode** takes `REPLAY | LIVE` only (`DEAD` is status-only); `goal` is `{route: Vec3[], role: string, hold: Vec3 | null}` for LIVE and `null` for REPLAY. `role` is a free string until Core defines roles.
-- **give.item** is a `WeaponId`.
+- **give.item** is an `ItemId` (a `WeaponId` or `defuser`, the defuse kit; B1). `clip/reserve` are the gun's magazine and reserve; for grenades, `c4` and `defuser` they are 0, and each `give` adds one item (two smoke gives = two smokes). Every pawn has a `knife` without a give.
+- **set_hp** carries `helmet: boolean` (B1) next to `hp` and `armor`.
 - **Control.** `checkpoint {id}` carries an app-chosen name and `rewind {id}` returns to it; `pause {paused: boolean}` is explicit (no toggle); `seek {t}` is in video seconds; `speed {x}` is a multiplier.
+- **Round data.** `parseRound(json | text)` validates `data/round.json` and returns it typed as `RoundData` (readonly). It checks in depth the fields the Core uses (meta clock/bomb timer, players, tracks, shots, kills, damage, utility, radio, chat, bomb, `timelines.weapon`, `events`), including `tick === toTick(t)` for every pair, and only the container shape of the rest; it throws `RoundDataError` naming the first bad path. `TrackSample.uncertainty` and `.resampled` are the only optional fields (absent in the file); read them as nullable. `tools/*` import these types from `src/contracts` (B1 moved them from `tools/round-types.ts`).
 - **Snapshots** are `{kind: 'host' | 'core', data: JsonValue}`; `data` is private to the implementation that made it. Use `toJsonValue` to build it from typed state.
 - **Log line** = `stableStringify({act, controls, observe})`. `controls` (new) lists the Control messages delivered to Core since the previous tick, applied before `step`; the Replayer re-sends them. Ticks may repeat (after a rewind); `get(tick)` returns the first such line, `at(i)` any line.
 - **Canonical inputs.** Logged numbers are rounded to 6 decimals, so a driver must pass `canonicalize(host.observe())` to `core.step` (or the host must already emit canonical numbers); otherwise a replay feeds Core slightly different numbers than the live run did.
