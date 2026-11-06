@@ -3,8 +3,9 @@
  * every REPLAY pawn along its recorded track (B2 puppets, src/core/puppet.ts), makes
  * the puppets act the recording (B3 scripted events, src/core/scripted.ts: aim, fire,
  * damage, weapons, utility, plant, defuse), switches puppets to LIVE when something
- * off-script reaches them (B4 divergence, src/core/divergence.ts) and reports status. See
- * docs/core.md "ReplayCore", "Puppets", "Scripted events" and "Divergence".
+ * off-script reaches them (B4 divergence, src/core/divergence.ts), brings LIVE pawns back
+ * to their recording once that is over (G1 rejoin, src/core/rejoin.ts) and reports status.
+ * See docs/core.md "ReplayCore", "Puppets", "Scripted events" and "Divergence".
  */
 import {
   PLAYER_IDS,
@@ -14,6 +15,7 @@ import {
   type Action,
   type Control,
   type CoreSnapshot,
+  type Goal,
   type ICore,
   type Mode,
   type Observe,
@@ -28,8 +30,9 @@ import {
 } from '../contracts/index';
 import { RoundClock, TICK_RATE } from './clock';
 import { Divergence, type DivergenceState } from './divergence';
+import { REJOIN_TRIGGER, Rejoin, type RejoinState } from './rejoin';
 import { copyLoadouts, initialLoadouts, noteActions, noteObserve, releaseWindowTicks, type LoadoutState } from './loadout';
-import { PuppetController, PuppetTrack, type PuppetState } from './puppet';
+import { PuppetController, PuppetTrack, roundYaw, type PuppetState } from './puppet';
 import { resyncActions, resyncHazards, type StandingBlock } from './resync';
 import type { RoundModel } from './round-model';
 import type { EventSchedule } from './schedule';
@@ -44,8 +47,13 @@ interface PawnState {
   since: number;
   /** B4: the trigger that made the pawn LIVE (`TriggerKind`), else null. */
   trigger: string | null;
-  /** B5: went LIVE this run (its damage blocks were lifted then), also once DEAD. */
+  /** B5: went LIVE this run, also once DEAD. */
   everLive: boolean;
+  /**
+   * G1: its B3 damage blocks are lifted: it went LIVE and hasn't rejoined since (also once DEAD). A resync rewind
+   * sets the blocks from this.
+   */
+  blocksLifted: boolean;
 }
 
 /** ReplayCore options (tools and tests). */
@@ -55,6 +63,8 @@ export interface ReplayCoreOptions {
    * that decides a scripted human's input as if he were a puppet, tools/human-bot.ts).
    */
   readonly divergence: boolean;
+  /** G1 rejoin (LIVE → REPLAY). On by default (absent = on); needs divergence and a WalkQuery. */
+  readonly rejoin?: boolean;
 }
 
 /** Everything ReplayCore keeps between steps; this is what snapshot() writes. */
@@ -100,6 +110,8 @@ export class ReplayCore implements ICore {
   readonly divergence: Divergence;
   /** False when built with `{divergence: false}`: no trigger is evaluated, no pawn goes LIVE by itself. */
   readonly divergenceOn: boolean;
+  /** G1: LIVE → REPLAY (null without a WalkQuery, without divergence or with `{rejoin: false}`). */
+  readonly rejoin: Rejoin | null;
   private state: ReplayCoreState;
   /** B5: the loadout ledger (src/core/loadout.ts), for resync rewinds. In the snapshot. */
   private loadout: LoadoutState;
@@ -118,6 +130,7 @@ export class ReplayCore implements ICore {
     this.script = new ScriptedEvents(model, schedule, tuning);
     this.divergence = new Divergence(model, schedule, this.script.plan, tuning);
     this.divergenceOn = options === null || options.divergence;
+    this.rejoin = walk === null || !this.divergenceOn || options?.rejoin === false ? null : new Rejoin(model, schedule, tuning, this.divergence, this.script, walk);
     this.state = initialState();
     this.loadout = initialLoadouts(model);
   }
@@ -138,11 +151,13 @@ export class ReplayCore implements ICore {
         p.since = o.tick;
         p.trigger = null;
         p.everLive = false;
+        p.blocksLifted = false;
       }
       this.loadout = initialLoadouts(this.model);
       if (this.puppets !== null) for (const c of this.puppets) c.reset(startYaw(this.model, c.id).yaw);
       this.script.reset();
       this.divergence.reset();
+      this.rejoin?.reset();
       if (this.divergenceOn) this.divergence.setup(o, this.script);
       for (const a of this.script.blockActions(o, s.pawns)) actions.push(a);
     }
@@ -166,13 +181,29 @@ export class ReplayCore implements ICore {
     // B5: a resync rewind puts the engine back to this observe before anything else in the Act.
     let prefix: Action[] = [];
     if (s.resync !== null) {
-      prefix = resyncActions(this.model, this.tuning, o, s.pawns, this.loadout, this.standingBlocks(), s.resync);
+      prefix = resyncActions(this.model, this.tuning, o, s.pawns, this.loadout, this.standingBlocks(), s.resync, this.rejoinGoals());
       s.resync = null;
     }
 
     // B4: the triggers and the scheduled encounters (not on the setup step: that observe predates the setup).
     if (this.divergenceOn && !s.setupThisStep) {
-      for (const h of this.divergence.step(o, s.pawns, this.references(o.tick), this.script, actions)) this.setPawnMode(h.id, 'LIVE', o.tick, h.trigger);
+      for (const h of this.divergence.step(o, s.pawns, this.references(o.tick), this.script, actions)) {
+        this.setPawnMode(h.id, 'LIVE', o.tick, h.trigger);
+        this.script.noteLive(h.id, o.tick);
+        this.rejoin?.noteLive(h.id, o.tick, h.trigger);
+      }
+      // G1: LIVE pawns heading back to, or rejoining, their recording (after this tick's LIVE switches).
+      if (this.rejoin !== null && this.puppets !== null) {
+        const tracks = this.puppets.map((c) => c.track);
+        for (const r of this.rejoin.step(o, s.pawns, tracks, this.loadout, actions)) {
+          this.setPawnMode(r.id, 'REPLAY', o.tick, REJOIN_TRIGGER);
+          this.script.noteRejoin(r.id, o.tick);
+          // The puppet's turn limit continues from where the AI left the pawn looking.
+          const c = this.puppet(r.id);
+          const obs = byId.get(r.id);
+          if (c !== null && obs !== undefined) c.state.yaw = roundYaw(obs.yaw);
+        }
+      }
     }
 
     this.scheduledActions(o, actions);
@@ -232,7 +263,7 @@ export class ReplayCore implements ICore {
    * there; empty when it would. A driver without engine snapshots skips such checkpoints (resyncHazards).
    */
   checkpointHazards(o: Observe): string[] {
-    const pl = this.script.plan.plant;
+    const pl = this.script.plantItem();
     const planter = pl === null ? null : this.state.pawns.find((p) => p.id === pl.id);
     const onScript = planter !== undefined && planter !== null && planter.id !== o.human && planter.mode === 'REPLAY';
     return resyncHazards(o, pl, onScript);
@@ -241,6 +272,17 @@ export class ReplayCore implements ICore {
   /** B5: the loadout ledger (read only; tests and tools). */
   loadouts(): LoadoutState {
     return copyLoadouts(this.loadout);
+  }
+
+  /** G1: the rejoin goals in force (LIVE pawns heading back to their track), for a resync. */
+  private rejoinGoals(): { id: PlayerId; goal: Goal }[] {
+    const out: { id: PlayerId; goal: Goal }[] = [];
+    if (this.rejoin === null) return out;
+    for (const id of PLAYER_IDS) {
+      const g = this.rejoin.goalOf(id);
+      if (g !== null) out.push({ id, goal: g });
+    }
+    return out;
   }
 
   /** B4 encounter blocks in force (the scripted hit's block_damage shooter → human, not yet lifted). */
@@ -289,12 +331,15 @@ export class ReplayCore implements ICore {
 
   snapshot(): CoreSnapshot {
     const puppets: PuppetState[] = this.puppets === null ? [] : this.puppets.map((c) => c.state);
-    return { kind: 'core', data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets, script: this.script.state, divergence: this.divergence.state, loadout: this.loadout }) };
+    return {
+      kind: 'core',
+      data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets, script: this.script.state, divergence: this.divergence.state, loadout: this.loadout, rejoin: this.rejoin?.state ?? [] }),
+    };
   }
 
   restore(snap: CoreSnapshot): void {
     if (snap.kind !== 'core') throw new Error('ReplayCore.restore: not a core snapshot');
-    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[]; script: ScriptState; divergence: DivergenceState; loadout?: LoadoutState };
+    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[]; script: ScriptState; divergence: DivergenceState; loadout?: LoadoutState; rejoin?: RejoinState[] };
     if (d.seed !== this.rng.seed) throw new Error(`ReplayCore.restore: snapshot seed ${d.seed} != core seed ${this.rng.seed}`);
     const st = d.state;
     this.state = {
@@ -307,7 +352,8 @@ export class ReplayCore implements ICore {
       pawns: PLAYER_IDS.map((id) => {
         const p = st.pawns.find((q) => q.id === id);
         if (p === undefined) throw new Error(`ReplayCore.restore: no state for ${id}`);
-        return { id, mode: p.mode, since: p.since, trigger: p.trigger, everLive: p.everLive ?? p.mode === 'LIVE' };
+        const everLive = p.everLive ?? p.mode === 'LIVE';
+        return { id, mode: p.mode, since: p.since, trigger: p.trigger, everLive, blocksLifted: p.blocksLifted ?? everLive };
       }),
       resync: st.resync ?? null,
     };
@@ -317,6 +363,11 @@ export class ReplayCore implements ICore {
     this.script.restore(d.script);
     if (d.divergence === undefined || d.divergence === null) throw new Error('ReplayCore.restore: snapshot has no divergence state (made before B4)');
     this.divergence.restore(d.divergence);
+    // Snapshots from before G1 have no rejoin state: LIVE pawns then start their calm clock afresh.
+    this.rejoin?.restore(d.rejoin ?? []);
+    if (this.rejoin !== null) {
+      for (const p of this.state.pawns) if (p.mode === 'LIVE' && !this.rejoin.state.some((r) => r.id === p.id)) this.rejoin.noteLive(p.id, p.since, p.trigger ?? 'unknown');
+    }
     if (this.puppets !== null) {
       for (const c of this.puppets) {
         const ps = d.puppets.find((q) => q.id === c.id);
@@ -372,9 +423,9 @@ export class ReplayCore implements ICore {
   }
 
   /**
-   * Change a pawn's Core mode from `tick` (B4 triggers: REPLAY → LIVE; `trigger` is what did it).
-   * Scripted shots and damage involving a LIVE pawn are dropped; a LIVE pawn gets no input. The
-   * engine is told by the `set_mode` action the triggers emit, not by this.
+   * Change a pawn's Core mode from `tick` (B4 triggers: REPLAY → LIVE; G1 rejoin: LIVE → REPLAY with trigger
+   * `rejoin`; `trigger` is what did it). Scripted shots and damage involving a LIVE pawn are dropped; a LIVE pawn gets
+   * no input. The engine is told by the `set_mode` action the triggers and the rejoin emit, not by this.
    */
   protected setPawnMode(id: PlayerId, mode: SettableMode, tick: number, trigger: string | null = null): void {
     const p = this.state.pawns.find((q) => q.id === id);
@@ -382,7 +433,8 @@ export class ReplayCore implements ICore {
     if (p.mode === mode) return;
     p.mode = mode;
     p.since = tick;
-    p.trigger = mode === 'LIVE' ? trigger : null;
+    p.trigger = trigger;
+    p.blocksLifted = mode === 'LIVE';
     if (mode === 'LIVE') p.everLive = true;
   }
 
@@ -409,7 +461,7 @@ function initialState(): ReplayCoreState {
     lastTick: null,
     paused: false,
     speed: 1,
-    pawns: PLAYER_IDS.map((id) => ({ id, mode: 'REPLAY' as Mode, since: 0, trigger: null, everLive: false })),
+    pawns: PLAYER_IDS.map((id) => ({ id, mode: 'REPLAY' as Mode, since: 0, trigger: null, everLive: false, blocksLifted: false })),
     resync: null,
   };
 }

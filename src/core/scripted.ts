@@ -625,6 +625,21 @@ export interface ScriptState {
   extraEngagements: Engagement[];
   /** B4: angles held at a point (a scheduled encounter's shooter watching the recorded spot), in the order added. */
   holds: HoldItem[];
+  /**
+   * G1: every LIVE period of a pawn, in the order they began: from the tick it went LIVE to the tick it rejoined
+   * (null while LIVE). What fell inside one is dropped (docs/core.md "Rejoin"): a fire item or engagement it was in
+   * the middle of when it went LIVE, a grenade throw that overlaps it.
+   */
+  liveSpans: LiveSpan[];
+  /** G1: ticks the scripted plant (USE window and fallback) runs late: the planter rejoined inside his plant window. */
+  plantShift: number;
+}
+
+/** G1: one LIVE period of a pawn, [from, to) in ticks (`to` null while it lasts). */
+export interface LiveSpan {
+  readonly id: PlayerId;
+  readonly from: number;
+  to: number | null;
 }
 
 /**
@@ -647,7 +662,7 @@ export interface PawnMode {
 }
 
 export function initialScriptState(): ScriptState {
-  return { plantedTick: null, defuseStartedTick: null, defuseEndedTick: null, decisions: [], extraFire: [], extraEngagements: [], holds: [] };
+  return { plantedTick: null, defuseStartedTick: null, defuseEndedTick: null, decisions: [], extraFire: [], extraEngagements: [], holds: [], liveSpans: [], plantShift: 0 };
 }
 
 function copyFire(f: FireItem): FireItem {
@@ -698,7 +713,51 @@ export class ScriptedEvents {
       extraFire: s.extraFire.map(copyFire),
       extraEngagements: s.extraEngagements.map((e) => ({ ...e })),
       holds: s.holds.map((h) => ({ key: h.key, id: h.id, point: { x: h.point.x, y: h.point.y, z: h.point.z }, fromTick: h.fromTick, toTick: h.toTick })),
+      // Snapshots from before G1 have neither.
+      liveSpans: (s.liveSpans ?? []).map((x) => ({ id: x.id, from: x.from, to: x.to })),
+      plantShift: s.plantShift ?? 0,
     };
+  }
+
+  /** G1: `id` went LIVE on `tick` (opens a LIVE span). */
+  noteLive(id: PlayerId, tick: number): void {
+    this.st.liveSpans.push({ id, from: tick, to: null });
+  }
+
+  /** G1: `id` rejoined its recording on `tick` (closes its open LIVE span). */
+  noteRejoin(id: PlayerId, tick: number): void {
+    for (const x of this.st.liveSpans) if (x.id === id && x.to === null) x.to = tick;
+  }
+
+  /** G1: true when `id` was LIVE at some tick of [a, b] (inclusive). */
+  liveDuring(id: PlayerId, a: number, b: number): boolean {
+    for (const x of this.st.liveSpans) if (x.id === id && x.from <= b && (x.to === null || x.to > a)) return true;
+    return false;
+  }
+
+  /** G1: true when `id` went LIVE after `fromTick` and no later than `toTick` (an item it was in the middle of). */
+  private wentLiveDuring(id: PlayerId, fromTick: number, toTick: number): boolean {
+    for (const x of this.st.liveSpans) if (x.id === id && x.from > fromTick && x.from <= toTick) return true;
+    return false;
+  }
+
+  /**
+   * G1: the planter rejoined inside his plant window on `tick`: the USE window and the fallback run `shift` ticks
+   * late (the c4 is drawn at the rejoin, so the USE waits for its deploy). Logged when it is late at all.
+   */
+  shiftPlant(shift: number, tick: number, out: Action[]): void {
+    const pl = this.plan.plant;
+    if (pl === null || shift <= 0) return;
+    this.st.plantShift = shift;
+    out.push({ type: 'log', level: 'info', text: `script: plant by ${pl.id} runs ${tenths(shift)} s late (rejoined at tick ${tick}): USE from tick ${pl.useFrom + shift}` });
+  }
+
+  /** The plant as it runs: the plan's, moved by `plantShift` (G1). */
+  plantItem(): PlantItem | null {
+    const pl = this.plan.plant;
+    const d = this.st.plantShift;
+    if (pl === null || d === 0) return pl;
+    return { ...pl, selectTick: pl.selectTick + d, useFrom: pl.useFrom + d, useTo: pl.useTo + d, fallbackTick: pl.fallbackTick + d };
   }
 
   /** The decision for a fire item or engagement key, or null before it is made. */
@@ -811,7 +870,15 @@ export class ScriptedEvents {
         out.push({ type: 'log', level: 'info', text: `script: dropped ${what}: ${why}` });
         continue;
       }
-      out.push({ type: 'damage', attacker: e.attacker, victim: e.victim, amount: e.amount, armor: e.armor ?? 0, hitgroup: e.hitgroup, weapon: e.weapon, lethal: e.lethal });
+      // G1: a recorded non-lethal hit stays non-lethal on a pawn with less HP than the tape (a rejoined pawn hurt while
+      // LIVE): it takes it down to 1 HP, and the recorded kill comes on its tick.
+      const hp = pawnOf(o, e.victim)?.hp ?? 0;
+      const amount = e.lethal || e.amount < hp ? e.amount : hp - 1;
+      if (amount <= 0) {
+        out.push({ type: 'log', level: 'info', text: `script: dropped ${what}: ${e.victim} has ${hp} hp` });
+        continue;
+      }
+      out.push({ type: 'damage', attacker: e.attacker, victim: e.victim, amount, armor: e.armor ?? 0, hitgroup: e.hitgroup, weapon: e.weapon, lethal: e.lethal });
     }
 
     // Fire items and engagements (the plan's, then B4's run-time ones): decide on the first active tick.
@@ -838,16 +905,18 @@ export class ScriptedEvents {
 
     // Utility: select the grenade, then (after the throw) the previous weapon.
     for (const u of this.plan.utility) {
+      if (this.liveDuring(u.id, u.selectTick, u.restoreTick)) continue;
       if (tick === u.selectTick && actorOk(o, modes, u.id)) out.push({ type: 'set_weapon', id: u.id, weapon: u.kind });
       if (tick === u.restoreTick && actorOk(o, modes, u.id) && pawnOf(o, u.id)?.weapon !== u.previous) out.push({ type: 'set_weapon', id: u.id, weapon: u.previous });
     }
 
     // Plant: c4 out, USE (input), then back to the gun; fallback `plant` if the engine didn't plant.
-    const pl = this.plan.plant;
+    const pl = this.plantItem();
     if (pl !== null && actorOk(o, modes, pl.id)) {
-      if (tick === pl.selectTick) out.push({ type: 'set_weapon', id: pl.id, weapon: 'c4' });
+      if (tick === pl.selectTick && s.plantShift === 0) out.push({ type: 'set_weapon', id: pl.id, weapon: 'c4' });
       const plantedNow = s.plantedTick === tick && tick >= pl.useFrom;
-      const fallback = tick === pl.fallbackTick && s.plantedTick === null;
+      // G1: no fallback for a planter who was LIVE in the USE window (he isn't where the tape has him planting).
+      const fallback = tick === pl.fallbackTick && s.plantedTick === null && !this.liveDuring(pl.id, pl.useFrom, pl.fallbackTick);
       if (fallback) {
         out.push({ type: 'plant', id: pl.id, pos: { x: pl.pos.x, y: pl.pos.y, z: pl.pos.z } });
         out.push({ type: 'log', level: 'info', text: `script: no planted event by tick ${tick}, sending plant for ${pl.id} at (${pl.pos.x}, ${pl.pos.y}, ${pl.pos.z})` });
@@ -857,7 +926,7 @@ export class ScriptedEvents {
 
     // Defuse: USE (input); fallback `defuse_start` if the engine didn't report one.
     const df = this.plan.defuse;
-    if (df !== null && tick === df.fallbackTick && actorOk(o, modes, df.id) && s.defuseStartedTick === null && s.defuseEndedTick === null) {
+    if (df !== null && tick === df.fallbackTick && actorOk(o, modes, df.id) && s.defuseStartedTick === null && s.defuseEndedTick === null && bombInReach(o, df.id, this.tuning)) {
       out.push({ type: 'defuse_start', id: df.id });
       out.push({ type: 'log', level: 'info', text: `script: no defuse_start event by tick ${tick}, sending defuse_start for ${df.id}` });
     }
@@ -899,12 +968,12 @@ export class ScriptedEvents {
       if (hold !== null) look = lookToward(prev, p.pos, crouching, hold.point, d, r.aimTurnRateDegPerTick);
     }
 
-    const u = this.plan.utility.find((x) => x.id === p.id && tick >= x.selectTick && tick <= x.releaseTick) ?? null;
+    const u = this.plan.utility.find((x) => x.id === p.id && tick >= x.selectTick && tick <= x.releaseTick && !this.liveDuring(x.id, x.selectTick, x.restoreTick)) ?? null;
     if (u !== null && tick >= u.attackFrom) look = { yaw: look === null ? base.yaw : look.yaw, pitch: r.throwPitchDeg };
 
     let input = look === null || (look.yaw === base.yaw && look.pitch === base.pitch) ? base : withLook(base, look.yaw, look.pitch);
 
-    const pl = this.plan.plant;
+    const pl = this.plantItem();
     const planting = pl !== null && pl.id === p.id && this.st.plantedTick === null;
     const buttons: Button[] = input.buttons.filter((b) => b !== 'ATTACK');
     if (u !== null) {
@@ -923,7 +992,7 @@ export class ScriptedEvents {
   /** True if a fire item of `id` that goes ahead holds ATTACK at `tick`. */
   attacking(id: PlayerId, tick: number): boolean {
     for (const f of this.fireItemsOf(id)) {
-      if (tick < f.fromTick || tick > f.toTick || this.decision(f.key) !== true) continue;
+      if (tick < f.fromTick || tick > f.toTick || this.decision(f.key) !== true || this.wentLiveDuring(id, f.fromTick, tick)) continue;
       if (f.attack.some((a) => tick >= a.from && tick <= a.to)) return true;
     }
     return false;
@@ -933,7 +1002,7 @@ export class ScriptedEvents {
   activeEngagement(id: PlayerId, tick: number): Engagement | null {
     let best: Engagement | null = null;
     for (const e of this.engagementItemsOf(id)) {
-      if (tick < e.fromTick || tick > e.toTick || this.decision(e.key) !== true) continue;
+      if (tick < e.fromTick || tick > e.toTick || this.decision(e.key) !== true || this.wentLiveDuring(id, e.fromTick, tick)) continue;
       if (best === null || e.toTick < best.toTick || (e.toTick === best.toTick && (e.fromTick < best.fromTick || (e.fromTick === best.fromTick && compareOrdinal(e.target, best.target) < 0)))) best = e;
     }
     return best;
@@ -966,6 +1035,24 @@ function unavailable(o: Observe, modes: readonly PawnMode[], id: PlayerId): stri
   if (!p.alive) return `${id} is dead`;
   if (modeOf(modes, id) === 'LIVE') return `${id} is LIVE`;
   return null;
+}
+
+/**
+ * G1: a `defuse_start` fallback must be a defuse, not one from across the map (a LIVE T may have planted the bomb
+ * somewhere else): false only when the round shows the bomb planted at a known spot further than `bomb.defuseRange`
+ * (2D) from the defuser. An engine that reports no bomb state keeps the fallback.
+ */
+function bombInReach(o: Observe, id: PlayerId, tuning: Tuning): boolean {
+  const p = pawnOf(o, id);
+  const b = o.round.bomb;
+  if (p === undefined || b.state !== 'planted' || b.pos === null) return true;
+  return Math.hypot(b.pos.x - p.pos.x, b.pos.y - p.pos.y) <= tuning.bomb.defuseRange;
+}
+
+/** A tick count as seconds with one decimal, from integer arithmetic only (13 → "0.2"). */
+function tenths(ticks: number): string {
+  const t = Math.floor((Math.abs(ticks) * 10) / TICK_RATE + 0.5);
+  return `${ticks < 0 && t > 0 ? '-' : ''}${Math.floor(t / 10)}.${t % 10}`;
 }
 
 /** True when `id` is a puppet the script may drive this tick: alive, REPLAY and not the human. */

@@ -95,6 +95,25 @@ export interface ReplayTuning {
   checkpointSec: number;
   /** B5: checkpoints kept (automatic and on demand together); the oldest goes first. */
   checkpointMax: number;
+  /**
+   * G1 rejoin (docs/core.md "Rejoin"): a LIVE pawn may head back to its recording once nothing off-script has reached
+   * it (no damage, no unexpected enemy in sight, no unexpected gunfire heard, no shot of its own) for this long (seconds).
+   */
+  rejoinCalmSec: number;
+  /** G1: a pawn stays LIVE at least this long (seconds) before it may rejoin (hysteresis: no flicker). */
+  rejoinMinLiveSec: number;
+  /** G1: the recording must keep the pawn alive and tracked this long (seconds) after the tick it rejoins at. */
+  rejoinMinTapeSec: number;
+  /** G1: a rejoin point counts as reachable when its nav path is at most this fraction of run speed × the time left (0 < f ≤ 1). */
+  rejoinSpeedFactor: number;
+  /** G1: seconds taken off the time to a rejoin point before the speed check (reaction, acceleration, the AI's easing off). */
+  rejoinLeadSec: number;
+  /** G1: how far ahead along its recorded track (seconds) the planner looks for a rejoin point. */
+  rejoinHorizonSec: number;
+  /** G1: an approach that hasn't rejoined this long (seconds) after its target tick is planned again. */
+  rejoinLateSec: number;
+  /** G1: after a plan finds no reachable point, wait this long (seconds) before planning again. */
+  rejoinRetrySec: number;
 }
 
 /** One gun (`weapons.<id>`). Sources and the damage formula: docs/combat.md. */
@@ -382,6 +401,14 @@ const REPLAY_KEYS = [
   'dwellUnits',
   'checkpointSec',
   'checkpointMax',
+  'rejoinCalmSec',
+  'rejoinMinLiveSec',
+  'rejoinMinTapeSec',
+  'rejoinSpeedFactor',
+  'rejoinLeadSec',
+  'rejoinHorizonSec',
+  'rejoinLateSec',
+  'rejoinRetrySec',
 ] as const;
 const WEAPON_KEYS = ['damage', 'rpm', 'headshotMult', 'armorPen', 'rangeModifier', 'clip', 'reserve', 'reloadSec', 'deploySec'] as const;
 const BOMB_KEYS = [
@@ -514,7 +541,7 @@ export function parseTuning(json: unknown): Tuning {
   };
   return {
     movement,
-    replay: pickNumbers(asObject(root['replay'], 'replay'), REPLAY_KEYS, 'replay'),
+    replay: checkReplay(pickNumbers(asObject(root['replay'], 'replay'), REPLAY_KEYS, 'replay')),
     weapons,
     bomb: pickNumbers(asObject(root['bomb'], 'bomb'), BOMB_KEYS, 'bomb'),
     grenades,
@@ -525,6 +552,18 @@ export function parseTuning(json: unknown): Tuning {
     collision,
     round: pickNumbers(asObject(root['round'], 'round'), ROUND_KEYS, 'round'),
   };
+}
+
+/**
+ * G1: the rejoin keys' ranges (the others only need to be numbers): times and the lead are seconds ≥ 0, the horizon
+ * and the retry > 0, and the speed factor in (0, 1] (a pawn can't be planned faster than it runs).
+ */
+function checkReplay(r: ReplayTuning): ReplayTuning {
+  const nonNegative = ['rejoinCalmSec', 'rejoinMinLiveSec', 'rejoinMinTapeSec', 'rejoinLeadSec', 'rejoinLateSec'] as const;
+  for (const k of nonNegative) if (r[k] < 0) throw new TuningError(`replay.${k}: must be >= 0, got ${r[k]}`);
+  for (const k of ['rejoinHorizonSec', 'rejoinRetrySec'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
+  if (!(r.rejoinSpeedFactor > 0 && r.rejoinSpeedFactor <= 1)) throw new TuningError(`replay.rejoinSpeedFactor: must be in (0, 1], got ${r.rejoinSpeedFactor}`);
+  return r;
 }
 
 function parseJsonText(text: string): unknown {

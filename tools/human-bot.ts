@@ -520,14 +520,16 @@ export function describeStep(s: BotStep): string {
 
 export interface TimelineEvent {
   readonly tick: number;
-  /** `live`, `death`, `encounter`, `bomb`, `round_end`, `dropped` (B3's dropped scripted item). */
+  /** `live`, `rejoin` (G1: heading back, or back on the tape), `death`, `encounter`, `bomb`, `round_end`, `dropped` (B3's dropped scripted item). */
   readonly kind: string;
   readonly text: string;
 }
 
 /**
  * The compact scenario timeline from a run's log: every switch to LIVE (the Core's log line, which names the trigger),
- * the encounters' log lines, B3's drops (`script: dropped …`), deaths, bomb events and the round end, in tick order.
+ * G1's rejoin lines (`<id> rejoin: …` when a LIVE pawn heads back, `<id> REPLAY: rejoined …` when it is back, and a
+ * late plant), the encounters' log lines, B3's drops (`script: dropped …`), deaths, bomb events and the round end, in
+ * tick order.
  */
 export function timeline(entries: readonly LogEntry[]): TimelineEvent[] {
   const out: TimelineEvent[] = [];
@@ -541,6 +543,7 @@ export function timeline(entries: readonly LogEntry[]): TimelineEvent[] {
     for (const a of e.act.actions) {
       if (a.type !== 'log') continue;
       if (/^[a-z0-9]+ LIVE: /.test(a.text)) out.push({ tick: o.tick, kind: 'live', text: a.text });
+      else if (/^[a-z0-9]+ (REPLAY: rejoined|rejoin: )/.test(a.text) || a.text.startsWith('script: plant by ')) out.push({ tick: o.tick, kind: 'rejoin', text: a.text });
       else if (a.text.startsWith('encounter ')) out.push({ tick: o.tick, kind: 'encounter', text: a.text });
       else if (a.text.startsWith('script: dropped')) out.push({ tick: o.tick, kind: 'dropped', text: a.text });
     }
@@ -552,16 +555,26 @@ export function formatTimeline(events: readonly TimelineEvent[]): string {
   return events.map((e) => `${(e.tick / 64).toFixed(2).padStart(6)} s  ${String(e.tick).padStart(4)}  ${e.kind.padEnd(9)} ${e.text}`).join('\n');
 }
 
-/** Which pawns went LIVE in a run, with the tick and trigger from the status. */
+/**
+ * Every switch to LIVE in a run, with the tick and trigger from the status (a pawn that rejoined its recording, G1,
+ * can switch again: one entry per switch).
+ */
 export function liveSwitches(entries: readonly LogEntry[]): { id: PlayerId; tick: number; trigger: string | null }[] {
   const out: { id: PlayerId; tick: number; trigger: string | null }[] = [];
-  const seen = new Set<PlayerId>();
   for (const e of entries) {
     for (const s of e.act.status) {
-      if (s.mode !== 'LIVE' || seen.has(s.id)) continue;
-      seen.add(s.id);
+      if (s.mode !== 'LIVE' || s.sinceTick !== e.observe.tick) continue;
       out.push({ id: s.id, tick: e.observe.tick, trigger: s.trigger });
     }
   }
   return out.sort((a, b) => a.tick - b.tick || PLAYER_IDS.indexOf(a.id) - PLAYER_IDS.indexOf(b.id));
+}
+
+/** G1: every rejoin (LIVE → REPLAY) in a run, from the status (mode REPLAY with trigger `rejoin` starting on its tick). */
+export function rejoins(entries: readonly LogEntry[]): { id: PlayerId; tick: number }[] {
+  const out: { id: PlayerId; tick: number }[] = [];
+  for (const e of entries) {
+    for (const s of e.act.status) if (s.mode === 'REPLAY' && s.trigger === 'rejoin' && s.sinceTick === e.observe.tick) out.push({ id: s.id, tick: e.observe.tick });
+  }
+  return out;
 }
