@@ -551,6 +551,13 @@ export function stepMove3d(s: MoveState, input: MoveInput | null, weapon: string
     }
   }
   mv.hull = hullOf(crouching);
+  // Stuck in something (a teleport into a wall, a stance change): out to the nearest free spot first (CheckStuck).
+  if (g.hullBlocked(mv.x, mv.y, mv.z, mv.hull)) {
+    const out = unstick(g, { x: mv.x, y: mv.y, z: mv.z }, mv.hull);
+    mv.x = out.x;
+    mv.y = out.y;
+    mv.z = out.z;
+  }
 
   // 3. Jump.
   let jumped = false;
@@ -630,18 +637,35 @@ export function stepMove3d(s: MoveState, input: MoveInput | null, weapon: string
   };
 }
 
+/** `unstick`: offsets tried, nearest first (xy rings of 4 units out to 32, each at 0, +9, +18, −9, −18 in z). */
+const UNSTICK_OFFSETS: readonly (readonly [number, number, number])[] = (() => {
+  const out: [number, number, number][] = [];
+  for (const dz of [0, 9, 18, -9, -18]) {
+    for (let dy = -32; dy <= 32; dy += 4) for (let dx = -32; dx <= 32; dx += 4) if (dx * dx + dy * dy <= 32 * 32) out.push([dx, dy, dz]);
+  }
+  return out.sort((a, b) => a[0] * a[0] + a[1] * a[1] + a[2] * a[2] - (b[0] * b[0] + b[1] * b[1] + b[2] * b[2]) || a[2] - b[2] || a[0] - b[0] || a[1] - b[1]);
+})();
+
 /**
- * Put a pawn that was placed (teleported, spawned) at `pos` on the floor: the hull is traced down from `up` units
- * above `pos` to `down` units below it, and stands where it lands (on the ground if that is walkable). If even the
- * start is inside something, the position is kept as is (in the air; the movement backs out of it).
+ * Source's CheckStuck, simplified: a hull at `pos` that cuts into the mesh is moved to the nearest free position
+ * (UNSTICK_OFFSETS), or left where it is if there is none within reach. Returns the position (unchanged if free).
+ */
+export function unstick(g: MapGeometry, pos: Vec3, hull: Hull): Vec3 {
+  if (!g.hullBlocked(pos.x, pos.y, pos.z, hull)) return pos;
+  for (const [dx, dy, dz] of UNSTICK_OFFSETS) if (!g.hullBlocked(pos.x + dx, pos.y + dy, pos.z + dz, hull)) return { x: pos.x + dx, y: pos.y + dy, z: pos.z + dz };
+  return pos;
+}
+
+/**
+ * Put a pawn that was placed (teleported, spawned) at `pos` on the floor: the hull is moved out of anything it cuts
+ * into (`unstick`), traced down from `up` units above to `down` units below, and stands where it lands (on the ground
+ * if that is walkable).
  */
 export function settle(g: MapGeometry, pos: Vec3, crouching: boolean, m: MovementTuning, up = 18, down = 64): { pos: Vec3; onGround: boolean } {
   const hull = hullOf(crouching);
-  const from = { x: pos.x, y: pos.y, z: pos.z + up };
-  if (g.hullBlocked(from.x, from.y, from.z, hull)) {
-    if (g.hullBlocked(pos.x, pos.y, pos.z, hull)) return { pos: { x: pos.x, y: pos.y, z: pos.z }, onGround: false };
-    from.z = pos.z;
-  }
-  const t = g.traceBox(from, { x: pos.x, y: pos.y, z: pos.z - down }, hull);
+  const at = unstick(g, pos, hull);
+  const from = { x: at.x, y: at.y, z: at.z + up };
+  if (g.hullBlocked(from.x, from.y, from.z, hull)) from.z = at.z;
+  const t = g.traceBox(from, { x: at.x, y: at.y, z: at.z - down }, hull);
   return { pos: { x: t.endX, y: t.endY, z: t.endZ }, onGround: t.hit && t.normalZ >= m.standableNormal };
 }

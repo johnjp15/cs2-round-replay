@@ -653,16 +653,27 @@ export class PuppetController {
     return { input: { id: p.id, forward: stick.forward, side: stick.side, yaw, pitch: 0, buttons }, actions };
   }
 
-  /** The latest reference point before t + lookahead (back to steerFallbackSec before t) in walkable line from `pos`; `ahead` if none. */
+  /**
+   * The latest reference sample before t + lookahead (back to steerFallbackSec before t) in walkable line from `pos`;
+   * `ahead` if none. G3: whole samples, not every tick's interpolated point: consecutive samples are in walkable line
+   * on the snapped 3D tracks (tools/snap-tracks.ts), so a corner is a sample to steer at, and it costs a dozen queries
+   * at most instead of a hundred (the 3D WalkQuery sweeps a hull).
+   */
   private fallbackSteer(pos: Vec3, t: number, ahead: Vec3): Vec3 {
     const r = this.replay;
     const tA = t + r.lookaheadSec;
-    const first = (this.track.raw[0] as TrackSample).t;
-    const steps = Math.round((r.lookaheadSec + r.steerFallbackSec) * TICK_RATE);
-    for (let j = 1; j <= steps; j++) {
-      const tt = tA - j / TICK_RATE;
-      if (tt < first) break;
-      const q = this.track.positionAt(tt);
+    const raw = this.track.raw;
+    // Latest sample at or before tA (binary search), then back while within steerFallbackSec of t.
+    let lo = 0;
+    let hi = raw.length - 1;
+    if ((raw[0] as TrackSample).t > tA + T_EPS) return ahead;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi + 1) / 2);
+      if ((raw[mid] as TrackSample).t <= tA + T_EPS) lo = mid;
+      else hi = mid - 1;
+    }
+    for (let i = lo; i >= 0 && (raw[i] as TrackSample).t >= t - r.steerFallbackSec - T_EPS; i--) {
+      const q = this.track.ref[i] as Vec3;
       if (this.walk.isWalkableLine(pos, q)) return q;
     }
     return ahead;

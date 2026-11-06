@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, SessionLog, canonicalize, replay, stableStringify, type DamageEvent, type LogEntry, type Observe, type PlayerId } from '../src/contracts/index';
 import { ReplayCore, tickOf } from '../src/core/index';
-import { NavWalkQuery } from '../src/sim2d/index';
+import { walkQueryOf } from '../src/app/index';
 import { FOLLOW_SCRIPT, playScript } from '../tools/follow-script';
 import { NO_HUMAN, ROOT, coreLogs, deaths, loadHarnessData, runHarness, type HarnessRun } from '../tools/harness';
 import { HumanBot, ScenarioError, formatTimeline, liveSwitches, loadScenario, parseScenario, rejoins, timeline, type TimelineEvent } from '../tools/human-bot';
@@ -231,7 +231,7 @@ describe('2. cart kills Lokier about 3 s late', () => {
   });
 
   it('replays identically through a fresh Core, and a Core snapshot mid-encounter continues exactly', () => {
-    const fresh = (): ReplayCore => new ReplayCore(run.model, run.session.schedule, tuning, 1, new NavWalkQuery(data.nav));
+    const fresh = (): ReplayCore => new ReplayCore(run.model, run.session.schedule, tuning, 1, walkQueryOf(data));
     const log = SessionLog.fromText(run.log.toText());
     expect(replay(log, fresh())).toMatchObject({ identical: true, mismatchCount: 0 });
     const seen = seenTick(run) as number;

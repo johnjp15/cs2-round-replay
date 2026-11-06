@@ -54,8 +54,8 @@ import {
   type WeaponId,
 } from '../src/contracts/index';
 import { PuppetTrack, ReplayCore, startYaw, summarize as summarizeRound, tOf, tickOf, type RoundModel } from '../src/core/index';
-import { NavWalkQuery, type Sim2DHost } from '../src/sim2d/index';
-import { SLOT_WEAPONS, Session, defaultCore, parseSessionData, weaponForSlot, type CoreFactory, type SessionData, type WeaponSlot } from '../src/app/index';
+import type { Sim2DHost } from '../src/sim2d/index';
+import { SLOT_WEAPONS, Session, defaultCore, parseSessionData, walkQueryOf, weaponForSlot, type CoreFactory, type SessionData, type WeaponSlot, type World3dFiles } from '../src/app/index';
 import { HumanBot, formatTimeline, loadScenario, timeline } from './human-bot';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,20 +72,33 @@ export const BEHIND_UNITS = 24;
 
 /** The parsed data files plus their text (for the fixture manifest's hashes). */
 export interface HarnessData extends SessionData {
-  readonly sources: { readonly round: string; readonly nav: string; readonly tuning: string; readonly vision: string };
+  readonly sources: { readonly round: string; readonly nav: string; readonly tuning: string; readonly vision: string; readonly tracks: string; readonly geometry: Uint8Array; readonly clips: Uint8Array };
+}
+
+/** G3: the 3D world's files as the app loads them (docs/geometry.md). */
+export function readWorld3d(root: string = ROOT): World3dFiles {
+  return {
+    geometry: new Uint8Array(readFileSync(resolve(root, 'data/geometry/mirage-geometry.bin'))),
+    clips: new Uint8Array(readFileSync(resolve(root, 'data/geometry/mirage-clips.bin'))),
+    tracks: readFileSync(resolve(root, 'data/geometry/mirage-tracks.json'), 'utf8'),
+  };
 }
 
 export function loadHarnessData(root: string = ROOT): HarnessData {
   const read = (rel: string): string => readFileSync(resolve(root, rel), 'utf8');
+  const world3d = readWorld3d(root);
   const sources = {
     round: read('data/round.json'),
     nav: read('data/mirage-nav.json'),
     tuning: read('data/tuning.json'),
     vision: read('data/mirage-vismask.json'),
+    tracks: world3d.tracks as string,
+    geometry: world3d.geometry,
+    clips: world3d.clips,
   };
-  // The sight mask (C4) must be passed explicitly: parseSessionData defaults it to null (nav line of sight),
-  // which would make the harness and fixtures disagree with the browser app.
-  return { ...parseSessionData(sources.round, sources.nav, sources.tuning, sources.vision), sources };
+  // The sight mask (C4) and the 3D world (G3) must be passed explicitly: parseSessionData defaults them to null (nav
+  // line of sight, 2D movement), which would make the harness and fixtures disagree with the browser app.
+  return { ...parseSessionData(sources.round, sources.nav, sources.tuning, sources.vision, world3d), sources };
 }
 
 /**
@@ -437,10 +450,10 @@ export function runHarness(data: SessionData, options: HarnessOptions): HarnessR
   if (driver !== null && human === null) throw new Error('runHarness: a driver needs a human pawn');
   const t0 = performance.now();
   // The app's Core (defaultCore), or the same Core with the walk query wrapped by a recorder.
-  const recorder = options.recordWalk === true ? new RecordingWalk(new NavWalkQuery(data.nav)) : null;
+  const recorder = options.recordWalk === true ? new RecordingWalk(walkQueryOf(data)) : null;
   if (recorder !== null && options.core !== undefined) throw new Error('runHarness: core and recordWalk do not mix');
   const core: CoreFactory = recorder === null ? (options.core ?? defaultCore) : (p) => new ReplayCore(p.model, p.schedule, p.tuning, p.seed, recorder);
-  const session = new Session({ round: data.round, nav: data.nav, tuning: data.tuning, vision: data.vision, seed, human, core });
+  const session = new Session({ round: data.round, nav: data.nav, tuning: data.tuning, vision: data.vision, geometry: data.geometry ?? null, seed, human, core });
   const ticks = roundTicks(session.model, data.tuning.replay.holdLastPositionSec);
   const last = options.lastTick === 'end' ? ticks - 1 : options.lastTick;
   if (!Number.isInteger(last) || last < 0) throw new Error(`runHarness: bad last tick ${String(options.lastTick)}`);

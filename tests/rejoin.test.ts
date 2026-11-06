@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, SessionLog, canonicalize, parseTuning, replay, stableStringify, type LogEntry, type Observe, type PlayerId } from '../src/contracts/index';
 import { ReplayCore, lagTicks, runSpeedOf, tickOf, trackLength, unrestReason, type RejoinState } from '../src/core/index';
-import { NavWalkQuery } from '../src/sim2d/index';
+import { walkQueryOf } from '../src/app/index';
 import { NO_HUMAN, ROOT, coreLogs, deaths, loadHarnessData, logDigest, runHarness, type HarnessRun } from '../tools/harness';
 import { HumanBot, formatTimeline, liveSwitches, loadScenario, rejoins, timeline } from '../tools/human-bot';
 import { readFileSync } from 'node:fs';
@@ -27,7 +27,7 @@ const sec = (s: number): number => Math.floor(s * 64 + 0.5);
 
 function play(name: string, rejoin = true): HarnessRun {
   const s = loadScenario(`${ROOT}/fixtures/scenarios/${name}.json`);
-  const core = rejoin ? undefined : (p: Parameters<NonNullable<Parameters<typeof runHarness>[1]['core']>>[0]) => new ReplayCore(p.model, p.schedule, p.tuning, p.seed, new NavWalkQuery(p.nav), { divergence: true, rejoin: false });
+  const core = rejoin ? undefined : (p: Parameters<NonNullable<Parameters<typeof runHarness>[1]['core']>>[0]) => new ReplayCore(p.model, p.schedule, p.tuning, p.seed, walkQueryOf(p), { divergence: true, rejoin: false });
   return runHarness(data, { human: s.human, driver: HumanBot.fromScenario(data, s), lastTick: s.until === 'end' ? 'end' : tickOf(s.until), seed: s.seed, ...(core === undefined ? {} : { core }) });
 }
 
@@ -202,7 +202,7 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
   });
 
   it('replays identically through a fresh Core; a Core snapshot in the middle of an approach continues exactly', () => {
-    const fresh = (): ReplayCore => new ReplayCore(run.model, run.session.schedule, tuning, 1, new NavWalkQuery(data.nav));
+    const fresh = (): ReplayCore => new ReplayCore(run.model, run.session.schedule, tuning, 1, walkQueryOf(data));
     const log = SessionLog.fromText(run.log.toText());
     expect(replay(log, fresh())).toMatchObject({ identical: true, mismatchCount: 0 });
     // barely's second approach: planned on 2662, back on 2709.
@@ -314,7 +314,7 @@ describe('the planter heading back into his plant window (Rejoin.step on golden 
   const tracks = (core: ReplayCore) => PLAYER_IDS.map((id) => core.puppet(id)?.track ?? (() => { throw new Error(id); })());
 
   function approach(): { core: ReplayCore; logs: { tick: number; actions: unknown[] }[]; spot: { x: number; y: number } } {
-    const core = new ReplayCore(run0.model, run0.session.schedule, tuning, 1, new NavWalkQuery(data.nav));
+    const core = new ReplayCore(run0.model, run0.session.schedule, tuning, 1, walkQueryOf(data));
     const rj = core.rejoin as NonNullable<ReplayCore['rejoin']>;
     rj.noteLive('barely', 1400, 'sighting');
     const spot = { x: -1700, y: 300 }; // east of B site, off his track
@@ -381,7 +381,7 @@ describe('the planter heading back into his plant window (Rejoin.step on golden 
   });
 
   it('a planter whose window has passed with the bomb unplanted does not rejoin: his AI keeps the plant', () => {
-    const core = new ReplayCore(run0.model, run0.session.schedule, tuning, 1, new NavWalkQuery(data.nav));
+    const core = new ReplayCore(run0.model, run0.session.schedule, tuning, 1, walkQueryOf(data));
     const rj = core.rejoin as NonNullable<ReplayCore['rejoin']>;
     const e = golden.entries[1700] as LogEntry;
     const o: Observe = { ...e.observe, round: { ...e.observe.round, bomb: { ...e.observe.round.bomb, state: 'carried', carrier: 'barely', plantTick: null, pos: null } } };

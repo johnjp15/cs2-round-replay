@@ -5,7 +5,8 @@
  * No file I/O here: callers read the file and pass the parsed JSON (or its text).
  * Portable style (docs/port-notes.md): readonly plain data. The only optional
  * fields in the repo are `TrackSample.uncertainty` and `TrackSample.resampled`,
- * because the generated file omits them; read them as nullable.
+ * because the generated file omits them, and (G3) `TrackSample.jump`, which only
+ * `applyTracks3d` (src/contracts/tracks3d.ts) sets; read them as nullable.
  */
 import { PLAYER_IDS, TEAMS, WEAPON_IDS, isPlayerId, type PlayerId, type Team, type Vec3, type WeaponId } from './types';
 
@@ -122,6 +123,11 @@ export interface TrackSample {
   readonly uncertainty?: number;
   /** True when this 10 Hz grid sample was linearly interpolated from off-grid source samples. */
   readonly resampled?: boolean;
+  /**
+   * G3: the player jumps from here to the next sample (a climb only a jump makes on CS2 Mirage; `crouch` = a crouch
+   * jump). Not in round.json: `applyTracks3d` sets it from data/geometry/mirage-tracks.json.
+   */
+  readonly jump?: 'plain' | 'crouch';
 }
 
 export interface YawSample {
@@ -436,6 +442,7 @@ function checkSample(value: unknown, path: string): number {
   oneOf(s['confidence'], CONFIDENCES, `${path}.confidence`);
   if (s['uncertainty'] !== undefined) num(s['uncertainty'], `${path}.uncertainty`);
   if (s['resampled'] !== undefined) bool(s['resampled'], `${path}.resampled`);
+  if (s['jump'] !== undefined) oneOf(s['jump'], ['plain', 'crouch'] as const, `${path}.jump`);
   return s['t'] as number;
 }
 
