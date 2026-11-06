@@ -1,8 +1,9 @@
 /**
  * ReplayCore: the ICore that replays the recording. It sets the round up, drives
- * every REPLAY pawn along its recorded track (B2 puppets, src/core/puppet.ts) and
- * reports status. B3 (scripted events) extends it through the `scheduledActions`
- * hook. See docs/core.md "ReplayCore" and "Puppets".
+ * every REPLAY pawn along its recorded track (B2 puppets, src/core/puppet.ts), makes
+ * the puppets act the recording (B3 scripted events, src/core/scripted.ts: aim, fire,
+ * damage, weapons, utility, plant, defuse) and reports status. See docs/core.md
+ * "ReplayCore", "Puppets" and "Scripted events".
  */
 import {
   PLAYER_IDS,
@@ -19,6 +20,7 @@ import {
   type PawnObs,
   type PawnStatus,
   type PlayerId,
+  type SettableMode,
   type Tuning,
   type WalkQuery,
 } from '../contracts/index';
@@ -26,6 +28,7 @@ import { RoundClock } from './clock';
 import { PuppetController, PuppetTrack, type PuppetState } from './puppet';
 import type { RoundModel } from './round-model';
 import type { EventSchedule } from './schedule';
+import { ScriptedEvents, type ScriptState } from './scripted';
 import { startActions, startYaw } from './start-state';
 
 /** Per-pawn status bookkeeping. */
@@ -68,6 +71,8 @@ export class ReplayCore implements ICore {
    * still), as in B1. Tests with fake hosts that don't model the map use that.
    */
   private readonly puppets: readonly PuppetController[] | null;
+  /** B3: the scripted events plan, its per-tick rules and its state (bomb events seen, decisions made). */
+  readonly script: ScriptedEvents;
   private state: ReplayCoreState;
 
   /**
@@ -80,6 +85,7 @@ export class ReplayCore implements ICore {
     this.clock = new RoundClock(model.meta.clock0, model.meta.bombTimerSec);
     this.rng = new Rng(seed);
     this.puppets = walk === null ? null : PLAYER_IDS.map((id) => new PuppetController(PuppetTrack.fromModel(model, schedule, tuning, id), tuning, walk));
+    this.script = new ScriptedEvents(model, schedule, tuning);
     this.state = initialState();
   }
 
@@ -97,16 +103,19 @@ export class ReplayCore implements ICore {
         p.since = o.tick;
       }
       if (this.puppets !== null) for (const c of this.puppets) c.reset(startYaw(this.model, c.id).yaw);
+      this.script.reset();
+      for (const a of this.script.blockActions(o, s.pawns)) actions.push(a);
     }
 
     const byId = new Map<PlayerId, PawnObs>();
     for (const p of o.pawns) byId.set(p.id, p);
 
-    // Status: DEAD once the engine reports the pawn dead, REPLAY otherwise.
+    // Status: DEAD once the engine reports the pawn dead; otherwise LIVE stays LIVE (B4 sets it
+    // through setPawnMode) and anything else is REPLAY.
     for (const p of s.pawns) {
       const obs = byId.get(p.id);
       if (obs === undefined) continue;
-      const mode: Mode = obs.alive ? 'REPLAY' : 'DEAD';
+      const mode: Mode = !obs.alive ? 'DEAD' : p.mode === 'LIVE' ? 'LIVE' : 'REPLAY';
       if (mode !== p.mode) {
         p.mode = mode;
         p.since = o.tick;
@@ -115,12 +124,16 @@ export class ReplayCore implements ICore {
 
     this.scheduledActions(o, actions);
 
-    // Inputs for every REPLAY pawn (alive, not the human's, not LIVE), in id order.
+    // Inputs for every REPLAY pawn (alive, not the human's, not LIVE), in id order:
+    // the puppet's movement (B2), then the scripted look and buttons (B3).
     const inputs: PawnInput[] = [];
     for (const p of s.pawns) {
       const obs = byId.get(p.id);
       if (obs === undefined || !obs.alive || p.id === o.human || p.mode !== 'REPLAY') continue;
-      inputs.push(this.pawnInput(obs, o, actions));
+      const c = this.puppet(p.id);
+      const prevYaw = c?.state.yaw ?? obs.yaw;
+      const base = this.pawnInput(obs, o, actions);
+      inputs.push(s.setupThisStep ? base : this.scriptedInput(base, obs, o, prevYaw));
     }
 
     const status: PawnStatus[] = s.pawns.map((p) => ({ id: p.id, mode: p.mode, trigger: null, sinceTick: p.since }));
@@ -133,6 +146,7 @@ export class ReplayCore implements ICore {
       case 'start':
       case 'restart':
         this.state = { ...initialState(), paused: this.state.paused, speed: this.state.speed, setupPending: true };
+        this.script.reset();
         return;
       case 'pause':
         this.state.paused = c.paused;
@@ -161,6 +175,13 @@ export class ReplayCore implements ICore {
     return this.puppets === null ? null : (this.puppets.find((c) => c.id === id) ?? null);
   }
 
+  /** A pawn's Core mode (REPLAY, LIVE or DEAD). */
+  modeOf(id: PlayerId): Mode {
+    const p = this.state.pawns.find((q) => q.id === id);
+    if (p === undefined) throw new Error(`ReplayCore.modeOf: unknown pawn ${id}`);
+    return p.mode;
+  }
+
   /** Snaps since the last start / restart, all pawns. */
   get snapCount(): number {
     let n = 0;
@@ -170,12 +191,12 @@ export class ReplayCore implements ICore {
 
   snapshot(): CoreSnapshot {
     const puppets: PuppetState[] = this.puppets === null ? [] : this.puppets.map((c) => c.state);
-    return { kind: 'core', data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets }) };
+    return { kind: 'core', data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets, script: this.script.state }) };
   }
 
   restore(snap: CoreSnapshot): void {
     if (snap.kind !== 'core') throw new Error('ReplayCore.restore: not a core snapshot');
-    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[] };
+    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[]; script: ScriptState };
     if (d.seed !== this.rng.seed) throw new Error(`ReplayCore.restore: snapshot seed ${d.seed} != core seed ${this.rng.seed}`);
     const st = d.state;
     this.state = {
@@ -191,6 +212,8 @@ export class ReplayCore implements ICore {
         return { id, mode: p.mode, since: p.since };
       }),
     };
+    if (d.script === undefined || d.script === null) throw new Error('ReplayCore.restore: snapshot has no scripted-events state (made before B3)');
+    this.script.restore(d.script);
     if (this.puppets !== null) {
       for (const c of this.puppets) {
         const ps = d.puppets.find((q) => q.id === c.id);
@@ -224,12 +247,37 @@ export class ReplayCore implements ICore {
   }
 
   /**
-   * B3 (scripted events) hook: append this tick's actions for scheduled entries
-   * (`this.schedule.at(o.tick)`), after the setup actions. B1 adds none.
+   * B3 (scripted events): append this tick's scripted actions (damage, weapons, grenade
+   * selection, plant / defuse fallbacks, drop logs) after the setup actions. See
+   * `ScriptedEvents.actions`.
    */
   protected scheduledActions(o: Observe, actions: Action[]): void {
-    void o;
-    void actions;
+    this.script.actions(o, this.state.pawns, actions);
+  }
+
+  /**
+   * B3: the scripted look (aim, defuse, grenade pitch) and buttons (ATTACK, USE) on top of the
+   * puppet's movement input, for every REPLAY pawn except on the setup step. The commanded yaw
+   * is written back to the puppet, so its turn limit continues from where the aim left it.
+   * `prevYaw` is the puppet's last commanded yaw (before this tick's movement input).
+   */
+  protected scriptedInput(base: PawnInput, p: PawnObs, o: Observe, prevYaw: number): PawnInput {
+    const input = this.script.input(base, p, o, prevYaw);
+    const c = this.puppet(p.id);
+    if (c !== null) c.state.yaw = input.yaw;
+    return input;
+  }
+
+  /**
+   * Change a pawn's Core mode from `tick` (B4 triggers: REPLAY <-> LIVE). Scripted shots and
+   * damage involving a LIVE pawn are dropped; a LIVE pawn gets no input.
+   */
+  protected setPawnMode(id: PlayerId, mode: SettableMode, tick: number): void {
+    const p = this.state.pawns.find((q) => q.id === id);
+    if (p === undefined) throw new Error(`ReplayCore.setPawnMode: unknown pawn ${id}`);
+    if (p.mode === mode) return;
+    p.mode = mode;
+    p.since = tick;
   }
 }
 

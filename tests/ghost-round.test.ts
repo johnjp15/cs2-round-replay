@@ -1,6 +1,7 @@
 /**
- * Ghost round: ReplayCore (B1 + B2 puppets) drives all ten pawns in Sim2DHost for the
- * whole round with no human, and every path is measured against the raw recording.
+ * Ghost round: ReplayCore (B1 + B2 puppets + B3 scripted events) drives all ten pawns in
+ * Sim2DHost for the whole round with no human, and every path is measured against the raw
+ * recording. B3's own checks (kills, HP, shots) are in tests/scripted-round.test.ts.
  * Run with `--reporter=verbose` to see the table (also in docs/core.md "Puppets").
  */
 import { describe, expect, it } from 'vitest';
@@ -56,7 +57,12 @@ describe('ghost round (no human, all ten pawns puppets)', () => {
 
   it('converts to a replay-page trace with all ten tracks', () => {
     const trace = toReplayTrace(run.log);
-    for (const id of PLAYER_IDS) expect(trace.tracks[DISPLAY_IDS[id]]?.length, id).toBeGreaterThan(600);
-    expect(trace.events.filter((e) => e.kind === 'info')).toHaveLength(run.snaps.length);
+    // A trace track ends at the pawn's death (B3 kills everyone but sp4rtan on the recorded tick).
+    for (const id of PLAYER_IDS) {
+      const p = inputs.round.players.find((q) => q.id === id);
+      const end = Math.min(p?.deathT ?? Infinity, inputs.round.tracks[id]?.endT ?? 0);
+      expect(trace.tracks[DISPLAY_IDS[id]]?.length, id).toBeGreaterThanOrEqual(Math.floor(end * 10));
+    }
+    expect(trace.events.filter((e) => e.kind === 'info' && e.text.startsWith('puppet '))).toHaveLength(run.snaps.length);
   });
 });

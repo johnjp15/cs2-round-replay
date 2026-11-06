@@ -342,6 +342,42 @@ function shotConfidence(raw: string): Confidence {
   return 'observed';
 }
 
+/**
+ * A switch row's note can name the switch back (donk, 49.93 s: "AWP quick-switch after his 49.85 shot;
+ * back to AWP at 50.083"). Returns the weapon and time, or null when the note doesn't say.
+ */
+export function switchBack(note: string, owner: PlayerId): { t: number; weapon: WeaponId; name: string } | null {
+  const m = /\bback to (.+?) at (\d+(?:\.\d+)?)\b/.exec(note);
+  if (!m) return null;
+  const name = (m[1] as string).trim();
+  const t = Number(m[2]);
+  if (!Number.isFinite(t)) throw new Error(`bad switch-back time in note: ${note}`);
+  return { t, weapon: weapon(name, owner), name };
+}
+
+/**
+ * The page's weapon timeline plus the weapon switches only the shots CSV knows: every `switch` row (raw
+ * `"<CSV weapon> (shots CSV)"`) and the switch back named in its note (raw `"<weapon> (shots CSV note)"`).
+ * Points are sorted by time; on a tie the page's point comes first. A CSV point that repeats the page's
+ * (same tick and weapon) is not added.
+ */
+function weaponTimeline(id: PlayerId, rows: [number, string][], shots: readonly Shot[]): WeaponTimelinePoint[] {
+  const page = rows.map(([t, raw]): WeaponTimelinePoint => {
+    const w = weaponOrNull(raw);
+    return { t, tick: toTick(t), weapon: id === 'lokier' && w === 'awp' ? 'ssg08' : w, raw };
+  });
+  const extra: WeaponTimelinePoint[] = [];
+  for (const s of shots) {
+    if (s.kind !== 'switch' || s.shooter !== id || s.t === null) continue;
+    extra.push({ t: s.t, tick: toTick(s.t), weapon: s.weapon, raw: `${s.raw['weapon'] ?? s.weapon} (shots CSV)` });
+    const back = switchBack(s.raw['note'] ?? '', id);
+    if (back !== null) extra.push({ t: back.t, tick: toTick(back.t), weapon: back.weapon, raw: `${back.name} (shots CSV note)` });
+  }
+  const out = [...page];
+  for (const p of extra) if (!out.some((q) => q.tick === p.tick && q.weapon === p.weapon)) out.push(p);
+  return out.map((p, i) => ({ p, i })).sort((a, b) => a.p.t - b.p.t || a.i - b.i).map((x) => x.p);
+}
+
 function buildShots(csv: string): Shot[] {
   const rows = parseCsv(csv);
   const header = rows[0];
@@ -607,15 +643,7 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
   const timelines: RoundData['timelines'] = {
     hp: sortedRecord(byId(src.hp).map(([id, rows]): [PlayerId, TimelinePoint[]] => [id, points(rows)])),
     money: sortedRecord(byId(src.money).map(([id, rows]): [PlayerId, TimelinePoint[]] => [id, points(rows)])),
-    weapon: sortedRecord(
-      byId(src.weapons).map(([id, rows]): [PlayerId, WeaponTimelinePoint[]] => [
-        id,
-        rows.map(([t, raw]) => {
-          const w = weaponOrNull(raw);
-          return { t, tick: toTick(t), weapon: id === 'lokier' && w === 'awp' ? 'ssg08' : w, raw };
-        }),
-      ]),
-    ),
+    weapon: sortedRecord(byId(src.weapons).map(([id, rows]): [PlayerId, WeaponTimelinePoint[]] => [id, weaponTimeline(id, rows, shots)])),
   };
 
   const events = src.events.map(

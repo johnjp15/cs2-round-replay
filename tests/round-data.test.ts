@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { buildRound, parseCsv } from '../tools/extract-round';
+import { buildRound, parseCsv, switchBack } from '../tools/extract-round';
 import type { PlayerId, RoundData } from '../src/contracts/index';
 import { validateRound } from '../tools/validate-round';
 
@@ -141,6 +141,19 @@ describe('data/round.json', () => {
     expect(p('lokier')?.role).toBe('hold_b');
     expect(p('barely')?.roles).toEqual(['take_b', 'planter']);
     expect(round.players.filter((x) => x.isHumanDefault).map((x) => x.id)).toEqual(['cart']);
+  });
+
+  it('puts the shots CSV switches into the weapon timeline, including the switch back only its note names', () => {
+    // CSV row 19: "donk, Glock-18, switch" at 49.93 s, note "AWP quick-switch after his 49.85 shot; back to AWP at 50.083".
+    expect(round.timelines.weapon['donk']).toEqual([
+      { t: 0, tick: 0, weapon: 'awp', raw: 'AWP' },
+      { t: 49.93, tick: 3196, weapon: 'glock', raw: 'Glock-18 (shots CSV)' },
+      { t: 50.083, tick: 3205, weapon: 'awp', raw: 'AWP (shots CSV note)' },
+    ]);
+    const switches = round.shots.filter((s) => s.kind === 'switch');
+    expect(switches.map((s) => [s.shooter, s.weapon, s.tick])).toEqual([['donk', 'glock', 3196]]);
+    expect(switchBack(switches[0]?.raw['note'] ?? '', 'donk')).toEqual({ t: 50.083, weapon: 'awp', name: 'AWP' });
+    expect(switchBack('no switch back here', 'donk')).toBeNull();
   });
 
   it('never gives Lokier an AWP', () => {

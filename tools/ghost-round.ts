@@ -1,8 +1,9 @@
 /**
  * Ghost round: the whole recorded round with no human. ReplayCore drives all ten pawns
  * as puppets in Sim2DHost, and each pawn's path is measured against the raw recording.
- * Without B3 nobody dies, so each pawn is measured up to its recorded death tick and is
- * no longer driven once its track (plus the hold) ends.
+ * Each pawn is measured up to its recorded death tick (with B3 it also dies there) and
+ * is no longer driven once its track (plus the hold) ends. The same run, with B3's
+ * scripted events checked (kills, HP, shots), is `npm run scripted` (tools/scripted-round.ts).
  *
  *   npm run ghost        # writes logs/ghost-round.jsonl and logs/ghost-trace.json, prints the table
  *
@@ -97,12 +98,23 @@ export interface GhostRun {
   readonly inputs: GhostInputs;
   readonly model: RoundModel;
   readonly core: ReplayCore;
+  /** The engine after the last tick (for its `unhandled()` notes and `combatLog()`). */
+  readonly host: Sim2DHost;
   readonly log: SessionLog;
   readonly ticks: number;
   /** positions[tick][i] = pawn PLAYER_IDS[i] at `tick`, after that tick's actions (setup, snaps) and before its move. */
   readonly positions: readonly (readonly Vec3[])[];
   /** Puppet snaps (teleports after the setup tick), in order. */
   readonly snaps: readonly Snap[];
+  /** Body blocks (C3 collision): a pawn whose move on `tick` an enemy cut short (`host.blockedBy`), in order. */
+  readonly bodyBlocks: readonly BodyBlock[];
+}
+
+export interface BodyBlock {
+  readonly id: PlayerId;
+  /** The engine tick whose move was cut. */
+  readonly tick: number;
+  readonly by: PlayerId;
 }
 
 /** Ticks to run: one past the latest track end plus the hold, so every sample can be interpolated. */
@@ -116,17 +128,24 @@ export function runGhostRound(inputs: GhostInputs = loadGhostInputs(), ticks: nu
   const { round, tuning, nav } = inputs;
   const model = new RoundModel(round);
   const core = new ReplayCore(model, new EventSchedule(round), tuning, GHOST_SEED, new NavWalkQuery(nav));
-  const host = new Sim2DHost(nav, tuning, model.players.map((p) => ({ id: p.id, team: p.team })));
+  // Like the Session: the round's score before it (CT 11 – T 15) and its clock at t = 0 (98.25 s).
+  const host = new Sim2DHost(nav, tuning, model.players.map((p) => ({ id: p.id, team: p.team })), { score: round.meta.score, roundTimeSec: round.meta.clock0 });
   host.setHuman(null);
   const n = ticks ?? ghostTicks(model, tuning);
   const positions: Vec3[][] = [];
   const snaps: Snap[] = [];
+  const bodyBlocks: BodyBlock[] = [];
   const log = drive(host, core, n, new Map([[0, [{ type: 'start' }]]]), (o, a) => {
     positions.push(host.observe().pawns.map((p) => p.pos));
     if (o.tick === 0) return;
+    // blockedBy describes the previous tick's move (this tick's move hasn't run yet).
+    for (const id of PLAYER_IDS) {
+      const by = host.blockedBy(id);
+      if (by !== null) bodyBlocks.push({ id, tick: o.tick - 1, by });
+    }
     for (const x of a.actions) if (x.type === 'teleport') snaps.push({ id: x.id, tick: o.tick });
   });
-  return { inputs, model, core, log, ticks: n, positions, snaps };
+  return { inputs, model, core, host, log, ticks: n, positions, snaps, bodyBlocks };
 }
 
 // ---------------------------------------------------------------------------
