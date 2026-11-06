@@ -16,6 +16,7 @@ import {
   type Button,
   type Control,
   type HostSnapshot,
+  type HostCapabilities,
   type IHost,
   type Observe,
   type ObsEvent,
@@ -71,6 +72,9 @@ interface StubPawn {
 
 class StubHost implements IHost {
   tick = 0;
+  capabilities(): HostCapabilities {
+    return { snapshot: true, seek: true, speed: true };
+  }
   readonly human: PlayerId | null;
   readonly deaths: ReadonlyMap<PlayerId, number>;
   readonly events: ReadonlyMap<number, readonly ObsEvent[]>;

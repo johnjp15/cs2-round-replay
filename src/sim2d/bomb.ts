@@ -17,6 +17,7 @@ import {
   compareOrdinal,
   roundNumber,
   type BombEvent,
+  type BombObs,
   type BombState,
   type BombTuning,
   type DefuseStartAction,
@@ -127,6 +128,40 @@ export function freshBomb(): BombData {
     defusedBy: null,
     defusedTick: null,
   };
+}
+
+/**
+ * B5 (`set_round`, resync rewind): the bomb as an Observe shows it, at observe tick `tick`. What the contract carries
+ * comes back (state, position, plant tick and with it the explode tick and the beeps, who defused it and when); a plant
+ * or defuse in progress does not (CS2 can't restore one either): it starts again if USE is still held. The c4 item is
+ * the inventories' business (`strip` / `give`). `planter` is not observed and stays null.
+ */
+export function bombFromObs(o: BombObs, tick: number, bt: BombTuning): BombData {
+  const fresh = freshBomb();
+  const pos = o.pos === null ? null : copyVec(o.pos);
+  switch (o.state) {
+    case 'carried':
+      return fresh;
+    case 'dropped':
+      return { ...fresh, state: 'dropped', pos };
+    case 'planted':
+    case 'defused':
+    case 'exploded': {
+      if (o.plantTick === null) return { ...fresh, state: o.state, pos };
+      const explodeTick = ticksAfter(o.plantTick, bt.timerSec);
+      const done = o.state !== 'planted';
+      return {
+        ...fresh,
+        state: o.state,
+        pos,
+        plantTick: o.plantTick,
+        explodeTick,
+        nextBeepTick: done ? null : nextBeep(tick, explodeTick, bt),
+        defusedBy: o.state === 'defused' ? o.defuser : null,
+        defusedTick: o.state === 'defused' ? o.defuseEndTick : null,
+      };
+    }
+  }
 }
 
 /** Planted and neither defused nor exploded. */

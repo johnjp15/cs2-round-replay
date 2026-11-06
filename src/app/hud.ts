@@ -13,7 +13,9 @@
  * - Bottom left: cart's HP, armor, weapon and ammo.
  * - Bottom right: frame rate and tick rate.
  *
- * `occupiedRects()` reports where all this is on the stage, so the renderer keeps pawn labels out of it.
+ * `occupiedRects()` reports where all this is on the stage, so the renderer keeps pawn labels out of it, together with
+ * B5's end-of-round summary (`#summary`, over the map: a side panel, or a bottom sheet on phones) and the timeline
+ * (`#timeline`, below the map today) while they show.
  */
 import type { PlayerId, RoundData, Team } from '../contracts/index';
 import type { RoundClock } from '../core/index';
@@ -83,6 +85,8 @@ export class Hud {
   private readonly perf: HTMLElement;
   private readonly scoreboard: HTMLElement;
   private readonly panelToggle: HTMLElement;
+  /** Other page elements over (or next to) the map that labels keep out of: B5's summary overlay and timeline. */
+  private readonly others: HTMLElement[];
   /** The HUD's rectangles after the last update (stage CSS px). */
   private occupied: ScreenRect[] = [];
   private readonly last = new Map<HTMLElement, string>();
@@ -111,6 +115,7 @@ export class Hud {
     this.perf = el('perf', HTMLElement);
     this.scoreboard = el('scoreboard', HTMLElement);
     this.panelToggle = el('panel-toggle', HTMLElement);
+    this.others = ['summary', 'timeline'].map((id) => document.getElementById(id)).filter((e): e is HTMLElement => e !== null);
     el('ct-name', HTMLElement).textContent = round.meta.teams.CT;
     el('t-name', HTMLElement).textContent = round.meta.teams.T;
     el('panel-toggle', HTMLButtonElement).addEventListener('click', (e) => {
@@ -140,7 +145,8 @@ export class Hud {
 
   /**
    * Where the HUD is on the stage (CSS px, the canvas's coordinates), as of the last update: the scoreboard, the
-   * kill feed (when it has rows), the status panel (its button when collapsed), your status and the rates.
+   * kill feed (when it has rows), the status panel (its button when collapsed), your status, the rates, and the
+   * summary overlay and the timeline when they show (a hidden element has no size and is left out).
    */
   occupiedRects(): readonly ScreenRect[] {
     return this.occupied;
@@ -158,6 +164,7 @@ export class Hud {
     add(this.panel);
     add(this.you);
     if (this.perf.textContent !== '') add(this.perf);
+    for (const e of this.others) add(e);
     return out;
   }
 

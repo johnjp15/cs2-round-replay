@@ -22,7 +22,30 @@ export interface CoreSnapshot {
   readonly data: JsonValue;
 }
 
+/**
+ * What an engine can do beyond observe / apply (B5, contract finding F6). The driver (the app's Session, the CS2
+ * plugin) asks once and degrades: without `snapshot` a rewind restores the Core and resyncs the engine through
+ * actions (`ReplayCore` "resync"), without `seek` it can't run ticks faster than real time (seek forward is refused;
+ * seek back is a rewind), without `speed` the `speed` control is refused. Sim2DHost: all true. CS2 adapter: all false.
+ */
+export interface HostCapabilities {
+  /** snapshot() / restore() put the engine back exactly (velocities, grenades in flight, bomb progress, timers). */
+  readonly snapshot: boolean;
+  /** The driver may step ticks back to back without waiting for real time (seek forward, as fast as possible). */
+  readonly seek: boolean;
+  /** The engine can run at another rate than real time (the `speed` control). */
+  readonly speed: boolean;
+}
+
+/** Sim2DHost's capabilities (everything). */
+export const ALL_CAPABILITIES: HostCapabilities = { snapshot: true, seek: true, speed: true };
+
+/** What the CS2 adapter returns (docs/cs2-adapter.md F6): a live server can't snapshot, fast-forward or change rate. */
+export const CS2_CAPABILITIES: HostCapabilities = { snapshot: false, seek: false, speed: false };
+
 export interface IHost {
+  /** B5: what this engine can do (constant for its lifetime). */
+  capabilities(): HostCapabilities;
   observe(): Observe;
   apply(act: Act): void;
   control(c: Control): void;

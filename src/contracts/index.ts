@@ -79,6 +79,8 @@ export type {
   DefuseStartAction,
   DefuseStopAction,
   EndRoundAction,
+  SetRoundAction,
+  StripAction,
   LogAction,
   Action,
   ActionType,
@@ -95,7 +97,8 @@ export type {
   ControlType,
 } from './types';
 
-export type { IHost, ICore, HostSnapshot, CoreSnapshot } from './host';
+export { ALL_CAPABILITIES, CS2_CAPABILITIES } from './host';
+export type { IHost, ICore, HostSnapshot, CoreSnapshot, HostCapabilities } from './host';
 export type { WalkQuery } from './walk';
 
 export { TICKS_PER_SEC, toTick, CONFIDENCES, GRENADE_IDS, SHOT_KINDS, RoundDataError, parseRound } from './round';
@@ -148,3 +151,6 @@ export type { ReplayResult, ReplayDiff } from './replayer';
 
 export { toReplayTrace, DISPLAY_IDS, TRACE_SAMPLE_TICKS } from './trace';
 export type { ReplayTrace, TraceSample, TraceKill, TraceEvent, TracePlayer } from './trace';
+
+export { KILL_STATUSES } from './summary';
+export type { KillStatus, KillRow, SwitchRow, RoundResult, BombSummary, PlayerStats, SummaryVerdict, RoundSummary } from './summary';

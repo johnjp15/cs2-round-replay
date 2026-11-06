@@ -28,7 +28,9 @@ import {
 } from '../contracts/index';
 import { RoundClock, TICK_RATE } from './clock';
 import { Divergence, type DivergenceState } from './divergence';
+import { copyLoadouts, initialLoadouts, noteActions, noteObserve, releaseWindowTicks, type LoadoutState } from './loadout';
 import { PuppetController, PuppetTrack, type PuppetState } from './puppet';
+import { resyncActions, resyncHazards, type StandingBlock } from './resync';
 import type { RoundModel } from './round-model';
 import type { EventSchedule } from './schedule';
 import { ScriptedEvents, type ScriptState } from './scripted';
@@ -42,6 +44,8 @@ interface PawnState {
   since: number;
   /** B4: the trigger that made the pawn LIVE (`TriggerKind`), else null. */
   trigger: string | null;
+  /** B5: went LIVE this run (its damage blocks were lifted then), also once DEAD. */
+  everLive: boolean;
 }
 
 /** ReplayCore options (tools and tests). */
@@ -67,6 +71,11 @@ interface ReplayCoreState {
   pawns: PawnState[];
   /** True on the step that emits the setup (puppets hold still: the observe predates the teleports). */
   setupThisStep: boolean;
+  /**
+   * B5: set by `rewind {id}` (the driver restored this Core's checkpoint snapshot, but the engine has no snapshot):
+   * the next step resyncs the engine to its observe first (`resyncActions`). The checkpoint id, else null.
+   */
+  resync: string | null;
 }
 
 export class ReplayCore implements ICore {
@@ -92,6 +101,8 @@ export class ReplayCore implements ICore {
   /** False when built with `{divergence: false}`: no trigger is evaluated, no pawn goes LIVE by itself. */
   readonly divergenceOn: boolean;
   private state: ReplayCoreState;
+  /** B5: the loadout ledger (src/core/loadout.ts), for resync rewinds. In the snapshot. */
+  private loadout: LoadoutState;
 
   /**
    * @param walk the engine's walkable-line query (2D sim: `NavWalkQuery`); null = no puppet movement.
@@ -108,12 +119,15 @@ export class ReplayCore implements ICore {
     this.divergence = new Divergence(model, schedule, this.script.plan, tuning);
     this.divergenceOn = options === null || options.divergence;
     this.state = initialState();
+    this.loadout = initialLoadouts(model);
   }
 
   step(o: Observe): Act {
     const s = this.state;
     const actions: Action[] = [];
     s.setupThisStep = false;
+    // B5: the ledger notes what this observe shows (held ammo, pops, the c4); the setup's observe predates the setup.
+    if (!s.setupPending) noteObserve(this.loadout, o, releaseWindowTicks(this.tuning.grenades));
     if (s.setupPending) {
       for (const a of startActions(this.model, this.tuning)) actions.push(a);
       s.setupPending = false;
@@ -123,7 +137,9 @@ export class ReplayCore implements ICore {
         p.mode = 'REPLAY';
         p.since = o.tick;
         p.trigger = null;
+        p.everLive = false;
       }
+      this.loadout = initialLoadouts(this.model);
       if (this.puppets !== null) for (const c of this.puppets) c.reset(startYaw(this.model, c.id).yaw);
       this.script.reset();
       this.divergence.reset();
@@ -147,6 +163,13 @@ export class ReplayCore implements ICore {
       }
     }
 
+    // B5: a resync rewind puts the engine back to this observe before anything else in the Act.
+    let prefix: Action[] = [];
+    if (s.resync !== null) {
+      prefix = resyncActions(this.model, this.tuning, o, s.pawns, this.loadout, this.standingBlocks(), s.resync);
+      s.resync = null;
+    }
+
     // B4: the triggers and the scheduled encounters (not on the setup step: that observe predates the setup).
     if (this.divergenceOn && !s.setupThisStep) {
       for (const h of this.divergence.step(o, s.pawns, this.references(o.tick), this.script, actions)) this.setPawnMode(h.id, 'LIVE', o.tick, h.trigger);
@@ -168,7 +191,9 @@ export class ReplayCore implements ICore {
 
     const status: PawnStatus[] = s.pawns.map((p) => ({ id: p.id, mode: p.mode, trigger: p.trigger, sinceTick: p.since }));
     s.lastTick = o.tick;
-    return { inputs, actions, status };
+    const all = prefix.length === 0 ? actions : [...prefix, ...actions];
+    noteActions(this.loadout, all);
+    return { inputs, actions: all, status };
   }
 
   control(c: Control): void {
@@ -185,11 +210,47 @@ export class ReplayCore implements ICore {
         if (!Number.isFinite(c.x) || c.x <= 0) throw new RangeError(`speed: expected a positive multiplier, got ${c.x}`);
         this.state.speed = c.x;
         return;
-      case 'seek':
+      // B5. Checkpoints and seeking are the driver's work: a checkpoint is this Core's snapshot() (plus the engine's,
+      // when it has one), a seek steps every tick as usual. The Core only checks them.
       case 'checkpoint':
+        checkId(c.type, c.id);
+        return;
+      case 'seek':
+        if (!Number.isFinite(c.t) || c.t < 0) throw new RangeError(`seek: expected seconds >= 0, got ${c.t}`);
+        return;
+      // The driver has restored this Core to the checkpoint (restore()), and the engine could not be: the next step
+      // resyncs it (resyncActions). With an engine snapshot the driver restores both and sends nothing.
       case 'rewind':
-        throw new Error(`${c.type}: not implemented until B5`);
+        checkId(c.type, c.id);
+        this.state.resync = c.id;
+        return;
     }
+  }
+
+  /**
+   * B5: why a resync rewind to a checkpoint taken at observe `o` (before its step) would not reproduce the round from
+   * there; empty when it would. A driver without engine snapshots skips such checkpoints (resyncHazards).
+   */
+  checkpointHazards(o: Observe): string[] {
+    const pl = this.script.plan.plant;
+    const planter = pl === null ? null : this.state.pawns.find((p) => p.id === pl.id);
+    const onScript = planter !== undefined && planter !== null && planter.id !== o.human && planter.mode === 'REPLAY';
+    return resyncHazards(o, pl, onScript);
+  }
+
+  /** B5: the loadout ledger (read only; tests and tools). */
+  loadouts(): LoadoutState {
+    return copyLoadouts(this.loadout);
+  }
+
+  /** B4 encounter blocks in force (the scripted hit's block_damage shooter → human, not yet lifted). */
+  private standingBlocks(): StandingBlock[] {
+    const out: StandingBlock[] = [];
+    const st = this.divergence.state.encounters;
+    this.divergence.encounters.forEach((e, i) => {
+      if (st[i]?.blocked === true) out.push({ attacker: e.shooter, victim: e.victim });
+    });
+    return out;
   }
 
   get paused(): boolean {
@@ -228,12 +289,12 @@ export class ReplayCore implements ICore {
 
   snapshot(): CoreSnapshot {
     const puppets: PuppetState[] = this.puppets === null ? [] : this.puppets.map((c) => c.state);
-    return { kind: 'core', data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets, script: this.script.state, divergence: this.divergence.state }) };
+    return { kind: 'core', data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets, script: this.script.state, divergence: this.divergence.state, loadout: this.loadout }) };
   }
 
   restore(snap: CoreSnapshot): void {
     if (snap.kind !== 'core') throw new Error('ReplayCore.restore: not a core snapshot');
-    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[]; script: ScriptState; divergence: DivergenceState };
+    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[]; script: ScriptState; divergence: DivergenceState; loadout?: LoadoutState };
     if (d.seed !== this.rng.seed) throw new Error(`ReplayCore.restore: snapshot seed ${d.seed} != core seed ${this.rng.seed}`);
     const st = d.state;
     this.state = {
@@ -246,9 +307,12 @@ export class ReplayCore implements ICore {
       pawns: PLAYER_IDS.map((id) => {
         const p = st.pawns.find((q) => q.id === id);
         if (p === undefined) throw new Error(`ReplayCore.restore: no state for ${id}`);
-        return { id, mode: p.mode, since: p.since, trigger: p.trigger };
+        return { id, mode: p.mode, since: p.since, trigger: p.trigger, everLive: p.everLive ?? p.mode === 'LIVE' };
       }),
+      resync: st.resync ?? null,
     };
+    // Snapshots from before B5 have no ledger: start it empty (a resync from one gives knives only).
+    this.loadout = d.loadout === undefined ? initialLoadouts(this.model) : copyLoadouts(d.loadout);
     if (d.script === undefined || d.script === null) throw new Error('ReplayCore.restore: snapshot has no scripted-events state (made before B3)');
     this.script.restore(d.script);
     if (d.divergence === undefined || d.divergence === null) throw new Error('ReplayCore.restore: snapshot has no divergence state (made before B4)');
@@ -319,6 +383,7 @@ export class ReplayCore implements ICore {
     p.mode = mode;
     p.since = tick;
     p.trigger = mode === 'LIVE' ? trigger : null;
+    if (mode === 'LIVE') p.everLive = true;
   }
 
   /**
@@ -344,6 +409,11 @@ function initialState(): ReplayCoreState {
     lastTick: null,
     paused: false,
     speed: 1,
-    pawns: PLAYER_IDS.map((id) => ({ id, mode: 'REPLAY' as Mode, since: 0, trigger: null })),
+    pawns: PLAYER_IDS.map((id) => ({ id, mode: 'REPLAY' as Mode, since: 0, trigger: null, everLive: false })),
+    resync: null,
   };
+}
+
+function checkId(type: string, id: string): void {
+  if (typeof id !== 'string' || id === '') throw new Error(`${type}: expected a checkpoint id, got ${JSON.stringify(id)}`);
 }

@@ -14,6 +14,7 @@ import {
   type CoreSnapshot,
   type HostSnapshot,
   type ICore,
+  type HostCapabilities,
   type IHost,
   type Observe,
   type ObsEvent,
@@ -74,6 +75,11 @@ export class ScriptedHost implements IHost {
       hp: 100,
       alive: true,
     }));
+  }
+
+  /** A test double that can snapshot (B5); the CS2 capabilities are tested through Session. */
+  capabilities(): HostCapabilities {
+    return { snapshot: true, seek: true, speed: true };
   }
 
   observe(): Observe {

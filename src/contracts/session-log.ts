@@ -16,6 +16,8 @@ export interface LogEntry {
 
 export class SessionLog {
   private readonly entries: string[] = [];
+  /** observe.tick of every line, so head() needs no parse. */
+  private readonly ticks: number[] = [];
   /** First line index for each tick (ticks may repeat after a rewind). */
   private readonly firstIndexByTick = new Map<number, number>();
 
@@ -51,6 +53,16 @@ export class SessionLog {
     return index === undefined ? null : this.at(index);
   }
 
+  /** B5: a new log with this log's first `n` lines (shared, not re-parsed): a rewind cuts the log back with it. */
+  head(n: number): SessionLog {
+    const out = new SessionLog();
+    const end = Math.max(0, Math.min(n, this.entries.length));
+    for (let i = 0; i < end; i++) {
+      out.push(this.entries[i] as string, this.ticks[i] as number);
+    }
+    return out;
+  }
+
   /** FNV-1a 32-bit (UTF-8) of toText(), 8 hex digits. */
   digest(): string {
     return fnv1a32Hex(this.toText());
@@ -72,6 +84,7 @@ export class SessionLog {
   private push(line: string, tick: number): void {
     if (!this.firstIndexByTick.has(tick)) this.firstIndexByTick.set(tick, this.entries.length);
     this.entries.push(line);
+    this.ticks.push(tick);
   }
 }
 

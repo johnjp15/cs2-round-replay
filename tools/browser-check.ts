@@ -19,17 +19,23 @@
  *  6. an iPhone-sized viewport (390×844, touch, DPR 3): starts in spectate mode, screenshot (d); then zoomed in
  *     about the Ts near the top of the map, no pawn label may overlap the HUD (scoreboard, kill feed, panel,
  *     status card), screenshot (d2);
- *  6b. labels and the HUD on the desktop: at 1000×700 the kill feed (three kills at 12.8 s) must not cover the
- *     scoreboard, screenshot (e); with cart idle the 2D AI's LIVE pawns show their behaviour, target and goal in
- *     the status panel and their path with the tracks overlay, screenshot (f);
+ *  6b. labels and the HUD on the desktop: at 900×700 the kill feed (kills at 12.8 s) must not cover the
+ *     scoreboard, screenshot (g); with cart idle the 2D AI's LIVE pawns show their behaviour, target and goal in
+ *     the status panel and their path with the tracks overlay, screenshot (h);
  *  7. checks determinism: the phone's spectate log has the same digest as a Node run of the same
  *     length, and the desktop's downloaded log (with a human) replays identically against a fresh Core;
  *  8. golden parity (E1): the no-human round runs in the page (`?human=none`, the app's own loop at 4×) to
  *     20 s, and its log through tick 1280 has the digest of the Node harness's (tools/harness.ts) at
  *     the same tick; so does the whole log the page made (to the tick it paused on);
- *  9. fails on console errors, page errors or requests to other origins.
+ *  9. B5, rewind and summary: plays cart (no input) at 4×, rewinds with `[`, the −10 s button and by dragging the
+ *     timeline, checks the rewound log is one straight run that replays in Node, seeks to 66 s and waits for the
+ *     summary overlay 2 s after the round end (screenshot e), closes and reopens it, uses its Rewind 10 s; the same
+ *     spectating (screenshot e2, "Played it like the tape") and on the phone (screenshot f). With the overlay showing
+ *     (desktop and phone) it is one of the HUD's rectangles and no pawn label overlaps it (F);
+ * 10. fails on console errors, page errors or requests to other origins.
  *
  *   npx tsx tools/browser-check.ts --only parity    # just step 8 (about 10 s)
+ *   npx tsx tools/browser-check.ts --only b5        # just step 9
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
@@ -133,6 +139,25 @@ async function labelsClearOfHud(page: Page, what: string, problems: string[]): P
   if (hit.length > 0) problems.push(`${what}: ${hit.length} pawn labels overlap the HUD`);
 }
 
+/**
+ * With the summary overlay showing: it must be one of the HUD's rectangles the renderer keeps labels out of (as must the
+ * timeline), and no pawn label of the last frame may overlap any of them.
+ */
+async function summaryClearOfLabels(page: Page, what: string, problems: string[]): Promise<void> {
+  const rects = await page.evaluate(() => {
+    const [hud, sum, tl] = ['hud', 'summary', 'timeline'].map((id) => document.getElementById(id)?.getBoundingClientRect() ?? null);
+    return { hud: hud ?? null, sum: sum ?? null, tl: tl ?? null };
+  });
+  const st = await stats(page);
+  const base = rects.hud;
+  const listed = (r: DOMRect | null): boolean =>
+    r !== null && base !== null && st.labels.hud.some((h) => Math.abs(h.x - (r.x - base.x)) < 1 && Math.abs(h.y - (r.y - base.y)) < 1 && Math.abs(h.w - r.width) < 1 && Math.abs(h.h - r.height) < 1);
+  console.log(`${what}: summary ${rects.sum === null ? 'missing' : `${rects.sum.width.toFixed(0)}×${rects.sum.height.toFixed(0)} at y ${rects.sum.y.toFixed(0)}`} in the HUD rects ${listed(rects.sum)}, timeline in them ${listed(rects.tl)}`);
+  if (!listed(rects.sum)) problems.push(`${what}: the summary overlay is not among the HUD rectangles`);
+  if (!listed(rects.tl)) problems.push(`${what}: the timeline is not among the HUD rectangles`);
+  await labelsClearOfHud(page, what, problems);
+}
+
 async function clockText(page: Page): Promise<string> {
   return page.evaluate(() => {
     const s = window.__cs2replay?.session();
@@ -205,6 +230,154 @@ async function goldenParity(browser: Awaited<ReturnType<typeof chromium.launch>>
   if (b.all !== nodeAll || b.lines !== node.ticks) problems.push(`golden parity: whole log Chrome ${b.all} (${b.lines}) != Node ${nodeAll} (${node.ticks})`);
 }
 
+interface B5State {
+  tick: number;
+  seeking: boolean;
+  summaryOpen: boolean;
+  checkpoints: number;
+  phase: string;
+  logLines: number;
+  headline: string;
+}
+
+async function b5(page: Page): Promise<B5State> {
+  return page.evaluate(() => {
+    const h = window.__cs2replay;
+    if (h === undefined) throw new Error('no hook');
+    const st = h.stats();
+    return {
+      tick: st.tick,
+      seeking: st.seeking,
+      summaryOpen: st.summaryOpen,
+      checkpoints: st.checkpoints,
+      phase: st.phase,
+      logLines: h.session().log().length,
+      headline: document.getElementById('sum-head')?.textContent ?? '',
+    };
+  });
+}
+
+async function landed(page: Page, ms = 30_000): Promise<B5State> {
+  await page.waitForFunction(() => window.__cs2replay?.stats().seeking === false, null, { timeout: ms, polling: 'raf' });
+  return b5(page);
+}
+
+/** Drag the timeline thumb to video second `t` (mouse). */
+async function dragTimeline(page: Page, t: number): Promise<void> {
+  const box = await page.locator('#scrub .scrub-track').boundingBox();
+  if (box === null) throw new Error('no timeline');
+  const span = Number(await page.getAttribute('#scrub', 'aria-valuemax'));
+  const x = box.x + (box.width * t) / span;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width * 0.1, y);
+  await page.mouse.down();
+  await page.mouse.move((box.x + x) / 2, y, { steps: 4 });
+  await page.mouse.move(x, y, { steps: 4 });
+  await page.mouse.up();
+}
+
+/** Step 9 (B5). */
+async function rewindAndSummary(browser: Awaited<ReturnType<typeof chromium.launch>>, problems: string[]): Promise<void> {
+  // Desktop, cart played by nobody (he stands where the setup put him): history changes.
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  watch(page, problems);
+  await page.goto(ORIGIN + '/?seed=1');
+  await page.waitForFunction(() => window.__cs2replay !== undefined);
+  await page.click('button[data-speed="4"]');
+  await page.click('#start');
+  await waitTick(page, 24 * 64);
+  const before = await b5(page);
+  await page.keyboard.press('BracketLeft');
+  const afterKey = await landed(page);
+  console.log(`[ key: tick ${before.tick} -> ${afterKey.tick} (${afterKey.phase}), log ${afterKey.logLines} lines, ${afterKey.checkpoints} checkpoints`);
+  if (Math.abs(before.tick - 320 - afterKey.tick) > 40) problems.push(`[ did not seek 5 s back: ${before.tick} -> ${afterKey.tick}`);
+  if (afterKey.phase !== 'running') problems.push(`after [ the round is ${afterKey.phase}, not running`);
+  await page.click('#pause');
+  const p0 = await b5(page);
+  await page.click('#back10');
+  const afterBtn = await landed(page);
+  console.log(`-10 s button: tick ${p0.tick} -> ${afterBtn.tick} (${afterBtn.phase})`);
+  if (Math.abs(p0.tick - 640 - afterBtn.tick) > 2) problems.push(`-10 s did not seek 10 s back: ${p0.tick} -> ${afterBtn.tick}`);
+  if (afterBtn.phase !== 'paused') problems.push(`after -10 s while paused the round is ${afterBtn.phase}`);
+  await dragTimeline(page, 60);
+  const t0 = Date.now();
+  const afterDrag = await landed(page, 60_000);
+  console.log(`timeline drag to 60 s: tick ${afterDrag.tick} in ${Date.now() - t0} ms (seek ahead, chunked per frame), log ${afterDrag.logLines} lines, ${afterDrag.checkpoints} checkpoints`);
+  if (Math.abs(afterDrag.tick - 3840) > 8) problems.push(`timeline drag landed on tick ${afterDrag.tick}, not ~3840`);
+  await shoot(page, 'e0-desktop-timeline');
+  // The rewound log is one straight run: it replays against a fresh Core.
+  const text = await page.evaluate(() => window.__cs2replay?.session().log().toText() ?? '');
+  const log = SessionLog.fromText(text);
+  const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'));
+  const ref = new Session({ ...data, seed: 1 });
+  const rp = replay(log, defaultCore({ model: ref.model, schedule: ref.schedule, tuning: data.tuning, seed: 1, nav: data.nav }));
+  const straight = log.lines().every((l, i) => (JSON.parse(l) as { observe: { tick: number } }).observe.tick === i);
+  console.log(`page log after the rewinds: ${log.length} lines, straight ${straight}, replays in Node ${rp.identical}`);
+  if (!straight || !rp.identical) problems.push(`rewound page log: straight ${straight}, replays ${rp.identical} (first mismatch ${rp.firstMismatchTick})`);
+  // To the round end and the summary.
+  await page.click('#pause');
+  await page.waitForFunction(() => window.__cs2replay?.stats().summaryOpen === true, null, { timeout: 60_000 });
+  const shown = await b5(page);
+  const timing = await page.evaluate(() => {
+    const t = performance.now();
+    const s = window.__cs2replay?.summary();
+    return { ms: performance.now() - t, verdict: s?.verdict, kills: s?.kills.length };
+  });
+  console.log(`summary overlay at tick ${shown.tick}: "${shown.headline}" (summarize() in the page: ${timing.ms.toFixed(0)} ms, ${timing.kills} kill rows)`);
+  await page.waitForTimeout(400);
+  await summaryClearOfLabels(page, 'desktop summary', problems);
+  await shoot(page, 'e-desktop-summary');
+  const later = await b5(page);
+  if (later.tick <= shown.tick) problems.push('the round stopped under the summary overlay');
+  await page.click('#sum-keep');
+  if ((await b5(page)).summaryOpen) problems.push('Keep watching did not close the summary');
+  await page.click('#summary-open');
+  if (!(await b5(page)).summaryOpen) problems.push('the Summary button did not reopen it');
+  const r0 = await b5(page);
+  await page.click('#sum-rewind');
+  const r1 = await landed(page);
+  console.log(`summary Rewind 10 s: tick ${r0.tick} -> ${r1.tick}, overlay ${r1.summaryOpen ? 'open' : 'closed'}`);
+  if (r1.summaryOpen || Math.abs(r0.tick - 640 - r1.tick) > 40) problems.push(`summary Rewind 10 s: ${r0.tick} -> ${r1.tick}, open ${r1.summaryOpen}`);
+  await page.close();
+
+  // Desktop, spectating: the tape.
+  const spec = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  watch(spec, problems);
+  await spec.goto(ORIGIN + '/?human=none&seed=1');
+  await spec.waitForFunction(() => window.__cs2replay !== undefined);
+  await spec.click('button[data-speed="2"]');
+  await spec.click('#start');
+  await spec.evaluate(() => window.__cs2replay?.seek(66));
+  await spec.waitForFunction(() => window.__cs2replay?.stats().summaryOpen === true, null, { timeout: 60_000 });
+  const tape = await b5(spec);
+  console.log(`spectating: "${tape.headline}" at tick ${tape.tick}`);
+  if (tape.headline !== 'Played it like the tape: CT defuse, 0.72 s left') problems.push(`spectate summary headline: ${tape.headline}`);
+  await spec.waitForTimeout(300);
+  await shoot(spec, 'e2-desktop-summary-spectate');
+  await spec.close();
+
+  // Phone (touch, spectate): the bottom sheet.
+  const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  watch(phone, problems);
+  await phone.goto(ORIGIN + '/');
+  await phone.waitForFunction(() => window.__cs2replay !== undefined);
+  await phone.tap('button[data-speed="2"]');
+  await phone.tap('#start');
+  await waitTick(phone, 5 * 64);
+  const ph0 = await b5(phone);
+  await phone.tap('#back5');
+  const ph1 = await landed(phone);
+  console.log(`phone -5 s: tick ${ph0.tick} -> ${ph1.tick}`);
+  if (ph1.tick >= ph0.tick) problems.push(`phone -5 s did not rewind: ${ph0.tick} -> ${ph1.tick}`);
+  await phone.evaluate(() => window.__cs2replay?.seek(66));
+  await phone.waitForFunction(() => window.__cs2replay?.stats().summaryOpen === true, null, { timeout: 60_000 });
+  await phone.waitForTimeout(300);
+  console.log(`phone summary: "${(await b5(phone)).headline}"`);
+  await summaryClearOfLabels(phone, 'phone summary', problems);
+  await shoot(phone, 'f-phone-summary');
+  await phone.close();
+}
+
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
   const server = startPreview();
@@ -219,7 +392,12 @@ async function main(): Promise<void> {
       await browser.close();
       return;
     }
-    if (ONLY !== '') throw new Error(`--only: expected parity, got ${ONLY}`);
+    if (ONLY === 'b5') {
+      await rewindAndSummary(browser, problems);
+      await browser.close();
+      return;
+    }
+    if (ONLY !== '') throw new Error(`--only: expected parity or b5, got ${ONLY}`);
 
     // 1. Desktop: ready, then running at 1x.
     const desk = await browser.newPage({ viewport: { width: 1280, height: 860 } });
@@ -462,7 +640,7 @@ async function main(): Promise<void> {
     await shoot(phone, 'd2-phone-zoomed-labels');
     await phone.close();
 
-    // 6b. (e) A narrower desktop window: the kill feed moves below the scoreboard instead of covering it.
+    // 6b. (g) A narrower desktop window: the kill feed moves below the scoreboard instead of covering it.
     const narrow = await browser.newPage({ viewport: { width: 900, height: 700 } });
     watch(narrow, problems);
     await narrow.goto(ORIGIN + '/?human=none');
@@ -486,10 +664,10 @@ async function main(): Promise<void> {
     if (boxes.rows < 2) problems.push(`narrow desktop: expected kills in the feed at 12.8 s, got ${boxes.rows}`);
     if (meets(boxes.feed, boxes.board)) problems.push('narrow desktop: the kill feed covers the scoreboard');
     await labelsClearOfHud(narrow, 'narrow desktop', problems);
-    await shoot(narrow, 'e-desktop-narrow-killfeed');
+    await shoot(narrow, 'g-desktop-narrow-killfeed');
     await narrow.close();
 
-    // (f) LIVE pawns' AI state in the status panel and their paths (tracks on): cart stays in Back Alley, so Lokier
+    // (h) LIVE pawns' AI state in the status panel and their paths (tracks on): cart stays in Back Alley, so Lokier
     //     outlives his recording at 21.8 s and goes LIVE, and the Ts who see him follow.
     const live = await browser.newPage({ viewport: { width: 1280, height: 860 } });
     watch(live, problems);
@@ -516,7 +694,7 @@ async function main(): Promise<void> {
     console.log(`LIVE AI in the panel at ${await clockText(live)} (${panel.live} LIVE): ${panel.rows.map((t) => JSON.stringify(t)).join(', ')}`);
     if (panel.live < 1 || panel.rows.length !== panel.live) problems.push(`status panel: ${panel.rows.length} AI lines for ${panel.live} LIVE pawns`);
     await labelsClearOfHud(live, 'desktop with the panel open', problems);
-    await shoot(live, 'f-desktop-live-aidebug');
+    await shoot(live, 'h-desktop-live-aidebug');
     await live.close();
 
     // 7. Determinism, Node vs. Chrome.
@@ -533,6 +711,9 @@ async function main(): Promise<void> {
 
     // 8. Golden parity: the no-human round in Chrome against the Node harness.
     await goldenParity(browser, problems);
+
+    // 9. B5: rewind, seek and the summary overlay.
+    await rewindAndSummary(browser, problems);
 
     await browser.close();
   } finally {

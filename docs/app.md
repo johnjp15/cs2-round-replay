@@ -10,7 +10,9 @@ the only requests are the page's own assets.
 
 | File | What it does | DOM? |
 | --- | --- | --- |
-| `session.ts` | `Session`: owns `Sim2DHost`, `ReplayCore` and the `SessionLog`; runs a tick; controls, human input, weapon-slot queue, restart, snapshot/restore, log and trace. `parseSessionData()` parses the data files (and the sight mask, C4). | no |
+| `session.ts` | `Session`: owns `Sim2DHost`, `ReplayCore` and the `SessionLog`; runs a tick; controls, human input, weapon-slot queue, restart, snapshot/restore, log and trace; (B5) capabilities, checkpoints, rewind, seek. `parseSessionData()` parses the data files (and the sight mask, C4). | no |
+| `timeline.ts` | B5: the timeline scrubber's pure mapping (tick ↔ bar fraction ↔ pointer, video time, `[` / `]`, seek progress) and `TimelineDom`, the bar under the map. | mapping no, `TimelineDom` yes |
+| `summary-overlay.ts` | B5: `summaryView` (a Core `RoundSummary` → display strings), `summaryDue` (2 s after the round end) and `SummaryOverlay`, the end-of-round card. | view no, overlay yes |
 | `loop.ts` | `FixedLoop`: 64 Hz accumulator, speed 0.25–4×, pause, per-frame cap. `RateMeter` for fps / ticks-per-second. | no |
 | `input.ts` | Pure keyboard/mouse → `PawnInput` mapping, key bindings, `weaponForSlot`. | no |
 | `radar.ts` | World ↔ radar ↔ screen transforms, `fitView`, yaw → screen direction. | no |
@@ -29,7 +31,7 @@ the only requests are the page's own assets.
 
 The DOM-free files hold the logic and are unit-tested in Node (`tests/session.test.ts`,
 `tests/loop.test.ts`, `tests/input.test.ts`, `tests/scene.test.ts`, `tests/camera.test.ts`,
-`tests/effects.test.ts`, `tests/hud-model.test.ts`).
+`tests/effects.test.ts`, `tests/hud-model.test.ts`; B5: `tests/rewind.test.ts`, `tests/timeline.test.ts`).
 
 ```
 requestAnimationFrame(now)
@@ -65,9 +67,10 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
 - **Controls** go to Core when `control()` is called and are logged on the next step's line.
   - `start`, `pause`, `speed`: to Core only. The driver paces them (`FixedLoop`); Sim2DHost has no use
     for them.
-  - `seek`, `checkpoint`, `rewind`: to Core (it throws "not implemented until B5") and then to the host.
+  - `checkpoint {id}`, `rewind {id}`, `seek {t}` (B5): `checkpoint()`, `rewind()`, `seek()` below. Driver work,
+    not logged (a resync rewind logs the `rewind` it sends the Core).
   - `restart`: `Session.restart()`.
-  - A control Core rejects (speed ≤ 0, B5 controls) throws and is not logged.
+  - A control Core rejects (speed ≤ 0) throws and is not logged; so does `speed` without the speed capability.
 - **Human input.** `setHumanInput(input | null)` forwards to `Sim2DHost.setHumanInput`; the input
   persists until replaced. `null` hands cart back to Core. It throws while spectating.
 - **Weapon slots (app-side action queue).** Keys 1–5 call `requestWeaponSlot(slot)`. On the next step
@@ -89,6 +92,19 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
   - Rebuilding a log costs a re-parse: about 0.11 s per 1,000 ticks (580 ms for a full round in Node).
     Restoring to the current log, or to an empty one, is free. B5's in-log rewinds (repeated ticks plus
     a `rewind` control) are a different mechanism.
+- **B5: capabilities, checkpoints, rewind, seek** (`docs/core.md` "Checkpoints, rewind, summary"):
+  - `capabilities` = the host's `capabilities()` and-ed with `SessionConfig.capabilities` (tests pass
+    `{snapshot: false}` to rewind as on a CS2 server).
+  - `step()` takes an automatic checkpoint before the step of every `replay.checkpointSec` multiple;
+    `checkpoint(id)` takes one now. `checkpoints` (a `CheckpointStore`) keeps the last `replay.checkpointMax`.
+  - `rewind(id)`: exact (host and Core restored, log cut back) or, without the snapshot capability, a resync on
+    the next step (Core restored, log cut back, `rewind` sent to the Core, `observe()` and `tick` report the
+    checkpoint until that step). `checkpointFor(tick)` is the target a seek uses (without hazards when resyncing).
+  - `seek(t)` (Node) or `beginSeek(t)` + `advanceSeek(maxTicks)` (the app, per animation frame), `seeking`,
+    `cancelSeek()`, `rewindBy(sec)`. A seek back rewinds to `checkpointFor(t)` first. The human's inputs and weapon
+    slots are recorded by tick; what he did after a rewind target becomes the **tape** (`tapeEnd`), and a forward
+    seek replays it, so scrubbing back and forth lands where a straight run would, byte for byte. The first live
+    step (not a seek) discards it. Pause and speed controls are not replayed (they don't change an Act).
 - **Core factory.** `SessionConfig.core` (default `defaultCore`) builds the Core from
   `{model, schedule, tuning, seed, nav}`. If B2 adds a nav-based `WalkQuery` parameter to
   `ReplayCore`, `defaultCore` is the one line to change.
@@ -137,7 +153,23 @@ their default blocked, except with ⌘ held, so Mac shortcuts still work. On Win
 not let a page block Ctrl+W/T/N: crouch with C there. All keys are released when the window loses
 focus. The grenade cycle order (he → flash → smoke → molotov) has not been checked against CS2.
 
-**Controls bar:** Start (from the ready state), Pause/Resume, Restart (back to ready), speed
+**Timeline (B5)**, the bar under the map: the played part filled, the checkpoints as marks (automatic dim, on demand
+amber), the round end in green, the human's replayable future (the tape) dashed. Drag (or tap) to seek; on the
+focused bar ←/→ seek 1 s, Page Up/Down 5 s, Home/End to the ends. **−10 s**, **−5 s** and **+5 s** beside it,
+and the keys **`[`** / **`]`** (5 s back / ahead). A seek stops the loop and runs `advanceSeek` for about 10 ms
+per animation frame (the bar reads "Seeking N %"), then the Scene restarts where it landed and the round goes on
+running if it was running (else paused). Seeking ahead past what the human played lets go of his keys. Measured in
+headless Chrome: the drag from 0:09 to 1:00 (3,240 ticks) took 1.5 s at 60 fps.
+
+**Summary overlay (B5)**: 2 s of round time after the round end (`summaryDue`) a card opens bottom right (a
+bottom sheet on phones) with the headline, this run against the recording (result, bomb), the kill table (same, Δt,
+✗ didn't happen with why, soon, new), who went LIVE (time, trigger, reason) and the player's stats (kills, damage
+dealt and taken, time alive, metres RMS off his recording), with **Rewind 10 s**, **Restart** and **Keep watching**.
+It doesn't pause anything: the post-round kill (69.4 s) still happens behind it and the card refreshes when it
+lands. Escape, × or Keep watching close it; the **Summary** button (enabled once the round is over) brings it
+back. A rewind to before the round end closes it.
+
+**Controls bar:** Start (from the ready state), Pause/Resume, Restart (back to ready), Summary (B5), speed
 0.25/0.5/1/2/4×, the view toggles Follow / Ghost / Tracks / Panel (the F, G, T and Tab keys, as
 buttons for touch), Spectate (rebuilds the session with `human: null` or `cart` and returns to ready),
 Download log (JSONL), Download trace (JSON). Downloads are `Blob` URLs. Tab toggles the panel only
@@ -316,9 +348,9 @@ Screenshots and downloads go to `logs/browser-check/` (gitignored). Results in h
   they sit under the scoreboard and the kill feed: 4 labels drawn, 2 left out, **0 overlapping the HUD** (before F, the
   check:locked phone screenshot had barely's and eradicate's labels under the scoreboard). donk's label moves below
   his dot, out from under the clock.
-- **(e) Desktop 900×700 at 12.8 s** (F, `e-desktop-narrow-killfeed`): the kill feed (2 rows) moves below the scoreboard
+- **(g) Desktop 900×700 at 12.8 s** (F, `g-desktop-narrow-killfeed`): the kill feed (2 rows) moves below the scoreboard
   (rows from y 84; the scoreboard ends at y 78) instead of covering its right end; 0 labels overlap the HUD.
-- **(f) LIVE AI in the panel** (F, `f-desktop-live-aidebug`, cart idle in Back Alley, tracks on): at 1:17 Lokier
+- **(h) LIVE AI in the panel** (F, `h-desktop-live-aidebug`, cart idle in Back Alley, tracks on): at 1:17 Lokier
   (outlived) and barely (sees him) are LIVE; their panel lines read "reacting · target lokier (out of sight) · plant →
   (−1873, 396)" and "reacting · target barely · hold", and their paths show on the map.
 - **Determinism:** the spectate log from Chrome has the same digest as a Node run of the same length,
@@ -330,7 +362,17 @@ Screenshots and downloads go to `logs/browser-check/` (gitignored). Results in h
   the controls the page logged (`8a6f3b52` with F's cover; it was `2b8dc5fb` on B4's main, the `045fe7ec` here before
   was C4's), and so does the page's whole log (`e5b41166` for 1,293 lines; the length depends on where the page
   paused).
+- **(e) B5: rewind and summary** (`--only b5` runs just this): cart played by nobody at 4×: `[` at 24 s seeks to
+  19 s and keeps running; −10 s while paused lands 10 s back, paused; dragging the timeline to 1:00 lands on tick
+  3,839 in 1.5 s; the page's log after all that is one straight run (every line's tick its index) that replays
+  identically in Node. The summary opens 2 s after the round end ("You changed history: Ts win by elimination
+  (recorded: CT defuse)", `e-desktop-summary`) while the round goes on; Keep watching closes it, Summary reopens it,
+  its Rewind 10 s goes back 10 s and closes it. Spectating: "Played it like the tape: CT defuse, 0.72 s left"
+  (`e2-desktop-summary-spectate`). Phone (390×844, touch): −5 s by tap, and the summary as a bottom sheet
+  (`f-phone-summary`). `summarize()` of a 4,000-line log takes ~80 ms in the page.
 - No console errors, and no requests outside the page's origin.
+
+![End-of-round summary, desktop: cart left idle changes history (headless Chrome, 1280×860)](img/app-summary-desktop.jpg)
 
 **Safari (macOS / iOS) was not tested**: there is no WebKit in this environment. Things to check on
 the iPhone are the layout with Safari's toolbars (`100dvh`, safe areas), downloads (iOS shows a
@@ -354,5 +396,6 @@ download sheet for the Blob link), and the JavaScriptCore vs. V8 numeric caveat 
   Act (the app calls `observe()` right after every step, and the host builds it twice per tick); an
   `effects()` on Session would save the app reaching into `session.host`; and a per-tick `events`
   stream (or the Act's `log` actions with their tick) would let the Scene skip re-reading.
-- `window.__cs2replay` has `stats()` (now with overlays, camera and radar-cache rebuilds), `session()`,
-  `scene()` and `screenOf(x, y)`; `tools/browser-check.ts` uses them.
+- `window.__cs2replay` has `stats()` (now with overlays, camera and radar-cache rebuilds; B5: `seeking`,
+  `summaryOpen`, `checkpoints`), `session()`, `scene()`, `screenOf(x, y)` and (B5) `summary()` (the
+  `RoundSummary` of the run so far) and `seek(t)`; `tools/browser-check.ts` uses them.

@@ -91,6 +91,10 @@ export interface ReplayTuning {
   blockedSec: number;
   /** A T's guard spot after the plant is its longest recorded stay within this radius (units, 2D). */
   dwellUnits: number;
+  /** B5: the driver takes an automatic checkpoint every this many seconds of round time (at tick multiples). */
+  checkpointSec: number;
+  /** B5: checkpoints kept (automatic and on demand together); the oldest goes first. */
+  checkpointMax: number;
 }
 
 /** One gun (`weapons.<id>`). Sources and the damage formula: docs/combat.md. */
@@ -376,6 +380,8 @@ const REPLAY_KEYS = [
   'contactSlackUnits',
   'blockedSec',
   'dwellUnits',
+  'checkpointSec',
+  'checkpointMax',
 ] as const;
 const WEAPON_KEYS = ['damage', 'rpm', 'headshotMult', 'armorPen', 'rangeModifier', 'clip', 'reserve', 'reloadSec', 'deploySec'] as const;
 const BOMB_KEYS = [
