@@ -297,3 +297,96 @@ describe('the other scenarios with a rejoin: blocks and motion rules hold', () =
     });
   }
 });
+
+describe('the planter heading back into his plant window (Rejoin.step on golden observes, barely moved off his track)', () => {
+  const golden = runHarness(data, NO_HUMAN);
+  const plantPlan = (core: ReplayCore) => core.script.plan.plant as NonNullable<ReplayCore['script']['plan']['plant']>;
+  /** The golden observe of `tick` with barely at `pos` holding `weapon`; the modes with barely LIVE. */
+  const frame = (tick: number, pos: { x: number; y: number }, weapon: 'ak47' | 'c4') => {
+    const e = golden.entries[tick] as LogEntry;
+    const o: Observe = {
+      ...e.observe,
+      pawns: e.observe.pawns.map((p) => (p.id === 'barely' ? { ...p, pos: { x: pos.x, y: pos.y, z: data.nav.zAt(pos) }, vel: { x: 0, y: 0, z: 0 }, weapon, sees: [] } : p)),
+    };
+    const modes = e.act.status.map((s) => ({ id: s.id, mode: s.id === 'barely' ? ('LIVE' as const) : s.mode, blocksLifted: s.id === 'barely' }));
+    return { o, modes };
+  };
+  const tracks = (core: ReplayCore) => PLAYER_IDS.map((id) => core.puppet(id)?.track ?? (() => { throw new Error(id); })());
+
+  function approach(): { core: ReplayCore; logs: { tick: number; actions: unknown[] }[]; spot: { x: number; y: number } } {
+    const core = new ReplayCore(run0.model, run0.session.schedule, tuning, 1, new NavWalkQuery(data.nav));
+    const rj = core.rejoin as NonNullable<ReplayCore['rejoin']>;
+    rj.noteLive('barely', 1400, 'sighting');
+    const spot = { x: -1700, y: 300 }; // east of B site, off his track
+    const logs: { tick: number; actions: unknown[] }[] = [];
+    const draw = plantPlan(core).selectTick;
+    for (let k = 1401; k <= 1500; k++) {
+      // As the engine shows it: the c4 in hand one tick (actionLatencyTicks) after the Core's set_weapon.
+      const { o, modes } = frame(k, spot, k > draw + r.actionLatencyTicks - 1 ? 'c4' : 'ak47');
+      const out: Parameters<typeof rj.step>[4] = [];
+      expect(rj.step(o, modes, tracks(core), core.loadouts(), out)).toEqual([]);
+      if (out.length > 0) logs.push({ tick: k, actions: out });
+    }
+    return { core, logs, spot };
+  }
+  const run0 = golden;
+
+  it('plans an approach into the window once calm, and draws the c4 on the recorded draw tick', () => {
+    const { core, logs } = approach();
+    const pl = plantPlan(core);
+    const plan = logs[0] as { tick: number; actions: { type: string; goal?: { role: string; hold: unknown }; text?: string }[] };
+    expect(plan.tick).toBe(1400 + sec(r.rejoinCalmSec) + 1); // calm from 1401, min LIVE from 1400
+    expect(plan.actions[0]).toMatchObject({ type: 'set_mode', id: 'barely', mode: 'LIVE', goal: { route: [], role: 'rejoin' } });
+    const target = Number(/at tick (\d+)/.exec(plan.actions[1]?.text ?? '')?.[1]);
+    expect(target).toBeGreaterThan(pl.selectTick);
+    expect(target).toBeLessThanOrEqual(pl.useTo);
+    expect(logs.find((l) => l.actions.some((a) => (a as { type: string; weapon?: string }).weapon === 'c4'))?.tick).toBe(pl.selectTick);
+  });
+
+  it('back with the c4 drawn on the way: the plant is on the tape (no shift)', () => {
+    const { core } = approach();
+    const rj = core.rejoin as NonNullable<ReplayCore['rejoin']>;
+    const t = tracks(core)[PLAYER_IDS.indexOf('barely')] as ReturnType<typeof tracks>[number];
+    for (let k = 1501; k <= 1530; k++) {
+      const at = k === 1530 ? t.targetAt(k) : { x: -1700, y: 300 };
+      const { o, modes } = frame(k, at, 'c4');
+      const out: Parameters<typeof rj.step>[4] = [];
+      const hits = rj.step(o, modes, tracks(core), core.loadouts(), out);
+      if (k < 1530) expect(hits).toEqual([]);
+      else {
+        expect(hits.map((h) => h.id)).toEqual(['barely']);
+        expect(out).toContainEqual({ type: 'set_mode', id: 'barely', mode: 'REPLAY', goal: null });
+        expect(out.some((a) => a.type === 'set_weapon')).toBe(false); // the c4 is out already
+      }
+    }
+    expect(core.script.state.plantShift).toBe(0);
+  });
+
+  it('back without the c4: drawn at the switch, and the plant runs late by the rest of its deploy (logged)', () => {
+    const { core } = approach();
+    const rj = core.rejoin as NonNullable<ReplayCore['rejoin']>;
+    const t = tracks(core)[PLAYER_IDS.indexOf('barely')] as ReturnType<typeof tracks>[number];
+    const k = 1530;
+    const { o, modes } = frame(k, t.targetAt(k), 'ak47');
+    const st = rj.state.find((x) => x.id === 'barely') as RejoinState;
+    st.drawTick = null; // as if a fight had made him put it away and he never drew it again
+    const out: Parameters<typeof rj.step>[4] = [];
+    expect(rj.step(o, modes, tracks(core), core.loadouts(), out).map((h) => h.id)).toEqual(['barely']);
+    expect(out).toContainEqual({ type: 'set_weapon', id: 'barely', weapon: 'c4' });
+    const pl = plantPlan(core);
+    const shift = k + Math.ceil(tuning.damage.defaultDeploySec * 64) - pl.useFrom;
+    expect(core.script.state.plantShift).toBe(shift);
+    expect(core.script.plantItem()).toMatchObject({ useFrom: pl.useFrom + shift, useTo: pl.useTo + shift, fallbackTick: pl.fallbackTick + shift });
+    expect(out.some((a) => a.type === 'log' && a.text.startsWith(`script: plant by barely runs 0.6 s late (rejoined at tick ${k})`))).toBe(true);
+  });
+
+  it('a planter whose window has passed with the bomb unplanted does not rejoin: his AI keeps the plant', () => {
+    const core = new ReplayCore(run0.model, run0.session.schedule, tuning, 1, new NavWalkQuery(data.nav));
+    const rj = core.rejoin as NonNullable<ReplayCore['rejoin']>;
+    const e = golden.entries[1700] as LogEntry;
+    const o: Observe = { ...e.observe, round: { ...e.observe.round, bomb: { ...e.observe.round.bomb, state: 'carried', carrier: 'barely', plantTick: null, pos: null } } };
+    expect(rj.fitsAt(o, 'barely', 1761, tracks(core)[0] as ReturnType<typeof tracks>[number])).toBe(true);
+    expect(rj.fitsAt(o, 'barely', 1762, tracks(core)[0] as ReturnType<typeof tracks>[number])).toBe(false);
+    expect(rj.objective(o, 'barely')).toBe(true);
+  });
+});

@@ -178,7 +178,7 @@ export class Rejoin {
       liveSince: r.liveSince,
       trigger: r.trigger,
       calmSince: r.calmSince,
-      target: r.target === null ? null : { tick: r.target.tick, pos: copyVec(r.target.pos), plannedTick: r.target.plannedTick, pathUnits: r.target.pathUnits, chase: r.target.chase },
+      target: r.target === null ? null : { tick: r.target.tick, pos: copyVec(r.target.pos), plannedTick: r.target.plannedTick, pathUnits: r.target.pathUnits, chase: r.target.chase ?? false },
       nextPlanTick: r.nextPlanTick,
       drawTick: r.drawTick ?? null,
     }));
@@ -259,7 +259,6 @@ export class Rejoin {
         level: 'info',
         text: `${s.id} rejoin: ${target.chase ? 'chasing' : 'heading for'} its track at tick ${target.tick} (${tenthsText(target.tick - tick, true)} s), ${intText(target.pathUnits)} u by nav; goal ${REJOIN_ROLE}`,
       });
-      s.drawTick = null;
     }
     // The planter heading back into his plant window draws the c4 on the way (from the recorded draw tick on), as the
     // tape has him doing, so it is deployed when he is back: a draw lost to a fight is made again once he is calm.
@@ -268,7 +267,12 @@ export class Rejoin {
       if (pl === null || s.id !== pl.id || back.includes(s.id) || s.target === null || s.calmSince === null || tick <= s.liveSince) continue;
       const me = pawnOf(o, s.id) as PawnObs;
       if (o.round.bomb.plantTick !== null || o.round.bomb.carrier !== s.id || tick < pl.selectTick || s.target.tick <= pl.selectTick || s.target.tick > pl.useTo) continue;
-      if (me.weapon === 'c4' || (s.drawTick !== null && tick - s.drawTick <= this.tuning.replay.actionLatencyTicks)) continue;
+      // Holding it already (an approach never starts while the AI plants: busy): keep the tick it was drawn.
+      if (me.weapon === 'c4') {
+        if (s.drawTick === null) s.drawTick = tick;
+        continue;
+      }
+      if (s.drawTick !== null && tick - s.drawTick <= this.tuning.replay.actionLatencyTicks) continue;
       out.push({ type: 'set_weapon', id: s.id, weapon: 'c4' });
       s.drawTick = tick;
     }
