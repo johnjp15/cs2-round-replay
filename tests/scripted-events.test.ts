@@ -2,7 +2,7 @@
  * B3 scripted events against a stub host (no engine): the Act stream the Core sends. Button timing for
  * sprays, taps and bursts; the damage emission tick; drops at dead or LIVE pawns; the human's exclusion;
  * weapon changes; utility; plant and defuse windows and fallbacks; aim geometry. The real-engine checks
- * (kills, HP, shot ticks) are in tests/scripted-round.test.ts.
+ * (kills, HP, shot ticks) are in tests/golden-round.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import {

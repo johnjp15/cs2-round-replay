@@ -31,7 +31,8 @@ the Network URL it prints. Details: [`docs/app.md`](docs/app.md).
 | `index.html` | Page entry for Vite. |
 | `data/` | Round data and `tuning.json` (all tunable numbers). |
 | `tests/` | Vitest tests. |
-| `tools/` | Node scripts (extraction, log tools). |
+| `tools/` | Node scripts (extraction, log tools, the headless harness). |
+| `fixtures/` | Golden fixtures for the C# port (`golden/`: logged rounds, walk oracles, `manifest.json`) and human input scripts (`scripts/`). |
 | `docs/` | Project rules and specs. |
 | `logs/` | Local session logs (gitignored). |
 
@@ -50,8 +51,11 @@ npm run bench:session  # cost of one Session.step() over a full round (docs/app.
 npm run check:browser  # after build: headless Chromium screenshots, fps and ticks/s (docs/app.md)
 npm run ghost          # whole round with no human: logs/ghost-round.jsonl + logs/ghost-trace.json, prints the tracking table
 npm run scripted       # the same round with B3's checks: logs/scripted-round.jsonl + logs/scripted-trace.json, prints kills, HP, shot ticks, latency
+npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
+                       # headless harness (the app's Session in Node): log.jsonl, trace.json, summary.json (docs/golden.md)
+npm run fixtures:update  # regenerate the golden fixtures for the C# port after an intended behaviour change (docs/golden.md)
 ```
 
 ## Docs
 
-Read [`docs/conventions.md`](docs/conventions.md) (stack, units, time, determinism, definition of done) and [`docs/contracts.md`](docs/contracts.md) (the Core ↔ engine interface) before starting a task. [`docs/round-data.md`](docs/round-data.md) describes `data/round.json` and how to regenerate it. [`docs/core.md`](docs/core.md) describes the Core: round model, clock, start state, event schedule and `ReplayCore`. [`docs/nav.md`](docs/nav.md) covers the nav mesh and [`docs/movement.md`](docs/movement.md) the 2D movement model and `Sim2DHost`, and [`docs/combat.md`](docs/combat.md) its weapons, damage, grenades, sounds, bomb, round rules and pawn collision. [`docs/app.md`](docs/app.md) covers the browser app: `Session`, the game loop, controls and performance.
+Read [`docs/conventions.md`](docs/conventions.md) (stack, units, time, determinism, definition of done) and [`docs/contracts.md`](docs/contracts.md) (the Core ↔ engine interface) before starting a task. [`docs/round-data.md`](docs/round-data.md) describes `data/round.json` and how to regenerate it. [`docs/core.md`](docs/core.md) describes the Core: round model, clock, start state, event schedule and `ReplayCore`. [`docs/nav.md`](docs/nav.md) covers the nav mesh and [`docs/movement.md`](docs/movement.md) the 2D movement model and `Sim2DHost`, and [`docs/combat.md`](docs/combat.md) its weapons, damage, grenades, sounds, bomb, round rules and pawn collision. [`docs/app.md`](docs/app.md) covers the browser app: `Session`, the game loop, controls and performance. [`docs/golden.md`](docs/golden.md) covers the headless harness, the golden master, the port fixtures and the replay contract for the C# port.

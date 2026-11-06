@@ -1,17 +1,17 @@
 /**
  * Scripted round: the whole recording with no human (the golden master). ReplayCore drives all ten pawns
- * in Sim2DHost (the ghost-round driver, tools/ghost-round.ts) and B3's scripted events act the recording:
+ * in Sim2DHost (the headless harness, tools/harness.ts) and B3's scripted events act the recording:
  * aim, shots, scripted damage and kills, weapon changes, utility, plant and defuse. This tool checks the
  * outcome against the recording (kills, HP, shot ticks, USE windows) and measures the 2D engine's
  * input and action latency.
  *
  *   npm run scripted     # writes logs/scripted-round.jsonl and logs/scripted-trace.json, prints the tables
  *
- * tests/scripted-round.test.ts runs the same thing and asserts on it.
+ * tests/golden-round.test.ts runs the same thing and asserts on it.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import {
   PLAYER_IDS,
   canonicalize,
@@ -22,20 +22,22 @@ import {
   type Button,
   type PawnInput,
   type PlayerId,
-  type SessionLog,
   type WeaponId,
 } from '../src/contracts/index';
 import type { FireItem, ScriptPlan } from '../src/core/index';
 import { Sim2DHost } from '../src/sim2d/host';
-import { loadGhostInputs, runGhostRound, type GhostInputs, type GhostRun } from './ghost-round';
+import type { SessionData } from '../src/app/index';
+import { loadGhostInputs, runGhostRound, type GhostRun } from './ghost-round';
+import { ROOT, actionsOfType, buttonSpans, coreLogs, deaths, hpChanges, roundEvents, shots, type ButtonSpan, type ShotSeen } from './harness';
 import { writeSessionLog } from './session-log-io';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+export { actionsOfType, buttonSpans, coreLogs, deaths, hpChanges, roundEvents, shots } from './harness';
+export type { ButtonSpan, DeathSeen, HpChange, RoundEventSeen, ShotSeen } from './harness';
 
 export type ScriptedRun = GhostRun;
 
 /** The golden master: no human, all ten pawns puppets, for the whole recording. */
-export function runScriptedRound(inputs: GhostInputs = loadGhostInputs(), ticks: number | null = null): ScriptedRun {
+export function runScriptedRound(inputs: SessionData = loadGhostInputs(), ticks: number | null = null): ScriptedRun {
   return runGhostRound(inputs, ticks);
 }
 
@@ -63,7 +65,7 @@ function act(inputs: readonly PawnInput[], actions: readonly Action[]): Act {
  * then the host ticks; the effect is looked for in the following observes. Two pawns (cart with an AK,
  * zwomp as the victim) are set up on tick 0 and measured from tick 2 on.
  */
-export function measureLatency(inputs: GhostInputs = loadGhostInputs()): Latency {
+export function measureLatency(inputs: SessionData = loadGhostInputs()): Latency {
   const { tuning, nav, round } = inputs;
   const roster = round.players.map((p) => ({ id: p.id, team: p.team }));
   const pos = (id: PlayerId): { x: number; y: number; z: number } => {
@@ -115,63 +117,8 @@ export function measureLatency(inputs: GhostInputs = loadGhostInputs()): Latency
 }
 
 // ---------------------------------------------------------------------------
-// Outcome
+// Outcome (the extractors over the logged lines are in tools/harness.ts)
 // ---------------------------------------------------------------------------
-
-export interface DeathSeen {
-  readonly tick: number;
-  readonly victim: PlayerId;
-  readonly attacker: PlayerId | null;
-  readonly weapon: WeaponId | null;
-  readonly headshot: boolean;
-}
-
-/** Every `death` event, at the tick of the observe it is in. */
-export function deaths(log: SessionLog): DeathSeen[] {
-  const out: DeathSeen[] = [];
-  for (let i = 0; i < log.length; i++) {
-    const o = log.at(i)?.observe;
-    if (o === undefined) continue;
-    for (const e of o.events) if (e.type === 'death') out.push({ tick: o.tick, victim: e.victim, attacker: e.attacker, weapon: e.weapon, headshot: e.headshot });
-  }
-  return out;
-}
-
-export interface HpChange {
-  readonly tick: number;
-  readonly hp: number;
-  readonly armor: number;
-}
-
-/** A pawn's HP and armor at the first logged tick and at every change after it. */
-export function hpChanges(log: SessionLog, id: PlayerId): HpChange[] {
-  const out: HpChange[] = [];
-  for (let i = 0; i < log.length; i++) {
-    const o = log.at(i)?.observe;
-    const p = o?.pawns.find((q) => q.id === id);
-    if (o === undefined || p === undefined) continue;
-    const last = out[out.length - 1];
-    if (last === undefined || last.hp !== p.hp || last.armor !== p.armor) out.push({ tick: o.tick, hp: p.hp, armor: p.armor });
-  }
-  return out;
-}
-
-export interface ShotSeen {
-  readonly tick: number;
-  readonly shooter: PlayerId;
-  readonly weapon: WeaponId;
-}
-
-/** Every `shot` event, at the tick of the observe it is in. */
-export function shots(log: SessionLog): ShotSeen[] {
-  const out: ShotSeen[] = [];
-  for (let i = 0; i < log.length; i++) {
-    const o = log.at(i)?.observe;
-    if (o === undefined) continue;
-    for (const e of o.events) if (e.type === 'shot') out.push({ tick: o.tick, shooter: e.shooter, weapon: e.weapon });
-  }
-  return out;
-}
 
 export interface ShotMatch {
   readonly shooter: PlayerId;
@@ -208,75 +155,6 @@ export function matchShots(plan: ScriptPlan, seen: readonly ShotSeen[]): ShotMat
   return out.sort((a, b) => a.recorded - b.recorded || (a.shooter < b.shooter ? -1 : 1));
 }
 
-export interface ButtonSpan {
-  readonly from: number;
-  readonly to: number;
-}
-
-/** Act ticks at which `id`'s input holds `button`, as inclusive spans. */
-export function buttonSpans(log: SessionLog, id: PlayerId, button: Button): ButtonSpan[] {
-  const out: ButtonSpan[] = [];
-  let open: number | null = null;
-  let last = -1;
-  for (let i = 0; i < log.length; i++) {
-    const e = log.at(i);
-    if (e === null) continue;
-    const held = e.act.inputs.find((q) => q.id === id)?.buttons.includes(button) === true;
-    const tick = e.observe.tick;
-    if (held && open === null) open = tick;
-    if (!held && open !== null) {
-      out.push({ from: open, to: last });
-      open = null;
-    }
-    last = tick;
-  }
-  if (open !== null) out.push({ from: open, to: last });
-  return out;
-}
-
-export interface RoundEventSeen {
-  readonly tick: number;
-  /** `bomb <phase>` or `round_end`. */
-  readonly kind: string;
-  readonly text: string;
-}
-
-/** Every `bomb` and `round_end` event, at the tick of the observe it is in. */
-export function roundEvents(log: SessionLog): RoundEventSeen[] {
-  const out: RoundEventSeen[] = [];
-  for (let i = 0; i < log.length; i++) {
-    const o = log.at(i)?.observe;
-    if (o === undefined) continue;
-    for (const e of o.events) {
-      if (e.type === 'bomb') out.push({ tick: o.tick, kind: `bomb ${e.phase}`, text: `${e.phase} by ${e.id ?? '-'}` });
-      if (e.type === 'round_end') out.push({ tick: o.tick, kind: 'round_end', text: `${e.winner} ${e.reason}` });
-    }
-  }
-  return out;
-}
-
-/** Core actions of one type, with their tick. */
-export function actionsOfType(log: SessionLog, type: Action['type']): { tick: number; action: Action }[] {
-  const out: { tick: number; action: Action }[] = [];
-  for (let i = 0; i < log.length; i++) {
-    const e = log.at(i);
-    if (e === null) continue;
-    for (const a of e.act.actions) if (a.type === type) out.push({ tick: e.observe.tick, action: a });
-  }
-  return out;
-}
-
-/** Core `log` actions, with their tick. */
-export function coreLogs(log: SessionLog): { tick: number; level: string; text: string }[] {
-  const out: { tick: number; level: string; text: string }[] = [];
-  for (let i = 0; i < log.length; i++) {
-    const e = log.at(i);
-    if (e === null) continue;
-    for (const a of e.act.actions) if (a.type === 'log') out.push({ tick: e.observe.tick, level: a.level, text: a.text });
-  }
-  return out;
-}
-
 // ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
@@ -286,9 +164,9 @@ const delta = (d: number): string => (d > 0 ? `+${d}` : `${d}`);
 
 /** Markdown: the kill table against the recording. */
 export function killTable(run: ScriptedRun): string {
-  const seen = deaths(run.log);
+  const seen = deaths(run.entries);
   const lines = ['| t (s) | killer → victim | weapon | HS | recorded tick | death event tick | Δ |', '| ---: | --- | --- | --- | ---: | ---: | ---: |'];
-  for (const k of run.inputs.round.kills) {
+  for (const k of run.data.round.kills) {
     const d = seen.find((x) => x.victim === k.victim);
     const ok = d !== undefined && d.attacker === k.killer && d.weapon === k.weapon && d.headshot === k.hs;
     lines.push(
@@ -303,7 +181,7 @@ export function killTable(run: ScriptedRun): string {
 export function hpTable(run: ScriptedRun): string {
   const lines = ['| player | HP (armor) over time: value @ tick |', '| --- | --- |'];
   for (const id of PLAYER_IDS) {
-    const ch = hpChanges(run.log, id);
+    const ch = hpChanges(run.entries, id);
     lines.push(`| ${id} | ${ch.map((c) => `${c.hp} (${c.armor}) @ ${c.tick}`).join(' → ')} |`);
   }
   return lines.join('\n');
@@ -311,7 +189,7 @@ export function hpTable(run: ScriptedRun): string {
 
 /** Markdown: recorded exact-time shots against the shot events. */
 export function shotTable(run: ScriptedRun): string {
-  const m = matchShots(run.core.script.plan, shots(run.log));
+  const m = matchShots(run.core.script.plan, shots(run.entries));
   const lines = ['| t (s) | shooter | weapon | fire item | recorded tick | shot event tick | Δ |', '| ---: | --- | --- | --- | ---: | ---: | ---: |'];
   for (const s of m) lines.push(`| ${sec(s.recorded)} | ${s.shooter} | ${s.weapon} | ${s.kind} | ${s.recorded} | ${s.seen ?? '–'} | ${s.seen === null ? '–' : delta(s.seen - s.recorded)} |`);
   return lines.join('\n');
@@ -339,14 +217,14 @@ function main(): void {
   console.log(`\n${shotTable(run)}`);
   const pl = run.core.script.plan.plant;
   const df = run.core.script.plan.defuse;
-  if (pl !== null) console.log(`\nplant ${pl.id}: USE ${spans(buttonSpans(run.log, pl.id, 'USE'))} (plan ${pl.useFrom}–${pl.useTo}, recorded plant ${pl.tick})`);
-  if (df !== null) console.log(`defuse ${df.id}: USE ${spans(buttonSpans(run.log, df.id, 'USE'))} (plan ${df.useFrom}–${df.useTo}, recorded ${df.startTick}–${df.endTick})`);
-  for (const e of roundEvents(run.log)) console.log(`${e.kind.padEnd(18)} observe tick ${e.tick} (${sec(e.tick)} s): ${e.text}`);
-  const end = run.log.at(run.log.length - 1)?.observe.round;
+  if (pl !== null) console.log(`\nplant ${pl.id}: USE ${spans(buttonSpans(run.entries, pl.id, 'USE'))} (plan ${pl.useFrom}–${pl.useTo}, recorded plant ${pl.tick})`);
+  if (df !== null) console.log(`defuse ${df.id}: USE ${spans(buttonSpans(run.entries, df.id, 'USE'))} (plan ${df.useFrom}–${df.useTo}, recorded ${df.startTick}–${df.endTick})`);
+  for (const e of roundEvents(run.entries)) console.log(`${e.kind.padEnd(18)} observe tick ${e.tick} (${sec(e.tick)} s): ${e.text}`);
+  const end = run.entries[run.entries.length - 1]?.observe.round;
   if (end !== undefined) console.log(`round at the end: ${end.phase}, ${end.winner ?? '-'} ${end.reason ?? ''}, score CT ${end.score.ct} – T ${end.score.t}, ${end.timeLeftSec} s left on the clock`);
-  console.log(`fallback actions: plant ${actionsOfType(run.log, 'plant').length}, defuse_start ${actionsOfType(run.log, 'defuse_start').length}; body blocks (enemy collision): ${run.bodyBlocks.length}`);
+  console.log(`fallback actions: plant ${actionsOfType(run.entries, 'plant').length}, defuse_start ${actionsOfType(run.entries, 'defuse_start').length}; body blocks (enemy collision): ${run.bodyBlocks.length}`);
   console.log('\nCore logs:');
-  for (const l of coreLogs(run.log)) console.log(`  ${l.tick} ${l.level} ${l.text}`);
+  for (const l of coreLogs(run.entries)) console.log(`  ${l.tick} ${l.level} ${l.text}`);
   const notes = run.host.unhandled().filter((n) => n.kind === 'action');
   console.log(`\nhost notes (actions not applied): ${notes.length}`);
   for (const n of notes) console.log(`  ${n.tick} ${n.type}: ${n.reason}`);

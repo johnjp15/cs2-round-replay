@@ -1,0 +1,3 @@
+# Golden fixtures: gzip is binary; the follow script is generated (npm run fixtures:update).
+fixtures/golden/*.gz binary
+fixtures/scripts/cart-follows-recording.json linguist-generated=true

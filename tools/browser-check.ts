@@ -19,15 +19,21 @@
  *  6. an iPhone-sized viewport (390×844, touch, DPR 3): starts in spectate mode, screenshot (d);
  *  7. checks determinism: the phone's spectate log has the same digest as a Node run of the same
  *     length, and the desktop's downloaded log (with a human) replays identically against a fresh Core;
- *  8. fails on console errors, page errors or requests to other origins.
+ *  8. golden parity (E1): the no-human round runs in the page (`?human=none`, the app's own loop at 4×) to
+ *     20 s, and its log through tick 1280 has the digest of the Node harness's (tools/harness.ts) at
+ *     the same tick; so does the whole log the page made (to the tick it paused on);
+ *  9. fails on console errors, page errors or requests to other origins.
+ *
+ *   npx tsx tools/browser-check.ts --only parity    # just step 8 (about 10 s)
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright-core';
-import { SessionLog, replay } from '../src/contracts/index';
+import { SessionLog, fnv1a32Hex, replay, stableStringify, type Control } from '../src/contracts/index';
 import { Session, defaultCore, parseSessionData } from '../src/app/session';
+import { NO_HUMAN, loadHarnessData, runHarness } from './harness';
 
 function read(rel: string): string {
   return readFileSync(new URL(rel, import.meta.url), 'utf8');
@@ -53,6 +59,10 @@ function arg(name: string, fallback: string): string {
 
 const OUT = resolve(arg('--out', 'logs/browser-check'));
 const SECONDS = Number(arg('--seconds', '10'));
+/** `--only parity` runs just the golden parity check (step 8). */
+const ONLY = arg('--only', '');
+/** Golden parity: compare the logs through this observe tick (20 s). */
+const PARITY_TICK = 20 * 64;
 const PORT = 4179;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
@@ -119,6 +129,61 @@ function watch(page: Page, problems: string[]): void {
   });
 }
 
+/**
+ * Golden parity (E1): the page plays the no-human round with its own loop (4×) past 20 s, pauses, and hashes its
+ * log through tick PARITY_TICK in the page (FNV-1a over the UTF-8 bytes, as SessionLog.digest); the Node harness
+ * runs the same round to the tick the page paused on, and both digests must agree: through 20 s and for the
+ * whole log.
+ */
+async function goldenParity(browser: Awaited<ReturnType<typeof chromium.launch>>, problems: string[]): Promise<void> {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  watch(page, problems);
+  await page.goto(ORIGIN + '/?human=none&seed=1');
+  await page.waitForFunction(() => window.__cs2replay !== undefined);
+  await page.click('button[data-speed="4"]');
+  await page.click('#start');
+  // stats().tick is the newest observe's tick: k + 1 once tick k has been stepped.
+  await waitTick(page, PARITY_TICK + 1, 60_000);
+  await page.click('#pause');
+  // No named functions inside evaluate(): tsx would wrap them in a helper the page doesn't have.
+  const b = await page.evaluate((through) => {
+    const log = window.__cs2replay?.session().log();
+    if (log === undefined) throw new Error('no session log');
+    const lines = log.lines();
+    const head = lines.slice(0, through + 1);
+    const bytes = new TextEncoder().encode(head.join('\n') + '\n');
+    let h = 0x811c9dc5;
+    for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ (bytes[i] as number), 0x01000193);
+    // The controls the page logged (its speed button sends `speed`), for the Node run to send too.
+    const controls: { tick: number; control: unknown }[] = [];
+    for (const l of lines) {
+      const e = JSON.parse(l) as { observe: { tick: number }; controls: unknown[] };
+      for (const c of e.controls) controls.push({ tick: e.observe.tick, control: c });
+    }
+    return {
+      controls,
+      lines: lines.length,
+      lastTick: (JSON.parse(lines[lines.length - 1] as string) as { observe: { tick: number } }).observe.tick,
+      headLast: (JSON.parse(head[head.length - 1] as string) as { observe: { tick: number } }).observe.tick,
+      head: (h >>> 0).toString(16).padStart(8, '0'),
+      all: log.digest(),
+    };
+  }, PARITY_TICK);
+  await page.close();
+  // Tick 0's `start` is the Session's own; the rest (the page's `speed`) the harness sends as the page did.
+  const sent = b.controls.filter((c) => !(c.tick === 0 && stableStringify(c.control) === '{"type":"start"}')) as { tick: number; control: Control }[];
+  const node = runHarness(loadHarnessData(), { ...NO_HUMAN, lastTick: b.lastTick, controls: sent });
+  const nodeHead = fnv1a32Hex(node.log.lines().slice(0, PARITY_TICK + 1).join('\n') + '\n');
+  const nodeAll = node.log.digest();
+  console.log(
+    `golden parity (no human; controls ${stableStringify(b.controls)}): Chrome through tick ${b.headLast} ${b.head}, Node harness ${nodeHead}; ` +
+      `whole page log (${b.lines} lines, to tick ${b.lastTick}) ${b.all}, Node ${nodeAll} (${node.ticks} lines)`,
+  );
+  if (b.headLast !== PARITY_TICK) problems.push(`golden parity: the page's log through ${PARITY_TICK} ends on tick ${b.headLast}`);
+  if (b.head !== nodeHead) problems.push(`golden parity: Chrome ${b.head} != Node ${nodeHead} through tick ${PARITY_TICK}`);
+  if (b.all !== nodeAll || b.lines !== node.ticks) problems.push(`golden parity: whole log Chrome ${b.all} (${b.lines}) != Node ${nodeAll} (${node.ticks})`);
+}
+
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
   const server = startPreview();
@@ -128,6 +193,12 @@ async function main(): Promise<void> {
     const exe = process.env['CHROME_PATH'];
     const browser = await chromium.launch(exe === undefined ? { headless: true } : { headless: true, executablePath: exe });
     console.log(`browser: ${browser.version()}`);
+    if (ONLY === 'parity') {
+      await goldenParity(browser, problems);
+      await browser.close();
+      return;
+    }
+    if (ONLY !== '') throw new Error(`--only: expected parity, got ${ONLY}`);
 
     // 1. Desktop: ready, then running at 1x.
     const desk = await browser.newPage({ viewport: { width: 1280, height: 860 } });
@@ -350,14 +421,17 @@ async function main(): Promise<void> {
     console.log(`desktop log (human cart, ${human.length} lines) replayed in Node: identical ${result.identical}`);
     if (!result.identical) problems.push(`desktop log does not replay: first mismatch at tick ${result.firstMismatchTick}`);
 
+    // 8. Golden parity: the no-human round in Chrome against the Node harness.
+    await goldenParity(browser, problems);
+
     await browser.close();
   } finally {
     server.kill();
-  }
-  console.log(`screenshots in ${OUT}`);
-  if (problems.length > 0) {
-    for (const p of problems) console.error(`PROBLEM ${p}`);
-    process.exitCode = 1;
+    if (ONLY === '') console.log(`screenshots in ${OUT}`);
+    if (problems.length > 0) {
+      for (const p of problems) console.error(`PROBLEM ${p}`);
+      process.exitCode = 1;
+    }
   }
 }
 

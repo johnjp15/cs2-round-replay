@@ -21,7 +21,9 @@
     "bench:session": "tsx tools/bench-session.ts",
     "check:browser": "tsx tools/browser-check.ts",
     "ghost": "tsx tools/ghost-round.ts",
-    "scripted": "tsx tools/scripted-round.ts"
+    "scripted": "tsx tools/scripted-round.ts",
+    "harness": "tsx tools/harness.ts",
+    "fixtures:update": "tsx tools/golden-fixtures.ts"
   },
   "repository": {
     "type": "git",
