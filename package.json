@@ -19,7 +19,8 @@
     "validate:round": "tsx tools/validate-round.ts",
     "extract:nav": "tsx tools/extract-nav.ts",
     "bench:session": "tsx tools/bench-session.ts",
-    "check:browser": "tsx tools/browser-check.ts"
+    "check:browser": "tsx tools/browser-check.ts",
+    "ghost": "tsx tools/ghost-round.ts"
   },
   "repository": {
     "type": "git",

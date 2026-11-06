@@ -46,6 +46,7 @@ npm run typecheck
 npm run build          # static build to dist/ (npm run preview to serve it)
 npm run bench:session  # cost of one Session.step() over a full round (docs/app.md)
 npm run check:browser  # after build: headless Chromium screenshots, fps and ticks/s (docs/app.md)
+npm run ghost          # whole round with no human: logs/ghost-round.jsonl + logs/ghost-trace.json, prints the tracking table
 ```
 
 ## Docs

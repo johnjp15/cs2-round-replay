@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { SessionLog, replay, stableStringify, type PlayerId } from '../src/contracts/index';
-import { ReplayCore, startActions } from '../src/core/index';
+import { startActions } from '../src/core/index';
 import { NO_CONTROLS, humanInput, type HeldControls } from '../src/app/input';
-import { Session, parseSessionData } from '../src/app/session';
+import { Session, defaultCore, parseSessionData } from '../src/app/session';
 import { ROUND_TEXT, TUNING_TEXT, loadRound } from './round-fixture';
 import { readFileSync } from 'node:fs';
 import { nav, tuning } from './sim2d-fixtures';
@@ -90,7 +90,7 @@ describe('Session', () => {
     }
   });
 
-  it('applies the human input: cart moves, switches weapons, and the rest stand still (B1 Core)', () => {
+  it('applies the human input: cart moves, switches weapons, and the rest follow their tracks (B2 puppets)', () => {
     const s = newSession();
     run(s, 300, playCart);
     const c = cart(s);
@@ -101,7 +101,7 @@ describe('Session', () => {
     // The app's set_weapon actions are not in the logged Act ...
     for (const line of s.log().lines()) expect(line.includes('"type":"set_weapon","weapon":"knife"')).toBe(false);
     // ... so the log replays identically against a fresh Core.
-    const core = new ReplayCore(s.model, s.schedule, tuning, SEED);
+    const core = defaultCore({ model: s.model, schedule: s.schedule, tuning, seed: SEED, nav });
     expect(replay(SessionLog.fromText(s.log().toText()), core)).toMatchObject({ identical: true, mismatchCount: 0, ticks: 300 });
     // Controls are logged on the line of the tick they preceded.
     expect(s.log().get(100)?.controls).toEqual([{ type: 'speed', x: 2 }]);
@@ -111,12 +111,13 @@ describe('Session', () => {
     ]);
     expect(s.speed).toBe(2);
     expect(s.paused).toBe(false);
-    // Nobody else moved.
+    // Everyone else is a puppet on its recorded track (incredibad's ends at 0.5 s; he holds still).
     const last = s.observe();
     for (const p of last.pawns) {
       if (p.id === 'cart') continue;
-      const start = s.model.player(p.id).startPos;
-      expect([p.pos.x, p.pos.y]).toEqual([start.x, start.y]);
+      const rec = s.model.trackAtTick(p.id, last.tick)?.pos ?? s.model.track(p.id).at(-1);
+      expect(rec, p.id).toBeDefined();
+      expect(Math.hypot(p.pos.x - (rec?.x ?? 0), p.pos.y - (rec?.y ?? 0)), p.id).toBeLessThan(tuning.replay.driftNudgeUnits);
     }
   });
 
