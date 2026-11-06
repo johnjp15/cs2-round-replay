@@ -410,7 +410,7 @@ async function main(): Promise<void> {
     await phone.close();
 
     // 7. Determinism, Node vs. Chrome.
-    const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'));
+    const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'));
     const node = new Session({ ...data, seed: 1, human: null });
     for (let i = 0; i < (browserLog?.lines ?? 0); i++) node.step();
     console.log(`spectate log: Chrome ${browserLog?.lines} lines ${browserLog?.digest}, Node ${node.log().length} lines ${node.log().digest()}`);

@@ -12,6 +12,7 @@
  */
 import roundUrl from '../../data/round.json?url';
 import navUrl from '../../data/mirage-nav.json?url';
+import visionUrl from '../../data/mirage-vismask.json?url';
 import radarUrl from '../../data/mirage-radar.jpg';
 import tuningJson from '../../data/tuning.json';
 import { isPlayerId, type PlayerId } from '../contracts/index';
@@ -387,8 +388,8 @@ async function boot(): Promise<void> {
     const params = new URLSearchParams(window.location.search);
     const seedParam = Number(params.get('seed') ?? '1');
     const seed = Number.isInteger(seedParam) ? seedParam : 1;
-    const [roundJson, navJson, radar] = await Promise.all([fetchJson(roundUrl), fetchJson(navUrl), loadImage(radarUrl)]);
-    const data = parseSessionData(roundJson, navJson, tuningJson);
+    const [roundJson, navJson, visionJson, radar] = await Promise.all([fetchJson(roundUrl), fetchJson(navUrl), fetchJson(visionUrl), loadImage(radarUrl)]);
+    const data = parseSessionData(roundJson, navJson, tuningJson, visionJson);
     new App(data, radar, seed, initialHuman(params));
     status.hidden = true;
   } catch (err) {

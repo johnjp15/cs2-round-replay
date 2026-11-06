@@ -13,7 +13,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 
 ```sh
 npm run harness -- [--human none|cart] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 0fb55e23
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest e6c2be70
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 ```
 
@@ -139,9 +139,9 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 964,329 | 17,379,314 | `0fb55e23` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 966,178 | (see manifest) | `e6c2be70` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 27,859 calls | 413,961 | | `9517e48f` |
-| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–1280 (20 s) | 278,271 | 5,064,472 | `6505c774` |
+| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–1280 (20 s) | 279,404 | (see manifest) | `76ee296f` |
 | `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 12,770 calls | 129,327 | | `cfcdde41` |
 | `manifest.json` | One entry per fixture | 1,846 | | |
 
@@ -265,3 +265,7 @@ hashes its log through tick 1280, and the Node harness runs the same round with 
 through tick 1280 both are `045fe7ec`, and the whole page log (1,293 lines, to tick 1292) matches too (`ba029b1a`).
 D1's spectate check (phone viewport, 1×) still compares a whole page log with a bare Node `Session`. Safari is not
 tested (no WebKit here).
+
+## History
+
+- C4 (#16) made `sees` real (radar sight mask) and clamps grenade throws at the mask's walls: the no-human digest went `0fb55e23` → `e6c2be70` and cart-idle `6505c774` → `76ee296f`. Core acts, positions, kills, HP, shots, plant and defuse are unchanged. The harness must pass `vision` to `Session` (as the app does): `parseSessionData` defaults the mask to null, which silently falls back to nav line of sight.

@@ -10,7 +10,7 @@ the only requests are the page's own assets.
 
 | File | What it does | DOM? |
 | --- | --- | --- |
-| `session.ts` | `Session`: owns `Sim2DHost`, `ReplayCore` and the `SessionLog`; runs a tick; controls, human input, weapon-slot queue, restart, snapshot/restore, log and trace. `parseSessionData()` parses the three data files. | no |
+| `session.ts` | `Session`: owns `Sim2DHost`, `ReplayCore` and the `SessionLog`; runs a tick; controls, human input, weapon-slot queue, restart, snapshot/restore, log and trace. `parseSessionData()` parses the data files (and the sight mask, C4). | no |
 | `loop.ts` | `FixedLoop`: 64 Hz accumulator, speed 0.25–4×, pause, per-frame cap. `RateMeter` for fps / ticks-per-second. | no |
 | `input.ts` | Pure keyboard/mouse → `PawnInput` mapping, key bindings, `weaponForSlot`. | no |
 | `radar.ts` | World ↔ radar ↔ screen transforms, `fitView`, yaw → screen direction. | no |
@@ -44,8 +44,8 @@ requestAnimationFrame(now)
 ## Session (`session.ts`)
 
 ```ts
-const data = parseSessionData(roundJson, navJson, tuningJson);   // values or text
-const s = new Session({ ...data, seed: 1 });                       // human: 'cart' (default) or null
+const data = parseSessionData(roundJson, navJson, tuningJson, visJson);   // values or text; visJson (the sight mask) may be null
+const s = new Session({ ...data, seed: 1 });                       // human: 'cart' (default) or null; the seed also seeds the LIVE AI
 s.step();                                                          // tick 0: Core sets the round up
 s.setHumanInput(humanInput('cart', held, yaw));                    // used every tick until replaced
 s.requestWeaponSlot(3);                                            // knife, on the next step
@@ -151,7 +151,7 @@ the bar moves to a column on the right.
 
 ## Loading and bundle
 
-`round.json` and `mirage-nav.json` are imported with `?url` and fetched in parallel with the radar
+`round.json`, `mirage-nav.json` and `mirage-vismask.json` (C4, 31 KB) are imported with `?url` and fetched in parallel with the radar
 image, so they are cached separately and don't bloat the script. `tuning.json` (1.8 KB) is inlined.
 Build output (`npm run build`):
 

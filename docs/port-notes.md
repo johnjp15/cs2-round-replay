@@ -99,3 +99,23 @@ C# re-implementation for tests would need:
 - **Aim** uses `atan2` (bearing and pitch); both are rounded to 0.001° before they are logged or compared (`roundYaw`, `roundPitch`), and pitch is clamped to ±89. `withLook` uses `cos` / `sin` and rounds the stick to 6 decimals, like B2.
 - **Decisions** (`ScriptState.decisions`) are a list in the order they were made, looked up by string key (`fire:<i>`, `aim:<i>`); plan item indices come from a sort by (first act tick, shooter id ordinal, build order).
 - **Log texts** of drops and fallbacks use only integers and ids (`script: dropped … (5 shots from tick 3192): donk is dead`, `script: no planted event by tick 1764, …`).
+
+## Vision and LIVE AI (src/sim2d/vision.ts, ai.ts; C4)
+
+The 2D engine is not ported (CS2 traces sight and runs its own bots), but its logs are fixtures, so a C# re-implementation
+for tests would need:
+
+- **Sight mask DDA.** Cells from `Math.floor`; the walk starts at the lexicographically smaller end (x, then y) so it is
+  exactly symmetric; `tMax += tDelta` accumulation and the run lengths `(t − tStart) × length` in doubles, compared
+  with `>` against the tolerances. A step exactly through a cell corner moves both axes at once (the side cells are not
+  visited). `Math.Floor`, `+ - * /` and `Math.Sqrt` are IEEE-exact, so C# matches bit for bit.
+- **Level check.** Samples at `i / n` with `n = ceil(length / step)`; floors from `floorsAt` sorted ascending; runs over a
+  surface are matched to the previous sample's floors in that order (first match within `stepHeight`).
+- **sees** visits unordered pairs (i < j) in id order and traces each once; the lists are then sorted ordinally. The FOV
+  test uses `atan2` (not bit-specified): a target exactly on the FOV edge can differ in the last ulp.
+- **AI randomness:** `new Rng(seed).fork("ai:" + id).fork("d" + n).NextDouble()` for the n-th draw. The normal draws use
+  Box–Muller (`Math.Log`, `Math.Cos`), rounded to 6 decimals; the inputs are canonicalized (6 decimals) like all host
+  state. Expect the same rare last-digit caveat as the movement trig.
+- **Order:** the AI runs at the start of a tick, before the movement locks, LIVE pawns in id order; a weapon switch it
+  asks for is applied at once (deploy time from that tick).
+

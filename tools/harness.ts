@@ -68,13 +68,20 @@ export const BEHIND_UNITS = 24;
 
 /** The parsed data files plus their text (for the fixture manifest's hashes). */
 export interface HarnessData extends SessionData {
-  readonly sources: { readonly round: string; readonly nav: string; readonly tuning: string };
+  readonly sources: { readonly round: string; readonly nav: string; readonly tuning: string; readonly vision: string };
 }
 
 export function loadHarnessData(root: string = ROOT): HarnessData {
   const read = (rel: string): string => readFileSync(resolve(root, rel), 'utf8');
-  const sources = { round: read('data/round.json'), nav: read('data/mirage-nav.json'), tuning: read('data/tuning.json') };
-  return { ...parseSessionData(sources.round, sources.nav, sources.tuning), sources };
+  const sources = {
+    round: read('data/round.json'),
+    nav: read('data/mirage-nav.json'),
+    tuning: read('data/tuning.json'),
+    vision: read('data/mirage-vismask.json'),
+  };
+  // The sight mask (C4) must be passed explicitly: parseSessionData defaults it to null (nav line of sight),
+  // which would make the harness and fixtures disagree with the browser app.
+  return { ...parseSessionData(sources.round, sources.nav, sources.tuning, sources.vision), sources };
 }
 
 /**
@@ -409,7 +416,7 @@ export function runHarness(data: SessionData, options: HarnessOptions): HarnessR
   // The app's Core (defaultCore), or the same Core with the walk query wrapped by a recorder.
   const recorder = options.recordWalk === true ? new RecordingWalk(new NavWalkQuery(data.nav)) : null;
   const core: CoreFactory = recorder === null ? defaultCore : (p) => new ReplayCore(p.model, p.schedule, p.tuning, p.seed, recorder);
-  const session = new Session({ round: data.round, nav: data.nav, tuning: data.tuning, seed, human, core });
+  const session = new Session({ round: data.round, nav: data.nav, tuning: data.tuning, vision: data.vision, seed, human, core });
   const ticks = roundTicks(session.model, data.tuning.replay.holdLastPositionSec);
   const last = options.lastTick === 'end' ? ticks - 1 : options.lastTick;
   if (!Number.isInteger(last) || last < 0) throw new Error(`runHarness: bad last tick ${String(options.lastTick)}`);

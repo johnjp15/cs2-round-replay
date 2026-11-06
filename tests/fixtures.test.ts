@@ -94,10 +94,11 @@ for (const spec of FIXTURE_SPECS) {
     const walkText = gunzipText(walkGz);
 
     it('was made from the current data files, script and settings', () => {
-      expect({ tuning: f.tuningHash, round: f.roundHash, nav: f.navHash }, STALE).toEqual({
+      expect({ tuning: f.tuningHash, round: f.roundHash, nav: f.navHash, vision: f.visionHash }, STALE).toEqual({
         tuning: canonicalHash(data.sources.tuning),
         round: canonicalHash(data.sources.round),
         nav: canonicalHash(data.sources.nav),
+        vision: canonicalHash(data.sources.vision),
       });
       expect(f.scriptHash, STALE).toBe(spec.script === null ? null : canonicalHash(readFileSync(resolve(ROOT, spec.script), 'utf8')));
       expect({ human: f.human, script: f.script, seed: f.seed, until: f.until }, STALE).toEqual({ human: spec.human, script: spec.script, seed: spec.seed, until: spec.until });
