@@ -17,8 +17,15 @@
 import type { AiTuning, PlayerId, Tuning, Vec3 } from '../contracts/index';
 import type { NavPoint } from './nav';
 
-/** Identifies the JSON layout of data/mirage-vismask.json. */
-export const VISMASK_FORMAT = 'cs2-round-replay/vismask@1';
+/** Identifies the JSON layout of data/mirage-vismask.json (@2 adds the `cover` rows; @1 files still decode, without cover). */
+export const VISMASK_FORMAT = 'cs2-round-replay/vismask@2';
+const VISMASK_FORMAT_V1 = 'cs2-round-replay/vismask@1';
+
+/** Cell classes of the mask. */
+export const CELL_OPEN = 0;
+export const CELL_WALL = 1;
+/** Boxes, crates, the Truck: blocks sight and bullets only under the cover rule (docs/vision.md "Cover"). */
+export const CELL_COVER = 2;
 
 export class VisMaskError extends Error {
   constructor(message: string) {
@@ -27,7 +34,7 @@ export class VisMaskError extends Error {
   }
 }
 
-/** Grid geometry and cells (1 = wall, 0 = open), row-major, top row first. */
+/** Grid geometry and cells (CELL_WALL 1, CELL_COVER 2, CELL_OPEN 0), row-major, top row first. */
 export interface VisMaskGrid {
   readonly width: number;
   readonly height: number;
@@ -54,7 +61,21 @@ export function visOptionsFromTuning(ai: Pick<AiTuning, 'losWallTolerancePx' | '
 
 /** Sight options from parsed tuning. */
 export function sightOptionsFromTuning(t: Pick<Tuning, 'ai' | 'damage' | 'nav'>): SightOptions {
-  return { eyeHeight: t.damage.eyeHeight, levelStepUnits: t.ai.losLevelStepUnits, levelSlackUnits: t.ai.losLevelSlackUnits, stepHeight: t.nav.stepHeight };
+  return {
+    eyeHeight: t.damage.eyeHeight,
+    levelStepUnits: t.ai.losLevelStepUnits,
+    levelSlackUnits: t.ai.losLevelSlackUnits,
+    stepHeight: t.nav.stepHeight,
+    coverTolerancePx: t.ai.losCoverTolerancePx,
+    coverNearUnits: t.ai.losCoverNearUnits,
+    coverHeightUnits: t.ai.losCoverHeightUnits,
+  };
+}
+
+/** A run of cover cells along a segment: distances from its start (units), from < to. */
+export interface CoverRun {
+  from: number;
+  to: number;
 }
 
 /** What a sight query found (for tests, tools and debugging). */
@@ -72,6 +93,8 @@ export class VisMask {
   readonly originX: number;
   readonly originY: number;
   readonly options: VisOptions;
+  /** True if any cell is cover (a mask without cover skips the cover rule). */
+  readonly hasCover: boolean;
   private readonly cells: Uint8Array;
 
   constructor(grid: VisMaskGrid, options: VisOptions) {
@@ -86,6 +109,7 @@ export class VisMask {
     this.originX = grid.originX;
     this.originY = grid.originY;
     this.cells = grid.cells;
+    this.hasCover = grid.cells.includes(CELL_COVER);
     this.options = { wallTolerancePx: options.wallTolerancePx, endpointTolerancePx: options.endpointTolerancePx };
   }
 
@@ -107,20 +131,117 @@ export class VisMask {
   /** True if cell (i, j) is wall; outside the grid is wall. */
   isWallCell(i: number, j: number): boolean {
     if (i < 0 || j < 0 || i >= this.width || j >= this.height) return true;
-    return this.cells[j * this.width + i] === 1;
+    return this.cells[j * this.width + i] === CELL_WALL;
   }
 
-  /** True if the cell under p is open. */
+  /** True if cell (i, j) is cover (a box, crate or the Truck); outside the grid is not. */
+  isCoverCell(i: number, j: number): boolean {
+    if (i < 0 || j < 0 || i >= this.width || j >= this.height) return false;
+    return this.cells[j * this.width + i] === CELL_COVER;
+  }
+
+  /** True if the cell under p is not wall (open or cover). */
   isOpen(p: NavPoint): boolean {
     const { px, py } = this.toPx(p);
     return !this.isWallCell(Math.floor(px), Math.floor(py));
   }
 
-  /** Open and wall cell counts. */
-  counts(): { open: number; wall: number } {
+  /** True if the cell under p is cover. */
+  isCover(p: NavPoint): boolean {
+    const { px, py } = this.toPx(p);
+    return this.isCoverCell(Math.floor(px), Math.floor(py));
+  }
+
+  /** Open, wall and cover cell counts (open excludes cover). */
+  counts(): { open: number; wall: number; cover: number } {
     let wall = 0;
-    for (const c of this.cells) wall += c;
-    return { open: this.cells.length - wall, wall };
+    let cover = 0;
+    for (const c of this.cells) {
+      if (c === CELL_WALL) wall++;
+      else if (c === CELL_COVER) cover++;
+    }
+    return { open: this.cells.length - wall - cover, wall, cover };
+  }
+
+  /**
+   * The runs of consecutive cover cells the 2D segment a–b crosses, as distances from `a` along it (units), in
+   * order from a. Symmetric: coverRuns(b, a) gives the same runs measured from b. Walls are ignored here.
+   */
+  coverRuns(a: NavPoint, b: NavPoint): CoverRun[] {
+    const runs: CoverRun[] = [];
+    let inRun = false;
+    const swapped = this.walkCells(a, b, (cover, t0, t1) => {
+      if (!cover) {
+        inRun = false;
+        return;
+      }
+      const last = runs[runs.length - 1];
+      if (inRun && last !== undefined) last.to = t1;
+      else runs.push({ from: t0, to: t1 });
+      inRun = true;
+    });
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const out = runs.map((r) => (swapped ? { from: (1 - r.to) * len, to: (1 - r.from) * len } : { from: r.from * len, to: r.to * len }));
+    return swapped ? out.reverse() : out;
+  }
+
+  /**
+   * Visit the cells the segment a–b crosses (the same DDA as lineOfSight, from the lexicographically smaller end),
+   * with whether each cell is cover and its parameter interval [t0, t1] on the walk. Returns true if the walk went
+   * b → a.
+   */
+  private walkCells(a: NavPoint, b: NavPoint, visit: (cover: boolean, t0: number, t1: number) => void): boolean {
+    const u = this.unitsPerPx;
+    let ax = (a.x - this.originX) / u;
+    let ay = (this.originY - a.y) / u;
+    let bx = (b.x - this.originX) / u;
+    let by = (this.originY - b.y) / u;
+    let swapped = false;
+    if (ax > bx || (ax === bx && ay > by)) {
+      swapped = true;
+      const tx = ax;
+      const ty = ay;
+      ax = bx;
+      ay = by;
+      bx = tx;
+      by = ty;
+    }
+    const dx = bx - ax;
+    const dy = by - ay;
+    if (Math.sqrt(dx * dx + dy * dy) < 1e-9) return swapped;
+    let ix = Math.floor(ax);
+    let iy = Math.floor(ay);
+    const stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    const stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
+    const tDeltaX = stepX === 0 ? Infinity : 1 / Math.abs(dx);
+    const tDeltaY = stepY === 0 ? Infinity : 1 / Math.abs(dy);
+    let tMaxX = stepX > 0 ? (ix + 1 - ax) / dx : stepX < 0 ? (ix - ax) / dx : Infinity;
+    let tMaxY = stepY > 0 ? (iy + 1 - ay) / dy : stepY < 0 ? (iy - ay) / dy : Infinity;
+    const w = this.width;
+    const h = this.height;
+    const cells = this.cells;
+    let t = 0;
+    for (;;) {
+      const tNext = tMaxX < tMaxY ? tMaxX : tMaxY;
+      const tEnd = tNext < 1 ? tNext : 1;
+      const inside = ix >= 0 && iy >= 0 && ix < w && iy < h;
+      visit(inside && cells[iy * w + ix] === CELL_COVER, t, tEnd);
+      if (tEnd >= 1) break;
+      t = tEnd;
+      if (tMaxX < tMaxY) {
+        ix += stepX;
+        tMaxX += tDeltaX;
+      } else if (tMaxY < tMaxX) {
+        iy += stepY;
+        tMaxY += tDeltaY;
+      } else {
+        ix += stepX;
+        iy += stepY;
+        tMaxX += tDeltaX;
+        tMaxY += tDeltaY;
+      }
+    }
+    return swapped;
   }
 
   /** 2D line of sight a ↔ b on the mask (symmetric: lineOfSight(a, b) === lineOfSight(b, a)). */
@@ -177,7 +298,7 @@ export class VisMask {
     for (;;) {
       const tNext = tMaxX < tMaxY ? tMaxX : tMaxY;
       const tEnd = tNext < 1 ? tNext : 1;
-      const wall = ix < 0 || iy < 0 || ix >= w || iy >= h || cells[iy * w + ix] === 1;
+      const wall = ix < 0 || iy < 0 || ix >= w || iy >= h || cells[iy * w + ix] === CELL_WALL;
       if (wall) {
         if (runStart < 0) runStart = t;
       } else if (runStart >= 0) {
@@ -231,7 +352,7 @@ export interface SightNav {
   floorsAt(x: number, y: number): number[];
 }
 
-/** Level-check parameters (`tuning.ai` and `tuning.nav`). */
+/** Level-check and cover parameters (`tuning.ai` and `tuning.nav`). */
 export interface SightOptions {
   /** Eye height above the floor for `lineOfSight` (`damage.eyeHeight`). */
   readonly eyeHeight: number;
@@ -241,6 +362,23 @@ export interface SightOptions {
   readonly levelSlackUnits: number;
   /** Floors at consecutive samples within this height of each other are the same surface (`nav.stepHeight`). */
   readonly stepHeight: number;
+  /** Cover: a run of cover cells this long or shorter (cells, along the line) never blocks: grazing a corner (`ai.losCoverTolerancePx`). */
+  readonly coverTolerancePx: number;
+  /** Cover: an upright pawn this close (units, along the line) to a box looks and shoots over it, and is seen over it (`ai.losCoverNearUnits`). */
+  readonly coverNearUnits: number;
+  /** Cover: a line at least this high (units) above the lower end's floor all across the box passes over it (`ai.losCoverHeightUnits`). */
+  readonly coverHeightUnits: number;
+}
+
+/**
+ * One end of a sight line or bullet for the cover rule: a pawn, or a point. `low` pawns (crouched, planting or
+ * defusing, or a target point on the ground) never look over cover; upright ones do from close by.
+ */
+export interface SightEnd {
+  readonly pos: Vec3;
+  /** Height of the line's end above `pos.z` (eye, or a body band for a bullet's impact point). */
+  readonly height: number;
+  readonly low: boolean;
 }
 
 /**
@@ -268,15 +406,50 @@ export class Sight {
     return this.mask === null ? this.nav.lineOfSight(a, b) : this.mask.lineOfSight(a, b);
   }
 
-  /** Eye to eye: `flat` and the level check, with eyes `eyeA` / `eyeB` above a.z / b.z. */
-  clear(a: Vec3, eyeA: number, b: Vec3, eyeB: number): boolean {
-    return this.flat(a, b) && this.levelsClear(a, a.z + eyeA, b, b.z + eyeB);
+  /**
+   * Eye to eye: `flat`, the level check and the cover rule, with eyes `eyeA` / `eyeB` above a.z / b.z. `lowA` /
+   * `lowB`: that end can't look over cover (crouched, planting or defusing pawn, or a point on the ground).
+   */
+  clear(a: Vec3, eyeA: number, b: Vec3, eyeB: number, lowA = false, lowB = false): boolean {
+    return this.flat(a, b) && this.levelsClear(a, a.z + eyeA, b, b.z + eyeB) && this.coverClear({ pos: a, height: eyeA, low: lowA }, { pos: b, height: eyeB, low: lowB });
   }
 
-  /** `clear` with the standing eye height at both ends; 2D only when either end has no z. Fits hitscan's LosQuery. */
+  /** `clear` with the standing eye height at both ends, both upright; 2D only when either end has no z. Fits hitscan's LosQuery. */
   lineOfSight(a: NavPoint, b: NavPoint): boolean {
     if (a.z === undefined || b.z === undefined) return this.flat(a, b);
     return this.clear({ x: a.x, y: a.y, z: a.z }, this.options.eyeHeight, { x: b.x, y: b.y, z: b.z }, this.options.eyeHeight);
+  }
+
+  /**
+   * The cover rule alone (docs/vision.md "Cover"): the straight line between the two ends' heights crosses no run of
+   * cover cells that blocks it. A run blocks when it is longer than `coverTolerancePx` cells, contains neither end
+   * (a pawn on or in a box: position error, or standing on it), no upright end is within `coverNearUnits` of it
+   * (an upright pawn at a box looks over it), and somewhere across it the line is less than `coverHeightUnits`
+   * above the lower end's floor (it doesn't pass over the box). Without a mask, or with no cover on the line: clear.
+   * Symmetric in its two ends.
+   */
+  coverClear(a: SightEnd, b: SightEnd): boolean {
+    const mask = this.mask;
+    if (mask === null || !mask.hasCover) return true;
+    const runs = mask.coverRuns(a.pos, b.pos);
+    if (runs.length === 0) return true;
+    const o = this.options;
+    const len = Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y);
+    const ha = a.pos.z + a.height;
+    const hb = b.pos.z + b.height;
+    const top = Math.min(a.pos.z, b.pos.z) + o.coverHeightUnits;
+    const tol = o.coverTolerancePx * mask.unitsPerPx;
+    for (const r of runs) {
+      if (r.to - r.from <= tol) continue;
+      if (r.from <= 0 || r.to >= len) continue;
+      if (!a.low && r.from <= o.coverNearUnits) continue;
+      if (!b.low && len - r.to <= o.coverNearUnits) continue;
+      const h0 = ha + ((hb - ha) * r.from) / len;
+      const h1 = ha + ((hb - ha) * r.to) / len;
+      if (Math.min(h0, h1) >= top) continue;
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -352,6 +525,8 @@ export interface SeePawn {
   readonly alive: boolean;
   /** Flashed: blind sees nothing (it can still be seen). */
   readonly blind: boolean;
+  /** Planting or defusing (head down at the bomb): like a crouched pawn, it doesn't look over cover. */
+  readonly busy?: boolean;
 }
 
 /** Eye heights and FOV for `sees`. */
@@ -380,8 +555,9 @@ export function angleOff(yaw: number, from: NavPoint, to: NavPoint): number {
 /**
  * `sees` for every pawn (contract F5; docs/contracts.md): `pawns` in id order, result in the same order, each list
  * sorted by id. Viewer V sees target T (another pawn, either team) when both are alive, V is not blind, T is within
- * fovDeg / 2 of V's yaw, the eye-to-eye line is clear (`sight.clear`: the 2D mask and the level check; eyes at
- * eyeHeight, crouchEyeHeight when crouched), and no active smoke crosses the 2D segment. Sight and smoke are
+ * fovDeg / 2 of V's yaw, the eye-to-eye line is clear (`sight.clear`: the 2D mask, the level check and the cover
+ * rule; eyes at eyeHeight, crouchEyeHeight when crouched; crouched, planting and defusing pawns are low for cover),
+ * and no active smoke crosses the 2D segment. Sight and smoke are
  * symmetric, so each unordered pair is traced once and only if one side looks at the other.
  */
 export function computeSees(pawns: readonly SeePawn[], sight: Sight, smoke: SmokeQuery, o: SeesOptions): PlayerId[][] {
@@ -398,7 +574,9 @@ export function computeSees(pawns: readonly SeePawn[], sight: Sight, smoke: Smok
       if (!ab && !ba) continue;
       const eyeA = a.crouching ? o.crouchEyeHeight : o.eyeHeight;
       const eyeB = b.crouching ? o.crouchEyeHeight : o.eyeHeight;
-      if (!sight.clear(a.pos, eyeA, b.pos, eyeB) || smoke.smokeBlocks(a.pos, b.pos)) continue;
+      const lowA = a.crouching || a.busy === true;
+      const lowB = b.crouching || b.busy === true;
+      if (!sight.clear(a.pos, eyeA, b.pos, eyeB, lowA, lowB) || smoke.smokeBlocks(a.pos, b.pos)) continue;
       if (ab) (out[i] as PlayerId[]).push(b.id);
       if (ba) (out[j] as PlayerId[]).push(a.id);
     }
@@ -409,7 +587,10 @@ export function computeSees(pawns: readonly SeePawn[], sight: Sight, smoke: Smok
 
 // ---- JSON (run-length encoded) ---------------------------------------------------------------------
 
-/** The JSON document's shape (rows: run lengths alternating wall, open, wall, …, starting with wall). */
+/**
+ * The JSON document's shape (rows: run lengths alternating wall, open, wall, …, starting with wall, cover counting as
+ * open; cover: run lengths alternating not cover, cover, …, starting with not cover).
+ */
 export interface VisMaskJson {
   readonly format: string;
   readonly width: number;
@@ -418,6 +599,7 @@ export interface VisMaskJson {
   readonly originX: number;
   readonly originY: number;
   readonly rows: readonly (readonly number[])[];
+  readonly cover?: readonly (readonly number[])[];
 }
 
 /** Run lengths of one row: wall, open, wall, … (the first may be 0). */
@@ -442,7 +624,8 @@ export function encodeRow(cells: Uint8Array, offset: number, width: number): num
 export function decodeVisMaskJson(json: unknown): VisMaskGrid {
   if (typeof json !== 'object' || json === null || Array.isArray(json)) throw new VisMaskError('vismask: expected an object');
   const o = json as Record<string, unknown>;
-  if (o['format'] !== VISMASK_FORMAT) throw new VisMaskError(`vismask: format must be ${VISMASK_FORMAT}`);
+  const v1 = o['format'] === VISMASK_FORMAT_V1;
+  if (o['format'] !== VISMASK_FORMAT && !v1) throw new VisMaskError(`vismask: format must be ${VISMASK_FORMAT}`);
   const num = (k: string): number => {
     const v = o[k];
     if (typeof v !== 'number' || !Number.isFinite(v)) throw new VisMaskError(`vismask.${k}: expected a finite number`);
@@ -469,5 +652,27 @@ export function decodeVisMaskJson(json: unknown): VisMaskGrid {
     }
     if (x !== width) throw new VisMaskError(`vismask.rows[${j}]: runs sum to ${x}, expected ${width}`);
   });
+  if (!v1) {
+    const cover = o['cover'];
+    if (!Array.isArray(cover) || cover.length !== height) throw new VisMaskError(`vismask.cover: expected ${height} rows`);
+    cover.forEach((row: unknown, j) => {
+      if (!Array.isArray(row)) throw new VisMaskError(`vismask.cover[${j}]: expected an array`);
+      let x = 0;
+      let on = false;
+      for (const r of row as unknown[]) {
+        if (typeof r !== 'number' || !Number.isInteger(r) || r < 0) throw new VisMaskError(`vismask.cover[${j}]: bad run ${String(r)}`);
+        if (x + r > width) throw new VisMaskError(`vismask.cover[${j}]: runs exceed width`);
+        if (on) {
+          for (let i = j * width + x; i < j * width + x + r; i++) {
+            if (cells[i] === CELL_WALL) throw new VisMaskError(`vismask.cover[${j}]: cover on a wall cell at ${x + i - (j * width + x)}`);
+            cells[i] = CELL_COVER;
+          }
+        }
+        x += r;
+        on = !on;
+      }
+      if (x !== width) throw new VisMaskError(`vismask.cover[${j}]: runs sum to ${x}, expected ${width}`);
+    });
+  }
   return { width, height, unitsPerPx, originX, originY, cells };
 }

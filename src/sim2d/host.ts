@@ -531,12 +531,17 @@ export class Sim2DHost implements IHost {
 
   // ---- tick phases ---------------------------------------------------------------------------
 
+  /** Planting or defusing now (a plant or defuse in progress): low for the sight's cover rule (docs/vision.md "Cover"). */
+  private busyAtBomb(id: PlayerId): boolean {
+    return this.bomb.plant?.id === id || this.bomb.defuse?.id === id;
+  }
+
   /** `sees` for the current state (contract F5, vision.ts computeSees), cached until the state changes. */
   private currentSees(): PlayerId[][] {
     if (this.seesCache === null) {
       const d = this.tuning.damage;
       this.seesCache = computeSees(
-        this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick })),
+        this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick, busy: this.busyAtBomb(p.id) })),
         this.sight,
         this,
         { fovDeg: this.tuning.ai.fovDeg, eyeHeight: d.eyeHeight, crouchEyeHeight: d.crouchEyeHeight },
@@ -580,12 +585,14 @@ export class Sim2DHost implements IHost {
           items: p.inventory.map((q) => q.item),
           ready: reached(t, w.nextAttackTick) && reached(t, w.deployEndTick) && !reloading,
           reloading,
+          defuseEndTick: this.bomb.defuse?.id === p.id ? this.bomb.defuse.endTick : null,
         },
         goal,
         others: others.filter((q) => q.id !== p.id),
         sees: sees[i] ?? [],
         events: this.events,
-        bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb) },
+        bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick },
+        round: { phase: roundPhase(this.round, isTicking(this.bomb)) },
         nav: this.nav,
         sight: this.sight,
         tuning: this.tuning,
@@ -662,7 +669,7 @@ export class Sim2DHost implements IHost {
     if (step.fired && gun !== null) {
       this.outbox.push({ type: 'shot', shooter: p.id, weapon: p.weapon });
       this.sound(p, 'shot');
-      const hit = traceShot(scanPawn(p), this.pawns.map((q) => scanPawn(q)), this.sight, this.tuning.damage);
+      const hit = traceShot(scanPawn(p, this.busyAtBomb(p.id)), this.pawns.map((q) => scanPawn(q, this.busyAtBomb(q.id))), this.sight, this.tuning.damage);
       if (hit !== null) {
         const victim = this.pawn(hit.victim) as PawnState;
         const dmg = bulletDamage(gun, hit.distance, hit.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
@@ -1051,8 +1058,8 @@ function spawnPawn(r: RosterEntry): PawnState {
   };
 }
 
-function scanPawn(p: PawnState): ScanPawn {
-  return { id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, pitch: p.move.pitch, crouching: p.move.crouching, alive: p.alive };
+function scanPawn(p: PawnState, busy: boolean): ScanPawn {
+  return { id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, pitch: p.move.pitch, crouching: p.move.crouching, alive: p.alive, busy };
 }
 
 function pawnObs(p: PawnState, sees: readonly PlayerId[]): PawnObs {

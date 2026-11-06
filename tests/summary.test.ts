@@ -11,6 +11,7 @@ import { SessionLog, type LogEntry, type ObsEvent } from '../src/contracts/index
 import { RoundModel, deltaText, fixed2, recordedBomb, recordedResult, resultLong, resultShort, secText, summarize } from '../src/core/index';
 import { GOLDEN_DIR, gunzipText } from '../tools/golden-fixtures';
 import { ROOT, loadHarnessData, runHarness } from '../tools/harness';
+import { FOLLOW_SCRIPT, playScript } from '../tools/follow-script';
 import { HumanBot, loadScenario } from '../tools/human-bot';
 
 const data = loadHarnessData();
@@ -97,6 +98,25 @@ describe('summary of the golden round (no human)', () => {
   });
 });
 
+describe('summary of the follow run (cart plays his recording, F)', () => {
+  const run = playScript(data, readFileSync(resolve(ROOT, FOLLOW_SCRIPT), 'utf8'));
+  const s = summarize(model, run.log);
+
+  it('same result as the tape, nobody LIVE; two kills differ: the 2D window kill 0.30 s early, and cart survives the post-round shot', () => {
+    expect(s.headline).toBe('Same result, different round: CT defuse, 0.72 s left; 2 kills changed');
+    expect(s.verdict).toBe('same_result');
+    expect(s.result).toEqual({ winner: 'CT', reason: 'bomb_defused', endTick: 4275, score: { ct: 12, t: 15 } });
+    expect(s.switches).toEqual([]);
+    const changed = s.kills.filter((k) => k.status !== 'same').map((k) => [k.killer, k.victim, k.status, k.text]);
+    expect(changed).toEqual([
+      ['cart', 'lokier', 'shifted', '-0.30 s'],
+      // sp4rtan's single implied post-round shot takes cart only to 73 HP (the tape: killed).
+      ['sp4rtan', 'cart', 'missed', "didn't happen: cart survived"],
+    ]);
+    expect(s.player).toMatchObject({ id: 'cart', human: true, kills: 1, damageTaken: 27, deathTick: null });
+  });
+});
+
 describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
   const sc = loadScenario(`${ROOT}/fixtures/scenarios/flank-sp4rtan.json`);
   const run = runHarness(data, { human: sc.human, driver: HumanBot.fromScenario(data, sc), lastTick: 'end', seed: sc.seed });
@@ -106,7 +126,7 @@ describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
     expect(s.headline).toBe('You changed history: Ts win by elimination (recorded: CT defuse)');
     expect(s.verdict).toBe('changed');
     expect(s.result).toEqual({ winner: 'T', reason: 'elimination', endTick: 2856, score: { ct: 11, t: 16 } });
-    // Nobody defused: the bomb exploded at 67.52 s, killing the two LIVE guards.
+    // Nobody defused: the bomb exploded at 67.52 s. The two LIVE guards had left its blast (F), so it killed nobody.
     expect(s.bomb).toEqual({ plantTick: 1761, defuseTick: null, explodeTick: 4321, marginSec: null });
   });
 
@@ -118,7 +138,8 @@ describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
       expect(row('sp4rtan', victim)).toMatchObject({ status: 'missed', runTick: null, text: "didn't happen: sp4rtan was dead (44.63 s)" });
     }
     expect(row('cart', 'lokier')).toMatchObject({ status: 'shifted', deltaTicks: -19, text: '-0.30 s' });
-    for (const victim of ['donk', 'barely']) expect(row(null, victim)).toMatchObject({ status: 'new', runTick: 4321, weapon: null });
+    // F: the LIVE guards leave the bomb's blast after the round, so the explosion kills nobody (it killed both before).
+    for (const victim of ['donk', 'barely']) expect(row(null, victim)).toBeUndefined();
     for (const [killer, victim] of [['snarlbot', 'incredibad'], ['snarlbot', 'snakelore'], ['lokier', 'eradicate'], ['sp4rtan', 'snarlbot'], ['barely', 'zwomp']] as const) {
       expect(row(killer, victim)?.status).toBe('same');
     }

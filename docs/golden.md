@@ -14,7 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest e6c2be70
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest e9a228d9
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 ```
 
@@ -97,19 +97,29 @@ plays it perfectly". Generated, not written by hand (`tools/follow-script.ts`, r
 the harness runs the round with cart as the human, and each tick a shadow `ReplayCore` (fed the live observe with
 `human: null`, and with `driftSnapUnits` = 10⁹, because a human can't teleport) decides cart's input as if he were a
 puppet: B2's track following and B3's aim, shots, grenades and weapon switches (its `set_weapon`s become `weapon`
-entries). The inputs are written as entries, a new one only where the held one would give a different input
-(`"track"` where the input's yaw is the recorded yaw: 2,305 of 4,460 entries), and the generator checks that
-playing the file reproduces the generation run byte for byte (digest `5c3016f4`). Results:
+entries). One exception (F, `tools/follow-aim.ts`): B3 aims every recorded shot at its target, which is right for a
+puppet (its damage is scripted) but not for the human, whose bullets are real and, with no spread in 2D, land where
+aimed. In an aim engagement the recording shows him **missing** (no damage or kill by him on that target), the script
+looks where his recorded view does (his POV yaw, where the camera follows him) and keeps moving the same way (the stick
+re-expressed in that yaw); the pitch stays B3's. For cart that is the defuse spray at sp4rtan (65.55–66.89 s; his
+recorded yaw tracks a fixed point near (−2210, 275) within 0.8°, 17–22° off sp4rtan's spot, `docs/vision.md`) and the
+post-round spray (68.30–69.27 s); his Lokier engagement (a recorded kill) keeps B3's aim. The human-bot's
+`followRecording` does the same. The inputs are written as entries, a new one only where the held one would give a
+different input (`"track"` where the input's yaw is the recorded yaw: 2,455 of 4,460 entries), and the generator checks
+that playing the file reproduces the generation run byte for byte (digest `4d30f7f1`). Results:
 
 - cart, observed samples: RMS 20.5 u (13.5 as a puppet), max 152 u at 14.5 s: without the puppet's snaps he has to
   catch up physically after the recording's jumps (217 u in 0.3 s at 14.2 s, the Balcony drop at 21.0 s). The
   puppets' snaps of cart are gone; the other four happen as in the golden master.
 - With C4's sight mask cart's real AK headshot kills Lokier at 18.50 s through the Apartments window (0.3 s before the
-  recorded kill: 2D has no spread), before B4's time-shifted scripted hit is due (18.63 s), so cart keeps 100 HP. With
-  B4 the only pawn that goes LIVE is sp4rtan, hit by cart's recorded spray during the defuse at 65.91 s (the B-site
-  boxes that stopped it in the recording are open in the mask); cart kills him at 66.22 s (T elimination, 11 – 16) and
-  the bomb explodes at 67.52 s. `docs/core.md` "Divergence", scenario 1.
-- The shadow is a `ReplayCore` with `{divergence: false}` (B2/B3 only). 4,321 entries.
+  recorded kill: 2D has no spread), before B4's time-shifted scripted hit is due (18.63 s), so cart keeps 100 HP.
+- **No pawn goes LIVE** (F). Cart's spray during the defuse misses as on the tape, sp4rtan defuses at 66.80 s and the
+  round ends CT `bomb_defused`, 12 – 15, with 0.72 s on the bomb, like the tape; after the round sp4rtan's one implied
+  shot hits cart for 27 (he ends on 73 HP; the tape has him killed). Until F the spray was aimed at sp4rtan and hit him
+  at 65.91 s (sp4rtan LIVE, T elimination 11 – 16). `docs/core.md` "Divergence", scenario 1. B5's summary (printed by
+  `npm run harness` as `round summary:`): "Same result, different round: CT defuse, 0.72 s left; 2 kills changed"
+  (cart's 2D window kill of Lokier 0.30 s early, and sp4rtan's post-round kill of cart that doesn't happen).
+- The shadow is a `ReplayCore` with `{divergence: false}` (B2/B3 only).
 
 ## The golden master (CI gate)
 
@@ -142,9 +152,9 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 966,178 | (see manifest) | `e6c2be70` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 966,125 | (see manifest) | `e9a228d9` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 27,859 calls | 413,961 | | `9517e48f` |
-| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–1280 (20 s) | 279,873 | (see manifest) | `868f56db` |
+| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–1280 (20 s) | 279,872 | (see manifest) | `4f8bc45c` |
 | `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 12,770 calls | 129,333 | | `84734d9c` |
 | `manifest.json` | One entry per fixture | 1,846 | | |
 
@@ -195,7 +205,14 @@ changed. That is allowed, but it has to be explicit:
 2. Commit the code first, then run `npm run fixtures:update` on the clean tree (so the manifest's `commit` names
    it and `sourceDirty` is false) and commit `fixtures/` in the same PR.
 3. In the PR, say which fixtures changed, the old and new digests, the first tick that differs and why
-   (`npm run harness -- … --out` before and after, and diff `summary.json`).
+   (`npm run harness -- … --out` before and after, and diff `summary.json`). `tools/fixture-diff.ts` (F) compares two
+   logs line by line and separates the Core's acts from the observes (pawn fields, `sees` on its own, events by type,
+   the round); it exits 1 if any act differs:
+
+   ```sh
+   git show main:fixtures/golden/round-nohuman.jsonl.gz > /tmp/old.jsonl.gz
+   npx tsx tools/fixture-diff.ts /tmp/old.jsonl.gz fixtures/golden/round-nohuman.jsonl.gz
+   ```
 
 Re-running is idempotent: unchanged content keeps its bytes and its manifest entry, so a diff under `fixtures/`
 always means behaviour changed. The follow script is regenerated too (it is the generator's output for the current
@@ -265,12 +282,15 @@ for him, 40 + 9 `block_damage` instead of 50 + 10, the `debug` logs).
 the built page plays the no-human round with its own loop (`?human=none`, 4×) past 20 s and pauses; the page
 hashes its log through tick 1280, and the Node harness runs the same round with the controls the page logged (its
 4× button logs `speed` on tick 1). Result (headless Chromium 153.0.8010.12, V8 15.3, against Node 22.23, V8 12.4):
-through tick 1280 both are `045fe7ec`, and the whole page log (1,293 lines, to tick 1292) matches too (`ba029b1a`).
+through tick 1280 both are `8a6f3b52` (F's cover; `2b8dc5fb` on B4's main, where the docs still said C4's `045fe7ec`),
+and the whole page log matches too (`e5b41166` for 1,293 lines, to tick 1292; that digest depends on the tick the page
+paused on).
 D1's spectate check (phone viewport, 1×) still compares a whole page log with a bare Node `Session`. Safari is not
 tested (no WebKit here).
 
 ## History
 
 - C4 (#16) made `sees` real (radar sight mask) and clamps grenade throws at the mask's walls: the no-human digest went `0fb55e23` → `e6c2be70` and cart-idle `6505c774` → `76ee296f`. Core acts, positions, kills, HP, shots, plant and defuse are unchanged. The harness must pass `vision` to `Session` (as the app does): `parseSessionData` defaults the mask to null, which silently falls back to nav line of sight.
+- F (fidelity and polish) adds **cover** to the sight mask (`docs/vision.md`): no-human `e6c2be70` → `e9a228d9`, cart-idle `868f56db` → `4f8bc45c`; both walk oracles unchanged. `tools/fixture-diff.ts` against B4's fixtures: **0 Core acts differ**, no controls, positions, HP, events (kills, damage, shots, the plant, the defuse) or round state differ; only `sees`, on 123 of 4,517 lines (from tick 940) and 17 of 1,281. Every change is a pair that no longer sees the other across a box: donk → barely (teammates in the Apartments) 14.69–14.94 s, 17 ticks, in both fixtures; barely → cart (teammates) on 48 ticks between 23.1 and 50.9 s; cart ↔ sp4rtan on 58 ticks between 63.3 and 65.1 s (the B-site stack between cart at the Shop door and the defusing sp4rtan, low for cover). The follow script changes from 65.55 s (tick 4195, the first missed engagement, `tools/follow-aim.ts`) and runs to the end (4,321 → 4,460 entries): cart no longer dies in the explosion. Merged after B5 (whose checkpoints change no digest) the digests are the same; the manifest changed only for the merged `tuningHash` (B5's `replay.checkpoint*` and F's `ai` keys), and `tools/fixture-diff.ts` against B5's main gives the same result (0 acts, `sees` only).
 - B4 (divergence) adds the `HUMAN` status mode and plays Lokier's hit on cart as a scheduled encounter: cart-idle `76ee296f` → `868f56db` (walk oracle `cfcdde41` → `84734d9c`). Every line's status shows cart `HUMAN` instead of `REPLAY`; from tick 1161 Lokier holds the angle on the Apartments window instead of the recorded aim at cart, so his input (yaw, and the stick re-expressed in it) and from 1162 his observed yaw and position differ, and his recorded tap at 1183 is gone (no `shot` at 1184; the encounter never starts, cart stays in Back Alley). The no-human golden master is byte-identical (`e6c2be70`); its manifest entry changed only for the new `tuningHash`. The follow script is the same through 66.0 s (sp4rtan goes LIVE at 65.91 s, so cart's aim at him differs from 66.03 s on).
 - B5 (checkpoints, rewind, summary): the app's Session (so the harness) takes an automatic checkpoint every `replay.checkpointSec` before the step; checkpoints are not logged and change no state, so both digests are unchanged (`e6c2be70`, `868f56db`; `tests/rewind.test.ts` re-checks the golden digest with checkpoints on and after an exact rewind). The manifest changed only for the new `tuningHash` (`replay.checkpointSec`, `replay.checkpointMax`). A rewind cuts the log back, so every log stays one straight run (each line's tick is its index) and replays; a resync rewind adds one line with `controls: [{type: rewind, id}]` and an Act starting with `set_round` (`docs/core.md` "Checkpoints, rewind, summary").

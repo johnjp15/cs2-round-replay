@@ -1,7 +1,8 @@
 # Vision in the 2D sim (C4 / A5: `src/sim2d/vision.ts`, `data/mirage-vismask.json`)
 
 What a pawn can see, and what bullets and grenades can cross. The nav mesh stays the **movement** model; sight uses a
-**mask built from the radar** plus a **level check** on the nav floors.
+**mask built from the radar** (walls, and since F **cover**: boxes, crates, the Truck) plus a **level check** on the nav
+floors.
 
 Why: the nav mesh's `lineOfSight` treats everything that isn't walkable as a full-height wall, so drops, ledges,
 windows and nav holes block sight. B3 found that 6 of the 13 recorded aimed engagements had no line of sight that
@@ -11,7 +12,7 @@ limits).
 ## The mask (`tools/extract-vismask.ts`)
 
 ```sh
-npx tsx tools/extract-vismask.ts          # data/mirage-vismask.json + logs/vismask-debug.png
+npx tsx tools/extract-vismask.ts          # data/mirage-vismask.json + logs/vismask-debug.png (+ -bsite.png, B site 3×)
 npx tsx tools/extract-vismask.ts --check  # fails if the committed file is stale
 npm run extract:vismask                   # the same as the first line
 ```
@@ -32,13 +33,23 @@ black background, never over floors. Steps, with the parameters written into the
 | 3. open specks | `minOpenArea` | 64 | 8-connected open components < 64 cells become wall (4 components, 63 cells). |
 | 4. wall specks | `minWallArea` | 6 | 4-connected wall components < 6 cells not touching the border become open (dark noise on floors: 6 components, 13 cells). Pillars and wall stubs are larger. |
 | 5. thin lines | `openThinLines` | true | A wall cell with open cells on both sides along x or along y (a line one cell thick) becomes open, in one pass (184 cells). On this radar 1-px dark lines drawn over floors are windows and railings: the Apartments window over B, the Mid window of Sniper's Nest, the Tunnel Stairs railing. Full-height walls are black gaps of 2 cells or more, which this step never touches. |
+| 6. cover (F) | `coverLumSeed`, `coverChroma` | 190, 24 | Boxes, crates and the Truck are drawn light grey to white (L 190–255, chroma ≤ 12) on floors that are L ≤ 156 (blue-grey 131, the grey bombsite squares 154) or colourful (tan rooms, chroma > 30). An open cell this light and grey seeds a prop. |
+| | `coverLumEdge` | 170 | JPEG blurs box edges over 1–2 px: cells at least this light (and as grey) 8-connected to a seed through such cells join it (14,122 candidates). |
+| | `coverOpenRadius` | 1 | An opening by a 3 × 3 square drops cover lines and slivers up to 2 cells thick (ledge highlights in Mid and on the T ramp). |
+| | `coverMinArea`, `coverMinCore` | 12, 5 | 8-connected components smaller than 12 cells, or without a 5 × 5 square (25 × 25 units) inside, are dropped: the remaining 3-cell-wide highlight lines (the long one beside T spawn's ramp, 3 × 78) and door sills (the Shop door, 12 × 4). 19 dropped, 52 kept. |
 
-Result: 310,069 open and 738,507 wall cells. The file (31 KB) is run-length encoded, one row per line: each row lists
-run lengths alternating wall, open, wall, … starting with wall (the first may be 0). Same image in, same bytes out
-(`tests/vision.test.ts` rebuilds it and compares).
+Result: 738,507 wall cells (unchanged by cover), 12,413 cover cells in 52 components, 297,656 open. The file (49 KB,
+format `vismask@2`) is run-length encoded, one row per line: each `rows` row lists run lengths alternating wall, open,
+wall, … starting with wall (the first may be 0; cover counts as open there), and each `cover` row run lengths
+alternating not cover, cover, … starting with not cover. A `vismask@1` file (no `cover`) still decodes, with no cover.
+Same image in, same bytes out (`tests/vision.test.ts` rebuilds it and compares).
 
 `logs/vismask-debug.png` shows the radar with walls tinted red, cells the cleanup closed in yellow and cells it opened
-in cyan; `logs/vision-labels.png` adds the labelled pairs (below). Both are gitignored.
+in cyan, cover in green and cover candidates the opening or the component filter dropped in orange;
+`logs/vismask-debug-bsite.png` is B site at 3×; `logs/vision-labels.png` adds the labelled pairs (below). All are
+gitignored.
+
+![B site in the debug overlay: the box stacks in green, the black corner stacks (walls) in red, the dropped Shop door sill in orange](img/vismask-cover-bsite.jpg)
 
 ## Line of sight
 
@@ -65,13 +76,36 @@ The slack is 48 because the nav's two-corner height model is off by tens of unit
 Truck → Apartments line (Lokier's kill of eradicate) clipped a Balcony area 24 units under its modelled floor. The
 Underpass → Catwalk line runs 69 units under the Catwalk floor.
 
+### Cover (F)
+
+The radar has no heights, so a box can't be treated as a wall (you see and shoot over a waist-high crate) nor as floor
+(a pawn crouched or defusing behind it is hidden). `Sight.coverClear(a, b)` decides, for the straight line between the
+two ends (each a point with a height above its floor, eye or body band, and a posture):
+
+A run of cover cells along the 2D segment **blocks** unless
+
+1. it is at most `ai.losCoverTolerancePx` (1) cells long along the line (grazing a box corner), or
+2. it contains an end (a pawn's centre on a box: standing on it, or position error), or
+3. an **upright** end is within `ai.losCoverNearUnits` (48) of it along the line: a standing pawn at a box looks and
+   shoots over it, and is seen over it. Crouched, planting and defusing pawns are **low**: they never look over cover,
+   so a defuser hugging a box is hidden from across the site; so is a target point on the ground (the AI's guard spot
+   check on the planted bomb); or
+4. the line passes over it: across the whole run it is at least `ai.losCoverHeightUnits` (72) above the lower end's
+   floor (from the Apartments window or a balcony you see over the boxes on B).
+
+It is symmetric in its ends, and only the mask's cover cells count (walls are the flat test's). The rule was chosen
+against the recording: every recorded kill, damage and sighting stays visible (below; the three that touch cover all
+have an end on or at a box: Lokier at the Truck at 12.5–12.75 s, on the B-site box at 18.8 s), and B3's aimed fire items
+lose nothing.
+
 ### Who uses what
 
 | user | query | note |
 | --- | --- | --- |
-| `sees` | `Sight.clear`, eye to eye (64, or 46 crouched) | plus FOV, smoke and blindness (below) |
-| bullets (`traceShot`) | `Sight.lineOfSight(shooter, impact)`, the impact point with the target's floor z | **Bullets use the mask**: you can shoot through the Apartments window, as cart and Lokier did. Everything the mask calls open (windows, railings, the props) is shoot-through too; there is still no wall penetration. |
-| grenades (throw clamp, flash, HE) | `Sight.flat` (`GrenadeSight`) | 2D: a grenade's arc is above eye level, so the level check would be wrong; grenades now fly through windows and over drops instead of stopping at nav holes |
+| `sees` | `Sight.clear`, eye to eye (64, or 46 crouched), with postures | plus FOV, smoke and blindness (below). Crouched, planting or defusing (`SeePawn.busy`, a plant or defuse in progress) pawns are low for cover |
+| bullets (`traceShot`) | `Sight.lineOfSight(shooter, impact)`, the impact point with the target's floor z; then `Sight.coverClear` from the shooter's eye to the hit band's point on the target | **Bullets use the mask**: you can shoot through the Apartments window, as cart and Lokier did. Windows and railings are shoot-through; a box stops a bullet under the cover rule (the shooter's and the victim's postures, `ScanPawn.busy`), and so is everything behind it on the ray; there is still no wall penetration. |
+| grenades (throw clamp, flash, HE) | `Sight.flat` (`GrenadeSight`) | 2D: a grenade's arc is above eye level, so the level check would be wrong; grenades fly through windows, over drops and **over boxes** (cover is ignored) |
+| LIVE AI guard spot | `Sight.clear(spot, eye, bomb, leg band, upright, low)` | a guard spot needs sight to the bomb over the boxes |
 | B2's snap rule | `sees` of the human's pawn | through `Observe` (see below) |
 
 ## `sees` (contract F5)
@@ -91,7 +125,8 @@ and the LIVE AI reads the same lists at the start of a tick.
 
 **Cost:** 0.073 ms per tick for 10 viewers × 9 targets (Node 22, recorded positions every 0.5 s of the round, 3.4
 visible pairs per tick on average; `tests/vision.test.ts` asserts < 0.5 ms). A whole Session step goes from 0.421 to
-0.449 ms per tick (full round, human cart).
+0.449 ms per tick (full round, human cart). Cover adds a second walk over the cells of each line that passes the walls
+and the level check: 0.063 → 0.077 ms per tick in the same test, back to back (3.4 visible pairs per tick, unchanged).
 
 The CS2 adapter reproduces it with `Trace.TraceEndShape` eye to eye plus the same FOV, smoke and flash tests
 (`docs/cs2-adapter.md`, `sees`); the level check is the 2D sim's stand-in for the 3D trace.
@@ -117,7 +152,8 @@ brief's Shop ↔ B plant and Underpass ↔ Catwalk.
 The fixture `tests/fixtures/vision-labels.json` is generated by the tool and checked against `round.json` by the test.
 
 **Results:** must see **12 / 12** asserted pairs visible (the nav LOS: 9 / 12); must not see **0 / 12** visible (the 2D
-mask alone: 1, Underpass ↔ Catwalk; the nav LOS: 0).
+mask alone: 1, Underpass ↔ Catwalk; the nav LOS: 0). With cover (F) both are unchanged: three asserted pairs cross
+cover, each at an end (rule 2 or 3 above).
 
 | pair | trusted | sight | 2D mask | nav LOS | longest wall run (cells) | mask flips with a sideways shift of |
 | --- | --- | --- | --- | --- | ---: | --- |
@@ -162,12 +198,28 @@ recorded position:
 shot, and 10 get an engine hit (hits are blocked by the Core's `block_damage`, so they only show in `combatLog()`). The
 four without sight: snarlbot → incredibad at 0.48 s (incredibad's inferred spot; the hit still lands, because the
 impact point on his circle is 16 units nearer), sp4rtan → snarlbot at 17.83 s (sp4rtan's inferred 700 u/s loop), and the
-two barely items above.
+two barely items above. With cover (F) the table is identical, item by item (9 / 8 / 10).
+
+**Cart's spray at the defusing sp4rtan (65.9–66.9 s), the case cover was meant for.** In the recording it hits nothing
+("the defuser behind the B-site boxes"); in 2D the first four of its eleven shots have sight (the table above: 4 / 11),
+and with B3's aim and no spread they hit. On this radar no box is on those lines: from cart's recorded spots
+(−2214, −182) … (−2270, −160) to sp4rtan's (−2005, 345) the line crosses open floor and the bombsite square, passing
+45 units east of the black corner stack (already wall, which blocks the later seven shots) and 55–80 units west of the
+south-east box stack; the nav mesh's holes agree with the radar's boxes there. So cover can't stop them. What the tape
+does show is cart looking elsewhere: his recorded view yaw during the spray tracks a fixed point near (−2210, 275)
+within 0.8° RMS, 17–22° off sp4rtan's spot, while he walks west at 150–200 u/s (an AK that inaccurate at 570 units
+misses anyway). B3 aims every recorded shot at its target; for the human's "perfect" follow script the shots the tape
+shows missing now use his recorded view instead (`tools/follow-aim.ts`, `docs/golden.md`), and that run has no LIVE
+switch. The radar sighting window points the same way, mirrored: sp4rtan is on cart's radar until 65.2 s and off it
+during the spray; in 2D the B-site stack hides the defusing sp4rtan from cart at the Shop door 64.5–65.1 s and opens as
+cart walks west. A few tens of units of difference in the CS:GO 2020 box or sp4rtan's spot would explain both.
 
 ## Known failure modes
 
-- **No height in the mask.** Props (the white Truck, the B and A site boxes) are open: pawns see and shoot over and
-  through them, including the tall ones. Low walls drawn black block completely.
+- **No height in the mask.** Props (the white Truck, the B and A site boxes) are cover with one rule for all (above):
+  a 48-unit crate and a stack taller than a player are treated alike, and boxes drawn black (the B-site corner stacks)
+  are walls. Low walls drawn black block completely. Postures are only crouched / planting / defusing; nobody in the
+  2D sim jumps onto or over a box.
 - **Thin lines are windows everywhere.** The Apartments' whole south wall over B (≈ 415 units) is a 1-px line, so the
   mask treats all of it as a window, and the Mid window of Sniper's Nest is wider than the real one.
 - **Levels** are only caught where the nav mesh has both floors (stacked areas) or the upper floor's edge; through nav

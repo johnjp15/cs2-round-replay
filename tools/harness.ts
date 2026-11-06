@@ -53,7 +53,7 @@ import {
   type WalkQuery,
   type WeaponId,
 } from '../src/contracts/index';
-import { PuppetTrack, ReplayCore, startYaw, tOf, tickOf, type RoundModel } from '../src/core/index';
+import { PuppetTrack, ReplayCore, startYaw, summarize as summarizeRound, tOf, tickOf, type RoundModel } from '../src/core/index';
 import { NavWalkQuery, type Sim2DHost } from '../src/sim2d/index';
 import { SLOT_WEAPONS, Session, defaultCore, parseSessionData, weaponForSlot, type CoreFactory, type SessionData, type WeaponSlot } from '../src/app/index';
 import { HumanBot, formatTimeline, loadScenario, timeline } from './human-bot';
@@ -985,6 +985,8 @@ function main(): void {
   if (args.out !== null) writeOutputs(resolve(args.out), run, summary);
   const t4 = performance.now();
   console.log(describeSummary(summary));
+  // B5's end-of-round summary, as the app's overlay shows it (stdout only; summary.json is unchanged).
+  console.log(`  round summary: ${summarizeRound(run.model, run.entries).headline}`);
   console.log(`\n${driftTable(measureDrift(run))}\n`);
   if (args.out !== null) console.log(`wrote ${resolve(args.out)}/{log.jsonl,trace.json,summary.json}`);
   const ms = (x: number): string => `${x.toFixed(0)} ms`;

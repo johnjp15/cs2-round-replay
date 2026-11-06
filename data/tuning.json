@@ -131,6 +131,9 @@
     "losEndpointTolerancePx": 3,
     "losLevelStepUnits": 16,
     "losLevelSlackUnits": 48,
+    "losCoverTolerancePx": 1,
+    "losCoverNearUnits": 48,
+    "losCoverHeightUnits": 72,
     "reactionJitter": 0.3,
     "headshotAimRatio": 0.35,
     "turnRateDegPerTick": 12,
@@ -151,7 +154,9 @@
     "counterStrafeSpeed": 40,
     "plantSpotUnits": 150,
     "defuseRangeFactor": 0.6,
-    "guardMaxUnits": 800
+    "guardMaxUnits": 800,
+    "blastMarginUnits": 64,
+    "defuseMarginSec": 0.25
   },
   "nav": { "stepHeight": 18, "edgeEpsilon": 1, "losMargin": 8 },
   "collision": { "pawnRadius": 16, "solidTeammates": false },

@@ -19,12 +19,12 @@ the only requests are the page's own assets.
 | `scene.ts` | `Scene`: what is drawn, built tick by tick (previous/current observe, statuses, kill feed, tracers, effects, pops, bomb, round end, Core logs); interpolation helpers. | no |
 | `camera.ts` | Zoom, pan, follow, clamp; the camera → `View`. | no |
 | `effects.ts` | `Effect` / `EffectsSource`; smokes, fires, flying grenades, pops and tracers as drawing primitives. | no |
-| `hud-model.ts` | Mode badges, weapon names, view toggles, the clock / bomb timer and score (reads C3's `observe.round` when present), the status card. | no |
+| `hud-model.ts` | Mode badges, weapon names, view toggles, the clock / bomb timer and score (reads C3's `observe.round` when present), the status card; where a pawn label goes clear of the HUD (`chooseLabelSpot`) and a LIVE pawn's AI line (`aiDebugLine`) (F). | no |
 | `style.ts` | Palette and fonts shared by the canvas and the HUD (index.html mirrors them as CSS variables). | no |
 | `input-dom.ts` | Thin listener layer: which bound keys and buttons are held, cursor position. | yes |
 | `camera-dom.ts` | Wheel, drag, pinch and double-click/double-tap → camera calls. | yes |
 | `renderer.ts` | `Renderer`: the canvas (radar cache, pawns, overlays, effects layer). `resize()`, `view`, `draw(frame)`. | yes |
-| `hud.ts` | `Hud`: the DOM overlay (scoreboard and clock, kill feed, status panel, your status, rates). | yes |
+| `hud.ts` | `Hud`: the DOM overlay (scoreboard and clock, kill feed, status panel, your status, rates); `occupiedRects()`, where it is on the stage. | yes |
 | `main.ts` | Entry: loads data, builds the Session, runs the loop on `requestAnimationFrame`, feeds the Scene, wires the controls bar and view keys. | yes |
 | `assets.ts` | `loadAssets()`: fetches the round, nav and sight-mask JSON and the radar. The single-file build swaps in `assets-embedded.ts`, which reads them from the page (docs/deploy.md). | yes |
 | `index.ts` | Barrel of the DOM-free parts, for Node (C5's headless harness). | no |
@@ -40,8 +40,8 @@ requestAnimationFrame(now)
   │                                    observe → canonicalize → core.step → log.append → host.apply(+ human set_weapon) → host.tick
   │                                    scene.ingest(session.observe(), act, session.host.activeEffects()) }
   ├─ alpha = loop.pending / TICK_MS
-  ├─ Renderer.draw({scene, alpha, model, clock, human, overlays, aim, fovDeg, nowMs})   (canvas)
-  └─ Hud.update({scene, clock, human, you, phase, speed, panelOpen, tick, fps, tps})     (DOM)
+  ├─ Renderer.draw({scene, alpha, model, clock, human, overlays, aim, fovDeg, nowMs, avoid: hud.occupiedRects(), ai: host})   (canvas)
+  └─ Hud.update({scene, clock, human, you, phase, speed, panelOpen, tick, fps, tps, ai: host})     (DOM)
 ```
 
 ## Session (`session.ts`)
@@ -184,7 +184,7 @@ the bar moves to a column on the right.
 
 ## Loading and bundle
 
-`round.json`, `mirage-nav.json` and `mirage-vismask.json` (C4, 31 KB) are imported with `?url` and fetched in parallel with the radar
+`round.json`, `mirage-nav.json` and `mirage-vismask.json` (C4, 49 KB with F's cover rows, 5.6 KB gzip) are imported with `?url` and fetched in parallel with the radar
 image, so they are cached separately and don't bloat the script. `tuning.json` (1.8 KB) is inlined.
 Build output (`npm run build`):
 
@@ -227,7 +227,9 @@ log lines use the system face. No web fonts and no game UI assets: everything is
    fire.
 3. **Recorded tracks** (T): each pawn's recorded path for the next 3 s as a dotted line in its team
    colour, and its recorded position now as a small ring, with a thin line to the pawn when it has
-   drifted more than 24 units (puppet drift and snaps show at a glance).
+   drifted more than 24 units (puppet drift and snaps show at a glance). With them (F), each LIVE pawn's way on
+   (`Sim2DHost.aiDebug(id).path`, from its next waypoint) as a faint dashed magenta line from the pawn, with a small
+   ring at the next waypoint. 2D debug: the Core never reads `aiDebug` (CS2's bots have their own state).
 4. **Bomb** (planted): a red dot at the plant position that blinks faster as the timer runs down (once
    a second at the plant, about seven times a second at the end), with the time left beside it; a
    dashed green ring while someone defuses; green once defused.
@@ -252,6 +254,12 @@ log lines use the system face. No web fonts and no game UI assets: everything is
     the latest `act.status` (`statusBadge`): REPLAY is a small dim "play" mark (spelled out from 2×
     zoom), **LIVE** a solid magenta tag, DEAD dim text, and the human's pawn none (it has the ring). The
     human's pawn is reported `HUMAN` by Core (B4), which `statusBadge` reads as "YOU" (the HUD's status card).
+    **Clear of the HUD (F):** each label takes the first of its spots (above, right, below, left, higher up) that
+    overlaps neither another label nor the HUD's rectangles (`Hud.occupiedRects()`: scoreboard, kill feed, panel or its
+    button, your status, the rates) nor the canvas edge; else the first clear of the HUD (overlapping another label, as
+    before); else its text is left out and only the dot shows (`chooseLabelSpot`). The bomb's time and the ghost's
+    distance are left out under the HUD too. `__cs2replay.stats().labels` reports the last frame's label rectangles,
+    how many were left out, and the HUD's rectangles.
 12. **Aim line** from the human's pawn to the cursor while playing.
 
 **Interpolation.** After each `Session.step()` the Scene keeps the previous and the current observe;
@@ -276,10 +284,13 @@ text changes):
   clock, bomb and score come from `observe.round` (`clockView`, `scoreView`).
 - **Kill feed, top right:** "killer [weapon] victim" with a drawn headshot mark, names in team colours,
   the newest at the bottom; the last 5, each for 5 s of round time (so a pause freezes it). Kills
-  involving the human get a red outline.
+  involving the human get a red outline. Wherever it would cover the scoreboard (desktop windows narrower than
+  about 1,100 px, phones in landscape) or the collapsed panel button (phones), it moves down below them (F, measured
+  each frame); an open panel sits above it.
 - **Status panel, left (Tab):** each pawn's mode badge, trigger and since-time (the round clock at
-  `sinceTick`), Ts then CTs; then the last 20 Core `log` actions, newest first. Collapsed by default on
-  phones.
+  `sinceTick`), Ts then CTs, and under a LIVE pawn (F) what the 2D engine's AI is doing, from `host.aiDebug(id)`:
+  behaviour, target ("out of sight" while it keeps one it lost) and goal (role → destination), e.g. "fighting · target
+  lokier · plant → (−1873, 396)"; then the last 20 Core `log` actions, newest first. Collapsed by default on phones.
 - **Your status, bottom left:** cart's HP (amber, then red as it drops), armor, weapon and clip /
   reserve ("spectating" when nobody plays him).
 - **Bottom right:** frame rate, ticks per second and tick.
@@ -333,13 +344,24 @@ Screenshots and downloads go to `logs/browser-check/` (gitignored). Results in h
 - **(d) Phone viewport** (`d-phone-spectate`, 390×844, DPR 3, touch): starts in spectate mode with the
   panel collapsed; the scoreboard sits above the map and your status below it; the controls wrap into
   four rows.
+- **(d2) Phone, zoomed in and dragged** (F, `d2-phone-zoomed-labels`): 2.44× about the Ts at T spawn, then dragged so
+  they sit under the scoreboard and the kill feed: 4 labels drawn, 2 left out, **0 overlapping the HUD** (before F, the
+  check:locked phone screenshot had barely's and eradicate's labels under the scoreboard). donk's label moves below
+  his dot, out from under the clock.
+- **(g) Desktop 900×700 at 12.8 s** (F, `g-desktop-narrow-killfeed`): the kill feed (2 rows) moves below the scoreboard
+  (rows from y 84; the scoreboard ends at y 78) instead of covering its right end; 0 labels overlap the HUD.
+- **(h) LIVE AI in the panel** (F, `h-desktop-live-aidebug`, cart idle in Back Alley, tracks on): at 1:17 Lokier
+  (outlived) and barely (sees him) are LIVE; their panel lines read "reacting · target lokier (out of sight) · plant →
+  (−1873, 396)" and "reacting · target barely · hold", and their paths show on the map.
 - **Determinism:** the spectate log from Chrome has the same digest as a Node run of the same length,
   and the desktop log (with a human) replays identically in Node against the app's Core (`defaultCore`:
   with the nav walk query; the check used a bare `ReplayCore` before, which stopped matching when B2
   turned the puppets on).
 - **Golden parity** (E1, `docs/golden.md`; `--only parity` runs just this): the no-human round played by the
   page at 4× has, through tick 1280 (20 s), the digest of the Node headless harness (`tools/harness.ts`) run with
-  the controls the page logged (`045fe7ec`), and so does the page's whole log (1,293 lines, `ba029b1a`).
+  the controls the page logged (`8a6f3b52` with F's cover; it was `2b8dc5fb` on B4's main, the `045fe7ec` here before
+  was C4's), and so does the page's whole log (`e5b41166` for 1,293 lines; the length depends on where the page
+  paused).
 - **(e) B5: rewind and summary** (`--only b5` runs just this): cart played by nobody at 4×: `[` at 24 s seeks to
   19 s and keeps running; −10 s while paused lands 10 s back, paused; dragging the timeline to 1:00 lands on tick
   3,839 in 1.5 s; the page's log after all that is one straight run (every line's tick its index) that replays

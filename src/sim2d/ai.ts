@@ -9,7 +9,7 @@
  * Randomness: each draw is `rng.fork('ai:' + id).fork('d' + n).next()` for the pawn's n-th draw, so a snapshot only
  * needs the draw count, and pawns never share a stream.
  */
-import { Rng, compareOrdinal, roundNumber, type Button, type Goal, type ObsEvent, type PlayerId, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
+import { Rng, compareOrdinal, roundNumber, type Button, type Goal, type ObsEvent, type PlayerId, type RoundPhase, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
 import { aimPitch } from './hitscan';
 import { TICKS_PER_SEC } from './movement';
 import type { NavMesh, NavPoint } from './nav';
@@ -21,7 +21,7 @@ export const AI_ROLES = ['hold', 'take_site', 'plant', 'guard_bomb', 'retake', '
 export type AiRole = (typeof AI_ROLES)[number];
 
 /** What the pawn is doing (aiDebug). */
-export type AiBehaviour = 'route' | 'moving' | 'holding' | 'planting' | 'guarding' | 'defusing' | 'hunting' | 'reacting' | 'fighting' | 'searching';
+export type AiBehaviour = 'route' | 'moving' | 'holding' | 'planting' | 'guarding' | 'defusing' | 'hunting' | 'reacting' | 'fighting' | 'searching' | 'escaping';
 
 const DEG = Math.PI / 180;
 
@@ -68,6 +68,13 @@ export interface AiState {
   /** The spot a role picked (plant spot, guard spot, hold spot), and the yaw to hold there. */
   spot: Vec3 | null;
   holdYaw: number | null;
+  /**
+   * Out of the bomb's blast: the spot picked once the pawn has to leave it (the round is over with the bomb ticking,
+   * or a CT gave up the defuse). Optional so that snapshots from before it restore (absent = null).
+   */
+  escape?: Vec3 | null;
+  /** A CT that can't finish the defuse before the explosion gave it up (for the rest of this goal). */
+  abandoned?: boolean;
 }
 
 /** What the AI may know about itself. */
@@ -87,6 +94,8 @@ export interface AiSelf {
   /** The held gun can fire on this tick (deployed, cycled, not reloading). */
   readonly ready: boolean;
   readonly reloading: boolean;
+  /** This pawn's defuse in progress completes on this tick (its progress bar), or null if it isn't defusing. */
+  readonly defuseEndTick: number | null;
 }
 
 /** Another pawn as the AI can see it (only pawns in `sees` are read for position). */
@@ -108,8 +117,10 @@ export interface AiContext {
   readonly sees: readonly PlayerId[];
   /** Last tick's events (what observe() reports). */
   readonly events: readonly ObsEvent[];
-  /** The bomb: planted position (null if not planted), and whether it is still ticking. */
-  readonly bomb: { readonly planted: Vec3 | null; readonly ticking: boolean };
+  /** The bomb: planted position (null if not planted), whether it is still ticking, and its explode tick (as the round shows: plant + timer). */
+  readonly bomb: { readonly planted: Vec3 | null; readonly ticking: boolean; readonly explodeTick: number | null };
+  /** The round as observe() reports it (`observe.round.phase`). */
+  readonly round: { readonly phase: RoundPhase };
   readonly nav: NavMesh;
   readonly sight: Sight;
   readonly tuning: Tuning;
@@ -154,6 +165,8 @@ export function freshAiState(id: PlayerId, tick: number, draws: number): AiState
     bombPos: null,
     spot: null,
     holdYaw: null,
+    escape: null,
+    abandoned: false,
   };
 }
 
@@ -303,14 +316,15 @@ export function holdFacing(ctx: AiContext, s: AiState, spot: Vec3): number {
 
 /**
  * A spot from which a T guards the planted bomb: on rings of 300–guardMaxUnits around it (every 15°), walkable, with
- * eye-to-bomb sight (`sight.clear`), nearest to the pawn (ties: ring then angle order). The goal's `hold` wins when
- * it qualifies. null if none qualifies.
+ * eye-to-bomb sight (`sight.clear`, cover included), nearest to the pawn (ties: ring then angle order). The goal's
+ * `hold` wins when it qualifies. null if none qualifies.
  */
 export function guardSpot(ctx: AiContext, bomb: Vec3): Vec3 | null {
   const { nav, sight, tuning } = ctx;
   const eye = tuning.damage.eyeHeight;
   const max = tuning.ai.guardMaxUnits;
-  const ok = (p: Vec3): boolean => dist2d(p, bomb) <= max && nav.isWalkable(p) && sight.clear(p, eye, bomb, tuning.damage.bandHeights['leg'] ?? 16);
+  // The bomb is a point on the ground: low for the cover rule (a box between hides it unless the guard stands at the box).
+  const ok = (p: Vec3): boolean => dist2d(p, bomb) <= max && nav.isWalkable(p) && sight.clear(p, eye, bomb, tuning.damage.bandHeights['leg'] ?? 16, false, true);
   const hold = ctx.goal.hold;
   if (hold !== null && ok(hold)) return copy(hold);
   let best: Vec3 | null = null;
@@ -329,6 +343,108 @@ export function guardSpot(ctx: AiContext, bomb: Vec3): Vec3 | null {
     }
   }
   return best;
+}
+
+/** 3D distance. */
+function dist3d(a: Vec3, b: Vec3): number {
+  return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+}
+
+/**
+ * Where to go to be out of a bomb's blast: the nearest way out by the nav mesh. A Dijkstra over the nav areas from
+ * the pawn's area (costs between portal midpoints, as `NavMesh.path`), popping areas in order of the walking
+ * distance to where it enters them; the first area with a candidate point (its centre, or a corner 16 units in) at
+ * least `clear` units (3D) from the bomb gives the destination: of its safe candidates, the one nearest to where the
+ * walk enters it. Ties by area id. The pawn's own position if it is already clear; null if no area is.
+ */
+export function escapeSpot(nav: NavMesh, from: Vec3, bomb: Vec3, clear: number): Vec3 | null {
+  if (dist3d(from, bomb) >= clear) return copy(from);
+  const areas = nav.areas;
+  const n = areas.length;
+  const g = new Float64Array(n).fill(Infinity);
+  const ex = new Float64Array(n);
+  const ey = new Float64Array(n);
+  const done = new Uint8Array(n);
+  const start = nav.areaAt(from) ?? nav.nearestArea(from);
+  g[start.id] = 0;
+  ex[start.id] = from.x;
+  ey[start.id] = from.y;
+  const inset = 16;
+  for (;;) {
+    let cur = -1;
+    let best = Infinity;
+    for (let i = 0; i < n; i++) {
+      if (done[i] === 0 && (g[i] as number) < best) {
+        best = g[i] as number;
+        cur = i;
+      }
+    }
+    if (cur < 0) return null;
+    done[cur] = 1;
+    const a = areas[cur] as (typeof areas)[number];
+    const ix = Math.min(inset, (a.x2 - a.x1) / 2);
+    const iy = Math.min(inset, (a.y2 - a.y1) / 2);
+    const cands = [
+      { x: (a.x1 + a.x2) / 2, y: (a.y1 + a.y2) / 2 },
+      { x: a.x1 + ix, y: a.y1 + iy },
+      { x: a.x2 - ix, y: a.y1 + iy },
+      { x: a.x1 + ix, y: a.y2 - iy },
+      { x: a.x2 - ix, y: a.y2 - iy },
+    ];
+    let pick: Vec3 | null = null;
+    let pickD = Infinity;
+    for (const c of cands) {
+      const p = { x: roundNumber(c.x), y: roundNumber(c.y), z: roundNumber(nav.zAt({ ...c, z: from.z })) };
+      if (dist3d(p, bomb) < clear) continue;
+      const d = Math.hypot(p.x - (ex[cur] as number), p.y - (ey[cur] as number));
+      if (d < pickD - 1e-9) {
+        pickD = d;
+        pick = p;
+      }
+    }
+    if (pick !== null) return pick;
+    for (const q of nav.portals[cur] ?? []) {
+      if (done[q.to] === 1) continue;
+      const ng = (g[cur] as number) + Math.hypot(q.mx - (ex[cur] as number), q.my - (ey[cur] as number));
+      if (ng < (g[q.to] as number) - 1e-9) {
+        g[q.to] = ng;
+        ex[q.to] = q.mx;
+        ey[q.to] = q.my;
+      }
+    }
+  }
+}
+
+/**
+ * Can this CT still finish a defuse before the bomb explodes? Defusing now: only if its progress bar ends before
+ * the explosion (the engine's rule). Otherwise: the time left must cover the walk to within the defuse range (nav
+ * path at the held weapon's run speed), the defuse itself (bomb.defuseKitSec with a kit, else bomb.defuseSec) and
+ * ai.defuseMarginSec. Unknown explode tick: yes.
+ */
+export function canFinishDefuse(ctx: AiContext, bomb: Vec3): boolean {
+  const { self, tick, tuning } = ctx;
+  const explode = ctx.bomb.explodeTick;
+  if (explode === null) return true;
+  if (self.defuseEndTick !== null) return self.defuseEndTick < explode;
+  const left = (explode - tick) / TICKS_PER_SEC;
+  const defuse = self.items.includes('defuser') ? tuning.bomb.defuseKitSec : tuning.bomb.defuseSec;
+  const budget = left - defuse - tuning.ai.defuseMarginSec;
+  if (budget < 0) return false;
+  const range = tuning.bomb.defuseRange * tuning.ai.defuseRangeFactor;
+  const speed = tuning.movement.runSpeedByWeapon[self.weapon] ?? tuning.movement.runSpeedByWeapon['knife'] ?? 250;
+  const straight = Math.max(0, dist2d(self.pos, bomb) - range);
+  if (straight / speed > budget) return false;
+  // Only when the straight line leaves it in doubt: the walking distance.
+  if ((3 * straight) / speed <= budget) return true;
+  const path = ctx.nav.path(self.pos, snapToNav(ctx.nav, bomb));
+  const walk = path === null ? straight : Math.max(0, pathLength2d(path) - range);
+  return walk / speed <= budget;
+}
+
+function pathLength2d(points: readonly Vec3[]): number {
+  let len = 0;
+  for (let i = 1; i < points.length; i++) len += dist2d(points[i - 1] as Vec3, points[i] as Vec3);
+  return len;
 }
 
 // ---- the step -------------------------------------------------------------------------------------------
@@ -539,11 +655,7 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
     walk: knownNear && !use,
   });
 
-  // The route first (every role); off-mesh points count at their projection onto the mesh.
   const nav = ctx.nav;
-  while (s.routeIndex < goal.route.length && dist2d(self.pos, snapToNav(nav, goal.route[s.routeIndex] as Vec3)) <= arrive) s.routeIndex++;
-  if (s.routeIndex < goal.route.length) return plan('route', snapToNav(nav, goal.route[s.routeIndex] as Vec3), null);
-
   const holdAt = (spot: Vec3, behaviour: AiBehaviour = 'holding'): RolePlan => {
     if (dist2d(self.pos, spot) > arrive) {
       s.holdYaw = null;
@@ -552,6 +664,31 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
     s.holdYaw ??= roundNumber(holdFacing(ctx, s, spot));
     return plan(behaviour, null, s.holdYaw);
   };
+  // Out of the blast: once the round is over with the bomb still ticking (nothing left to win, everything to lose),
+  // and for a CT who gave up the defuse, before anything else (the route too). Run, then hold there.
+  const bombAt = ctx.bomb.planted;
+  const escape = (): RolePlan => {
+    if (s.escape === undefined || s.escape === null) {
+      s.escape = bombAt === null ? copy(self.pos) : (escapeSpot(nav, self.pos, bombAt, tuning.bomb.radius + ai.blastMarginUnits) ?? copy(self.pos));
+      s.holdYaw = null;
+    }
+    const spot = s.escape;
+    if (dist2d(self.pos, spot) > arrive) {
+      s.holdYaw = null;
+      return { ...plan('escaping', spot, null), walk: false };
+    }
+    s.holdYaw ??= roundNumber(holdFacing(ctx, s, spot));
+    return { ...plan('holding', null, s.holdYaw), walk: false };
+  };
+  const mustLeave = bombAt !== null && ctx.bomb.ticking && (ctx.round.phase === 'over' || s.abandoned === true);
+  // After the explosion a pawn that got out keeps holding there: the round is over, there is nothing to go back to.
+  const stayOut = ctx.round.phase === 'over' && s.escape !== undefined && s.escape !== null;
+  if (mustLeave || stayOut) return escape();
+
+  // The route first (every role); off-mesh points count at their projection onto the mesh.
+  while (s.routeIndex < goal.route.length && dist2d(self.pos, snapToNav(nav, goal.route[s.routeIndex] as Vec3)) <= arrive) s.routeIndex++;
+  if (s.routeIndex < goal.route.length) return plan('route', snapToNav(nav, goal.route[s.routeIndex] as Vec3), null);
+
   const defaultSpot = (): Vec3 => {
     s.spot ??= snapToNav(nav, goal.hold ?? (goal.route.length > 0 ? (goal.route[goal.route.length - 1] as Vec3) : self.pos));
     return s.spot;
@@ -580,6 +717,11 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
       return guardPlan(s, ctx, plan, holdAt, defaultSpot);
     case 'retake':
     case 'defuse': {
+      if (self.team === 'CT' && s.bombPos !== null && ctx.bomb.ticking && bombAt !== null && !canFinishDefuse(ctx, s.bombPos)) {
+        // Too late: no defuse can finish before the explosion. Give it up and save yourself (CS players do).
+        s.abandoned = true;
+        return escape();
+      }
       if (self.team === 'CT' && s.bombPos !== null && ctx.bomb.ticking) {
         const range = tuning.bomb.defuseRange * ai.defuseRangeFactor;
         if (dist2d(self.pos, s.bombPos) <= range) {

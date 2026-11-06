@@ -10,6 +10,7 @@
  * - Rewinding across a LIVE switch puts the pawn back in REPLAY (both paths).
  * - Seek forward and back equal straight runs.
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, canonicalize, replay, type LogEntry, type PlayerId, type SessionLog, type Vec3 } from '../src/contracts/index';
 import { autoCheckpointId, noteObserve, releaseWindowTicks, tickOf } from '../src/core/index';
@@ -18,7 +19,8 @@ import { ROOT, loadHarnessData, logDigest, slotPresses, type HumanCommand, type 
 import { HumanBot, loadScenario } from '../tools/human-bot';
 
 const data = loadHarnessData();
-const GOLDEN_DIGEST = 'e6c2be70';
+/** The golden master's digest, from the fixtures manifest (so a fixture update doesn't need an edit here). */
+const GOLDEN_DIGEST = (JSON.parse(readFileSync(`${ROOT}/fixtures/golden/manifest.json`, 'utf8')) as { fixtures: { name: string; digest: string }[] }).fixtures.find((f) => f.name === 'round-nohuman')?.digest;
 const END = 4516;
 
 function session(extra: Partial<SessionConfig> = {}): Session {

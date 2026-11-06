@@ -4,6 +4,8 @@
  * hitgroup comes from `pitch`: the band (head, chest, stomach, leg) whose aim pitch is closest to the
  * shooter's pitch, within `damage.hitToleranceDeg`, else the bullet passes over or under that pawn and
  * flies on. Bullets ignore smoke. Pitch is Source's: degrees, positive = looking down. docs/combat.md.
+ * Cover (boxes; docs/vision.md "Cover"): once the band is known, the line from the shooter's eye to that band's
+ * point on the victim must also pass the sight's cover rule, or the box stops the bullet.
  */
 import { roundNumber, type DamageTuning, type PlayerId, type Team, type Vec3 } from '../contracts/index';
 import type { NavPoint } from './nav';
@@ -23,14 +25,18 @@ export interface ScanPawn {
   readonly pitch: number;
   readonly crouching: boolean;
   readonly alive: boolean;
+  /** Planting or defusing: like a crouched pawn, it doesn't look over cover (Sim2DHost sets it). */
+  readonly busy?: boolean;
 }
 
 /**
  * The sight query hitscan uses: Sim2DHost passes its Sight (the radar mask plus the level check, C4), so bullets go
- * through windows; NavMesh fits too (2D, z ignored). Both ends carry their floor z.
+ * through windows; NavMesh fits too (2D, z ignored). Both ends carry their floor z. `coverClear` (Sight's cover
+ * rule) is optional: without it nothing is cover.
  */
 export interface LosQuery {
   lineOfSight(a: NavPoint, b: NavPoint): boolean;
+  coverClear?(a: { readonly pos: Vec3; readonly height: number; readonly low: boolean }, b: { readonly pos: Vec3; readonly height: number; readonly low: boolean }): boolean;
 }
 
 export interface ShotHit {
@@ -83,7 +89,8 @@ export function pickBand(pitch: number, from: Body, to: Body, d: DamageTuning): 
  * Trace one bullet from `shooter` through `pawns` (any order; candidates are taken by ray distance, then
  * id). Skips the shooter, dead pawns and (friendly fire off) teammates. Returns the first pawn hit, or
  * null. A pawn the ray crosses but `sight.lineOfSight(shooter, impact)` rejects is behind a wall, and so is
- * everything further along the ray.
+ * everything further along the ray. A pawn whose band the bullet would hit but `sight.coverClear` (eye to that
+ * band's point, crouched / planting / defusing ends low) rejects is behind a box, which stops the bullet too.
  */
 export function traceShot(shooter: ScanPawn, pawns: readonly ScanPawn[], nav: LosQuery, d: DamageTuning): ShotHit | null {
   const rad = shooter.yaw / DEG;
@@ -114,8 +121,14 @@ export function traceShot(shooter: ScanPawn, pawns: readonly ScanPawn[], nav: Lo
     if (!nav.lineOfSight(shooter.pos, impact2)) break;
     const band = pickBand(shooter.pitch, shooter, c.p, d);
     if (band === null) continue;
+    const bandH = bandHeight(band, c.p.crouching, d);
+    if (nav.coverClear !== undefined) {
+      const from = { pos: shooter.pos, height: eyeZ - shooter.pos.z, low: shooter.crouching || shooter.busy === true };
+      const to = { pos: { x: impact2.x, y: impact2.y, z: c.p.pos.z }, height: bandH, low: c.p.crouching || c.p.busy === true };
+      if (!nav.coverClear(from, to)) break;
+    }
     const flat = Math.hypot(c.p.pos.x - shooter.pos.x, c.p.pos.y - shooter.pos.y);
-    const aimZ = c.p.pos.z + bandHeight(band, c.p.crouching, d);
+    const aimZ = c.p.pos.z + bandH;
     return {
       victim: c.p.id,
       hitgroup: band,

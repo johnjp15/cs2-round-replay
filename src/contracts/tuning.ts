@@ -260,6 +260,12 @@ export interface AiTuning {
   losLevelStepUnits: number;
   /** Level check: a sample counts as inside a floor only this far below it (units; nav height-model error). */
   losLevelSlackUnits: number;
+  /** Cover (boxes): a run of cover cells along a line this long or shorter (cells) never blocks (grazing a corner). */
+  losCoverTolerancePx: number;
+  /** Cover: an upright pawn (not crouched, planting or defusing) this close (units) to a box sees and shoots over it. */
+  losCoverNearUnits: number;
+  /** Cover: a line at least this high (units) above the lower end's floor all across a box passes over it. */
+  losCoverHeightUnits: number;
   /** LIVE AI (2D engine only; CS2 uses the native bot). The reaction time varies by ± this fraction (seeded). */
   reactionJitter: number;
   /** Share of acquisitions aimed at the head band; the rest aim at the chest. */
@@ -301,6 +307,10 @@ export interface AiTuning {
   defuseRangeFactor: number;
   /** A guard spot is at most this far (units) from the planted bomb. */
   guardMaxUnits: number;
+  /** Leaving the bomb's blast: go at least this far (units, 3D) beyond bomb.radius. */
+  blastMarginUnits: number;
+  /** A CT starts (or keeps going for) a defuse only if it can finish this long (s) before the explosion. */
+  defuseMarginSec: number;
 }
 
 /** Nav-mesh geometry tolerances (see docs/nav.md). */
@@ -435,6 +445,9 @@ const AI_KEYS = [
   'losEndpointTolerancePx',
   'losLevelStepUnits',
   'losLevelSlackUnits',
+  'losCoverTolerancePx',
+  'losCoverNearUnits',
+  'losCoverHeightUnits',
   'reactionJitter',
   'headshotAimRatio',
   'turnRateDegPerTick',
@@ -456,6 +469,8 @@ const AI_KEYS = [
   'plantSpotUnits',
   'defuseRangeFactor',
   'guardMaxUnits',
+  'blastMarginUnits',
+  'defuseMarginSec',
 ] as const;
 const NAV_KEYS = ['stepHeight', 'edgeEpsilon', 'losMargin'] as const;
 
