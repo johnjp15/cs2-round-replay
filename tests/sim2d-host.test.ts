@@ -44,7 +44,7 @@ function setupActions(): Action[] {
   const out: Action[] = [];
   for (const p of round.players) {
     out.push({ type: 'teleport', id: p.id, pos: p.start.pos, yaw: 0 });
-    out.push({ type: 'set_hp', id: p.id, hp: p.startHp, armor: p.startArmor });
+    out.push({ type: 'set_hp', id: p.id, hp: p.startHp, armor: p.startArmor, helmet: p.startArmor > 0 });
     const drawn = p.kit.primary ?? p.kit.secondary;
     if (drawn !== null) {
       out.push(loose({ type: 'give', id: p.id, item: drawn, clip: p.kit.clip, reserve: p.kit.reserve }));
@@ -100,7 +100,7 @@ describe('Sim2DHost actions', () => {
     host.apply(
       act([
         { type: 'teleport', id: 'cart', pos: { x: -391, y: 909, z: -84 }, yaw: 45 },
-        { type: 'set_hp', id: 'cart', hp: 61, armor: 37 },
+        { type: 'set_hp', id: 'cart', hp: 61, armor: 37, helmet: true },
         { type: 'give', id: 'cart', item: 'ak47', clip: 30, reserve: 90 },
         { type: 'set_weapon', id: 'cart', weapon: 'ak47' },
       ]),
@@ -131,15 +131,15 @@ describe('Sim2DHost actions', () => {
     host.apply(act([{ type: 'teleport', id: 'cart', pos: { x: -391, y: 909, z: -84 }, yaw: 90 }]));
     expect(pawn(host.observe(), 'cart').vel).toEqual({ x: 0, y: 0, z: 0 });
 
-    host.apply(act([{ type: 'set_hp', id: 'donk', hp: 0, armor: 0 }]));
+    host.apply(act([{ type: 'set_hp', id: 'donk', hp: 0, armor: 0, helmet: false }]));
     expect(pawn(host.observe(), 'donk').alive).toBe(false);
-    host.apply(act([{ type: 'set_hp', id: 'donk', hp: 100, armor: 100 }]));
+    host.apply(act([{ type: 'set_hp', id: 'donk', hp: 100, armor: 100, helmet: true }]));
     expect(pawn(host.observe(), 'donk').alive).toBe(true);
   });
 
   it('dead pawns do not move', () => {
     const host = newHost();
-    host.apply(act([{ type: 'teleport', id: 'cart', pos: { x: -391, y: 909, z: -84 }, yaw: 0 }, { type: 'set_hp', id: 'cart', hp: 0, armor: 0 }], [input('cart', 1, 0, 0)]));
+    host.apply(act([{ type: 'teleport', id: 'cart', pos: { x: -391, y: 909, z: -84 }, yaw: 0 }, { type: 'set_hp', id: 'cart', hp: 0, armor: 0, helmet: false }], [input('cart', 1, 0, 0)]));
     for (let i = 0; i < 10; i++) host.tick();
     expect(pawn(host.observe(), 'cart').pos.x).toBe(-391);
   });
