@@ -126,7 +126,8 @@
     "aimSettleSec": 0.15,
     "aimResidualDeg": 0.5,
     "fireConeDeg": 1.5,
-    "semiAutoSettleFactor": 2,
+    "semiAutoSettleFactor": 1,
+    "sprayStartFactor": 2,
     "targetLostSec": 0.5,
     "reloadClipFraction": 0.3,
     "walkNearEnemyUnits": 600,
@@ -137,7 +138,7 @@
     "stuckProgressUnits": 16,
     "unstickSec": 0.4,
     "counterStrafeSpeed": 40,
-    "plantSpotUnits": 400,
+    "plantSpotUnits": 150,
     "defuseRangeFactor": 0.6,
     "guardMaxUnits": 800
   },

@@ -21,7 +21,9 @@
     "bench:session": "tsx tools/bench-session.ts",
     "check:browser": "tsx tools/browser-check.ts",
     "ghost": "tsx tools/ghost-round.ts",
-    "scripted": "tsx tools/scripted-round.ts"
+    "scripted": "tsx tools/scripted-round.ts",
+    "extract:vismask": "tsx tools/extract-vismask.ts",
+    "vision": "tsx tools/vision-labels.ts"
   },
   "repository": {
     "type": "git",

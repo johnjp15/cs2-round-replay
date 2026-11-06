@@ -172,7 +172,7 @@ for (;;) {
 | `set_hp` | Sets hp and armor (≥ 0); `alive = hp > 0`, so `set_hp 0` kills and `set_hp > 0` revives (restart/setup). Reads B1's `helmet` boolean when present. |
 | `give` | Adds or replaces the inventory entry `{item, clip, reserve}`; each grenade `give` adds another entry (C2). Items are strings, so unknown items are kept. |
 | `set_weapon` | Switches the active item if it is in the inventory, starting its deploy (C2; instant when the same act teleported the pawn). Otherwise it is noted as `not in inventory`, and a `defuser` as `item cannot be held`. Ammo in `observe()` is the active item's entry. |
-| `set_mode` | Records mode and goal per pawn (`pawnState(id)`); the host does not act on them. |
+| `set_mode` | Records mode and goal per pawn (`pawnState(id)`). LIVE (C4): the LIVE AI drives the pawn and Core inputs for it are ignored (`docs/ai.md`); REPLAY hands it back. |
 | `log` | Ignored (the app reads Core logs from the Act / SessionLog). |
 | `damage`, `block_damage`, `unblock_damage` | C2: see `docs/combat.md` (scripted damage is applied in the next `tick()`). |
 | `plant`, `defuse_start`, `defuse_stop`, `end_round` | C3: queued and applied in the next `tick()` after the scripted damage (`docs/combat.md`, "Bomb and round rules"). |
@@ -184,11 +184,14 @@ for (;;) {
 - **Human**: `human` defaults to `cart`; `setHuman(id | null)` changes it. `setHumanInput(input)` drives the
   human pawn instead of any Core input for it, until replaced or cleared with `null`, which hands the pawn
   back to Core. `input.id` must be the human pawn.
-- **observe()**: all roster pawns sorted by id, `sees: []` (C4), the last tick's events in emission order
-  (C2), `t = tick / 64`, and `round` (C3: phase, score, clock, bomb).
+- **observe()**: all roster pawns sorted by id, `sees` (C4: FOV, sight mask and level check, smoke, blindness;
+  `docs/vision.md`; cached per state), the last tick's events in emission order (C2), `t = tick / 64`, and `round`
+  (C3: phase, score, clock, bomb).
+- **Vision and AI setup** (C4): `new Sim2DHost(nav, tuning, roster, options, {mask, seed})`. `mask` is the sight mask
+  (`data/mirage-vismask.json`; null = the nav mesh's line of sight), `seed` the LIVE AI's seed. The Session passes both.
 - **Collision and locks** (C3): pawns don't overlap alive enemies (radius 16 circles, teammates pass through), and a
   planting or defusing pawn doesn't move (`docs/combat.md`, "Collision" and "Bomb and round rules").
-- **snapshot() / restore()**: version 3 adds the combat, bomb and round state (`docs/combat.md`, Snapshot) to
+- **snapshot() / restore()**: version 4 (C4) adds the LIVE AI state and seed; version 3 added the combat, bomb and round state (`docs/combat.md`, Snapshot) to
   `{tick, human, humanInput, inputs, pawns}`, via `toJsonValue`. It is exact because the state is canonical.
   `restore` checks the version and roster. `unhandled()` and `combatLog()` are diagnostics and are not part of
   snapshots.

@@ -294,7 +294,9 @@ These are proposals for the contracts owner (task A4). This task changes no inte
   coming from the planter. `land` has no engine event, so the adapter derives it; the contract should say landing
   sounds are adapter-derived.
 - **F5. `sees` in CS2 is adapter-computed.** The contract should say whether smoke and flashes block it, whether
-  teammates are included, and the eye height used (e.g. `AbsOrigin + ViewOffset`).
+  teammates are included, and the eye height used (e.g. `AbsOrigin + ViewOffset`). *Resolved in C4:* both teams, eye
+  to eye, FOV `ai.fovDeg`, smoke blocks, a flashed viewer sees nothing, dead pawns neither see nor are seen
+  (`docs/contracts.md`, "sees"; the 2D version in `docs/vision.md`).
 - **F6. Control and snapshots.** `seek` (except t = 0), `checkpoint`/`rewind`, `speed` and
   `IHost.snapshot()/restore()` can't be done faithfully on a live CS2 server. Make them optional host capabilities
   (e.g. an `IHost.capabilities()` list) so Core and the app degrade gracefully.

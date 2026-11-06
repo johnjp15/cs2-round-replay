@@ -96,6 +96,10 @@ T Spawn → Palace Alley → T Ramp ≈ 6,900), not the shortest walkable one, s
 `losMargin` (8) covers slivers the export leaves between areas at ledges and railings (e.g. the 4- and
 12-unit gaps between B site and the Balcony on the Truck → Apartments line).
 
+Since C4, `sees`, bullets and grenades use the radar sight mask instead (`docs/vision.md`); this query remains for
+movement-side checks and as the fallback on hosts without a mask. `floorsAt(x, y)` (C4) lists the floor heights of every
+area containing a point, for vision's level check.
+
 **Approximation:** anything that is not walkable is treated as a full-height wall, and height is ignored.
 Known failure modes:
 

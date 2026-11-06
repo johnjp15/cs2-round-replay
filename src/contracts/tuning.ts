@@ -246,6 +246,8 @@ export interface AiTuning {
   fireConeDeg: number;
   /** Semi-automatic guns fire only after this many aimSettleSec on the target (automatic guns at once). */
   semiAutoSettleFactor: number;
+  /** Fire when the settling aim offset is within the target's angular radius; automatic guns within this multiple of it. */
+  sprayStartFactor: number;
   /** Keep a target out of sight this long (s) before switching to another. */
   targetLostSec: number;
   /** Reload with no enemy in sight once the magazine is at or below this fraction. */
@@ -401,6 +403,7 @@ const AI_KEYS = [
   'aimResidualDeg',
   'fireConeDeg',
   'semiAutoSettleFactor',
+  'sprayStartFactor',
   'targetLostSec',
   'reloadClipFraction',
   'walkNearEnemyUnits',

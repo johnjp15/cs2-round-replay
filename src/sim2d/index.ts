@@ -30,7 +30,7 @@ export {
   decodeVisMaskJson,
 } from './vision';
 export type { VisMaskGrid, VisOptions, SightTrace, VisMaskJson, SightNav, SightOptions, SeePawn, SeesOptions, SmokeQuery } from './vision';
-export { AI_ROLES, freshAiState, roleOf, stepAi, placeCentre, nearestBombsitePoint, holdFacing, guardSpot } from './ai';
+export { AI_ROLES, freshAiState, roleOf, stepAi, snapToNav, placeCentre, nearestBombsitePoint, holdFacing, guardSpot } from './ai';
 export type { AiRole, AiBehaviour, AiState, AiSelf, AiOther, AiContext, AiStep } from './ai';
 export {
   BOMBSITE_PREFIX,

@@ -212,6 +212,14 @@ function isEnemy(self: AiSelf, o: AiOther): boolean {
   return o.team !== self.team;
 }
 
+/** `p` if it is walkable, else its projection onto the nearest nav area (with that floor's z). */
+export function snapToNav(nav: NavMesh, p: NavPoint & { z?: number }): Vec3 {
+  if (nav.isWalkable(p)) return copy(p);
+  const a = nav.nearestArea(p);
+  const q = { x: Math.min(Math.max(p.x, a.x1), a.x2), y: Math.min(Math.max(p.y, a.y1), a.y2) };
+  return { x: q.x, y: q.y, z: nav.zAt(q) };
+}
+
 /** Area-weighted centre of the nav areas of a place (e.g. "T Spawn"), or null. */
 export function placeCentre(nav: NavMesh, place: string): Vec3 | null {
   let w = 0;
@@ -229,20 +237,30 @@ export function placeCentre(nav: NavMesh, place: string): Vec3 | null {
   return { x: p.x, y: p.y, z: nav.zAt(p) };
 }
 
-/** Centre of the bombsite area nearest to `p` (2D rectangle distance, then id), or null. */
+/**
+ * The plant spot for a bomb carrier heading from `p`: the bombsite (a nav place whose name starts with "Bombsite")
+ * with the area nearest to `p` (2D, ties by id), and that site's area-weighted centre, snapped onto walkable space.
+ * null if the mesh has no bombsite.
+ */
 export function nearestBombsitePoint(nav: NavMesh, p: NavPoint): Vec3 | null {
-  let best: Vec3 | null = null;
+  let place: string | null = null;
   let bestD = Infinity;
   for (const a of nav.areas) {
-    if (!(nav.places[a.place] ?? '').startsWith('Bombsite')) continue;
+    const name = nav.places[a.place] ?? '';
+    if (!name.startsWith('Bombsite')) continue;
     const d = Math.hypot(Math.max(a.x1 - p.x, 0, p.x - a.x2), Math.max(a.y1 - p.y, 0, p.y - a.y2));
     if (d < bestD - 1e-9) {
       bestD = d;
-      const c = { x: (a.x1 + a.x2) / 2, y: (a.y1 + a.y2) / 2 };
-      best = { x: c.x, y: c.y, z: nav.zAt(c) };
+      place = name;
     }
   }
-  return best;
+  if (place === null) return null;
+  const c = placeCentre(nav, place);
+  if (c === null) return null;
+  if (nav.isWalkable(c)) return c;
+  const a = nav.nearestArea(c);
+  const q = { x: Math.min(Math.max(c.x, a.x1), a.x2), y: Math.min(Math.max(c.y, a.y1), a.y2) };
+  return { x: q.x, y: q.y, z: nav.zAt(q) };
 }
 
 /**
@@ -325,10 +343,10 @@ export function stepAi(prev: AiState, ctx: AiContext): AiStep {
   selectTarget(s, ctx);
 
   let yaw = self.yaw;
-  let pitch = self.pitch;
+  let pitch: number;
   const buttons: Button[] = [];
   let move: { dirX: number; dirY: number; mag: number } | null = null;
-  let weapon: WeaponId | null = null;
+  let weapon: WeaponId | null;
   const rate = ai.turnRateDegPerTick;
 
   const engaged = s.target !== null && tick >= s.acquiredTick + s.reactTicks;
@@ -349,8 +367,14 @@ export function stepAi(prev: AiState, ctx: AiContext): AiStep {
     if (speed > ai.counterStrafeSpeed) move = { dirX: -self.vel.x / speed, dirY: -self.vel.y / speed, mag: 1 };
     weapon = bestGun(self);
     const gun = gunStats(self.weapon, tuning);
+    // Fire once the view has caught up with the aim point and the settling offset is within the target's angular
+    // radius (automatic guns start spraying within sprayStartFactor of it). Misses come from the residual.
     const aligned = Math.abs(angleDiff(yaw, wantYaw)) <= ai.fireConeDeg && Math.abs(pitch - wantPitch) <= ai.fireConeDeg;
-    if (visible && gun !== null && weapon === null && self.clip > 0 && !self.reloading && aligned) {
+    const d = dist2d(self.pos, aimAt);
+    const radius = d > tuning.damage.pawnRadius ? Math.asin(tuning.damage.pawnRadius / d) / DEG : 90;
+    const spread = gun !== null && gun.automatic ? ai.sprayStartFactor : 1;
+    const onTarget = Math.abs(s.aimYawErr * settle) <= radius * spread && Math.abs(s.aimPitchErr * settle) <= tuning.damage.hitToleranceDeg * spread;
+    if (visible && gun !== null && weapon === null && self.clip > 0 && !self.reloading && aligned && onTarget) {
       if (gun.automatic) {
         buttons.push('ATTACK');
       } else if (!s.attackHeld && self.ready && tau >= ai.semiAutoSettleFactor * ai.aimSettleSec) {
@@ -515,9 +539,10 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
     walk: knownNear && !use,
   });
 
-  // The route first (every role).
-  while (s.routeIndex < goal.route.length && dist2d(self.pos, goal.route[s.routeIndex] as Vec3) <= arrive) s.routeIndex++;
-  if (s.routeIndex < goal.route.length) return plan('route', copy(goal.route[s.routeIndex] as Vec3), null);
+  // The route first (every role); off-mesh points count at their projection onto the mesh.
+  const nav = ctx.nav;
+  while (s.routeIndex < goal.route.length && dist2d(self.pos, snapToNav(nav, goal.route[s.routeIndex] as Vec3)) <= arrive) s.routeIndex++;
+  if (s.routeIndex < goal.route.length) return plan('route', snapToNav(nav, goal.route[s.routeIndex] as Vec3), null);
 
   const holdAt = (spot: Vec3, behaviour: AiBehaviour = 'holding'): RolePlan => {
     if (dist2d(self.pos, spot) > arrive) {
@@ -528,7 +553,7 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
     return plan(behaviour, null, s.holdYaw);
   };
   const defaultSpot = (): Vec3 => {
-    s.spot ??= copy(goal.hold ?? (goal.route.length > 0 ? (goal.route[goal.route.length - 1] as Vec3) : self.pos));
+    s.spot ??= snapToNav(nav, goal.hold ?? (goal.route.length > 0 ? (goal.route[goal.route.length - 1] as Vec3) : self.pos));
     return s.spot;
   };
 
@@ -541,7 +566,7 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
       if (s.spot === null) {
         const hold = goal.hold;
         const inSite = hold !== null && (ctx.nav.placeName(hold) ?? '').startsWith('Bombsite');
-        s.spot = inSite && hold !== null ? copy(hold) : nearestBombsitePoint(ctx.nav, goal.route.length > 0 ? (goal.route[goal.route.length - 1] as Vec3) : self.pos);
+        s.spot = inSite && hold !== null ? snapToNav(nav, hold) : nearestBombsitePoint(nav, goal.route.length > 0 ? (goal.route[goal.route.length - 1] as Vec3) : self.pos);
       }
       const spot = s.spot ?? defaultSpot();
       const inSiteNow = ctx.nav.placeName(self.pos).startsWith('Bombsite');
@@ -563,13 +588,14 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
           if (!enemyInSight) return plan('defusing', null, bearing(self.pos, s.bombPos), true, gun);
           return plan('holding', null, bearing(self.pos, s.bombPos));
         }
-        return plan('moving', s.bombPos, null, false, gun, range);
+        return plan('moving', snapToNav(nav, s.bombPos), null, false, gun, range);
       }
       return holdAt(defaultSpot());
     }
     case 'hunt': {
       if (s.lastKnown !== null && tick - s.lastKnown.tick <= sec(ai.memorySec)) {
-        if (dist2d(self.pos, s.lastKnown.pos) > arrive) return plan('hunting', s.lastKnown.pos, null);
+        const there = snapToNav(nav, s.lastKnown.pos);
+        if (dist2d(self.pos, there) > arrive) return plan('hunting', there, null);
         // Reached it without contact: forget it and look around from there.
         s.lastKnown = null;
         s.spot = copy(self.pos);
@@ -602,8 +628,9 @@ function guardPlan(
 
 /**
  * Steer along the nav path to `dest`: (re)plan when the destination changes, skip ahead to the furthest later path
- * point reachable in a straight walkable line, ease off within 48 units of the end, and repath with a sideways
- * nudge when the remaining length hasn't dropped by stuckProgressUnits in stuckSec. null once within arriveUnits.
+ * point reachable in a straight walkable line, re-plan from the current position when the next point isn't, ease
+ * off within 48 units of the end, and repath with a sideways nudge when the remaining length hasn't dropped by
+ * stuckProgressUnits in stuckSec. null once within arriveUnits.
  */
 function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number): { dirX: number; dirY: number; mag: number } | null {
   const { nav, self, tick, tuning } = ctx;
@@ -632,9 +659,16 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
       break;
     }
   }
-  const next = path[s.pathIndex] as Vec3;
+  // Off the corridor (a corner cut short): re-plan from here, so the first leg is walkable again.
+  if (!nav.segmentWalkable(pos, path[s.pathIndex] as Vec3) && nav.isWalkable(pos)) {
+    const keep = { progressTick: s.progressTick, progressDist: s.progressDist };
+    replan();
+    s.progressTick = keep.progressTick;
+    s.progressDist = keep.progressDist;
+  }
+  const next = s.path[s.pathIndex] as Vec3;
   let remaining = dist2d(pos, next);
-  for (let j = s.pathIndex; j < path.length - 1; j++) remaining += dist2d(path[j] as Vec3, path[j + 1] as Vec3);
+  for (let j = s.pathIndex; j < s.path.length - 1; j++) remaining += dist2d(s.path[j] as Vec3, s.path[j + 1] as Vec3);
   if (remaining < s.progressDist - ai.stuckProgressUnits) {
     s.progressDist = remaining;
     s.progressTick = tick;

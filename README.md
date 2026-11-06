@@ -50,8 +50,10 @@ npm run bench:session  # cost of one Session.step() over a full round (docs/app.
 npm run check:browser  # after build: headless Chromium screenshots, fps and ticks/s (docs/app.md)
 npm run ghost          # whole round with no human: logs/ghost-round.jsonl + logs/ghost-trace.json, prints the tracking table
 npm run scripted       # the same round with B3's checks: logs/scripted-round.jsonl + logs/scripted-trace.json, prints kills, HP, shot ticks, latency
+npm run extract:vismask  # rebuild data/mirage-vismask.json (the sight mask) from the radar; logs/vismask-debug.png
+npm run vision         # the labelled vision set against the sight mask (docs/vision.md); logs/vision-labels.png
 ```
 
 ## Docs
 
-Read [`docs/conventions.md`](docs/conventions.md) (stack, units, time, determinism, definition of done) and [`docs/contracts.md`](docs/contracts.md) (the Core ↔ engine interface) before starting a task. [`docs/round-data.md`](docs/round-data.md) describes `data/round.json` and how to regenerate it. [`docs/core.md`](docs/core.md) describes the Core: round model, clock, start state, event schedule and `ReplayCore`. [`docs/nav.md`](docs/nav.md) covers the nav mesh and [`docs/movement.md`](docs/movement.md) the 2D movement model and `Sim2DHost`, and [`docs/combat.md`](docs/combat.md) its weapons, damage, grenades, sounds, bomb, round rules and pawn collision. [`docs/app.md`](docs/app.md) covers the browser app: `Session`, the game loop, controls and performance.
+Read [`docs/conventions.md`](docs/conventions.md) (stack, units, time, determinism, definition of done) and [`docs/contracts.md`](docs/contracts.md) (the Core ↔ engine interface) before starting a task. [`docs/round-data.md`](docs/round-data.md) describes `data/round.json` and how to regenerate it. [`docs/core.md`](docs/core.md) describes the Core: round model, clock, start state, event schedule and `ReplayCore`. [`docs/nav.md`](docs/nav.md) covers the nav mesh and [`docs/movement.md`](docs/movement.md) the 2D movement model and `Sim2DHost`, and [`docs/combat.md`](docs/combat.md) its weapons, damage, grenades, sounds, bomb, round rules and pawn collision; [`docs/vision.md`](docs/vision.md) covers sight (the radar mask, `sees`) and [`docs/ai.md`](docs/ai.md) the LIVE AI. [`docs/app.md`](docs/app.md) covers the browser app: `Session`, the game loop, controls and performance.
