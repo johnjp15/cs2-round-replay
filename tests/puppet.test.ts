@@ -14,8 +14,11 @@ import {
   weaponAt,
   withLook,
 } from '../src/core/index';
+import { NavWalkQuery } from '../src/sim2d/walk-query';
+import { Sim2DHost } from '../src/sim2d/host';
 import { ScriptedHost, runSession } from './fakes';
 import { loadRound, loadTuning } from './round-fixture';
+import { nav, roster } from './sim2d-fixtures';
 
 const tuning = loadTuning();
 const r = tuning.replay;
@@ -340,6 +343,30 @@ describe('ReplayCore with puppets', () => {
     const later = log.at(5)?.act;
     expect(later?.inputs.some((i) => i.forward !== 0 || i.side !== 0)).toBe(true);
     expect(later?.actions).toEqual([]);
+  });
+
+  it('keeps every start yaw through the setup tick (Sim2DHost applies input yaw after the teleport)', () => {
+    const cores: [string, ReplayCore][] = [
+      ['puppets off', new ReplayCore(model, schedule, tuning, 1)],
+      ['puppets on', new ReplayCore(model, schedule, tuning, 1, new NavWalkQuery(nav))],
+    ];
+    for (const human of ['cart', null] as const) {
+      for (const [label, core] of cores) {
+        const host = new Sim2DHost(nav, tuning, roster);
+        host.setHuman(human);
+        core.control({ type: 'start' });
+        const act = core.step(host.observe());
+        host.apply(act);
+        host.tick();
+        const o = host.observe();
+        expect(o.tick).toBe(1);
+        for (const a of act.actions) {
+          if (a.type !== 'teleport') continue;
+          expect(o.pawns.find((q) => q.id === a.id)?.yaw, `${label}, human ${String(human)}: ${a.id}`).toBe(a.yaw);
+        }
+        expect(o.pawns.find((q) => q.id === 'eradicate')?.yaw).toBe(167.2);
+      }
+    }
   });
 
   it('snapshot / restore carries the puppet state', () => {

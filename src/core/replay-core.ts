@@ -208,14 +208,16 @@ export class ReplayCore implements ICore {
    * The input for one REPLAY pawn this tick (alive, not the human's), called in id
    * order after `scheduledActions`. The puppet controller drives it along its track
    * and may append a snap (`teleport` + `log`) to `actions`. Without puppets (no
-   * WalkQuery) the pawn holds still, looking where it already looks. On the setup
-   * step every puppet holds still at its start yaw, because this observe predates the
-   * setup teleports.
+   * WalkQuery) the pawn holds still, looking where it already looks.
+   *
+   * On the setup step (puppets on or off) every pawn holds still at the yaw of its setup
+   * `teleport`: this observe predates the teleports, and the engine applies the input's
+   * yaw after them, so the observed (pre-setup) yaw would undo the start yaw.
    */
   protected pawnInput(p: PawnObs, o: Observe, actions: Action[]): PawnInput {
+    if (this.state.setupThisStep) return { id: p.id, forward: 0, side: 0, yaw: startYaw(this.model, p.id).yaw, pitch: 0, buttons: [] };
     const c = this.puppet(p.id);
     if (c === null) return { id: p.id, forward: 0, side: 0, yaw: p.yaw, pitch: p.pitch, buttons: [] };
-    if (this.state.setupThisStep) return c.neutral(p);
     const r = c.input(p, o, o.tick);
     for (const a of r.actions) actions.push(a);
     return r.input;

@@ -36,7 +36,7 @@ import {
   type Tuning,
 } from '../contracts/index';
 import { EventSchedule, ReplayCore, RoundModel, type RoundClock } from '../core/index';
-import { NavMesh, Sim2DHost, navOptionsFromTuning, type HostNote, type PawnState, type RosterEntry } from '../sim2d/index';
+import { NavMesh, NavWalkQuery, Sim2DHost, navOptionsFromTuning, type HostNote, type PawnState, type RosterEntry } from '../sim2d/index';
 import { weaponForSlot, type WeaponSlot } from './input';
 
 /** The pawn a human plays unless told otherwise. */
@@ -67,9 +67,9 @@ export interface CoreParts {
 
 export type CoreFactory = (parts: CoreParts) => ReplayCore;
 
-/** The Core every session uses unless told otherwise. When B2 adds a nav-based WalkQuery parameter, it goes here. */
+/** The Core every session uses unless told otherwise: puppets steer with the nav mesh's walkable-line query (B2). */
 export function defaultCore(p: CoreParts): ReplayCore {
-  return new ReplayCore(p.model, p.schedule, p.tuning, p.seed);
+  return new ReplayCore(p.model, p.schedule, p.tuning, p.seed, new NavWalkQuery(p.nav));
 }
 
 export interface SessionConfig {
