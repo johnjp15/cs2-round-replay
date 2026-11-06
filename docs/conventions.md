@@ -1,0 +1,12 @@
+# Conventions
+
+- **Stack:** TypeScript 5 (strict), Vite for dev server/build, Vitest for tests, ESLint with an import-boundary rule (`src/core` may import only `src/contracts`; `src/contracts` imports nothing; `src/sim2d` may import `src/contracts` only). No framework, no runtime dependencies in `src/core` or `src/contracts`. Node 22. `npm test` and `npm run build` must pass.
+- **Portable Core style** (so the later C# port is mechanical): plain `interface` data types and classes with explicit fields; no closures as state, no prototype tricks, no `any`, no `Date`, no `Math.random` (use the seeded PRNG in `src/contracts/rng.ts`), no reliance on object-key iteration order (sort by id), integer ticks for all scheduling, numbers treated as doubles everywhere. `docs/port-notes.md` records anything that will need care in C#.
+- **Units and frames:** Source units in the Mirage world frame (`x` east toward T spawn, `y` north toward B). Radar transform `px = (x + 3230) / 5`, `py = (1713 − y) / 5` on the 1024×1024 overview. Yaw in degrees counter-clockwise from +x, `setang` convention (0 = east, 90 = north). Keep `z` from the nav mesh even though 2D ignores it, so logs are CS2-ready.
+- **Time:** 64 ticks/s. `t` = video seconds; replay starts at t = 0 (clock 1:39, 98.25 s left). Bomb timer 40 s. All scheduling in ticks: `tick = Math.round(t * 64)`.
+- **Player ids:** lowercase short names: `barely snarlbot cart eradicate donk incredibad snakelore lokier sp4rtan zwomp`. Teams `T`/`CT`.
+- **Determinism:** same inputs → identical JSONL, in Node and in the browser.
+- **Tunables** live in `data/tuning.json` (speeds, accel, weapon stats, lookahead, drift thresholds, hearing range, aim error). Code never hard-codes a number that CS2 calibration might change.
+- **Definition of done:** `npm test`, `npm run lint`, `npm run build` pass; new behaviour has a test; `docs/` updated if an interface changed; one branch per task (`a1-scaffold`, `b3-scripted-events`, …), PR with a short description, no unrelated edits. Don't touch another task's module except through its public interface; if you need an interface change, say so in the PR instead of making it.
+- **Git:** rebase on `main` before pushing; the session git proxy allows 2 concurrent operations per repo — on HTTP 429 wait 5 s and retry once.
+- **Don't** read `web-apps/cs2/mirage-round-replay/index.html` into context (392 KB with an inline JPEG); extract from it with a script. Don't invent facts about the round — everything comes from the project docs and `data/round.json`.

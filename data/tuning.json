@@ -1,0 +1,41 @@
+{
+  "_note": "defaults; calibrate in CS2 probe",
+  "movement": {
+    "svAccelerate": 5.5,
+    "svFriction": 5.2,
+    "svStopSpeed": 80,
+    "walkFactor": 0.52,
+    "crouchFactor": 0.34,
+    "runSpeedByWeapon": {
+      "knife": 250,
+      "ak47": 215,
+      "awp": 200,
+      "ssg08": 230,
+      "deagle": 230,
+      "m4a1": 225,
+      "m4a4": 225,
+      "famas": 220,
+      "galil": 215
+    }
+  },
+  "replay": {
+    "lookaheadSec": 0.15,
+    "driftNudgeUnits": 24,
+    "driftSnapUnits": 96,
+    "walkSpeedThreshold": 120,
+    "crouchSpeedThreshold": 60,
+    "maxTurnRateDegPerTick": 12,
+    "hearingRangeUnits": 1500,
+    "outliveGraceSec": 3
+  },
+  "weapons": {
+    "ak47": { "damage": 36, "rpm": 600, "headshotMult": 4, "armorPen": 0.775, "clip": 30, "reserve": 90, "reloadSec": 2.4 },
+    "awp": { "damage": 115, "rpm": 41, "headshotMult": 4, "armorPen": 0.975, "clip": 10, "reserve": 30, "reloadSec": 3.7 },
+    "ssg08": { "damage": 88, "rpm": 48, "headshotMult": 4, "armorPen": 0.85, "clip": 10, "reserve": 90, "reloadSec": 3.7 },
+    "deagle": { "damage": 53, "rpm": 267, "headshotMult": 4, "armorPen": 0.932, "clip": 7, "reserve": 35, "reloadSec": 2.2 },
+    "m4a4": { "damage": 33, "rpm": 666, "headshotMult": 4, "armorPen": 0.7, "clip": 30, "reserve": 90, "reloadSec": 3.1 }
+  },
+  "bomb": { "plantSec": 3.2, "timerSec": 40, "defuseSec": 10, "defuseKitSec": 5 },
+  "grenades": { "smokeSec": 18, "molotovSec": 7, "flashSec": 3 },
+  "ai": { "fovDeg": 106, "reactionSec": 0.25, "aimErrorDeg": 2.5 }
+}
