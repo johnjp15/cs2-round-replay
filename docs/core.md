@@ -109,13 +109,13 @@ Other cases:
 
 ## ReplayCore (`replay-core.ts`)
 
-`new ReplayCore(model, schedule, tuning, seed, walk = null, options = null)` implements `ICore`. `options` is `{divergence: boolean}` (default on); off gives the B2/B3 puppets alone, for the human-bot's shadow puppet.
+`new ReplayCore(model, schedule, tuning, seed, walk = null, options = null)` implements `ICore`. `options` is `{divergence: boolean, rejoin?: boolean}` (both default on); divergence off gives the B2/B3 puppets alone, for the human-bot's shadow puppet; `rejoin: false` gives B4's one-way modes (G1's rejoin needs divergence and a `walk`).
 
 `step(o)`:
 
 1. On the first step after `start` or `restart`, it emits `startActions`, resets every pawn's status to `REPLAY` since that tick, resets every puppet controller to the pawn's start yaw and the scripted events' state, and then (B3) emits the round-start `block_damage` actions (see "Scripted events"). Before any `start` it emits no setup.
-2. Status for all ten pawns, in id order: `DEAD` from the tick the observe first shows `alive: false`; `HUMAN` for the living pawn `observe.human` names (B4); otherwise `LIVE` stays `LIVE` (set by B4's triggers through `setPawnMode`) and anything else is `REPLAY`. `trigger` is the trigger that made the pawn LIVE (B4, see "Divergence"), else `null`, and `sinceTick` is the tick the mode began (0 before the first start).
-3. **Divergence** (B4, not on the setup step): `Divergence.step` runs the triggers and the scheduled encounters, appends their actions (`unblock_damage`, `set_mode`, logs; an encounter's `block_damage` and scripted `damage`) and returns the pawns that go LIVE, which `setPawnMode` switches before B3 sees the modes. On the setup step `Divergence.setup` replaces the recorded shot of an active encounter.
+2. Status for all ten pawns, in id order: `DEAD` from the tick the observe first shows `alive: false`; `HUMAN` for the living pawn `observe.human` names (B4); otherwise `LIVE` stays `LIVE` (set by B4's triggers through `setPawnMode`) and anything else is `REPLAY`. `trigger` is the trigger that made the pawn LIVE (B4, see "Divergence"), `rejoin` for a REPLAY pawn that came back to its recording (G1), else `null`, and `sinceTick` is the tick the mode began (0 before the first start).
+3. **Divergence** (B4, not on the setup step): `Divergence.step` runs the triggers and the scheduled encounters, appends their actions (`unblock_damage`, `set_mode`, logs; an encounter's `block_damage` and scripted `damage`) and returns the pawns that go LIVE, which `setPawnMode` switches before B3 sees the modes. On the setup step `Divergence.setup` replaces the recorded shot of an active encounter. Then (G1) **`Rejoin.step`** looks at every LIVE pawn with the modes after those switches: it may send an approach (`set_mode` LIVE with role `rejoin`) or switch the pawn back (`block_damage`s, reconciliation, `set_mode` REPLAY, log), and `setPawnMode` makes the returned pawns REPLAY (trigger `rejoin`) before B3 sees the modes; the puppet's commanded yaw restarts from the observed one. See "Rejoin".
 4. **`scheduledActions(o, actions)`** (B3): appends this tick's scripted actions after the setup (`ScriptedEvents.actions`: damage, weapons, grenade selection, plant / defuse fallbacks, drop logs).
 5. **`pawnInput(pawn, o, actions)`** (B2): called once per REPLAY pawn (alive, not `o.human`, mode `REPLAY`), in id order. It returns the puppet's input and may append a snap (`teleport` + `log`) to `actions`, after the setup and scheduled actions. On the setup step every REPLAY pawn (puppets on or off) gets a neutral input at the yaw of its setup `teleport`: that observe predates the teleports, and the engine applies the input yaw after them, so echoing the observed (pre-setup) yaw would turn every pawn back to 0. Without puppets (no `walk`) the input is otherwise neutral: forward 0, side 0, the pawn's current yaw and pitch, no buttons. See "Puppets" below.
 6. **`scriptedInput(input, pawn, o, prevYaw)`** (B3): layers the scripted look (aim, defuse, grenade pitch) and buttons (`ATTACK`, `USE`) on that input, except on the setup step, and writes the commanded yaw back to the puppet's state. `prevYaw` is the puppet's commanded yaw before this tick's movement input (the observed yaw without puppets).
@@ -126,7 +126,7 @@ Other cases:
 - `pause {paused}` and `speed {x}` are stored; `x` must be positive. The driver does the actual pausing and pacing: Core doesn't stop stepping by itself.
 - B5: `checkpoint {id}` and `seek {t}` are checked (a non-empty id; seconds ≥ 0) and change nothing: checkpoints and seeking are the driver's work (a checkpoint stores `snapshot()`, a seek steps every tick as usual). `rewind {id}` arms a **resync**: the driver has restored this Core to the checkpoint and the engine couldn't be (no snapshot capability), so the next step puts the engine back first. See "Checkpoints, rewind, summary".
 
-`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `setupThisStep`, `startTick`, `lastTick`, `paused`, `speed`, each pawn's mode, trigger, since tick and (B5) `everLive`, the armed `resync`, each puppet's `PuppetState`, the scripted events' `ScriptState`, (B4) the `DivergenceState` and (B5) the loadout ledger) together with the seed. Restoring checks that the seed matches. Every stored number is already canonical (yaw to 0.001°, `behind` to 6 decimals), so a restore continues exactly. A snapshot from before B5 restores with an empty ledger.
+`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `setupThisStep`, `startTick`, `lastTick`, `paused`, `speed`, each pawn's mode, trigger, since tick, (B5) `everLive` and (G1) `blocksLifted`, the armed `resync`, each puppet's `PuppetState`, the scripted events' `ScriptState`, (B4) the `DivergenceState`, (B5) the loadout ledger and (G1) the `RejoinState` list) together with the seed. Snapshots from before G1 restore with no rejoin state (a LIVE pawn's calm clock starts afresh), no LIVE spans and `blocksLifted` = `everLive`. Restoring checks that the seed matches. Every stored number is already canonical (yaw to 0.001°, `behind` to 6 decimals), so a restore continues exactly. A snapshot from before B5 restores with an empty ledger.
 
 `puppet(id)` returns a pawn's `PuppetController` (or null without puppets) and `snapCount` the snaps since the last start. `script` is the `ScriptedEvents` (its `plan` and `state`), `divergence` the B4 `Divergence` (its `index`, `encounters` and `state`), `modeOf(id)` a pawn's Core mode, `triggerOf(id)` its trigger, and the protected `setPawnMode(id, mode, tick, trigger)` is what the triggers switch through.
 
@@ -138,7 +138,7 @@ A puppet is a REPLAY pawn driven along its recorded track with **per-tick inputs
 
 ### WalkQuery
 
-Wall-aware steering needs "can a pawn walk straight from a to b?". The Core can't import an engine, so the engine passes a `WalkQuery { isWalkableLine(a, b) }` (`src/contracts/walk.ts`) to the `ReplayCore` constructor. The 2D sim's is `NavWalkQuery` (`src/sim2d/walk-query.ts`, `NavMesh.segmentWalkable`, 2D). In CS2 it becomes a nav-mesh raycast or a hull trace (`docs/port-notes.md`).
+Wall-aware steering needs "can a pawn walk straight from a to b?". The Core can't import an engine, so the engine passes a `WalkQuery { isWalkableLine(a, b), pathLength(a, b) }` (`src/contracts/walk.ts`; `pathLength` is G1's, for the rejoin planner only) to the `ReplayCore` constructor. The 2D sim's is `NavWalkQuery` (`src/sim2d/walk-query.ts`, `NavMesh.segmentWalkable`, 2D). In CS2 it becomes a nav-mesh raycast or a hull trace (`docs/port-notes.md`).
 
 ### Track preprocessing (`PuppetTrack`)
 
@@ -293,6 +293,7 @@ All 33 recorded exact-time shots land within a tick (20 exactly), and every gun 
 - **Blocks.** On the setup step the Core sends `block_damage` for every ordered pair of enemies that are both REPLAY (neither is the human), so the engine's own bullets and grenades between puppets do no damage: the recorded damage is scripted. Each such puppet is also blocked on itself (attacker = victim): in the first run donk's molotov burned him for 40 HP and barely's HE took 34, because the throws are guesses and the recording has no self-damage. Friendly fire is off, so teammates need no block. No human: 50 + 10 blocks; human cart: 40 + 9.
 - **Emission tick.** `Sim2DHost` queues a `damage` action in `apply()` and applies it in the next `tick()` (after shots and grenades), so its `damage` / `death` events land one tick later. The Core sends each schedule `damage` entry at **its tick − `actionLatencyTicks`** (tick − 1), and the events land exactly on the schedule tick. `armor` is the recorded armor (cart's 7 at 18.5 s) or 0 when the recording doesn't show it; `lethal` entries take all remaining HP.
 - **Drops.** A damage entry whose attacker or victim is dead (observed `alive: false`) or LIVE at its emission tick is dropped with one `info` log (`script: dropped damage sp4rtan -> donk (27 hp at tick 3194): donk is dead`).
+- **G1: non-lethal stays non-lethal.** A recorded non-lethal hit on a pawn that has less HP than the tape at that point (a rejoined pawn hurt while LIVE) takes it down to 1 HP instead of killing it, so its death comes with the recorded kill. Never applies when nobody leaves the tape (the schedule's HP walk keeps every non-lethal hit below the HP left).
 
 ### The human
 
@@ -307,6 +308,13 @@ With `human === null` (the golden master) cart is a puppet like everyone else.
 ### Drops and decisions
 
 A fire item or engagement is decided once, on the first tick it is active (`ScriptState.decisions`): it is dropped if its shooter is the human (silently) or if its shooter or target is dead or LIVE then (one `info` log per fire item, e.g. `script: dropped sp4rtan ak47 spray at donk (5 shots from tick 3192): donk is dead`). Once started, it runs to its end: cart keeps firing at Lokier for 0.2 s after the 18.8 s kill, as recorded. A dropped engagement doesn't aim. A LIVE pawn gets no input at all.
+
+**G1: what falls while a pawn is LIVE.** `ScriptState.liveSpans` keeps every LIVE period `[from, to)` (to = the rejoin tick, null while LIVE). Only what falls inside one is lost; everything the plan has for the pawn after its rejoin runs as usual (each item is decided on its own first active tick, damage on its emission tick, inventory and utility on their ticks):
+
+- a fire item or engagement it was in the middle of when it went LIVE (started before, still running after the rejoin) does not resume;
+- a grenade throw whose window (draw to restore) overlaps a LIVE period is skipped whole (no draw, no ATTACK on the gun it holds, no restore);
+- a pickup made while LIVE is given at the rejoin (reconciliation, "Rejoin");
+- the plant and defuse fallbacks: no `plant` for a planter who was LIVE in the USE window, and no `defuse_start` when the round shows the bomb planted further than `bomb.defuseRange` from the defuser (a LIVE T may have planted it elsewhere); neither guard changes a run where nobody leaves the tape.
 
 ### Weapons
 
@@ -375,7 +383,9 @@ HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/10
 
 ## Divergence (`divergence.ts`, B4)
 
-By default the round replays exactly. When the human does something different, only the puppets whose world actually changed go **LIVE** (the engine's AI drives them, carrying their recorded intent as a goal), and everyone else keeps replaying. A puppet follows its recording until something happens that its recorded self never experienced; divergence spreads only through cause and effect from an **off-script** pawn (the human, or a LIVE pawn): damage, sight, gunfire, a body block. Modes go one way: REPLAY → LIVE → DEAD; a LIVE pawn never returns to REPLAY, and the human never goes LIVE. A cancelled event alone changes nothing: B3 drops the shots and damage whose other side is dead or LIVE and the puppet carries on replaying (barely's 44.2 s kill of an already dead Zwomp).
+By default the round replays exactly. When the human does something different, only the puppets whose world actually changed go **LIVE** (the engine's AI drives them, carrying their recorded intent as a goal), and everyone else keeps replaying. A puppet follows its recording until something happens that its recorded self never experienced; divergence spreads only through cause and effect from an **off-script** pawn (the human, or a LIVE pawn): damage, sight, gunfire, a body block. A cancelled event alone changes nothing: B3 drops the shots and damage whose other side is dead or LIVE and the puppet carries on replaying (barely's 44.2 s kill of an already dead Zwomp).
+
+**Modes** (G1): REPLAY → LIVE (a trigger below) → REPLAY again once the reason is gone (**rejoin**, below: calm, still alive on the tape, its state fits the recorded future) → LIVE again if something new reaches it, and so on; DEAD ends it. A pawn with no tape left (outlived) stays LIVE. The human is never LIVE or REPLAY. Before G1 modes went one way (REPLAY → LIVE → DEAD): one small deviation by the human (cart idle in Back Alley) cascaded through the rest of the round (never-peeks ended in a T win instead of the recorded CT defuse).
 
 ### Triggers (checked every tick, pure functions)
 
@@ -392,7 +402,7 @@ Every alive REPLAY puppet that isn't the human, in id order, the first that appl
 
 Teammates only matter through damage (friendly fire is off) and, with `collision.solidTeammates`, body blocks: a T doesn't go LIVE because he sees or hears the human, his teammate. The checks don't run on the setup step (that observe predates the setup; everyone stands at the origin).
 
-**The switch.** In the same Act: `unblock_damage` for every pair involving the pawn that B3 blocked (its self pair, then both directions with every enemy that is neither the human nor LIVE, dead ones included; plus an encounter's standing block), then `set_mode {id, mode: LIVE, goal}`, then the `log` line. The pawn gets no Core input from that tick on; the engine's AI first moves it in that tick's `tick()`. B3 drops whatever the plan still had for it (`script: dropped … : <id> is LIVE`).
+**The switch.** In the same Act: `unblock_damage` for every pair involving the pawn that B3 blocked (its self pair, then both directions with every enemy that is neither the human nor LIVE, dead ones included; plus an encounter's standing block), then `set_mode {id, mode: LIVE, goal}`, then the `log` line. The pawn gets no Core input from that tick on; the engine's AI first moves it in that tick's `tick()`. B3 drops whatever the plan has for it while it is LIVE (`script: dropped … : <id> is LIVE`); G1 brings it back ("Rejoin").
 
 ### Expected encounters (`ExpectedEncounters`)
 
@@ -440,14 +450,82 @@ The C4 AI faces a holding pawn toward the enemy's approach from their spawn; the
 | `encounterDelaySec` | 1 | A scheduled encounter's hit lands this long after the shooter first sees the human at the spot (recorded: 17.45 → 18.50 s). |
 | `humanSpotToleranceUnits` | 192 | The human is at an encounter's spot within this (2D). |
 | `routeThinUnits` | 64 | LIVE route thinning tolerance. |
-| `offCourseUnits` | 64 | Off course: the human beyond it is off script; a body block must push a puppet this much further (or hold it beyond it). |
+| `offCourseUnits` | 64 | Off course: the human beyond it is off script; a body block must push a puppet this much further (or hold it beyond it); G1: a LIVE pawn this close to its tape (now, or up to `steerFallbackSec` ago) may switch back to REPLAY. |
 | `contactSlackUnits` | 4 | Body contact: centres within 2 × `collision.pawnRadius` + this. |
 | `blockedSec` | 0.25 | Held in contact this long (slower than `standSpeedThreshold`) counts as blocked. |
 | `dwellUnits` | 64 | Radius of a "stay" for the post-plant guard spot. |
 
+### Rejoin: LIVE → REPLAY (`rejoin.ts`, G1)
+
+A pawn that went LIVE because of something off-script goes back to its recording once that reason is gone, so the rest of the round plays out as recorded: CS2 bots would have to do it the same way, so it is done with the same means (a LIVE goal for the engine's AI, then per-tick inputs; never a teleport, never faster than the weapon runs). `Rejoin.step` runs every tick after the triggers, for every LIVE pawn (not the human), in id order:
+
+| # | rule | detail |
+| --- | --- | --- |
+| 1 | **unrest** (`unrestReason`) restarts the calm clock | this tick it was hit by anyone (world and self damage don't count); it fired a shot itself; an alive enemy is in its `sees` that isn't the recording: off script (LIVE, or the human off course) or a REPLAY enemy the recording doesn't have it engaging or seeing around now (`ExpectedEncounters.saw`); the human on course and a pair a scheduled encounter owns are the recording, as for trigger 2; or it heard off-script enemy gunfire that isn't recorded fire (trigger 3's rule) |
+| 2 | **hysteresis** | LIVE for at least `rejoinMinLiveSec` (1 s) and calm for `rejoinCalmSec` (1 s): it can't flicker |
+| 3 | **busy** (`busyReason`) | not while defusing (`round.bomb.defuser`), nor holding the c4 (the LIVE AI plants or is about to) unless the Core drew it for the approach (rule 7) |
+| 4 | **fits its recorded future** at the rejoin tick k (`fitsAt`) | the recording keeps it alive and tracked until k + `rejoinMinTapeSec` (1 s): an outlived pawn (Lokier) has no tape and stays LIVE; **the planter** with the bomb unplanted must carry it and k ≤ the recorded plant tick (the plant can't happen twice: once the bomb is planted, by him as AI or anyone, the scripted plant is moot because `ScriptState.plantedTick` is set); **the defuser** with the bomb planted needs it within `bomb.defuseRange` of his recorded defuse spot and k ≤ the scripted USE start; nobody once the round is over with the bomb still ticking (the AI is leaving the blast) |
+| 5 | **switch** (REPLAY) | on the first tick 1–4 hold and the pawn is within `offCourseUnits` (64, 2D) of its puppet reference now or of where it was up to `steerFallbackSec` (2 s) ago (`lagTicks`, every 4 ticks back): on the tape's route, at most as late as the puppet's wall-aware catch-up can follow. The puppet's catch-up (run speed, steering back to the latest reference point in walkable line) absorbs the rest |
+| 6 | **approach** otherwise (`plan`) | the earliest sample of its reference track after now, up to `rejoinHorizonSec` (15 s) ahead, that fits (4) and that it can reach in time: walk length (straight if `isWalkableLine`, else `WalkQuery.pathLength`) ≤ run speed of the held weapon × `rejoinSpeedFactor` (0.85) × (time to it − `rejoinLeadSec`, 0.25 s); the straight line is checked first, at most 32 path queries per plan. Sent as `set_mode {id, LIVE, goal {route: [], role: 'rejoin', hold: that point}}`: the engine's AI runs there and still fights what it meets (docs/ai.md); the switch (5) usually comes on the way |
+| 7 | **chase** when nothing is reachable in time | the furthest fitting sample of the horizon, if its walk is not a detour (≤ the distance to the reference + the tape's own length from there + `offCourseUnits`; the 2D nav has no one-way drops, so it walks round what the tape drops down); checked again every `rejoinRetrySec` (0.5 s) for a point reachable in time. A pawn that trails a track running at about its own speed (sp4rtan after a fight) thus runs after it instead of walking its old goal. **Never for an objective pawn** (the planter with the bomb unplanted, the defuser with it planted): its LIVE AI keeps the objective unless a point is reachable in time. The planter on an approach into his plant window draws the c4 on the way (from the recorded draw tick on; again after a fight), as the tape has him doing |
+| 8 | **re-plan, give up** | an approach is planned again when the calm was broken after it or `rejoinLateSec` (1 s) after its tick; if no point fits or is reachable then, the pawn gets its regular LIVE goal back (`set_mode` LIVE with `liveGoal`, log `<id> rejoin: gave up, …`); a plan that found nothing waits `rejoinRetrySec` |
+| 9 | **cycles** | a rejoined pawn is a REPLAY puppet like any other: B4's triggers apply and may make it LIVE again (barely in never-peeks: LIVE, back, LIVE again when he hears sp4rtan fight cart, back) |
+
+**The switch** sends, in this order in the Act, after the triggers' actions and before B3's:
+
+1. `block_damage` for the pairs B3 blocked at the round start and the LIVE switch lifted: its self pair, then both directions with every enemy that is neither the human nor has its own blocks lifted (LIVE, or dead since it was LIVE), dead puppets included; a pawn rejoining earlier in the same tick counts as back. Invariant (tested over whole runs): an enemy or self pair is blocked exactly when neither pawn is the human or has its blocks lifted.
+2. **Reconciliation**: a `give` (tuning clip / reserve) for each pickup the plan made while it was LIVE that the loadout ledger doesn't show (sp4rtan's AK at 19.6 s if he was LIVE then), then `set_weapon` to the weapon the recording shows at this tick (`recordedWeaponAt`) if it holds something else, or the c4 for a planter back after the recorded draw tick. **The planter back before the recorded plant**: the scripted USE starts when the c4 is deployed (drawn on the approach, on the recorded draw tick, or now: `deployTicksOf('c4')`) and he can be at the recorded spot (the shorter of the straight / nav walk and the walk back along the tape, at run speed), never before the recorded USE start; later than that, the whole plant (USE window and fallback) runs that much late (`ScriptedEvents.shiftPlant`, logged `script: plant by barely runs 0.7 s late …`). Ammo and HP are not reconciled: the scripted damage doesn't depend on ammo, and a non-lethal scripted hit on a pawn with less HP than the tape leaves it at 1 HP ("Scripted events" → Damage).
+3. `set_mode {id, mode: REPLAY, goal: null}` and the log line `<id> REPLAY: rejoined at tick <k>, <n> u from its track[ (<x.x> s behind it)], after <y.y> s LIVE (<trigger>)`. An approach logs `<id> rejoin: heading for|chasing its track at tick <k> (+x.x s), <n> u by nav; goal rejoin`.
+
+From that tick the pawn's status is `REPLAY` with trigger `rejoin` (the HUD's status panel shows it; during an approach the LIVE pawn's aiDebug line shows role `rejoin` and behaviour `rejoining`), it gets the puppet's input again, and B3 runs everything its plan has after the rejoin tick ("Scripted events" → Drops and decisions, G1). A resync rewind (B5) restores the blocks from `blocksLifted` and gives an approaching pawn its rejoin goal back.
+
+**State** (`RejoinState`, one per LIVE pawn, in the Core snapshot): `liveSince`, `trigger`, `calmSince`, the `target` in force (`tick`, `pos`, `plannedTick`, `pathUnits`, `chase`), `nextPlanTick`, `drawTick` (the c4 drawn for the approach). Plain data, integer ticks.
+
+#### Tunables (`data/tuning.json` → `replay`, G1; validated in `parseTuning`)
+
+| Key | Value | Meaning |
+| --- | ---: | --- |
+| `rejoinCalmSec` | 1 | Calm (no unrest) this long before a LIVE pawn may head back or switch. |
+| `rejoinMinLiveSec` | 1 | LIVE at least this long (hysteresis). |
+| `rejoinMinTapeSec` | 1 | The recording keeps the pawn alive and tracked this long after the rejoin tick. |
+| `rejoinSpeedFactor` | 0.85 | A point is reachable when its walk ≤ this × run speed × the time left (0 < f ≤ 1). |
+| `rejoinLeadSec` | 0.25 | Taken off the time left before that check (reaction, acceleration, the AI easing off). |
+| `rejoinHorizonSec` | 15 | How far ahead along its track the planner looks. |
+| `rejoinLateSec` | 1 | An approach not done this long after its target tick is planned again. |
+| `rejoinRetrySec` | 0.5 | Wait after a plan that found nothing; a chase is re-checked this often. |
+| (`offCourseUnits`, `steerFallbackSec`) | 64, 2 | The switch tolerance and how late (behind its tape) the switch may be. |
+
+`parseTuning` requires all eight and checks the ranges (times ≥ 0, horizon and retry > 0, the speed factor in (0, 1]).
+
+#### Results: never-peeks (cart idle in Back Alley all round; `tests/rejoin.test.ts`)
+
+| event | recorded | B4 alone (before G1) | with rejoin |
+| --- | ---: | ---: | ---: |
+| lokier LIVE: outlived (cart never shot him) | – | 21.80 | 21.80 (stays LIVE: no tape) |
+| barely LIVE: sees lokier; kills him | – | 21.81; 22.17 | 21.81; 22.17 |
+| barely REPLAY (160 u, 0.6 s behind his tape) | – | never | 23.19 |
+| barely plants | 27.52 | 28.41 (AI) | **27.52** |
+| sp4rtan LIVE: sees cart; kills him | – | 40.06; 40.58 | 40.06; 40.58 |
+| barely LIVE: hears sp4rtan fire (1,372 u) | – | – | 40.27 |
+| sp4rtan REPLAY (72 u) / barely REPLAY again (92 u, after a 1.2 s approach) | – | never | 41.59 / 42.33 |
+| barely kills Zwomp | 44.20 | 43.41 (AI) | **44.20** |
+| sp4rtan kills donk | 50.35 | 49.97 (AI) | **50.34** (tick 3222, the golden master's) |
+| sp4rtan kills barely (HS) | 58.85 | – (barely kills sp4rtan at 59.61: T elimination) | **58.84** (tick 3766) |
+| sp4rtan's kit defuse | 66.80 | – | **66.80**: CT bomb_defused 12 – 15, 0.72 s on the bomb |
+
+Every event that doesn't involve cart is on the golden master's observe tick. With `rejoin: false` the run is B4's byte for byte (digest `b424522f`). The puppets catch up after the switch: barely within 24 u in 0.88 s, sp4rtan in 2.3 s; nothing teleports and nothing runs above its weapon's run speed (beyond the engine's own ≤ 5 % acceleration transients) from a LIVE switch to 2 s after the rejoin.
+
+#### Known limits
+
+- **2D nav: no one-way drops** (`docs/nav.md`): the LIVE AI and `pathLength` walk round what the tape drops down (Balcony → B). Variant of `miss-lokier-shop` with cart hiding at (−1450, 760): Lokier, still alive, sees him through the sight mask's over-wide Apartments window at 21.02 s and goes LIVE; barely meets him at the window *before* his recorded drop, kills him at 21.48 s, and his LIVE AI walks round by Back Alley and Tunnel Stairs (3,192 u by nav): no point is reachable in time, the planter never chases, so the AI plants at 36.67 s (+9.15 s); he rejoins at 41.97 s and from then on every event is the tape's (Zwomp 44.20, donk 50.34, barely 58.84, defuse 66.80, CT win with 9.88 s on the bomb). In CS2 the bot drops from the Balcony.
+- **Late planter.** A planter back after the recorded draw tick plants late by the c4's deploy (1 s, `damage.defaultDeploySec`, which CS2 needs; the 2D engine doesn't) unless the approach drew it: in never-peeks it did, so the plant is on the tape.
+- **No late defuse**: a defuser who can't be back by his scripted USE start stays LIVE and defuses as AI.
+- **Lagging switch**: a pawn may rejoin up to 2 s behind its tape; until the puppet catches up its scripted shots aim from where it is (the damage is scripted, so kills land on the tape's ticks), and a puppet snap at a teleport point can still happen (B2's rule).
+- **The recording's own sightings** decide "unexpected enemy in sight" (2 s windows per pair, not positions): a LIVE pawn that runs into a REPLAY enemy the tape doesn't pair it with stays LIVE and the AI fights it.
+
 ### Scenarios (`tests/scenarios.test.ts`, `fixtures/scenarios/*.json`)
 
-Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aimAt`, `fire`, `holdStill`, `throw`, setup `teleport`; `npm run harness -- --scenario <file>` prints the timeline). Seed 1, deterministic. Shared invariant: a puppet nothing touched replays exactly; on every tick it is REPLAY (and not body-blocked) it is within 0.01 units of the no-human golden master's position (measured: 0.0005 at most, in every scenario). Where a LIVE fight's winner depends on the toy AI, the tests assert the triggers and print the winner. The recorded opening (snarlbot's kills of incredibad and snakelore, Lokier's of eradicate, sp4rtan's of snarlbot) is the same in all but `cart-dies` and is left out.
+Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aimAt`, `fire`, `holdStill`, `throw`, setup `teleport`; `npm run harness -- --scenario <file>` prints the timeline). Seed 1, deterministic. Shared invariant: a puppet nothing touched replays exactly; on every tick it is REPLAY (and not body-blocked, and, G1, not LIVE yet: a rejoined pawn catches up from where its LIVE self left it) it is within 0.01 units of the no-human golden master's position (measured: 0.0005 at most, in every scenario). Where a LIVE fight's winner depends on the toy AI, the tests assert the triggers and print the winner. The recorded opening (snarlbot's kills of incredibad and snakelore, Lokier's of eradicate, sp4rtan's of snarlbot) is the same in all but `cart-dies` and is left out.
 
 **1. No-op guard.** Golden no-human round: no switch, no `set_mode`, no `HUMAN`. `cart-follows-recording`: **no switch** (F; before F exactly one). Lokier sees cart at 10.9 s down the corridor from Truck, but cart is on course (no divergence). The encounter starts when he sees cart at the window at 17.63 s (+0.2 s); cart's real AK headshot kills him at 18.50 s, before the hit due at 18.63 s, so cart keeps 100 HP (E1's re-check: with C4's sight mask cart's bullets do reach Lokier through the Apartments window, 0.3 s before the recorded kill, because 2D has no spread). Everything then replays to the end. Cart's recorded spray at the defusing sp4rtan (65.9–66.9 s) hit nothing on the tape; until F the follow script aimed it at sp4rtan with B3's aim, and with no spread and no box on the line (`docs/vision.md`, "Cart's spray") it hit him for real at 65.91 s (sp4rtan LIVE, T elimination 11 – 16, the bomb killing cart at 67.52 s). The follow script now looks where cart's recorded view does on the shots the tape shows missing (`tools/follow-aim.ts`, `docs/golden.md`), 17–22° off sp4rtan:
 
@@ -471,18 +549,21 @@ Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aim
 | 66.80 | sp4rtan defuses: CT bomb_defused, 12 – 15 (no switch: cart's spray misses as in the follow run; F. Before: sp4rtan LIVE at 65.91 s, hit by cart, killed cart at 66.19 s and died in the explosion, T bomb_exploded 11 – 16) |
 | 69.41 | sp4rtan kills cart (27 HP) after the round, as recorded |
 
-**3. `never-peeks`** (cart stands in Back Alley all round):
+**3. `never-peeks`** (cart stands in Back Alley all round; John's case, "Rejoin" → Results):
 
 | t (s) | event |
 | ---: | --- |
-| 21.80 | **lokier LIVE: outlived recording (+3.0 s)** → `hold`, route [], hold his last sample on B |
+| 21.80 | **lokier LIVE: outlived recording (+3.0 s)** → `hold`, route [], hold his last sample on B; no tape left, so he never rejoins |
 | 21.81 | **barely LIVE: sees lokier (LIVE), not in the recording** → `plant` |
 | 22.17 | barely kills lokier (real; donk, dwelling in the Apartments, never saw him) |
-| 28.41 | barely plants (AI) |
-| 40.06 | **sp4rtan LIVE: sees cart (the human)** on his flank → `defuse`; 40.58 sp4rtan kills cart |
-| 43.41, 49.97 | barely kills zwomp, sp4rtan kills donk (real fights; 43.33 s before F's cover) |
-| 59.61 | barely kills sp4rtan: round_end T elimination, 11 – 16 |
-| 59.6 – 68.4 | the bomb still ticks: barely (LIVE) leaves its blast and survives it (F; before, the explosion at 68.41 s killed him) |
+| 23.19 | **barely REPLAY: rejoined** (160 u, 0.6 s behind his tape) |
+| 27.52 | barely plants (scripted, on the tape's tick) |
+| 40.06 | **sp4rtan LIVE: sees cart (the human)** on his flank → `defuse`; 40.27 **barely LIVE: heard sp4rtan fire**; 40.58 sp4rtan kills cart |
+| 41.59, 42.33 | **sp4rtan REPLAY**, **barely REPLAY** again (after a 1.2 s approach) |
+| 44.20, 50.34, 58.84 | barely kills zwomp, sp4rtan kills donk and barely (HS): scripted, on the tape's ticks |
+| 61.80 – 66.80 | sp4rtan defuses with the kit: round_end CT bomb_defused, 12 – 15, 0.72 s on the bomb |
+
+Before G1: barely and sp4rtan stayed LIVE, barely planted at 28.41 (AI), killed zwomp at 43.41, sp4rtan killed donk at 49.97 and barely killed sp4rtan at 59.61: T elimination, 11 – 16; the bomb exploded at 68.41 s with barely (LIVE) out of its blast.
 
 **4. `mid-zwomp`** (cart follows to 29.7 s, then is teleported into Middle):
 
@@ -491,7 +572,7 @@ Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aim
 | 29.72 | **zwomp LIVE: sees cart (the human)** |
 | 29.73 | cart kills zwomp (AK, HS) |
 | 43.58, 44.19 | `script: dropped barely ak47 burst at zwomp (7 shots from tick 2789): zwomp is dead`, and the lethal damage; barely keeps replaying |
-| 50.34 – 66.80 | as recorded; sp4rtan was at least 1,785 u from cart's shots (hearing range 1,500), so he stays REPLAY; CT bomb_defused, 12 – 15 |
+| 50.34 – 66.80 | as recorded; sp4rtan was at least 1,785 u from cart's shots (hearing range 1,500), so he stays REPLAY; CT bomb_defused, 12 – 15 (G1: unchanged, zwomp dies a tick after going LIVE) |
 
 **5. `flank-sp4rtan`** (cart follows to 44.6 s, then waits in Back Alley):
 
@@ -513,15 +594,37 @@ Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aim
 | 10.81 | **donk LIVE: sees lokier (LIVE)** |
 | 10.84 | lokier kills cart (SSG 08, real) |
 | 11.30 | donk kills lokier; **zwomp LIVE: heard donk fire 1387 u away** |
-| 15.75 | **eradicate LIVE: outlived recording (+3.0 s)** (Lokier's 12.75 s kill was dropped) |
+| 12.31, 13.22 | G1: **donk REPLAY** (15 u from his tape), **zwomp REPLAY** (after a 0.9 s approach) |
+| 15.75 | **eradicate LIVE: outlived recording (+3.0 s)** (Lokier's 12.75 s kill was dropped): no tape, he stays LIVE |
 | 17.84, 27.52 | sp4rtan kills snarlbot, barely plants: as recorded (untouched puppets) |
-| 30.81 | **barely LIVE: sees zwomp (LIVE)**; 31.09 kills him (30.59 / 30.91 before F's cover: a box hid zwomp a little longer) |
-| 52.84 | **sp4rtan LIVE: sees donk (LIVE)**; 53.19 donk kills him: T elimination, 11 – 16 |
-| 67.52 | the bomb explodes; barely, donk and eradicate (LIVE) have left its blast and live (F; before, all three died) |
+| 44.20, 50.34 | barely kills zwomp, sp4rtan kills donk: on the tape's ticks again (before G1: barely killed a LIVE zwomp at 31.09 s) |
+| 57.84 | **sp4rtan LIVE: hit by eradicate** on B; 58.05 eradicate kills him: T elimination, 11 – 16 (before G1: donk killed sp4rtan at 53.19 s) |
+| 61.84, 67.52 | barely LIVE (outlived); the bomb explodes, barely and eradicate (LIVE) have left its blast and live (F) |
 
-**7. `block-barely`**: cart stands in barely's path in the Apartments corridor, looking at him. Teammates aren't solid (`collision.solidTeammates` false, `mp_solid_teammates 0`): barely walks through, never blocked, never off course; no switch to 21.5 s. **7b. `block-sp4rtan`**: cart (teleported at 57 s) stands in sp4rtan's way to the bomb. The pair is recorded in sight on B from 58.6 s (no sighting trigger); sp4rtan is held in contact from 58.9 s and goes **LIVE: blocked by cart, held 110 u off course, seen by cart** at 59.16 s, then kills cart (59.70 s) and starts the defuse LIVE (61.09 s).
+**7. `block-barely`**: cart stands in barely's path in the Apartments corridor, looking at him. Teammates aren't solid (`collision.solidTeammates` false, `mp_solid_teammates 0`): barely walks through, never blocked, never off course; no switch to 21.5 s (G1: unchanged, the scenario ends before anyone goes LIVE). **7b. `block-sp4rtan`**: cart (teleported at 57 s) stands in sp4rtan's way to the bomb. The pair is recorded in sight on B from 58.6 s (no sighting trigger); sp4rtan is held in contact from 58.9 s and goes **LIVE: blocked by cart, held 110 u off course, seen by cart** at 59.16 s, then kills cart (59.70 s). G1: **sp4rtan REPLAY** at 60.72 s (35 u) and the scripted defuse starts on the tape's tick, 61.80 s (before: a LIVE defuse from 61.09 s).
 
-**8. `smoke-window`**: cart smokes the window from the Apartments at 15 s and walks to his recorded spot: within the spot tolerance from 18.0 s (on the spot from 19.0 s), over the recorded hit at 18.50 s, unseen. No encounter starts until he steps west out of the smoke: in sight at 20.02 s (+2.6 s), the hit at 21.02 s, cart kills Lokier at 21.28 s; no switch.
+**8. `smoke-window`**: cart smokes the window from the Apartments at 15 s and walks to his recorded spot: within the spot tolerance from 18.0 s (on the spot from 19.0 s), over the recorded hit at 18.50 s, unseen. No encounter starts until he steps west out of the smoke: in sight at 20.02 s (+2.6 s), the hit at 21.02 s, cart kills Lokier at 21.28 s; no switch (G1: unchanged).
+
+**9. `cart-goes-a`** (G1; cart takes A instead of B and never fires: from Back Alley through House and T spawn, down past Palace Alley to A main, where he waits looking at A):
+
+| t (s) | event |
+| ---: | --- |
+| 19.73 | **sp4rtan LIVE: sees cart (the human)**, his flank coming down A main; 20.91 sp4rtan kills cart |
+| 21.80, 21.81, 22.17 | lokier LIVE (outlived), barely LIVE (sees him), barely kills him: as in never-peeks |
+| 21.92 | **sp4rtan REPLAY** (264 u, 1.2 s behind his tape; within 24 u 6.4 s later) |
+| 23.19 | **barely REPLAY** |
+| 27.52 – 66.80 | plant, Zwomp, donk, barely, defuse: all on the tape's ticks; CT bomb_defused, 12 – 15, 0.72 s left |
+
+**10. `miss-lokier-shop`** (G1; cart plays his recording to the window, takes Lokier's scripted 73, sprays 6° wide and misses: Lokier lives. He backs off deep into the Apartments out of Lokier's sight, waits, then takes his recorded way over the Balcony drop and across B to Shop and hides there all round):
+
+| t (s) | event |
+| ---: | --- |
+| 17.63, 18.61 | encounter: cart in sight at the spot (+0.2 s), the scripted hit (cart 27 HP); cart's spray hits nothing |
+| 21.80, 21.81, 22.17 | lokier LIVE (outlived), barely LIVE (sees him), barely kills him |
+| 23.19 | **barely REPLAY** |
+| 27.52 – 66.80 | plant, Zwomp, donk, barely, defuse: all on the tape's ticks; CT bomb_defused, 12 – 15; cart ends the round in Shop on 27 HP |
+
+With cart hiding nearer the window (−1450, 760), see "Rejoin" → Known limits.
 
 ### Known limits
 
@@ -555,10 +658,10 @@ The driver restores the Core's snapshot, cuts the log back, sends the Core `rewi
 
 1. `set_round {tick, round}` (new action): the engine's clock becomes the checkpoint tick (its next observe reports tick + 1) and its round state the checkpoint's: score, winner / reason / end tick, the bomb (carried, dropped where, planted on which tick, so the timer and the beeps; defused; exploded). 2D: `Sim2DHost` relabels its tick, drops grenades in flight, smokes and fires, and moves per-pawn timers (weapon, flash, footsteps) by the same amount, as CS2 game-time timers would keep running; CS2: the adapter's tick base, the round start time, `planted_c4`'s `C4Blow`.
 2. For every **living** pawn, in id order: `set_hp {hp, armor, helmet}` (a dead pawn comes back), `teleport {pos, yaw}`, `strip` (new action: everything but the knife), one `give` per ledger item with its clip / reserve, `set_weapon` (the observed weapon), and for every pawn but the human `set_mode` REPLAY, or LIVE with a fresh `liveGoal` from there. A pawn dead at the checkpoint is dead now too and gets nothing.
-3. `block_damage` / `unblock_damage` for **every** self pair and ordered enemy pair: blocked when neither pawn is the human or was ever LIVE (`everLive`), plus a scheduled encounter's standing block. 50 + 10 actions.
+3. `block_damage` / `unblock_damage` for **every** self pair and ordered enemy pair: blocked when neither pawn is the human or has its blocks lifted (`blocksLifted`: it went LIVE and hasn't rejoined since; `everLive` before G1), plus a scheduled encounter's standing block. 50 + 10 actions.
 4. `log {info, "rewind <id>: resync to tick <k>, <n> pawns placed, <m> LIVE, <b> blocked pairs"}`.
 
-So rewinding across a LIVE switch returns the pawn to REPLAY in both paths (B4's note: the engine is told again).
+So rewinding across a LIVE switch returns the pawn to REPLAY in both paths (B4's note: the engine is told again). A pawn on a rejoin approach at the checkpoint gets its rejoin goal back (G1).
 
 **Not restored** (no contract action; CS2 can't either): **velocity** (a teleport stops the pawn; it catches up through the puppet's feedback), **grenades in flight** and active **smokes and fires** (dropped; an in-flight grenade is still in the ledger, so its thrower gets it back), **bomb progress** (a plant or defuse in progress starts again: hence the hazards), weapon timers (reload, deploy, fire cadence), flashes in progress, and the LIVE AI's memory and random draws (a LIVE fight after a resync can go another way). A round that ended stays ended in CS2 (the 2D `set_round` takes it back).
 

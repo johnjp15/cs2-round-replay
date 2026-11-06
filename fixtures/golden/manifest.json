@@ -29,7 +29,7 @@
     },
     {
       "bytes": 605544,
-      "commit": "3d14280ab759425ef66dd45ec1667ebc26ff4a16",
+      "commit": "f1adda824422d5f3574b8e9a310578f5bd28b5eb",
       "description": "Human cart stands still in Back Alley (fixtures/scripts/cart-idle.json) for 45 s: the Core skips him and his scripted damage; Lokier outlives his recording, barely kills him and rejoins (G1), sp4rtan kills cart on his flank and rejoins, barely hears it, goes LIVE and rejoins again (rejoin path queries in the walk oracle).",
       "digest": "2923a71d",
       "file": "round-cart-idle.jsonl.gz",
@@ -43,7 +43,7 @@
       "script": "fixtures/scripts/cart-idle.json",
       "scriptHash": "4577d8df",
       "seed": 1,
-      "sourceDirty": true,
+      "sourceDirty": false,
       "ticks": 2881,
       "tuningHash": "411b04b5",
       "until": 45,

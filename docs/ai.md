@@ -41,6 +41,7 @@ the table says; the bomb's blast (next section) comes before both.
 | `guard_bomb` | A T after the plant holds a spot within `ai.guardMaxUnits` (800) of the bomb with sight to it (`goal.hold` if that qualifies, else the nearest walkable point on rings of 300, 450, 600, 750 units every 15° with eye-to-bomb sight), facing the bomb. Before the plant: `hold`. |
 | `retake`, `defuse` | A CT goes to the planted bomb once it knows where it is (from the bomb's beeps, which only these roles listen to), walks to within `ai.defuseRangeFactor` × `bomb.defuseRange` (0.6 × 62 units), and holds USE only while no enemy is in its `sees` (it fights first). The engine defuses in 5 s with a kit, 10 s without. No bomb yet: `hold`. |
 | `hunt` | Go to the last known enemy position (seen or heard, at most `ai.memorySec` old); reaching it without contact forgets it and holds there (`searching`). Nothing known: `hold`. |
+| `rejoin` (G1) | Heading back to its recorded track (docs/core.md "Rejoin"): the Core picked `goal.hold`, a point of its reference track it can reach in time (route empty). Go there by the nav path, **running** (never WALK, even near a known enemy: time matters more than noise), keeping the held item (the Core may have drawn the c4 for a planter going back into his plant window), and wait there facing the likely approach. It still fights what it sees (it draws its best gun for that, as always). The Core switches it to REPLAY on the way, usually long before it arrives. `aiDebug().behaviour` is `rejoining`. |
 | anything else | `hold` (aiDebug reports `hold`). |
 
 ### The bomb's blast (F)
@@ -64,7 +65,7 @@ side's spawn (place `T Spawn` for a CT, `CT Spawn` for a T) to the spot, reverse
 reversed; else the current yaw. While moving it looks where it goes, or at a heard sound.
 
 `aiDebug().behaviour` is one of `route moving holding planting guarding defusing hunting searching reacting fighting
-escaping`.
+escaping rejoining` (G1: `rejoining` for the `rejoin` role, moving or waiting).
 
 ## Navigation
 
@@ -171,3 +172,15 @@ round shows it).
   round, and when a defuse is too late, it leaves the bomb's blast whatever its goal (above).
 - **Timing:** the set_mode applies in `apply()`; the AI first moves the pawn in the following `tick()`.
 - **Status:** `aiDebug(id)` is the 2D host's; CS2 has its own bot state, so the Core must not depend on it.
+
+## What G1 (rejoin) needs to know
+
+- **Back to REPLAY** is `set_mode {id, mode: 'REPLAY', goal: null}`: the AI state is dropped and the Core's inputs drive
+  the pawn from that tick's `tick()` on (velocity carries over; nothing is teleported). The Core sends the
+  `block_damage`s first.
+- **The approach** is an ordinary `set_mode LIVE` with role `rejoin`; every new plan starts the goal afresh (only sent
+  when the pawn is calm, so no fight is cut short). The 2D AI walks the nav path, which has no one-way drops
+  (`docs/nav.md`): a way back that needs the Balcony drop is walked round, so the Core measures straight walkable lines
+  first and doesn't chase along a detour.
+- **Run speed**: the planner assumes the held weapon's run speed × `replay.rejoinSpeedFactor`; the AI's easing off in
+  the last 48 units and its reaction are what `replay.rejoinLeadSec` covers.
