@@ -13,6 +13,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 
 ```sh
 npm run harness -- [--human none|cart] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
+npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
 npm run harness -- --until end                     # the golden master: 4,517 ticks, digest e6c2be70
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 ```
@@ -29,6 +30,7 @@ the same log (see "Browser parity").
 | `--until <t\|end>` | Run through observe tick round(t × 64), inclusive (`--until 20` logs ticks 0–1280, 1,281 lines). `end` (default) is the golden length, 4,517 ticks: one past the latest track end plus the 0.25 s hold. |
 | `--seed <n>` | Core seed, default 1 (the page's default). Nothing draws from the Core's PRNG yet, so the log doesn't depend on it today. |
 | `--out <dir>` | Writes `log.jsonl` (the SessionLog), `trace.json` (`toReplayTrace`, opens in the existing replay page) and `summary.json`. |
+| `--scenario <path>` | B4: a human-bot scenario (`fixtures/scenarios/*.json`, `tools/human-bot.ts`): its human, seed, length (unless `--until`) and steps. Prints the bot's steps and the divergence timeline (switches to LIVE with their triggers, encounters, deaths, the round end). Excludes `--script`. |
 
 `summary.json` is deterministic (canonical numbers, sorted keys), so two summaries can be diffed: digest and tick
 range; every `death` (tick, attacker, weapon, headshot); `bomb` and `round_end` events; the final `observe.round`;
@@ -102,11 +104,12 @@ playing the file reproduces the generation run byte for byte (digest `5c3016f4`)
 - cart, observed samples: RMS 20.5 u (13.5 as a puppet), max 152 u at 14.5 s: without the puppet's snaps he has to
   catch up physically after the recording's jumps (217 u in 0.3 s at 14.2 s, the Balcony drop at 21.0 s). The
   puppets' snaps of cart are gone; the other four happen as in the golden master.
-- The round changes the way B4 has to handle: cart's scripted kill of Lokier is skipped (he is the human) and his
-  real bullets don't reach Lokier through the 2D Apartments window, so Lokier lives; sp4rtan's post-round kill of
-  cart is skipped, and cart's post-round spray kills sp4rtan for real at 68.86 s. Plant, defuse and the round end
-  (CT, `bomb_defused`, 12 – 15) are unchanged.
-- 4,460 entries, 402 KB.
+- With C4's sight mask cart's real AK headshot kills Lokier at 18.50 s through the Apartments window (0.3 s before the
+  recorded kill: 2D has no spread), before B4's time-shifted scripted hit is due (18.63 s), so cart keeps 100 HP. With
+  B4 the only pawn that goes LIVE is sp4rtan, hit by cart's recorded spray during the defuse at 65.91 s (the B-site
+  boxes that stopped it in the recording are open in the mask); cart kills him at 66.22 s (T elimination, 11 – 16) and
+  the bomb explodes at 67.52 s. `docs/core.md` "Divergence", scenario 1.
+- The shadow is a `ReplayCore` with `{divergence: false}` (B2/B3 only). 4,321 entries.
 
 ## The golden master (CI gate)
 
@@ -141,8 +144,8 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 | --- | --- | ---: | ---: | --- |
 | `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 966,178 | (see manifest) | `e6c2be70` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 27,859 calls | 413,961 | | `9517e48f` |
-| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–1280 (20 s) | 279,404 | (see manifest) | `76ee296f` |
-| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 12,770 calls | 129,327 | | `cfcdde41` |
+| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–1280 (20 s) | 279,873 | (see manifest) | `868f56db` |
+| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 12,770 calls | 129,333 | | `84734d9c` |
 | `manifest.json` | One entry per fixture | 1,846 | | |
 
 With the two scripts (402 KB) everything under `fixtures/` is 2.19 MB; `tests/fixtures.test.ts` keeps the golden
@@ -269,3 +272,4 @@ tested (no WebKit here).
 ## History
 
 - C4 (#16) made `sees` real (radar sight mask) and clamps grenade throws at the mask's walls: the no-human digest went `0fb55e23` → `e6c2be70` and cart-idle `6505c774` → `76ee296f`. Core acts, positions, kills, HP, shots, plant and defuse are unchanged. The harness must pass `vision` to `Session` (as the app does): `parseSessionData` defaults the mask to null, which silently falls back to nav line of sight.
+- B4 (divergence) adds the `HUMAN` status mode and plays Lokier's hit on cart as a scheduled encounter: cart-idle `76ee296f` → `868f56db` (walk oracle `cfcdde41` → `84734d9c`). Every line's status shows cart `HUMAN` instead of `REPLAY`; from tick 1161 Lokier holds the angle on the Apartments window instead of the recorded aim at cart, so his input (yaw, and the stick re-expressed in it) and from 1162 his observed yaw and position differ, and his recorded tap at 1183 is gone (no `shot` at 1184; the encounter never starts, cart stays in Back Alley). The no-human golden master is byte-identical (`e6c2be70`); its manifest entry changed only for the new `tuningHash`. The follow script is the same through 66.0 s (sp4rtan goes LIVE at 65.91 s, so cart's aim at him differs from 66.03 s on).

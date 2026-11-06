@@ -35,10 +35,13 @@ describe('status badges', () => {
     expect(statusBadge(null, false)).toEqual({ text: 'REPLAY', tone: 'subtle' });
   });
 
-  it("marks the human's own pawn, unless it is dead", () => {
-    expect(statusBadge('REPLAY', true)).toEqual({ text: 'YOU', tone: 'human' });
+  it("marks the human's own pawn from its HUMAN mode (B4), unless it is dead", () => {
+    expect(statusBadge('HUMAN', true)).toEqual({ text: 'YOU', tone: 'human' });
+    // Before the first status the human's pawn already reads YOU; afterwards the badge follows Core's mode.
+    expect(statusBadge(null, true)).toEqual({ text: 'YOU', tone: 'human' });
+    expect(statusBadge('REPLAY', true)).toEqual({ text: 'REPLAY', tone: 'subtle' });
     expect(statusBadge('DEAD', true)).toEqual({ text: 'DEAD', tone: 'dead' });
-    expect(statusBadge('REPLAY', true, false)).toEqual({ text: 'DEAD', tone: 'dead' });
+    expect(statusBadge('HUMAN', true, false)).toEqual({ text: 'DEAD', tone: 'dead' });
     expect(statusBadge('LIVE', false, false)).toEqual({ text: 'DEAD', tone: 'dead' });
   });
 });

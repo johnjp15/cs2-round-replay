@@ -5,6 +5,7 @@
  * script ("chaos cart"). docs/golden.md describes it, and the golden master and the C# port fixtures are built on it.
  *
  *   npm run harness -- [--human none|cart] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
+ *   npm run harness -- --scenario fixtures/scenarios/<name>.json [--until <t|end>] [--out <dir>]
  *
  * - `--human none` (default): nobody plays, the Core drives all ten pawns (the golden master). `--human cart`: cart
  *   is the human pawn (the Core sends him nothing); without `--script` he gets no input and stands where the setup
@@ -14,6 +15,8 @@
  *   recording has none).
  * - `--until <t|end>`: run up to and including observe tick round(t × 64); `end` (default) is the golden length,
  *   one past the latest track end plus the hold (4,517 ticks, `roundTicks`).
+ * - `--scenario <path>` (B4): a human-bot scenario (tools/human-bot.ts): its human, seed, length and steps; prints the
+ *   divergence timeline (switches to LIVE with their triggers, encounters, deaths, the round end).
  * - `--seed <n>`: Core seed (default 1, as the app).
  * - `--out <dir>`: writes `log.jsonl` (the SessionLog), `trace.json` (`toReplayTrace`, opens in the replay page) and
  *   `summary.json` (deterministic: deaths, bomb events, round end, final round state, per-pawn modes, snaps, body
@@ -53,6 +56,7 @@ import {
 import { PuppetTrack, ReplayCore, startYaw, tOf, tickOf, type RoundModel } from '../src/core/index';
 import { NavWalkQuery, type Sim2DHost } from '../src/sim2d/index';
 import { SLOT_WEAPONS, Session, defaultCore, parseSessionData, weaponForSlot, type CoreFactory, type SessionData, type WeaponSlot } from '../src/app/index';
+import { HumanBot, formatTimeline, loadScenario, timeline } from './human-bot';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -893,11 +897,17 @@ export interface CliArgs {
   readonly until: number | 'end';
   readonly seed: number;
   readonly out: string | null;
+  /** A human-bot scenario file (B4), or null. */
+  readonly scenario: string | null;
+  /** Whether --until was given (a scenario has its own length otherwise). */
+  readonly untilGiven: boolean;
 }
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
   let human: PlayerId | null = null;
   let script: string | null = null;
+  let scenario: string | null = null;
+  let untilGiven = false;
   let until: number | 'end' = 'end';
   let seed = DEFAULT_SEED;
   let out: string | null = null;
@@ -919,7 +929,11 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
       case '--script':
         script = value();
         break;
+      case '--scenario':
+        scenario = value();
+        break;
       case '--until': {
+        untilGiven = true;
         const v = value();
         if (v === 'end') until = 'end';
         else if (Number.isFinite(Number(v)) && Number(v) >= 0) until = Number(v);
@@ -936,11 +950,12 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
         out = value();
         break;
       default:
-        throw new Error(`unknown option ${flag} (options: --human none|cart, --script <path>, --until <t|end>, --seed <n>, --out <dir>)`);
+        throw new Error(`unknown option ${flag} (options: --human none|cart, --script <path>, --scenario <path>, --until <t|end>, --seed <n>, --out <dir>)`);
     }
   }
+  if (scenario !== null && script !== null) throw new Error('--scenario and --script exclude each other');
   if (script !== null && human === null) throw new Error('--script needs --human (e.g. --human cart)');
-  return { human, script, until, seed, out };
+  return { human, script, until, seed, out, scenario, untilGiven };
 }
 
 /** Harness options for parsed CLI arguments (reads the script file). */
@@ -954,9 +969,18 @@ function main(): void {
   const t0 = performance.now();
   const data = loadHarnessData();
   const t1 = performance.now();
-  const run = runHarness(data, optionsFromArgs(args));
+  const scenario = args.scenario === null ? null : loadScenario(args.scenario);
+  const bot = scenario === null ? null : HumanBot.fromScenario(data, scenario);
+  const options: HarnessOptions =
+    scenario === null || bot === null
+      ? optionsFromArgs(args)
+      : { human: scenario.human, driver: bot, seed: scenario.seed, lastTick: args.untilGiven ? (args.until === 'end' ? 'end' : tickOf(args.until)) : scenario.until === 'end' ? 'end' : tickOf(scenario.until) };
+  const run = runHarness(data, options);
   const t2 = performance.now();
-  const summary = summarize(run, args.script);
+  const summary = summarize(run, args.script ?? args.scenario);
+  if (scenario !== null && bot !== null) {
+    console.log(`scenario ${scenario.name}: ${scenario.description}\n\nbot steps:\n${bot.trace.map((l) => `  ${l}`).join('\n')}\n\ntimeline:\n${formatTimeline(timeline(run.entries))}\n`);
+  }
   const t3 = performance.now();
   if (args.out !== null) writeOutputs(resolve(args.out), run, summary);
   const t4 = performance.now();

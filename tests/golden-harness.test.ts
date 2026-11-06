@@ -104,8 +104,18 @@ describe('input scripts', () => {
 
 describe('harness', () => {
   it('parses the CLI options', () => {
-    expect(parseCliArgs([])).toEqual({ human: null, script: null, until: 'end', seed: 1, out: null });
-    expect(parseCliArgs(['--human', 'cart', '--script', 'x.json', '--until', '20', '--seed', '7', '--out', 'o'])).toEqual({ human: 'cart', script: 'x.json', until: 20, seed: 7, out: 'o' });
+    expect(parseCliArgs([])).toEqual({ human: null, script: null, until: 'end', seed: 1, out: null, scenario: null, untilGiven: false });
+    expect(parseCliArgs(['--human', 'cart', '--script', 'x.json', '--until', '20', '--seed', '7', '--out', 'o'])).toEqual({
+      human: 'cart',
+      script: 'x.json',
+      until: 20,
+      seed: 7,
+      out: 'o',
+      scenario: null,
+      untilGiven: true,
+    });
+    expect(parseCliArgs(['--scenario', 's.json'])).toMatchObject({ scenario: 's.json', human: null, untilGiven: false });
+    expect(() => parseCliArgs(['--scenario', 's.json', '--human', 'cart', '--script', 'x.json'])).toThrow(/exclude/);
     expect(() => parseCliArgs(['--script', 'x.json'])).toThrow(/needs --human/);
     expect(() => parseCliArgs(['--human', 'bob'])).toThrow(/--human/);
     expect(() => parseCliArgs(['--until', 'soon'])).toThrow(/--until/);

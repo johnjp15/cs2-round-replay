@@ -119,3 +119,13 @@ for tests would need:
 - **Order:** the AI runs at the start of a tick, before the movement locks, LIVE pawns in id order; a weapon switch it
   asks for is applied at once (deploy time from that tick).
 
+## Divergence (src/core/divergence.ts, B4)
+
+- **Pure triggers**: `damageTrigger`, `sightingTrigger`, `gunfireTrigger`, `outlivedTrigger`, `blockedTrigger` take the Observe, the modes at the start of the tick and plain data; port them as static methods. Pawns are visited in `PLAYER_IDS` order and the first trigger in table order wins; switches are applied after all pawns are checked (a cascade takes a tick).
+- **Distances and branches**: 2D `Math.Sqrt` distances and dot products only (IEEE-exact); `offCourseUnits`, `contactSlackUnits`, hearing range and the spot tolerance compare with `<=` / `>` as written. The contact's starting drift is rounded to 6 decimals (`roundNumber`) before it is stored. No trig.
+- **Ticks**: windows and delays are `secTicks` (`Math.Floor(sec * 64 + 0.5)`); the encounter's shot tick is `seenTick + max(secTicks(encounterDelaySec), max(inputLatencyTicks, actionLatencyTicks))`.
+- **Log texts** use only integers, ids and tenths of seconds from integer tick arithmetic (`intText` = `Math.Floor(x + 0.5)`; `tenthsText(ticks)` = `Math.Floor(|ticks| * 10 / 64 + 0.5)` split into `a.b`, sign explicit). No `ToString("F1")`.
+- **Sightings**: `RoundModel.sightings[].by` is resolved from the free text by splitting the lowercase string at anything but `a-z0-9` and keeping the words that are player ids, in `PLAYER_IDS` order (`Regex.Split(by.ToLowerInvariant(), "[^a-z0-9]+")`).
+- **RDP route thinning** uses an explicit stack of index pairs (push a, best, best, b; pop b then a); the furthest point wins, on a tie the first (strict `>` against the tolerance).
+- **State** (`DivergenceState`: encounter phases and ticks, contacts) is plain data in the Core snapshot. B3's `ScriptState` gained `extraFire`, `extraEngagements` (run-time items, decided like the plan's) and `holds`; `suppress(key)` pre-decides a plan item as dropped without a log.
+- **Goal coordinates** come from track samples (they may be fractional: Lokier's last sample is (−2145.78125, 432.21875, −160.03125), exact in binary).

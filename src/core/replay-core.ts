@@ -2,8 +2,9 @@
  * ReplayCore: the ICore that replays the recording. It sets the round up, drives
  * every REPLAY pawn along its recorded track (B2 puppets, src/core/puppet.ts), makes
  * the puppets act the recording (B3 scripted events, src/core/scripted.ts: aim, fire,
- * damage, weapons, utility, plant, defuse) and reports status. See docs/core.md
- * "ReplayCore", "Puppets" and "Scripted events".
+ * damage, weapons, utility, plant, defuse), switches puppets to LIVE when something
+ * off-script reaches them (B4 divergence, src/core/divergence.ts) and reports status. See
+ * docs/core.md "ReplayCore", "Puppets", "Scripted events" and "Divergence".
  */
 import {
   PLAYER_IDS,
@@ -22,9 +23,11 @@ import {
   type PlayerId,
   type SettableMode,
   type Tuning,
+  type Vec3,
   type WalkQuery,
 } from '../contracts/index';
-import { RoundClock } from './clock';
+import { RoundClock, TICK_RATE } from './clock';
+import { Divergence, type DivergenceState } from './divergence';
 import { PuppetController, PuppetTrack, type PuppetState } from './puppet';
 import type { RoundModel } from './round-model';
 import type { EventSchedule } from './schedule';
@@ -37,6 +40,17 @@ interface PawnState {
   mode: Mode;
   /** Tick the current mode began. */
   since: number;
+  /** B4: the trigger that made the pawn LIVE (`TriggerKind`), else null. */
+  trigger: string | null;
+}
+
+/** ReplayCore options (tools and tests). */
+export interface ReplayCoreOptions {
+  /**
+   * B4 divergence (triggers, scheduled encounters). On by default; off gives the B2/B3 puppets alone (a shadow Core
+   * that decides a scripted human's input as if he were a puppet, tools/human-bot.ts).
+   */
+  readonly divergence: boolean;
 }
 
 /** Everything ReplayCore keeps between steps; this is what snapshot() writes. */
@@ -73,12 +87,17 @@ export class ReplayCore implements ICore {
   private readonly puppets: readonly PuppetController[] | null;
   /** B3: the scripted events plan, its per-tick rules and its state (bomb events seen, decisions made). */
   readonly script: ScriptedEvents;
+  /** B4: the triggers, the expected-encounter index and the scheduled encounters, with their state. */
+  readonly divergence: Divergence;
+  /** False when built with `{divergence: false}`: no trigger is evaluated, no pawn goes LIVE by itself. */
+  readonly divergenceOn: boolean;
   private state: ReplayCoreState;
 
   /**
    * @param walk the engine's walkable-line query (2D sim: `NavWalkQuery`); null = no puppet movement.
+   * @param options null = the defaults (divergence on).
    */
-  constructor(model: RoundModel, schedule: EventSchedule, tuning: Tuning, seed: number, walk: WalkQuery | null = null) {
+  constructor(model: RoundModel, schedule: EventSchedule, tuning: Tuning, seed: number, walk: WalkQuery | null = null, options: ReplayCoreOptions | null = null) {
     this.model = model;
     this.schedule = schedule;
     this.tuning = tuning;
@@ -86,6 +105,8 @@ export class ReplayCore implements ICore {
     this.rng = new Rng(seed);
     this.puppets = walk === null ? null : PLAYER_IDS.map((id) => new PuppetController(PuppetTrack.fromModel(model, schedule, tuning, id), tuning, walk));
     this.script = new ScriptedEvents(model, schedule, tuning);
+    this.divergence = new Divergence(model, schedule, this.script.plan, tuning);
+    this.divergenceOn = options === null || options.divergence;
     this.state = initialState();
   }
 
@@ -101,25 +122,34 @@ export class ReplayCore implements ICore {
       for (const p of s.pawns) {
         p.mode = 'REPLAY';
         p.since = o.tick;
+        p.trigger = null;
       }
       if (this.puppets !== null) for (const c of this.puppets) c.reset(startYaw(this.model, c.id).yaw);
       this.script.reset();
+      this.divergence.reset();
+      if (this.divergenceOn) this.divergence.setup(o, this.script);
       for (const a of this.script.blockActions(o, s.pawns)) actions.push(a);
     }
 
     const byId = new Map<PlayerId, PawnObs>();
     for (const p of o.pawns) byId.set(p.id, p);
 
-    // Status: DEAD once the engine reports the pawn dead; otherwise LIVE stays LIVE (B4 sets it
-    // through setPawnMode) and anything else is REPLAY.
+    // Status: DEAD once the engine reports the pawn dead; HUMAN for the human's living pawn (B4);
+    // otherwise LIVE stays LIVE (set by the B4 triggers through setPawnMode) and anything else is REPLAY.
     for (const p of s.pawns) {
       const obs = byId.get(p.id);
       if (obs === undefined) continue;
-      const mode: Mode = !obs.alive ? 'DEAD' : p.mode === 'LIVE' ? 'LIVE' : 'REPLAY';
+      const mode: Mode = !obs.alive ? 'DEAD' : p.id === o.human ? 'HUMAN' : p.mode === 'LIVE' ? 'LIVE' : 'REPLAY';
       if (mode !== p.mode) {
         p.mode = mode;
         p.since = o.tick;
+        if (mode !== 'LIVE') p.trigger = null;
       }
+    }
+
+    // B4: the triggers and the scheduled encounters (not on the setup step: that observe predates the setup).
+    if (this.divergenceOn && !s.setupThisStep) {
+      for (const h of this.divergence.step(o, s.pawns, this.references(o.tick), this.script, actions)) this.setPawnMode(h.id, 'LIVE', o.tick, h.trigger);
     }
 
     this.scheduledActions(o, actions);
@@ -136,7 +166,7 @@ export class ReplayCore implements ICore {
       inputs.push(s.setupThisStep ? base : this.scriptedInput(base, obs, o, prevYaw));
     }
 
-    const status: PawnStatus[] = s.pawns.map((p) => ({ id: p.id, mode: p.mode, trigger: null, sinceTick: p.since }));
+    const status: PawnStatus[] = s.pawns.map((p) => ({ id: p.id, mode: p.mode, trigger: p.trigger, sinceTick: p.since }));
     s.lastTick = o.tick;
     return { inputs, actions, status };
   }
@@ -175,11 +205,18 @@ export class ReplayCore implements ICore {
     return this.puppets === null ? null : (this.puppets.find((c) => c.id === id) ?? null);
   }
 
-  /** A pawn's Core mode (REPLAY, LIVE or DEAD). */
+  /** A pawn's Core mode (REPLAY, LIVE, DEAD or HUMAN). */
   modeOf(id: PlayerId): Mode {
     const p = this.state.pawns.find((q) => q.id === id);
     if (p === undefined) throw new Error(`ReplayCore.modeOf: unknown pawn ${id}`);
     return p.mode;
+  }
+
+  /** The trigger that made a pawn LIVE (B4), or null. */
+  triggerOf(id: PlayerId): string | null {
+    const p = this.state.pawns.find((q) => q.id === id);
+    if (p === undefined) throw new Error(`ReplayCore.triggerOf: unknown pawn ${id}`);
+    return p.trigger;
   }
 
   /** Snaps since the last start / restart, all pawns. */
@@ -191,12 +228,12 @@ export class ReplayCore implements ICore {
 
   snapshot(): CoreSnapshot {
     const puppets: PuppetState[] = this.puppets === null ? [] : this.puppets.map((c) => c.state);
-    return { kind: 'core', data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets, script: this.script.state }) };
+    return { kind: 'core', data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets, script: this.script.state, divergence: this.divergence.state }) };
   }
 
   restore(snap: CoreSnapshot): void {
     if (snap.kind !== 'core') throw new Error('ReplayCore.restore: not a core snapshot');
-    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[]; script: ScriptState };
+    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[]; script: ScriptState; divergence: DivergenceState };
     if (d.seed !== this.rng.seed) throw new Error(`ReplayCore.restore: snapshot seed ${d.seed} != core seed ${this.rng.seed}`);
     const st = d.state;
     this.state = {
@@ -209,11 +246,13 @@ export class ReplayCore implements ICore {
       pawns: PLAYER_IDS.map((id) => {
         const p = st.pawns.find((q) => q.id === id);
         if (p === undefined) throw new Error(`ReplayCore.restore: no state for ${id}`);
-        return { id, mode: p.mode, since: p.since };
+        return { id, mode: p.mode, since: p.since, trigger: p.trigger };
       }),
     };
     if (d.script === undefined || d.script === null) throw new Error('ReplayCore.restore: snapshot has no scripted-events state (made before B3)');
     this.script.restore(d.script);
+    if (d.divergence === undefined || d.divergence === null) throw new Error('ReplayCore.restore: snapshot has no divergence state (made before B4)');
+    this.divergence.restore(d.divergence);
     if (this.puppets !== null) {
       for (const c of this.puppets) {
         const ps = d.puppets.find((q) => q.id === c.id);
@@ -269,15 +308,31 @@ export class ReplayCore implements ICore {
   }
 
   /**
-   * Change a pawn's Core mode from `tick` (B4 triggers: REPLAY <-> LIVE). Scripted shots and
-   * damage involving a LIVE pawn are dropped; a LIVE pawn gets no input.
+   * Change a pawn's Core mode from `tick` (B4 triggers: REPLAY → LIVE; `trigger` is what did it).
+   * Scripted shots and damage involving a LIVE pawn are dropped; a LIVE pawn gets no input. The
+   * engine is told by the `set_mode` action the triggers emit, not by this.
    */
-  protected setPawnMode(id: PlayerId, mode: SettableMode, tick: number): void {
+  protected setPawnMode(id: PlayerId, mode: SettableMode, tick: number, trigger: string | null = null): void {
     const p = this.state.pawns.find((q) => q.id === id);
     if (p === undefined) throw new Error(`ReplayCore.setPawnMode: unknown pawn ${id}`);
     if (p.mode === mode) return;
     p.mode = mode;
     p.since = tick;
+    p.trigger = mode === 'LIVE' ? trigger : null;
+  }
+
+  /**
+   * Each puppet's reference position at `tick` (PLAYER_IDS order) for the body-block trigger: its
+   * track's reference while the puppet follows it (B2: from the first sample to the last plus
+   * `holdLastPositionSec`), else null; all null without puppets.
+   */
+  private references(tick: number): (Vec3 | null)[] {
+    const hold = Math.round(this.tuning.replay.holdLastPositionSec * TICK_RATE);
+    return PLAYER_IDS.map((id) => {
+      const c = this.puppet(id);
+      if (c === null || tick < c.track.startTick || tick > c.track.endTick + hold) return null;
+      return c.track.targetAt(tick);
+    });
   }
 }
 
@@ -289,6 +344,6 @@ function initialState(): ReplayCoreState {
     lastTick: null,
     paused: false,
     speed: 1,
-    pawns: PLAYER_IDS.map((id) => ({ id, mode: 'REPLAY' as Mode, since: 0 })),
+    pawns: PLAYER_IDS.map((id) => ({ id, mode: 'REPLAY' as Mode, since: 0, trigger: null })),
   };
 }

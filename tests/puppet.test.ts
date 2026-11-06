@@ -335,7 +335,8 @@ describe('ReplayCore with puppets', () => {
   const START = new Map([[0, [{ type: 'start' as const }]]]);
 
   it('holds every puppet still at its start yaw on the setup tick, then drives them', () => {
-    const log = runSession(10, new ScriptedHost(), new ReplayCore(model, schedule, tuning, 1, OPEN), START);
+    // ScriptedHost is no world (everyone sees everyone off their tracks, sp4rtan human): B2 alone, without B4's triggers.
+    const log = runSession(10, new ScriptedHost(), new ReplayCore(model, schedule, tuning, 1, OPEN, { divergence: false }), START);
     const first = log.at(0)?.act.inputs ?? [];
     expect(first.map((i) => i.id)).toEqual(PLAYER_IDS.filter((id) => id !== 'sp4rtan'));
     for (const i of first) expect(i).toEqual({ id: i.id, forward: 0, side: 0, yaw: startYaw(model, i.id).yaw, pitch: 0, buttons: [] });

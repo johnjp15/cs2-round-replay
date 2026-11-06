@@ -1,0 +1,15 @@
+{
+  "name": "flank-sp4rtan",
+  "description": "cart plays his recording to 44.6 s, then (teleported) waits in Back Alley for sp4rtan's flank and kills him at about 44.7 s. sp4rtan's later kills of donk and barely are dropped, they outlive their recordings and go LIVE guarding the bomb; no CT is left, so the round ends T elimination, 11-16.",
+  "human": "cart",
+  "seed": 1,
+  "until": "end",
+  "steps": [
+    {"do": "followRecording", "until": 44.6},
+    {"do": "teleport", "pos": [-560, 600], "yaw": 19},
+    {"do": "aimAt", "id": "sp4rtan"},
+    {"do": "fire", "untilDead": true, "maxSec": 2},
+    {"do": "aimAt", "id": null},
+    {"do": "holdStill", "until": 70.6}
+  ]
+}

@@ -218,7 +218,8 @@ log lines use the system face. No web fonts and no game UI assets: everything is
     popped, at its `grenade` sound).
 11. **Names and mode badges** above the pawns, nudged apart where they would overlap. Badges come from
     the latest `act.status` (`statusBadge`): REPLAY is a small dim "play" mark (spelled out from 2×
-    zoom), **LIVE** a solid magenta tag, DEAD dim text, and the human's pawn none (it has the ring).
+    zoom), **LIVE** a solid magenta tag, DEAD dim text, and the human's pawn none (it has the ring). The
+    human's pawn is reported `HUMAN` by Core (B4), which `statusBadge` reads as "YOU" (the HUD's status card).
 12. **Aim line** from the human's pawn to the cursor while playing.
 
 **Interpolation.** After each `Session.step()` the Scene keeps the previous and the current observe;

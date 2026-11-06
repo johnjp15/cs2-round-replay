@@ -49,7 +49,16 @@
     "throwPitchDeg": -10,
     "throwHoldSec": 0.25,
     "plantFallbackTicks": 3,
-    "defuseFallbackTicks": 2
+    "defuseFallbackTicks": 2,
+    "expectedSightingWindowSec": 2,
+    "expectedGunfireWindowSec": 2,
+    "encounterDelaySec": 1,
+    "humanSpotToleranceUnits": 192,
+    "routeThinUnits": 64,
+    "offCourseUnits": 64,
+    "contactSlackUnits": 4,
+    "blockedSec": 0.25,
+    "dwellUnits": 64
   },
   "weapons": {
     "ak47": { "damage": 36, "rpm": 600, "headshotMult": 4, "armorPen": 0.775, "rangeModifier": 0.98, "clip": 30, "reserve": 90, "reloadSec": 2.5, "deploySec": 1, "automatic": true },

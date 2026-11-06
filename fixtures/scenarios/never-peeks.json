@@ -1,0 +1,10 @@
+{
+  "name": "never-peeks",
+  "description": "cart holds Back Alley all round and never peeks: Lokier outlives his recording and holds B LIVE; the Ts walking onto the site meet a live enemy.",
+  "human": "cart",
+  "seed": 1,
+  "until": "end",
+  "steps": [
+    {"do": "holdStill", "until": 70.6}
+  ]
+}
