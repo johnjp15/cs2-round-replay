@@ -66,10 +66,11 @@ export const FIXTURE_SPECS: readonly FixtureSpec[] = [
   },
   {
     name: 'round-cart-idle',
-    description: 'Human cart stands still in Back Alley (fixtures/scripts/cart-idle.json) for 20 s: the Core skips him and his scripted damage.',
+    description:
+      'Human cart stands still in Back Alley (fixtures/scripts/cart-idle.json) for 45 s: the Core skips him and his scripted damage; Lokier outlives his recording, barely kills him and rejoins (G1), sp4rtan kills cart on his flank and rejoins, barely hears it, goes LIVE and rejoins again (rejoin path queries in the walk oracle).',
     human: 'cart',
     script: 'fixtures/scripts/cart-idle.json',
-    until: 20,
+    until: 45,
     seed: DEFAULT_SEED,
   },
 ];
