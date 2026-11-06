@@ -1,0 +1,137 @@
+/**
+ * B5: the end-of-round summary (src/core/summary.ts), a pure function of the round data and a SessionLog. The golden
+ * round (no human, the committed fixture) is "the tape": every kill the same, CT defuse with 0.72 s left. B4's
+ * flank-sp4rtan scenario changes history: cart kills sp4rtan at 44.6 s, Ts win by elimination, and sp4rtan's recorded
+ * kills don't happen.
+ */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { SessionLog, type LogEntry, type ObsEvent } from '../src/contracts/index';
+import { RoundModel, deltaText, fixed2, recordedBomb, recordedResult, resultLong, resultShort, secText, summarize } from '../src/core/index';
+import { GOLDEN_DIR, gunzipText } from '../tools/golden-fixtures';
+import { ROOT, loadHarnessData, runHarness } from '../tools/harness';
+import { HumanBot, loadScenario } from '../tools/human-bot';
+
+const data = loadHarnessData();
+const model = new RoundModel(data.round);
+const golden = SessionLog.fromText(gunzipText(readFileSync(resolve(ROOT, GOLDEN_DIR, 'round-nohuman.jsonl.gz'))));
+const goldenEntries: LogEntry[] = [];
+for (let i = 0; i < golden.length; i++) goldenEntries.push(golden.at(i) as LogEntry);
+
+describe('summary helpers', () => {
+  it('formats times from integer arithmetic', () => {
+    expect([fixed2(0.71875), fixed2(0.005), fixed2(-0.296875), fixed2(44.625), fixed2(0), fixed2(-0.001), fixed2(12)]).toEqual(['0.72', '0.01', '-0.30', '44.63', '0.00', '0.00', '12.00']);
+    expect([secText(2856), deltaText(-19), deltaText(11), deltaText(0)]).toEqual(['44.63', '-0.30 s', '+0.17 s', '+0.00 s']);
+  });
+
+  it('names results', () => {
+    expect([resultShort('CT', 'bomb_defused'), resultShort('T', 'elimination'), resultShort('T', 'bomb_exploded'), resultShort('CT', 'time')]).toEqual(['CT defuse', 'T elimination', 'T bomb', 'CT on time']);
+    expect([resultLong('T', 'elimination'), resultLong('CT', 'bomb_defused'), resultLong('T', 'bomb_exploded')]).toEqual(['Ts win by elimination', 'CTs win by defusing the bomb', 'Ts win: the bomb explodes']);
+  });
+
+  it('reads the recorded result from the round: CT bomb_defused at 66.8 s, 12 – 15, 0.72 s left', () => {
+    expect(recordedResult(model)).toEqual({ winner: 'CT', reason: 'bomb_defused', endTick: 4275, score: { ct: 12, t: 15 } });
+    expect(recordedBomb(model)).toEqual({ plantTick: 1761, defuseTick: 4275, explodeTick: null, marginSec: 0.71875 });
+  });
+});
+
+describe('summary of the golden round (no human)', () => {
+  const s = summarize(model, golden);
+
+  it('played it like the tape', () => {
+    expect(s.headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
+    expect(s.verdict).toBe('tape');
+    expect(s.result).toEqual(s.recorded);
+    expect(s.bomb).toEqual({ plantTick: 1761, defuseTick: 4275, explodeTick: null, marginSec: 0.71875 });
+    expect(s.switches).toEqual([]);
+    expect([s.ticks, s.lastTick]).toEqual([4517, 4516]);
+  });
+
+  it('has every recorded kill the same, on its recorded tick', () => {
+    expect(s.kills).toHaveLength(9);
+    for (const k of s.kills) {
+      expect(k).toMatchObject({ status: 'same', deltaTicks: 0, text: 'same' });
+      expect(k.runTick).toBe(k.recordedTick);
+    }
+    expect(s.kills.map((k) => `${k.killer} ${k.victim}`)).toEqual(model.kills.map((k) => `${k.killer} ${k.victim}`));
+    expect(s.kills.at(-1)).toMatchObject({ killer: 'sp4rtan', victim: 'cart', postRound: true, runTick: 4442 });
+  });
+
+  it("reports cart's stats (watched, not played)", () => {
+    expect(s.player).toMatchObject({ id: 'cart', human: false, kills: 1, damageDealt: 100, damageTaken: 100, deathTick: 4442 });
+    expect(s.player.aliveSec).toBeCloseTo(4441 / 64, 9);
+    // Per tick against the interpolated track (the golden table's 13.5 is per 10 Hz sample).
+    expect(s.player.rmsFromRecording).toBeGreaterThan(10);
+    expect(s.player.rmsFromRecording).toBeLessThan(16);
+  });
+
+  it('is a pure function: the same lines give the same summary; a partial log is unfinished', () => {
+    expect(summarize(model, goldenEntries)).toEqual(s);
+    const partial = summarize(model, goldenEntries.slice(0, 3000));
+    expect(partial.verdict).toBe('unfinished');
+    expect(partial.headline).toBe('Round still on (recorded: CT defuse)');
+    expect(partial.kills.filter((k) => k.status === 'missed').map((k) => k.text)).toEqual([
+      "didn't happen: donk survived",
+      "didn't happen: barely survived",
+      "didn't happen: cart survived",
+    ]);
+  });
+
+  it('a kill moved by 11 ticks is shifted: same result, different round', () => {
+    const moved = goldenEntries.map((e) => {
+      const strip = (ev: ObsEvent): boolean => !(ev.type === 'death' && ev.victim === 'zwomp');
+      if (e.observe.tick === 2829) return { ...e, observe: { ...e.observe, events: e.observe.events.filter(strip) } };
+      if (e.observe.tick === 2840) return { ...e, observe: { ...e.observe, events: [...e.observe.events, { type: 'death' as const, victim: 'zwomp' as const, attacker: 'barely' as const, weapon: 'ak47' as const, headshot: false }] } };
+      return e;
+    });
+    const m = summarize(model, moved);
+    expect(m.verdict).toBe('same_result');
+    expect(m.headline).toBe('Same result, different round: CT defuse, 0.72 s left; 1 kill changed');
+    expect(m.kills.find((k) => k.victim === 'zwomp')).toMatchObject({ status: 'shifted', deltaTicks: 11, text: '+0.17 s' });
+  });
+});
+
+describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
+  const sc = loadScenario(`${ROOT}/fixtures/scenarios/flank-sp4rtan.json`);
+  const run = runHarness(data, { human: sc.human, driver: HumanBot.fromScenario(data, sc), lastTick: 'end', seed: sc.seed });
+  const s = summarize(model, run.log);
+
+  it('changed history: Ts win by elimination at 44.63 s, 11 – 16', () => {
+    expect(s.headline).toBe('You changed history: Ts win by elimination (recorded: CT defuse)');
+    expect(s.verdict).toBe('changed');
+    expect(s.result).toEqual({ winner: 'T', reason: 'elimination', endTick: 2856, score: { ct: 11, t: 16 } });
+    // Nobody defused: the bomb exploded at 67.52 s, killing the two LIVE guards.
+    expect(s.bomb).toEqual({ plantTick: 1761, defuseTick: null, explodeTick: 4321, marginSec: null });
+  });
+
+  it("compares the kills: a new kill cart → sp4rtan at 44.6 s, sp4rtan's recorded kills didn't happen", () => {
+    const row = (killer: string | null, victim: string) => s.kills.find((k) => k.killer === killer && k.victim === victim);
+    expect(row('cart', 'sp4rtan')).toMatchObject({ status: 'new', runTick: 2856, recordedTick: null, headshot: true });
+    expect(secText(row('cart', 'sp4rtan')?.runTick ?? 0)).toBe('44.63');
+    for (const victim of ['donk', 'barely', 'cart']) {
+      expect(row('sp4rtan', victim)).toMatchObject({ status: 'missed', runTick: null, text: "didn't happen: sp4rtan was dead (44.63 s)" });
+    }
+    expect(row('cart', 'lokier')).toMatchObject({ status: 'shifted', deltaTicks: -19, text: '-0.30 s' });
+    for (const victim of ['donk', 'barely']) expect(row(null, victim)).toMatchObject({ status: 'new', runTick: 4321, weapon: null });
+    for (const [killer, victim] of [['snarlbot', 'incredibad'], ['snarlbot', 'snakelore'], ['lokier', 'eradicate'], ['sp4rtan', 'snarlbot'], ['barely', 'zwomp']] as const) {
+      expect(row(killer, victim)?.status).toBe('same');
+    }
+    expect(s.kills.map((k) => k.recordedTick ?? k.runTick)).toEqual([...s.kills.map((k) => k.recordedTick ?? k.runTick)].sort((a, b) => (a ?? 0) - (b ?? 0)));
+  });
+
+  it('lists the LIVE switches with trigger, time and reason', () => {
+    expect(s.switches).toEqual([
+      { id: 'sp4rtan', tick: 2855, trigger: 'sighting', reason: 'sees cart (the human), not in the recording' },
+      { id: 'donk', tick: 3414, trigger: 'outlived', reason: 'outlived recording (+3.0 s)' },
+      { id: 'barely', tick: 3958, trigger: 'outlived', reason: 'outlived recording (+3.0 s)' },
+    ]);
+  });
+
+  it("reports cart's stats (the human)", () => {
+    expect(s.player).toMatchObject({ id: 'cart', human: true, kills: 2, deathTick: null });
+    expect(s.player.damageDealt).toBe(200);
+    expect(s.player.aliveSec).toBeCloseTo(4516 / 64, 9);
+    console.log(`[summary flank-sp4rtan] ${s.headline}; cart ${s.player.kills} kills, ${s.player.damageDealt} dealt, ${s.player.damageTaken} taken, RMS ${s.player.rmsFromRecording?.toFixed(1)} u from his recording (teleported to Back Alley at 44.6 s)`);
+  });
+});
