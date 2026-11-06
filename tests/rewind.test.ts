@@ -336,7 +336,7 @@ describe('seek (B5)', () => {
   it('forward from the start equals a straight run (no human)', () => {
     const s = session();
     const p = s.seek(30);
-    expect(p).toMatchObject({ from: 0, target: 1920, tick: 1920, done: true, rewound: null });
+    expect(p).toMatchObject({ from: 0, start: 0, target: 1920, tick: 1920, done: true, rewound: null });
     expect(s.log().lines().join('\n') === straight.log().lines().slice(0, 1920).join('\n')).toBe(true);
   });
 
@@ -346,7 +346,7 @@ describe('seek (B5)', () => {
     runTo(s, 3199, HumanBot.fromScenario(data, sc));
     const ref = s.log().lines();
     const back = s.seek(33);
-    expect(back).toMatchObject({ from: 3200, target: tickOf(33), rewound: autoCheckpointId(1920), done: true });
+    expect(back).toMatchObject({ from: 3200, start: 1920, target: tickOf(33), rewound: autoCheckpointId(1920), done: true });
     expect(s.log().lines().join('\n') === ref.slice(0, tickOf(33)).join('\n')).toBe(true);
     const fwd = s.seek(45);
     expect(fwd).toMatchObject({ target: 2880, done: true, rewound: null });

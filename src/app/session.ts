@@ -112,6 +112,8 @@ export interface SessionConfig {
 export interface SeekProgress {
   /** Tick when the seek began (before any rewind). */
   readonly from: number;
+  /** Tick the forward stepping began (after a rewind: the checkpoint's). */
+  readonly start: number;
   readonly target: number;
   /** The tick the next step runs. */
   readonly tick: number;
@@ -195,10 +197,12 @@ export class Session {
    */
   private tapeInputs: HumanInputAt[] = [];
   private tapeSlots: SlotAt[] = [];
+  /** How far the run the tape comes from got (its next tick then), or null without a tape. */
+  private tapeUntil: number | null = null;
   /** True while advanceSeek steps (inputs are replayed, the tape is kept). */
   private replaying = false;
   /** B5: the seek in progress. */
-  private seekState: { from: number; target: number; rewound: string | null } | null = null;
+  private seekState: { from: number; start: number; target: number; rewound: string | null } | null = null;
 
   constructor(config: SessionConfig) {
     this.round = config.round;
@@ -229,10 +233,7 @@ export class Session {
   step(): Act {
     if (this.resyncObserve === null && this.tick % this.checkpointTicks === 0 && !this.checkpoints.hasAt(this.tick)) this.takeCheckpoint(autoCheckpointId(this.tick), true);
     // Played live: the run goes its own way from here, and the old future is gone.
-    if (!this.replaying && (this.tapeInputs.length > 0 || this.tapeSlots.length > 0)) {
-      this.tapeInputs = [];
-      this.tapeSlots = [];
-    }
+    if (!this.replaying && this.tapeUntil !== null) this.dropTape();
     const o = this.resyncObserve ?? canonicalize(this.host.observe());
     this.resyncObserve = null;
     const controls = this.pending;
@@ -308,6 +309,7 @@ export class Session {
     this.tapeSlots = [...this.slotTrack.filter((e) => e.tick >= cp.tick), ...this.tapeSlots.filter((e) => e.tick > lastSlot)];
     this.humanTrack = this.humanTrack.filter((e) => e.tick < cp.tick);
     this.slotTrack = this.slotTrack.filter((e) => e.tick < cp.tick);
+    if (this.human !== null) this.tapeUntil = Math.max(this.tick, this.tapeUntil ?? 0);
     this.rewindTo(cp);
     return cp;
   }
@@ -335,7 +337,7 @@ export class Session {
       this.rewind(cp.id);
       rewound = cp.id;
     }
-    this.seekState = { from, target: this.capabilities.seek ? target : this.tick, rewound };
+    this.seekState = { from, start: this.tick, target: this.capabilities.seek ? target : this.tick, rewound };
     return this.seekProgress();
   }
 
@@ -384,19 +386,25 @@ export class Session {
     return this.seek(Math.max(0, this.tick - sec * 64) / 64);
   }
 
-  /** The last tick the tape (the human's replayable future) reaches, or null when there is none. */
+  /**
+   * How far the human's replayable future (the tape) reaches: the tick the run it comes from had got to, while that is
+   * ahead of now; else null. A forward seek up to it replays what he did; past it his last input stays held.
+   */
   get tapeEnd(): number | null {
-    let end: number | null = null;
-    for (const e of this.tapeInputs) if (end === null || e.tick > end) end = e.tick;
-    for (const e of this.tapeSlots) if (end === null || e.tick > end) end = e.tick;
-    return end;
+    return this.tapeUntil !== null && this.tapeUntil > this.tick ? this.tapeUntil : null;
+  }
+
+  private dropTape(): void {
+    this.tapeInputs = [];
+    this.tapeSlots = [];
+    this.tapeUntil = null;
   }
 
   private seekProgress(): SeekProgress {
     const sk = this.seekState;
     const tick = this.tick;
-    if (sk === null) return { from: tick, target: tick, tick, rewound: null, done: true };
-    return { from: sk.from, target: sk.target, tick, rewound: sk.rewound, done: tick >= sk.target };
+    if (sk === null) return { from: tick, start: tick, target: tick, tick, rewound: null, done: true };
+    return { from: sk.from, start: sk.start, target: sk.target, tick, rewound: sk.rewound, done: tick >= sk.target };
   }
 
   private takeCheckpoint(id: string, auto: boolean): Checkpoint {
@@ -450,8 +458,7 @@ export class Session {
     this.checkpoints.clear();
     this.humanTrack = [];
     this.slotTrack = [];
-    this.tapeInputs = [];
-    this.tapeSlots = [];
+    this.dropTape();
   }
 
   /**
@@ -524,8 +531,7 @@ export class Session {
     this.checkpoints.dropAfter(tick);
     this.humanTrack = this.humanTrack.filter((e) => e.tick < tick);
     this.slotTrack = this.slotTrack.filter((e) => e.tick < tick);
-    this.tapeInputs = [];
-    this.tapeSlots = [];
+    this.dropTape();
   }
 
   /** The current state as the next step will see it (already canonical). After a resync rewind: the checkpoint's. */
