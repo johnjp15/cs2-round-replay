@@ -3,7 +3,7 @@
   "fixtures": [
     {
       "bytes": 964329,
-      "commit": "79dba7861e5dc47957977370ae220bf361d247de",
+      "commit": "bad79a65de81c38a6fd602c36cd43f9e1cf9d4d4",
       "description": "The golden master: no human, the Core drives all ten pawns for the whole round (npm run harness -- --human none --until end).",
       "digest": "0fb55e23",
       "file": "round-nohuman.jsonl.gz",
@@ -17,7 +17,7 @@
       "script": null,
       "scriptHash": null,
       "seed": 1,
-      "sourceDirty": true,
+      "sourceDirty": false,
       "ticks": 4517,
       "tuningHash": "c41c0ea2",
       "until": "end",
@@ -28,7 +28,7 @@
     },
     {
       "bytes": 278271,
-      "commit": "79dba7861e5dc47957977370ae220bf361d247de",
+      "commit": "bad79a65de81c38a6fd602c36cd43f9e1cf9d4d4",
       "description": "Human cart stands still in Back Alley (fixtures/scripts/cart-idle.json) for 20 s: the Core skips him and his scripted damage.",
       "digest": "6505c774",
       "file": "round-cart-idle.jsonl.gz",
@@ -42,7 +42,7 @@
       "script": "fixtures/scripts/cart-idle.json",
       "scriptHash": "4577d8df",
       "seed": 1,
-      "sourceDirty": true,
+      "sourceDirty": false,
       "ticks": 1281,
       "tuningHash": "c41c0ea2",
       "until": 20,
