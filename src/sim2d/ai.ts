@@ -13,7 +13,7 @@ import { Rng, compareOrdinal, roundNumber, type Button, type Goal, type ObsEvent
 import { aimPitch } from './hitscan';
 import { TICKS_PER_SEC } from './movement';
 import type { NavMesh, NavPoint } from './nav';
-import { angleOff, type Sight } from './vision';
+import type { Sight } from './vision';
 import { fallbackWeapon, gunStats, isGrenade } from './weapons';
 
 /** The roles `goal.role` may name (any other string behaves as `hold`). docs/ai.md. */
@@ -692,9 +692,4 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
   const toEnd = dist2d(pos, dest);
   const mag = Math.min(1, Math.max(0.25, toEnd / 48));
   return { dirX: dx, dirY: dy, mag };
-}
-
-/** True if `id`'s view (yaw) points within the FOV at p (for tests and debugging). */
-export function facing(yaw: number, from: NavPoint, p: NavPoint, fovDeg: number): boolean {
-  return angleOff(yaw, from, p) <= fovDeg / 2;
 }

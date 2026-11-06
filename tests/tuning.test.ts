@@ -19,6 +19,8 @@ describe('parseTuning', () => {
     expect(t.bomb.timerSec).toBe(40);
     expect(t.grenades.smokeSec).toBe(18);
     expect(t.ai.fovDeg).toBe(106);
+    // C4: sight tolerances and the LIVE AI's keys.
+    expect(t.ai).toMatchObject({ losWallTolerancePx: 1, losEndpointTolerancePx: 3, losLevelStepUnits: 16, losLevelSlackUnits: 48, headshotAimRatio: 0.35, reactionJitter: 0.3 });
     expect(t.nav).toEqual({ stepHeight: 18, edgeEpsilon: 1, losMargin: 8 });
     expect(Object.keys(t.weapons)).toEqual(['ak47', 'awp', 'deagle', 'glock', 'm4a4', 'ssg08']);
   });
