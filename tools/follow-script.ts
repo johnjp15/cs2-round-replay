@@ -6,7 +6,8 @@
  *
  * How: the harness runs the round with cart as the human, and each tick a *shadow* ReplayCore decides cart's input
  * as if he were a puppet (B2's track following, B3's aim, shots, grenades and weapon switches), from the live observe
- * with `human` set to null. The shadow never snaps (a human can't teleport: `driftSnapUnits` = 1e9), so where the
+ * with `human` set to null; in the engagements the recording shows him missing he looks where the recording has him
+ * looking (his recorded view yaw, tools/follow-aim.ts) instead of at the target. The shadow never snaps (a human can't teleport: `driftSnapUnits` = 1e9), so where the
  * recording jumps (cart at 14.2–14.5 s and the Balcony drop at 21.0 s) the human catches up physically. Its
  * `set_weapon` actions become the entries' `weapon` (the app's weapon-slot keys). Everything else the shadow sends
  * is dropped. The per-tick inputs are then written as script entries, a new entry only where the held one would
@@ -20,6 +21,7 @@ import { canonicalize, stableStringify, type PawnInput, type PlayerId, type Tuni
 import { EventSchedule, ReplayCore, RoundModel } from '../src/core/index';
 import { NavWalkQuery } from '../src/sim2d/index';
 import type { Session } from '../src/app/index';
+import { FollowAim } from './follow-aim';
 import {
   DEFAULT_SEED,
   ROOT,
@@ -47,6 +49,8 @@ const NO_SNAP_UNITS = 1e9;
 export class FollowDriver implements HumanDriver {
   private readonly id: PlayerId;
   private readonly shadow: ReplayCore;
+  /** Where the recording shows him missing, he looks where it has him looking (tools/follow-aim.ts). */
+  private readonly aim: FollowAim;
   /** Every tick's command, in order (what the script must reproduce). */
   readonly commands: { tick: number; input: PawnInput | null; weapon: WeaponId | null }[] = [];
 
@@ -54,15 +58,19 @@ export class FollowDriver implements HumanDriver {
     this.id = id;
     const tuning: Tuning = { ...data.tuning, replay: { ...data.tuning.replay, driftSnapUnits: NO_SNAP_UNITS } };
     // B2/B3 only: the shadow decides cart's input as a puppet; B4's triggers would only act on its own (unused) pawns.
-    this.shadow = new ReplayCore(new RoundModel(data.round), new EventSchedule(data.round), tuning, seed, new NavWalkQuery(data.nav), { divergence: false });
+    const model = new RoundModel(data.round);
+    const schedule = new EventSchedule(data.round);
+    this.shadow = new ReplayCore(model, schedule, tuning, seed, new NavWalkQuery(data.nav), { divergence: false });
     this.shadow.control({ type: 'start' });
+    this.aim = new FollowAim(data.round, model, schedule, data.tuning, this.shadow.script.plan, id);
   }
 
   command(tick: number, session: Session): HumanCommand {
     const o = canonicalize(session.observe());
     if (o.tick !== tick) throw new Error(`FollowDriver: observe tick ${o.tick}, expected ${tick}`);
     const act = canonicalize(this.shadow.step({ ...o, human: null }));
-    const input = act.inputs.find((q) => q.id === this.id) ?? null;
+    const shadowInput = act.inputs.find((q) => q.id === this.id) ?? null;
+    const input = shadowInput === null ? null : this.aim.adjust(tick, shadowInput);
     let weapon: WeaponId | null = null;
     // The setup step's give / set_weapon are the round setup, which the real Core sends the human pawn too.
     const setup = this.commands.length === 0;

@@ -303,14 +303,15 @@ export function holdFacing(ctx: AiContext, s: AiState, spot: Vec3): number {
 
 /**
  * A spot from which a T guards the planted bomb: on rings of 300–guardMaxUnits around it (every 15°), walkable, with
- * eye-to-bomb sight (`sight.clear`), nearest to the pawn (ties: ring then angle order). The goal's `hold` wins when
- * it qualifies. null if none qualifies.
+ * eye-to-bomb sight (`sight.clear`, cover included), nearest to the pawn (ties: ring then angle order). The goal's
+ * `hold` wins when it qualifies. null if none qualifies.
  */
 export function guardSpot(ctx: AiContext, bomb: Vec3): Vec3 | null {
   const { nav, sight, tuning } = ctx;
   const eye = tuning.damage.eyeHeight;
   const max = tuning.ai.guardMaxUnits;
-  const ok = (p: Vec3): boolean => dist2d(p, bomb) <= max && nav.isWalkable(p) && sight.clear(p, eye, bomb, tuning.damage.bandHeights['leg'] ?? 16);
+  // The bomb is a point on the ground: low for the cover rule (a box between hides it unless the guard stands at the box).
+  const ok = (p: Vec3): boolean => dist2d(p, bomb) <= max && nav.isWalkable(p) && sight.clear(p, eye, bomb, tuning.damage.bandHeights['leg'] ?? 16, false, true);
   const hold = ctx.goal.hold;
   if (hold !== null && ok(hold)) return copy(hold);
   let best: Vec3 | null = null;

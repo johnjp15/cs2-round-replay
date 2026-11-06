@@ -56,6 +56,7 @@ import {
 } from '../src/core/index';
 import { NavWalkQuery, gunStats, throwElevation, type NavMesh } from '../src/sim2d/index';
 import type { Session, SessionData } from '../src/app/index';
+import { FollowAim } from './follow-aim';
 import type { HumanCommand, HumanDriver } from './harness';
 
 /** A step's position: [x, y] (z from the nav floor). */
@@ -212,6 +213,8 @@ export class HumanBot implements HumanDriver {
   private readonly model: RoundModel;
   /** Shadow puppet for followRecording: a ReplayCore without divergence that sees the human as a puppet; never snaps. */
   private readonly shadow: ReplayCore;
+  /** Where the recording shows him missing, followRecording looks where it has him looking (tools/follow-aim.ts). */
+  private readonly followAim: FollowAim;
   private shadowInput: PawnInput | null = null;
   private shadowWeapon: WeaponId | null = null;
   private cur: Running | null = null;
@@ -226,8 +229,10 @@ export class HumanBot implements HumanDriver {
     this.tuning = data.tuning;
     this.model = new RoundModel(data.round);
     const tuning: Tuning = { ...data.tuning, replay: { ...data.tuning.replay, driftSnapUnits: 1e9 } };
-    this.shadow = new ReplayCore(this.model, new EventSchedule(data.round), tuning, seed, new NavWalkQuery(data.nav), { divergence: false });
+    const schedule = new EventSchedule(data.round);
+    this.shadow = new ReplayCore(this.model, schedule, tuning, seed, new NavWalkQuery(data.nav), { divergence: false });
     this.shadow.control({ type: 'start' });
+    this.followAim = new FollowAim(data.round, this.model, schedule, data.tuning, this.shadow.script.plan, id);
     this.yaw = startYaw(this.model, id).yaw;
   }
 
@@ -349,7 +354,8 @@ export class HumanBot implements HumanDriver {
       return;
     }
     const act = canonicalize(this.shadow.step({ ...o, human: null }));
-    this.shadowInput = act.inputs.find((q) => q.id === this.id) ?? null;
+    const input = act.inputs.find((q) => q.id === this.id) ?? null;
+    this.shadowInput = input === null ? null : this.followAim.adjust(o.tick, input);
     this.shadowWeapon = null;
     if (o.tick > 0) for (const a of act.actions) if (a.type === 'set_weapon' && a.id === this.id) this.shadowWeapon = a.weapon;
   }

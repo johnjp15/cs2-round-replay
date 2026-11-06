@@ -46,7 +46,8 @@ describe('sight mask file', () => {
       expect(runs.reduce((a, b) => a + b, 0)).toBe(g.width);
     }
     const c = mask.counts();
-    expect(c.open + c.wall).toBe(1024 * 1024);
+    expect(c.open + c.wall + c.cover).toBe(1024 * 1024);
+    expect(c.cover).toBeGreaterThan(5_000);
     expect(c.open).toBeGreaterThan(250_000);
     expect(c.open).toBeLessThan(400_000);
   });

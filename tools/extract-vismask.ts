@@ -21,9 +21,17 @@
  *    cell thick) becomes open, in one pass, so lines two or more cells thick are untouched. On this radar such
  *    1-px dark lines are drawn over floors for windows and railings (the Apartments window over B site, the Mid
  *    window of Sniper's Nest, the Tunnel Stairs railing), not walls; full-height walls are black gaps ≥ 2 cells.
+ * 6. Cover (`cover*`, F): boxes, crates and the Truck are drawn as light grey or white rectangles on the floors.
+ *    An open cell is cover if it is light and grey (L ≥ coverLumSeed, C ≤ coverChroma), or a lighter edge pixel
+ *    (L ≥ coverLumEdge, C ≤ coverChroma) 8-connected to one through such pixels (the JPEG blurs box edges). Then
+ *    an opening by a (2 × coverOpenRadius + 1)² square drops lines and slivers, and 8-connected components
+ *    smaller than coverMinArea cells, or with no coverMinCore × coverMinCore square inside (lines: ledge and
+ *    door-sill highlights), are dropped. Cover stays separate from wall: it blocks sight and bullets only under
+ *    the rule in docs/vision.md ("Cover"), never grenades or movement.
  *
  * The output is run-length encoded per row (wall, open, wall, …), one row per line, at the radar's 5 units per
- * cell, with the radar transform. Same image in, same bytes out. jpeg-js is a devDependency (tools only).
+ * cell, with the radar transform, and the cover the same way in `cover` (not cover, cover, …). Same image in,
+ * same bytes out. jpeg-js is a devDependency (tools only).
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -53,6 +61,18 @@ export const PARAMS = {
   minWallArea: 6,
   /** Step 5: wall lines exactly one cell thick (open on both sides) become open (windows, railings). */
   openThinLines: true,
+  /** Step 6 (cover): open pixels at least this light and at most coverChroma grey seed a prop. Floors: L ≤ 156. */
+  coverLumSeed: 190,
+  /** …and pixels at least this light (and as grey) connected to a seed join it (blurred box edges). */
+  coverLumEdge: 170,
+  /** Chroma limit for cover (max − min of R, G, B): tan rooms and the site outlines are more colourful. */
+  coverChroma: 24,
+  /** Opening radius (cells, square element): drops cover lines and slivers up to 2 × r cells thick. */
+  coverOpenRadius: 1,
+  /** Cover components smaller than this (cells, 8-connected) are dropped. */
+  coverMinArea: 12,
+  /** A cover component must contain a square of this side (cells; 5 = 25 units): lines and sills are dropped. */
+  coverMinCore: 5,
 } as const;
 
 /** The radar transform (docs/conventions.md): px = (x + 3230) / 5, py = (1713 − y) / 5. */
@@ -61,10 +81,12 @@ const TRANSFORM = { unitsPerPx: 5, originX: -3230, originY: 1713 } as const;
 export interface BuiltMask {
   readonly width: number;
   readonly height: number;
-  /** 1 = wall. */
+  /** 1 = wall, 2 = cover, 0 = open. */
   readonly cells: Uint8Array;
   /** The raw classification before cleanup (1 = wall), for the debug image. */
   readonly raw: Uint8Array;
+  /** Cover candidates before the opening and the component filter (1 = candidate), for the debug image. */
+  readonly coverRaw: Uint8Array;
   /** Decoded radar, RGBA. */
   readonly rgba: Uint8Array;
   readonly stats: Record<string, number>;
@@ -98,8 +120,152 @@ export function buildMask(jpg: Uint8Array): BuiltMask {
     cells = thin.cells;
   }
   stats['wall'] = count(cells);
-  stats['open'] = width * height - stats['wall'];
-  return { width, height, cells, raw, rgba, stats };
+  const cover = buildCover(cells, rgba, width, height);
+  stats['coverCandidates'] = count(cover.candidates);
+  stats['coverComponents'] = cover.components;
+  stats['coverComponentsDropped'] = cover.dropped;
+  let coverCells = 0;
+  for (let i = 0; i < width * height; i++) {
+    if (cover.cover[i] === 1) {
+      cells[i] = 2;
+      coverCells++;
+    }
+  }
+  stats['cover'] = coverCells;
+  stats['open'] = width * height - stats['wall'] - coverCells;
+  return { width, height, cells, raw, coverRaw: cover.candidates, rgba, stats };
+}
+
+function lumChroma(rgba: Uint8Array, i: number): { lum: number; chroma: number } {
+  const r = rgba[i * 4] as number;
+  const g = rgba[i * 4 + 1] as number;
+  const b = rgba[i * 4 + 2] as number;
+  return { lum: 0.299 * r + 0.587 * g + 0.114 * b, chroma: Math.max(r, g, b) - Math.min(r, g, b) };
+}
+
+/**
+ * Step 6: cover on the open cells of `walls` (1 = wall). Seeds and edge pixels by colour, edge pixels joined to a
+ * seed (8-connected flood), an opening, then the component filter. Returns the cover (1 = cover) and the
+ * candidates before the opening.
+ */
+export function buildCover(walls: Uint8Array, rgba: Uint8Array, w: number, h: number): { cover: Uint8Array; candidates: Uint8Array; components: number; dropped: number } {
+  const n = w * h;
+  const edge = new Uint8Array(n);
+  const seed = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (walls[i] === 1) continue;
+    const { lum, chroma } = lumChroma(rgba, i);
+    if (chroma > PARAMS.coverChroma) continue;
+    if (lum >= PARAMS.coverLumEdge) edge[i] = 1;
+    if (lum >= PARAMS.coverLumSeed) seed[i] = 1;
+  }
+  // Hysteresis: edge pixels 8-connected to a seed through edge pixels (scan order, deterministic).
+  const candidates = new Uint8Array(n);
+  const stack: number[] = [];
+  for (let start = 0; start < n; start++) {
+    if (seed[start] !== 1 || candidates[start] === 1) continue;
+    candidates[start] = 1;
+    stack.push(start);
+    while (stack.length > 0) {
+      const k = stack.pop() as number;
+      const x = k % w;
+      const y = (k - x) / w;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          const yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+          const kk = yy * w + xx;
+          if (edge[kk] !== 1 || candidates[kk] === 1) continue;
+          candidates[kk] = 1;
+          stack.push(kk);
+        }
+      }
+    }
+  }
+  const r = PARAMS.coverOpenRadius;
+  const opened = r > 0 ? dilateSet(erodeSet(candidates, w, h, r), w, h, r) : new Uint8Array(candidates);
+  // Components (8-connected): keep those with at least coverMinArea cells and a coverMinCore² square inside.
+  const coreR = Math.floor((PARAMS.coverMinCore - 1) / 2);
+  const core = erodeSet(opened, w, h, coreR);
+  const cover = new Uint8Array(n);
+  const seen = new Uint8Array(n);
+  const comp: number[] = [];
+  let components = 0;
+  let dropped = 0;
+  for (let start = 0; start < n; start++) {
+    if (opened[start] !== 1 || seen[start] === 1) continue;
+    comp.length = 0;
+    seen[start] = 1;
+    stack.push(start);
+    let hasCore = false;
+    while (stack.length > 0) {
+      const k = stack.pop() as number;
+      comp.push(k);
+      if (core[k] === 1) hasCore = true;
+      const x = k % w;
+      const y = (k - x) / w;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          const yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+          const kk = yy * w + xx;
+          if (opened[kk] !== 1 || seen[kk] === 1) continue;
+          seen[kk] = 1;
+          stack.push(kk);
+        }
+      }
+    }
+    if (comp.length >= PARAMS.coverMinArea && hasCore) {
+      components++;
+      for (const k of comp) cover[k] = 1;
+    } else {
+      dropped++;
+    }
+  }
+  return { cover, candidates, components, dropped };
+}
+
+/** Erosion of a set (1 = in) by a (2r+1)² square; outside the image is not in the set. */
+function erodeSet(src: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (src[y * w + x] !== 1) continue;
+      let v = 1;
+      for (let j = -r; j <= r && v === 1; j++) {
+        for (let i = -r; i <= r; i++) {
+          const xx = x + i;
+          const yy = y + j;
+          if (xx < 0 || yy < 0 || xx >= w || yy >= h || src[yy * w + xx] !== 1) {
+            v = 0;
+            break;
+          }
+        }
+      }
+      out[y * w + x] = v;
+    }
+  }
+  return out;
+}
+
+/** Dilation of a set by a (2r+1)² square. */
+function dilateSet(src: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (src[y * w + x] !== 1) continue;
+      for (let j = -r; j <= r; j++) {
+        for (let i = -r; i <= r; i++) {
+          const xx = x + i;
+          const yy = y + j;
+          if (xx >= 0 && yy >= 0 && xx < w && yy < h) out[yy * w + xx] = 1;
+        }
+      }
+    }
+  }
+  return out;
 }
 
 /** Step 1: is this colour playable space? */
@@ -110,9 +276,10 @@ export function isOpenColor(r: number, g: number, b: number): boolean {
   return lum >= PARAMS.lumTeal && chroma >= PARAMS.chromaTeal && g >= r && b >= r;
 }
 
+/** Number of cells equal to 1. */
 function count(cells: Uint8Array): number {
   let n = 0;
-  for (const c of cells) n += c;
+  for (const c of cells) if (c === 1) n++;
   return n;
 }
 
@@ -226,7 +393,7 @@ function removeSmall(cells: Uint8Array, w: number, h: number, value: 0 | 1, minA
 export function maskJsonText(m: BuiltMask, sha256: string): string {
   const head = {
     format: VISMASK_FORMAT,
-    note: 'Sight-blocking mask of Mirage (C4). Cell (i, j) covers px in [i, i+1), py in [j, j+1) with px = (x - originX) / unitsPerPx, py = (originY - y) / unitsPerPx; rows top to bottom; each row lists run lengths alternating wall, open, wall, ... starting with wall (the first may be 0). Built by tools/extract-vismask.ts; see docs/vision.md.',
+    note: 'Sight-blocking mask of Mirage (C4; cover F). Cell (i, j) covers px in [i, i+1), py in [j, j+1) with px = (x - originX) / unitsPerPx, py = (originY - y) / unitsPerPx; rows top to bottom; each row lists run lengths alternating wall, open, wall, ... starting with wall (the first may be 0), where cover counts as open; each cover row lists run lengths alternating not cover, cover, ... starting with not cover. Built by tools/extract-vismask.ts; see docs/vision.md.',
     width: m.width,
     height: m.height,
     unitsPerPx: TRANSFORM.unitsPerPx,
@@ -240,25 +407,45 @@ export function maskJsonText(m: BuiltMask, sha256: string): string {
   lines.pop(); // closing brace
   const last = lines.length - 1;
   lines[last] = `${lines[last] as string},`;
-  lines.push('  "rows": [');
+  const wallBits = new Uint8Array(m.width);
+  const coverBits = new Uint8Array(m.width);
+  const rows: string[] = [];
+  const cover: string[] = [];
   for (let y = 0; y < m.height; y++) {
-    const runs = encodeRow(m.cells, y * m.width, m.width);
-    lines.push(`    [${runs.join(',')}]${y === m.height - 1 ? '' : ','}`);
+    for (let x = 0; x < m.width; x++) {
+      const c = m.cells[y * m.width + x] as number;
+      wallBits[x] = c === 1 ? 1 : 0;
+      coverBits[x] = c === 2 ? 0 : 1;
+    }
+    const sep = y === m.height - 1 ? '' : ',';
+    rows.push(`    [${encodeRow(wallBits, 0, m.width).join(',')}]${sep}`);
+    cover.push(`    [${encodeRow(coverBits, 0, m.width).join(',')}]${sep}`);
   }
-  lines.push('  ]');
+  lines.push('  "rows": [', ...rows, '  ],');
+  lines.push('  "cover": [', ...cover, '  ]');
   lines.push('}');
   return lines.join('\n') + '\n';
 }
 
-/** Debug overlay: walls tinted red, cells the cleanup changed in yellow (closed) or cyan (removed specks). */
+/**
+ * Debug overlay: walls tinted red, cells the wall cleanup changed in yellow (closed) or cyan (removed specks), cover
+ * in green, and cover candidates the opening or the component filter dropped in orange.
+ */
 export function debugImage(m: BuiltMask): Uint8Array {
   const out = new Uint8Array(m.rgba);
   for (let i = 0; i < m.width * m.height; i++) {
     const wall = m.cells[i] === 1;
+    const cover = m.cells[i] === 2;
     const rawWall = m.raw[i] === 1;
     let tint: [number, number, number] | null = null;
     let a = 0;
-    if (wall && !rawWall) {
+    if (cover) {
+      tint = [0, 235, 120];
+      a = 0.8;
+    } else if (m.coverRaw[i] === 1) {
+      tint = [255, 140, 0];
+      a = 0.9;
+    } else if (wall && !rawWall) {
       tint = [255, 220, 0];
       a = 0.9;
     } else if (!wall && rawWall) {
@@ -273,6 +460,22 @@ export function debugImage(m: BuiltMask): Uint8Array {
   }
   return out;
 }
+
+/** A crop of an RGBA image, scaled up by an integer factor (nearest neighbour), for looking at one area. */
+export function cropScale(rgba: Uint8Array, width: number, x0: number, y0: number, cw: number, ch: number, scale: number): Uint8Array {
+  const out = new Uint8Array(cw * scale * ch * scale * 4);
+  for (let y = 0; y < ch * scale; y++) {
+    for (let x = 0; x < cw * scale; x++) {
+      const si = ((y0 + Math.floor(y / scale)) * width + x0 + Math.floor(x / scale)) * 4;
+      const di = (y * cw * scale + x) * 4;
+      for (let c = 0; c < 4; c++) out[di + c] = rgba[si + c] as number;
+    }
+  }
+  return out;
+}
+
+/** The debug crop of B site written next to the full overlay (radar px 120–420 × 170–420, 3×). */
+export const BSITE_CROP = { x0: 120, y0: 170, w: 300, h: 250, scale: 3 } as const;
 
 function main(): void {
   const check = process.argv.includes('--check');
@@ -293,9 +496,13 @@ function main(): void {
   writeFileSync(outPath, text, 'utf8');
   const png = resolve(ROOT, 'logs/vismask-debug.png');
   mkdirSync(dirname(png), { recursive: true });
-  writeFileSync(png, encodePng(m.width, m.height, debugImage(m)));
+  const dbg = debugImage(m);
+  writeFileSync(png, encodePng(m.width, m.height, dbg));
+  const c = BSITE_CROP;
+  const crop = resolve(ROOT, 'logs/vismask-debug-bsite.png');
+  writeFileSync(crop, encodePng(c.w * c.scale, c.h * c.scale, cropScale(dbg, m.width, c.x0, c.y0, c.w, c.h, c.scale)));
   console.log(`${m.width}×${m.height}: ${JSON.stringify(m.stats)}`);
-  console.log(`wrote ${outPath} (${text.length} bytes) and ${png}`);
+  console.log(`wrote ${outPath} (${text.length} bytes), ${png} and ${crop}`);
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
