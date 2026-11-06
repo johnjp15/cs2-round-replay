@@ -7,6 +7,7 @@ import {
   PLAYER_IDS,
   type Bomb,
   type Confidence,
+  type Kill,
   type Kit,
   type Pickup,
   type PlayerId,
@@ -87,6 +88,8 @@ function readSightings(round: RoundData): ModelSighting[] {
 export class RoundModel {
   readonly meta: RoundMeta;
   readonly bomb: Bomb;
+  /** B5: the kill feed (`kills[]`, file order = time order), for the end-of-round summary. */
+  readonly kills: readonly Kill[];
   /** All ten players, sorted by id (PLAYER_IDS order). */
   readonly players: readonly ModelPlayer[];
   /** `sightings[]` in file order, with `by` resolved to player ids (B4: the expected-encounter index). */
@@ -131,6 +134,7 @@ export class RoundModel {
     }
     this.meta = round.meta;
     this.bomb = round.bomb;
+    this.kills = round.kills;
     this.players = players;
     this.sightings = readSightings(round);
     this.samples = samples;
