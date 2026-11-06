@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "extract-nav": "tsx tools/extract-nav.ts"
   },
   "repository": {
     "type": "git",
@@ -26,6 +27,7 @@
     "eslint": "^10.14.0",
     "eslint-plugin-import-x": "^4.17.1",
     "globals": "^17.14.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.6",
