@@ -448,8 +448,9 @@ it for tests and debugging, along with the explode and next-beep ticks.
 - **Differences from CS2:** the CS player hull is a 32 × 32 box. Two boxes touch at 32 units along an axis and
   45 units on the diagonal; the circle uses 32 everywhere. There is no pushing, no standing on heads, and no
   hull-to-world collision beyond the nav mesh (`docs/movement.md`).
-- In the B2 ghost round (nobody dies yet), sp4rtan is held up for 6 ticks at about 50.7 s by eradicate. Eradicate
-  should be dead by then (12.75 s) but lives on because B3's deaths are not in yet. No tracking figure changes.
+- In the B2 ghost round (nobody died yet), sp4rtan was held up for 6 ticks at about 50.7 s by eradicate, who
+  should have been dead since 12.75 s. With B3's scripted deaths no puppet is body-blocked at any tick of the
+  ghost round (`tests/scripted-round.test.ts`).
 
 [rg-grenade]: https://github.com/s1lentq/ReGameDLL_CS/blob/70307312cde05cec5d73a3d3a384b4bdac3d5fe2/regamedll/dlls/ggrenade.cpp
 [rg-combat]: https://github.com/s1lentq/ReGameDLL_CS/blob/70307312cde05cec5d73a3d3a384b4bdac3d5fe2/regamedll/dlls/combat.cpp

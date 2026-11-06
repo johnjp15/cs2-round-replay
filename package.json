@@ -20,7 +20,8 @@
     "extract:nav": "tsx tools/extract-nav.ts",
     "bench:session": "tsx tools/bench-session.ts",
     "check:browser": "tsx tools/browser-check.ts",
-    "ghost": "tsx tools/ghost-round.ts"
+    "ghost": "tsx tools/ghost-round.ts",
+    "scripted": "tsx tools/scripted-round.ts"
   },
   "repository": {
     "type": "git",

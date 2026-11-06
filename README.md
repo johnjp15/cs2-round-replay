@@ -49,6 +49,7 @@ npm run build          # static build to dist/ (npm run preview to serve it)
 npm run bench:session  # cost of one Session.step() over a full round (docs/app.md)
 npm run check:browser  # after build: headless Chromium screenshots, fps and ticks/s (docs/app.md)
 npm run ghost          # whole round with no human: logs/ghost-round.jsonl + logs/ghost-trace.json, prints the tracking table
+npm run scripted       # the same round with B3's checks: logs/scripted-round.jsonl + logs/scripted-trace.json, prints kills, HP, shot ticks, latency
 ```
 
 ## Docs

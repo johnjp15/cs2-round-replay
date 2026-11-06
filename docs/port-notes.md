@@ -90,3 +90,12 @@ C# re-implementation for tests would need:
   the armor `trunc`, like grenades).
 - **Collision.** `collideMove` uses `sqrt` and `hypot`; positions are rounded to 6 decimals after each move like all
   movement (`docs/movement.md`), so expect the same rare last-digit caveat as wall slides.
+
+## Scripted events (src/core/scripted.ts, aim.ts)
+
+- **Ticks from seconds**: `secTicks` = `Math.Floor(sec * 64 + 0.5)` (preAim, plantSec, throwHold); `ceilTicks` = `Math.Ceiling(sec * 64 - 1e-9)` (deploy times: a deploy must be complete). Burst taps use `⌊(k + ½) × span / count + ½⌋` explicitly, not `Math.Round` (banker's in C#).
+- **Fire cadence model** (`cadenceOffsets`, `simulateHolds`): due times accumulate the fractional cycle (`64 × 60 / rpm`) rounded to 6 decimals after every add (`roundNumber`, as the 2D engine stores them), and a shot fires on `Math.Ceiling(due - 1e-9)`. Plain `+ - * /` and ceiling: identical in C#. `cadenceOffsets` guards `-0` (`Math.ceil(-1e-9)` is `-0` in JS; C#'s `Math.Ceiling` returns `-0.0` too, and `-0` must not reach a log).
+- **Spray fit** tie-breaks are part of the output: candidates in `SPRAY_FIT_SHIFTS` order (0, −1, +1, −2, +2), one hold before two holds, splits in shot order, first-hold shift outer and second-hold shift inner; a candidate replaces the best only if strictly better (largest error, then sum of squared errors).
+- **Aim** uses `atan2` (bearing and pitch); both are rounded to 0.001° before they are logged or compared (`roundYaw`, `roundPitch`), and pitch is clamped to ±89. `withLook` uses `cos` / `sin` and rounds the stick to 6 decimals, like B2.
+- **Decisions** (`ScriptState.decisions`) are a list in the order they were made, looked up by string key (`fire:<i>`, `aim:<i>`); plan item indices come from a sort by (first act tick, shooter id ordinal, build order).
+- **Log texts** of drops and fallbacks use only integers and ids (`script: dropped … (5 shots from tick 3192): donk is dead`, `script: no planted event by tick 1764, …`).
