@@ -73,6 +73,14 @@ export type BombPhase = (typeof BOMB_PHASES)[number];
 export const ROUND_END_REASONS = ['elimination', 'bomb_exploded', 'bomb_defused', 'time'] as const;
 export type RoundEndReason = (typeof ROUND_END_REASONS)[number];
 
+/** Round phase (C3): `live` until the bomb is planted, `planted` while it ticks, `over` from round_end on. */
+export const ROUND_PHASES = ['live', 'planted', 'over'] as const;
+export type RoundPhase = (typeof ROUND_PHASES)[number];
+
+/** Where the C4 is (C3). */
+export const BOMB_STATES = ['carried', 'dropped', 'planted', 'defused', 'exploded'] as const;
+export type BombState = (typeof BOMB_STATES)[number];
+
 export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
@@ -151,7 +159,8 @@ export interface DeathEvent {
 
 export interface SoundEvent {
   readonly type: 'sound';
-  readonly source: PlayerId;
+  /** The pawn that made it; null for sounds without one (bomb beeps; CS2 `bomb_beep` has no player). */
+  readonly source: PlayerId | null;
   readonly pos: Vec3;
   readonly kind: SoundKind;
 }
@@ -174,6 +183,46 @@ export interface RoundEndEvent {
 /** Events since the previous tick, in engine emission order (not sorted). */
 export type ObsEvent = DamageEvent | ShotEvent | DeathEvent | SoundEvent | BombEvent | RoundEndEvent;
 
+/** Rounds won per side. */
+export interface Score {
+  readonly ct: number;
+  readonly t: number;
+}
+
+/** The C4 (CS2: game rules and the `planted_c4` entity). */
+export interface BombObs {
+  readonly state: BombState;
+  /** The pawn carrying it (state `carried`); null otherwise, and null while nobody has it (before setup). */
+  readonly carrier: PlayerId | null;
+  /** The carrier's position (carried), where it lies (dropped) or the bomb (planted, defused, exploded); null when nobody carries it. */
+  readonly pos: Vec3 | null;
+  /** Tick it was planted; null before the plant. */
+  readonly plantTick: number | null;
+  /** The CT defusing it now; after `defused`, who defused it; null otherwise. */
+  readonly defuser: PlayerId | null;
+  /** Tick the defuse in progress completes; after `defused`, the tick it did; null otherwise. */
+  readonly defuseEndTick: number | null;
+}
+
+/** Round state (CS2: game rules). */
+export interface RoundObs {
+  readonly phase: RoundPhase;
+  /** Current score; the round's win is counted from its `round_end` tick on. */
+  readonly score: Score;
+  /** Set when the round ends (phase `over`); null before. */
+  readonly winner: Team | null;
+  readonly reason: RoundEndReason | null;
+  /** Tick of the round_end; null before. */
+  readonly endTick: number | null;
+  /**
+   * Seconds left: the round clock while live, the bomb timer while planted (and while it still ticks after
+   * the round ended). Otherwise frozen at round end: the round clock then, the bomb timer at the defuse, 0
+   * after an explosion. Never negative.
+   */
+  readonly timeLeftSec: number;
+  readonly bomb: BombObs;
+}
+
 export interface Observe {
   /** Integer tick, 64 per second. */
   readonly tick: number;
@@ -184,6 +233,8 @@ export interface Observe {
   readonly events: readonly ObsEvent[];
   /** The pawn the human controls, or null (spectating / bot-only run). */
   readonly human: PlayerId | null;
+  /** Round phase, score, clock and the bomb (C3). */
+  readonly round: RoundObs;
 }
 
 // ---------------------------------------------------------------------------

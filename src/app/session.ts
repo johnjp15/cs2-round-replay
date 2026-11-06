@@ -134,7 +134,7 @@ export class Session {
     this.model = new RoundModel(config.round);
     this.schedule = new EventSchedule(config.round);
     const roster: RosterEntry[] = this.model.players.map((p) => ({ id: p.id, team: p.team }));
-    this.host = new Sim2DHost(config.nav, config.tuning, roster);
+    this.host = new Sim2DHost(config.nav, config.tuning, roster, { score: config.round.meta.score, roundTimeSec: config.round.meta.clock0 });
     this.host.setHuman(this.human);
     const makeCore = config.core ?? defaultCore;
     this.core = makeCore({ model: this.model, schedule: this.schedule, tuning: config.tuning, seed: config.seed, nav: config.nav });

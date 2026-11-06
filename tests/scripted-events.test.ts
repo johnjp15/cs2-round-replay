@@ -38,6 +38,7 @@ import {
   simulateHolds,
 } from '../src/core/index';
 import { aimPitch } from '../src/sim2d/hitscan';
+import { liveRound } from './fakes';
 import { loadRound, loadTuning } from './round-fixture';
 
 const round = loadRound();
@@ -98,6 +99,7 @@ class StubHost implements IHost {
       t: t / 64,
       human: this.human,
       events: this.events.get(t) ?? [],
+      round: liveRound(t, 'barely', model.player('barely').startPos),
       pawns: sortById(
         this.pawns.map((p) => {
           const dead = (this.deaths.get(p.id) ?? Infinity) <= t;

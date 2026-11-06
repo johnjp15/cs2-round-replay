@@ -5,10 +5,12 @@ Things in `src/contracts` (and, at the end, `src/core`) that need care when port
 ## Types
 
 - **Discriminated unions** (`ObsEvent`, `Action`, `Control`) → an `abstract record` base per union with one `sealed record` per member; (de)serialize with a `"type"` discriminator whose value is the TS `type` string (`System.Text.Json` `[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]` + `[JsonDerivedType(typeof(X), "block_damage")]`). Switches over `type` → `switch` on the record type; keep them exhaustive.
-- **String unions** (`PlayerId`, `Team`, `WeaponId`, `ItemId`, `Button`, `Hitgroup`, `Mode`, `SoundKind`, `BombPhase`, `RoundEndReason`, `LogLevel`, and for round data `Confidence`, `GrenadeId`, `ShotKind`) → either `string` constants or enums with a converter that writes the exact TS spelling (lowercase ids, `REPLAY`, `ATTACK2`, `bomb_defused`). Never use the enum's integer value in logs.
+- **String unions** (`PlayerId`, `Team`, `WeaponId`, `ItemId`, `Button`, `Hitgroup`, `Mode`, `SoundKind`, `BombPhase`, `RoundEndReason`, `RoundPhase`, `BombState`, `LogLevel`, and for round data `Confidence`, `GrenadeId`, `ShotKind`) → either `string` constants or enums with a converter that writes the exact TS spelling (lowercase ids, `REPLAY`, `ATTACK2`, `bomb_defused`). Never use the enum's integer value in logs.
 - **`readonly` fields** → `init`-only record properties. **`readonly T[]`** → `ImmutableArray<T>` (note: record equality on `ImmutableArray` is reference-based; compare logs by text, not by record `==`).
 - **`null` vs absent**: TS has no optional fields; every property is always written, `null` included. Do not set `JsonIgnoreCondition.WhenWritingNull`. The one exception is input, not output: `data/round.json` omits `TrackSample.uncertainty` and `TrackSample.resampled` when they don't apply, so read them as `double?` / `bool?`.
 - **`Hitgroup`** gained `neck` and `generic` (C2), appended after `leg`: `head chest stomach arm leg neck generic`. CS2's numeric hitgroups map 0 → `generic`, 8 → `neck`.
+- **`Observe.round`** (C3) → `RoundObs` record with `Phase` (`live planted over`), `Score` (`record Score(double Ct, double T)`, JSON `ct`/`t`), `Winner` (`Team?`), `Reason` (`RoundEndReason?`), `EndTick` (`double?`), `TimeLeftSec` (double) and `Bomb` (`BombObs`: `State` `carried dropped planted defused exploded`, `Carrier` `PlayerId?`, `Pos` `Vec3?`, `PlantTick` `double?`, `Defuser` `PlayerId?`, `DefuseEndTick` `double?`). All nullable fields are written as `null`, never omitted. In CS2 the adapter fills it from `CCSGameRules` (bomb planted flag, round win status, round time) and the `planted_c4` entity (`C4Blow`, `DefuseCountDown`, `BombDefuser`); the score from the team entities.
+- **`SoundEvent.source`** is `PlayerId?` (C3, finding F4): bomb beeps have no source.
 - **`ItemId`** = every `WeaponId` plus `defuser` (`ITEM_IDS` keeps `WEAPON_IDS` order, then `defuser`). `WeaponId` gained `glock` (between `m4a4` and `knife`). `give.item` is an `ItemId`; `set_hp` has `helmet` (bool).
 - **`number`** is a double everywhere, including ticks, hp and counts. Ticks are integral doubles; `Math.round(i * 6.4)` (trace sampling) is JS rounding (half up toward +∞) → `Math.Floor(i * 6.4 + 0.5)` in C#, not `Math.Round` (banker's).
 - **Snapshots**: `data` is a `JsonValue` → `JsonNode`/`JsonElement`.
@@ -72,6 +74,23 @@ The log format is defined by this function; `System.Text.Json` defaults do not m
 - **State** (`PuppetState`) is plain data and already canonical (yaw 0.001°, `behind` 6 decimals), so a snapshot round trip is exact. `usedPoints` is an ordered list (append order), not a set.
 - `describeEvent` (debug text, not logged) uses `toFixed`; port it with `ToString("F2", CultureInfo.InvariantCulture)` if a C# debug dump has to match.
 
+## Bomb and round rules (src/sim2d, C3)
+
+The 2D engine is not ported (the CS2 host uses the game's own rules), but logs written with it are fixtures, so a
+C# re-implementation for tests would need:
+
+- **Tick rounding.** `dueTick(t) = Math.ceil(roundNumber(t) − 1e-9)` → `Math.Ceiling(Round6(t) − 1e-9)`. Plant
+  3.2 s from tick s ends on s + 205; 40 s, 5 s and 10 s are exact (2560, 320, 640). The time-out tick for 98.25 s
+  is 6288.
+- **Order.** Bomb rules run after scripted damage, then the round rules; pawns are scanned in ordinal id order for
+  the plant starter, the defuse starter, the drop and the pickup. Explosion damage is applied in id order. A
+  same-tick wipe of both sides is a T win.
+- **Distances.** Defuse range and pickup range compare squared 2D distances (`dx*dx + dy*dy <= r*r`, exact). The
+  explosion uses `Math.hypot` in 3D (not bit-specified across runtimes; the damage is rounded to 6 decimals before
+  the armor `trunc`, like grenades).
+- **Collision.** `collideMove` uses `sqrt` and `hypot`; positions are rounded to 6 decimals after each move like all
+  movement (`docs/movement.md`), so expect the same rare last-digit caveat as wall slides.
+
 ## Scripted events (src/core/scripted.ts, aim.ts)
 
 - **Ticks from seconds**: `secTicks` = `Math.Floor(sec * 64 + 0.5)` (preAim, plantSec, throwHold); `ceilTicks` = `Math.Ceiling(sec * 64 - 1e-9)` (deploy times: a deploy must be complete). Burst taps use `⌊(k + ½) × span / count + ½⌋` explicitly, not `Math.Round` (banker's in C#).
@@ -80,4 +99,3 @@ The log format is defined by this function; `System.Text.Json` defaults do not m
 - **Aim** uses `atan2` (bearing and pitch); both are rounded to 0.001° before they are logged or compared (`roundYaw`, `roundPitch`), and pitch is clamped to ±89. `withLook` uses `cos` / `sin` and rounds the stick to 6 decimals, like B2.
 - **Decisions** (`ScriptState.decisions`) are a list in the order they were made, looked up by string key (`fire:<i>`, `aim:<i>`); plan item indices come from a sort by (first act tick, shooter id ordinal, build order).
 - **Log texts** of drops and fallbacks use only integers and ids (`script: dropped … (5 shots from tick 3192): donk is dead`, `script: no planted event by tick 1764, …`).
-

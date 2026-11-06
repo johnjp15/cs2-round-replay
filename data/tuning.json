@@ -59,7 +59,20 @@
     "m4a4": { "damage": 33, "rpm": 666.667, "headshotMult": 4, "armorPen": 0.7, "rangeModifier": 0.97, "clip": 30, "reserve": 90, "reloadSec": 3.07, "deploySec": 1, "automatic": true },
     "glock": { "damage": 30, "rpm": 400, "headshotMult": 4, "armorPen": 0.47, "rangeModifier": 0.85, "clip": 20, "reserve": 120, "reloadSec": 2.17, "deploySec": 1, "automatic": false }
   },
-  "bomb": { "plantSec": 3.2, "timerSec": 40, "defuseSec": 10, "defuseKitSec": 5 },
+  "bomb": {
+    "plantSec": 3.2,
+    "timerSec": 40,
+    "defuseSec": 10,
+    "defuseKitSec": 5,
+    "defuseRange": 62,
+    "pickupRange": 32,
+    "damage": 500,
+    "radius": 1750,
+    "armorPen": 0.5,
+    "beepSec": 1,
+    "beepFastSec": 0.5,
+    "beepFastLastSec": 10
+  },
   "grenades": {
     "smokeSec": 18,
     "molotovSec": 7,
@@ -100,5 +113,7 @@
   },
   "sound": { "footstepSpeed": 135, "footstepIntervalSec": 0.3 },
   "ai": { "fovDeg": 106, "reactionSec": 0.25, "aimErrorDeg": 2.5 },
-  "nav": { "stepHeight": 18, "edgeEpsilon": 1, "losMargin": 8 }
+  "nav": { "stepHeight": 18, "edgeEpsilon": 1, "losMargin": 8 },
+  "collision": { "pawnRadius": 16, "solidTeammates": false },
+  "round": { "timeSec": 115 }
 }

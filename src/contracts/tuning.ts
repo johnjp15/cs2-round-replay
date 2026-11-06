@@ -92,11 +92,48 @@ export interface WeaponTuning {
   automatic: boolean;
 }
 
+/** The C4 (docs/combat.md, "Bomb and round rules"). Seconds and Source units. */
 export interface BombTuning {
+  /** USE held this long with the c4 drawn inside a bombsite plants it. */
   plantSec: number;
+  /** The bomb explodes this long after the plant. */
   timerSec: number;
+  /** Defuse time without a kit. */
   defuseSec: number;
+  /** Defuse time with a kit (`defuser` in the inventory). */
   defuseKitSec: number;
+  /** A CT defuses while within this 2D distance of the bomb. */
+  defuseRange: number;
+  /** An alive T picks up a dropped c4 within this 2D distance. */
+  pickupRange: number;
+  /** Explosion damage at the bomb; falls linearly to 0 at `radius`. */
+  damage: number;
+  /** Explosion radius (CS: 3.5 × damage). */
+  radius: number;
+  /** armorPen for explosion damage (CS's armor ratio without a weapon). */
+  armorPen: number;
+  /** Beep interval while more than `beepFastLastSec` are left. */
+  beepSec: number;
+  /** Beep interval in the last `beepFastLastSec`. */
+  beepFastSec: number;
+  beepFastLastSec: number;
+}
+
+/** Pawn-pawn collision (docs/combat.md, "Collision"). */
+export interface CollisionTuning {
+  /** Pawn circle radius (units); two solid pawns stay 2 × this apart. */
+  pawnRadius: number;
+  /** false = teammates pass through each other (`mp_solid_teammates 0`); enemies are always solid. */
+  solidTeammates: boolean;
+}
+
+/** Round rules. */
+export interface RoundTuning {
+  /**
+   * Round clock at the start (seconds) when the host is not given one; the round times out when it reaches 0.
+   * The Session passes `round.meta.clock0` instead.
+   */
+  timeSec: number;
 }
 
 /** Grenades (docs/combat.md, Grenades). Seconds, Source units, degrees. */
@@ -206,6 +243,8 @@ export interface Tuning {
   sound: SoundTuning;
   ai: AiTuning;
   nav: NavTuning;
+  collision: CollisionTuning;
+  round: RoundTuning;
 }
 
 export class TuningError extends Error {
@@ -243,7 +282,22 @@ const REPLAY_KEYS = [
   'defuseFallbackTicks',
 ] as const;
 const WEAPON_KEYS = ['damage', 'rpm', 'headshotMult', 'armorPen', 'rangeModifier', 'clip', 'reserve', 'reloadSec', 'deploySec'] as const;
-const BOMB_KEYS = ['plantSec', 'timerSec', 'defuseSec', 'defuseKitSec'] as const;
+const BOMB_KEYS = [
+  'plantSec',
+  'timerSec',
+  'defuseSec',
+  'defuseKitSec',
+  'defuseRange',
+  'pickupRange',
+  'damage',
+  'radius',
+  'armorPen',
+  'beepSec',
+  'beepFastSec',
+  'beepFastLastSec',
+] as const;
+const COLLISION_KEYS = ['pawnRadius'] as const;
+const ROUND_KEYS = ['timeSec'] as const;
 const GRENADE_KEYS = [
   'smokeSec',
   'molotovSec',
@@ -317,6 +371,11 @@ export function parseTuning(json: unknown): Tuning {
     friendlyFire: asBoolean(damageObj['friendlyFire'], 'damage.friendlyFire'),
     reloadDiscardsMagazine: asBoolean(damageObj['reloadDiscardsMagazine'], 'damage.reloadDiscardsMagazine'),
   };
+  const collisionObj = asObject(root['collision'], 'collision');
+  const collision: CollisionTuning = {
+    ...pickNumbers(collisionObj, COLLISION_KEYS, 'collision'),
+    solidTeammates: asBoolean(collisionObj['solidTeammates'], 'collision.solidTeammates'),
+  };
   return {
     movement,
     replay: pickNumbers(asObject(root['replay'], 'replay'), REPLAY_KEYS, 'replay'),
@@ -327,6 +386,8 @@ export function parseTuning(json: unknown): Tuning {
     sound: pickNumbers(asObject(root['sound'], 'sound'), SOUND_KEYS, 'sound'),
     ai: pickNumbers(asObject(root['ai'], 'ai'), AI_KEYS, 'ai'),
     nav: pickNumbers(asObject(root['nav'], 'nav'), NAV_KEYS, 'nav'),
+    collision,
+    round: pickNumbers(asObject(root['round'], 'round'), ROUND_KEYS, 'round'),
   };
 }
 

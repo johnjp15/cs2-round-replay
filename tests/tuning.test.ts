@@ -46,6 +46,35 @@ describe('parseTuning', () => {
     expect(() => parseTuning(m)).toThrow(/sound: expected an object/);
   });
 
+  it('loads the C3 sections: bomb, collision, round', () => {
+    const t = parseTuning(clone());
+    expect(t.bomb).toEqual({
+      plantSec: 3.2,
+      timerSec: 40,
+      defuseSec: 10,
+      defuseKitSec: 5,
+      defuseRange: 62,
+      pickupRange: 32,
+      damage: 500,
+      radius: 1750,
+      armorPen: 0.5,
+      beepSec: 1,
+      beepFastSec: 0.5,
+      beepFastLastSec: 10,
+    });
+    expect(t.collision).toEqual({ pawnRadius: 16, solidTeammates: false });
+    expect(t.round).toEqual({ timeSec: 115 });
+    const j = clone();
+    (j['collision'] as Record<string, unknown>)['solidTeammates'] = 'no';
+    expect(() => parseTuning(j)).toThrow(/collision\.solidTeammates: expected true or false/);
+    const k = clone();
+    delete (k['bomb'] as Record<string, unknown>)['defuseRange'];
+    expect(() => parseTuning(k)).toThrow(/bomb\.defuseRange/);
+    const m = clone();
+    delete m['round'];
+    expect(() => parseTuning(m)).toThrow(/round: expected an object/);
+  });
+
   it('accepts a JSON string and ignores _note', () => {
     const t = parseTuning(raw);
     expect(t).toEqual(parseTuning(clone()));

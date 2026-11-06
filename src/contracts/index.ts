@@ -12,6 +12,8 @@ export type {
   SoundTuning,
   AiTuning,
   NavTuning,
+  CollisionTuning,
+  RoundTuning,
 } from './tuning';
 
 export {
@@ -25,6 +27,8 @@ export {
   SOUND_KINDS,
   BOMB_PHASES,
   ROUND_END_REASONS,
+  ROUND_PHASES,
+  BOMB_STATES,
   LOG_LEVELS,
   isPlayerId,
   compareOrdinal,
@@ -44,6 +48,8 @@ export type {
   SoundKind,
   BombPhase,
   RoundEndReason,
+  RoundPhase,
+  BombState,
   LogLevel,
   Vec3,
   Ammo,
@@ -55,6 +61,9 @@ export type {
   BombEvent,
   RoundEndEvent,
   ObsEvent,
+  Score,
+  BombObs,
+  RoundObs,
   Observe,
   PawnInput,
   Goal,
