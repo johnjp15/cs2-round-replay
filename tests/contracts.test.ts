@@ -65,6 +65,15 @@ function fullObserve(): Observe {
     t: 1,
     human: 'sp4rtan',
     events: Object.values(EVENTS),
+    round: {
+      phase: 'over',
+      score: { ct: 12, t: 15 },
+      winner: 'CT',
+      reason: 'bomb_defused',
+      endTick: 4275,
+      timeLeftSec: 0.71875,
+      bomb: { state: 'defused', carrier: null, pos: v(-1982, 311, -160), plantTick: 1761, defuser: 'sp4rtan', defuseEndTick: 4275 },
+    },
     pawns: sortById(
       PLAYER_IDS.map((id, i) => ({
         id,

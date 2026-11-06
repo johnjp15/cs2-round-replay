@@ -166,13 +166,14 @@ describe('Sim2DHost actions', () => {
     expect(host.unhandled().map((n) => [n.type, n.reason])).toEqual([['set_weapon', 'not in inventory']]);
   });
 
-  it('records bomb and round actions and controls as unsupported (nothing vanishes); combat actions are applied', () => {
+  it('applies combat, bomb and round actions in the next tick; records unknown actions and controls as unsupported (nothing vanishes)', () => {
     const host = newHost();
+    const bombPos = { x: -1982, y: 311, z: -160 };
     const actions: Action[] = [
       { type: 'damage', attacker: 'cart', victim: 'lokier', amount: 27, armor: 5, hitgroup: 'chest', weapon: 'ak47', lethal: false },
       { type: 'block_damage', attacker: 'sp4rtan', victim: 'cart' },
       { type: 'unblock_damage', attacker: 'sp4rtan', victim: 'cart' },
-      { type: 'plant', id: 'barely', pos: { x: -1982, y: 311, z: -160 } },
+      { type: 'plant', id: 'barely', pos: bombPos },
       { type: 'defuse_start', id: 'sp4rtan' },
       { type: 'defuse_stop', id: 'sp4rtan' },
       { type: 'end_round', winner: 'CT', reason: 'bomb_defused' },
@@ -182,15 +183,25 @@ describe('Sim2DHost actions', () => {
     host.apply(act(actions));
     host.control({ type: 'pause', paused: true });
     const notes = host.unhandled();
-    expect(notes.map((n) => n.type)).toEqual(['plant', 'defuse_start', 'defuse_stop', 'end_round', 'future_action', 'pause']);
+    expect(notes.map((n) => n.type)).toEqual(['future_action', 'pause']);
     for (const n of notes) expect(n.reason).toBe(UNSUPPORTED_V0);
-    expect(notes[0]?.data).toEqual(actions[3]);
+    expect(notes[0]?.data).toEqual(actions[8]);
     expect(notes.at(-1)?.kind).toBe('control');
-    // Scripted damage is queued by apply() and applied by the next tick().
+    // Scripted damage, then the bomb and round actions, are queued by apply() and applied by the next tick().
     expect(pawn(host.observe(), 'lokier').hp).toBe(100);
+    expect(host.observe().round.bomb.state).toBe('carried');
     host.tick();
-    expect(pawn(host.observe(), 'lokier').hp).toBe(73);
+    const o = host.observe();
+    expect(pawn(o, 'lokier').hp).toBe(73);
     expect(host.blockedPairs()).toEqual([]);
+    expect(o.events.map((e) => (e.type === 'bomb' ? `bomb ${e.phase}` : e.type))).toEqual(['damage', 'bomb planted', 'bomb defuse_start', 'bomb defuse_stop', 'round_end']);
+    expect(o.round).toMatchObject({ phase: 'over', winner: 'CT', reason: 'bomb_defused', endTick: 0, score: { ct: 1, t: 0 } });
+    expect(o.round.bomb).toEqual({ state: 'planted', carrier: null, pos: bombPos, plantTick: 0, defuser: null, defuseEndTick: null });
+    // A second end_round is noted, not applied.
+    host.apply(act([{ type: 'end_round', winner: 'T', reason: 'elimination' }]));
+    host.tick();
+    expect(host.unhandled().at(-1)).toMatchObject({ type: 'end_round', reason: 'round already over' });
+    expect(host.observe().round.score).toEqual({ ct: 1, t: 0 });
   });
 
   it('tolerates B1 fields: glock, defuser item, set_hp.helmet', () => {

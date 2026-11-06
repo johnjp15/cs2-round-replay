@@ -20,11 +20,28 @@ import {
   type PawnInput,
   type PawnStatus,
   type PlayerId,
+  type RoundObs,
   type Team,
   type Vec3,
 } from '../src/contracts/index';
 
 const T_SIDE: readonly PlayerId[] = ['barely', 'snarlbot', 'cart', 'eradicate', 'donk'];
+
+/**
+ * A live round at `tick` (98.25 s on the clock at tick 0, score CT 11 – T 15) with the c4 carried by
+ * `carrier` at `pos`, for fakes and fixtures that build an Observe by hand.
+ */
+export function liveRound(tick: number, carrier: PlayerId | null = null, pos: Vec3 | null = null): RoundObs {
+  return {
+    phase: 'live',
+    score: { ct: 11, t: 15 },
+    winner: null,
+    reason: null,
+    endTick: null,
+    timeLeftSec: Math.max(0, 98.25 - tick / 64),
+    bomb: { state: 'carried', carrier, pos, plantTick: null, defuser: null, defuseEndTick: null },
+  };
+}
 const RUN_SPEED = 250;
 const TICK_SEC = 1 / 64;
 
@@ -71,11 +88,13 @@ export class ScriptedHost implements IHost {
       }
     }
     const alive = this.pawns.filter((p) => p.alive).map((p) => p.id);
+    const barely = this.pawns.find((p) => p.id === 'barely');
     return {
       tick: this.tick,
       t: this.tick / 64,
       human: 'sp4rtan',
       events,
+      round: liveRound(this.tick, barely?.alive === true ? 'barely' : null, barely?.alive === true ? barely.pos : null),
       pawns: sortById(
         this.pawns.map((p) => ({
           id: p.id,

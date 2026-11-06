@@ -1,9 +1,10 @@
 /**
- * Sim2DHost: the 2D engine behind IHost. Movement (stepMove on the nav mesh), weapons (fire cadence,
- * reload, deploy), hitscan bullets with CS damage and armor, grenades (smoke, flash, HE, molotov), the
- * Core's scripted `damage` and `block_damage` / `unblock_damage`, deaths and sounds, plus the bookkeeping
- * actions (teleport, set_hp, give, set_weapon, set_mode). Bomb and round-end actions and all Control
- * messages are recorded in `unhandled()` instead of being dropped (task C3).
+ * Sim2DHost: the 2D engine behind IHost. Movement (stepMove on the nav mesh) with pawn collision,
+ * weapons (fire cadence, reload, deploy), hitscan bullets with CS damage and armor, grenades (smoke, flash,
+ * HE, molotov), the Core's scripted `damage` and `block_damage` / `unblock_damage`, deaths and sounds, the
+ * bomb (plant, defuse, timer, explosion, drop and pickup) and the round rules (elimination, time-out, score;
+ * C3), plus the bookkeeping actions (teleport, set_hp, give, set_weapon, set_mode). Control messages are
+ * recorded in `unhandled()` instead of being dropped.
  *
  * Driver loop: observe() → core.step → apply(act) → tick(). IHost has no tick(); the app (or the
  * game, for the CS2 host) owns the clock. Per-tick order: docs/combat.md.
@@ -21,8 +22,10 @@ import {
   toJsonValue,
   type Act,
   type Ammo,
+  type BombObs,
   type Control,
   type DamageAction,
+  type EndRoundAction,
   type Goal,
   type Hitgroup,
   type HostSnapshot,
@@ -33,6 +36,8 @@ import {
   type PawnInput,
   type PawnObs,
   type PlayerId,
+  type RoundObs,
+  type Score,
   type SettableMode,
   type SoundKind,
   type Team,
@@ -40,10 +45,13 @@ import {
   type Vec3,
   type WeaponId,
 } from '../contracts/index';
+import { applyBombAction, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
+import { collideMove, type Obstacle } from './collision';
 import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeOutcome } from './grenades';
 import { traceShot, type ScanPawn } from './hitscan';
 import { TICKS_PER_SEC, TICK_DT, stepMove, type MoveState } from './movement';
 import type { NavMesh, NavPoint } from './nav';
+import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from './round';
 import {
   armorDamage,
   bulletDamage,
@@ -98,6 +106,8 @@ export interface PawnState {
   blindUntilTick: number;
   /** Earliest tick for the next footstep sound. */
   nextFootstepTick: number;
+  /** The solid pawn that cut this pawn's last move short (collision), or null. Debug hint for body blocks. */
+  blockedBy: PlayerId | null;
 }
 
 /** Something the host received but did not (fully) apply. */
@@ -125,7 +135,18 @@ export interface BlockedPair {
 
 export const UNSUPPORTED_V0 = 'unsupported in v0';
 
-const HOST_SNAPSHOT_VERSION = 2;
+/** Round setup the host can't get from tuning: the Session passes `round.meta.score` and `round.meta.clock0`. */
+export interface Sim2DOptions {
+  /** Score before this round. */
+  readonly score: Score;
+  /** Round clock at tick 0 (seconds); the round times out when it reaches 0. */
+  readonly roundTimeSec: number;
+}
+
+/** Queued bomb and round actions (applied in the next tick(), after scripted damage, in Core order). */
+type QueuedRoundAction = BombAction | EndRoundAction;
+
+const HOST_SNAPSHOT_VERSION = 3;
 /** CS2 spawn state for a pawn before Core sets it up (game rules, not calibration). */
 const SPAWN_HP = 100;
 const SPAWN_WEAPON: WeaponId = 'knife';
@@ -147,6 +168,10 @@ interface HostState {
   readonly blocked: readonly BlockedPair[];
   /** Scripted damage from apply(), applied in the next tick() in Core order. */
   readonly pendingDamage: readonly DamageAction[];
+  /** plant / defuse_start / defuse_stop / end_round from apply(), applied in the next tick() after the damage. */
+  readonly pendingRound: readonly QueuedRoundAction[];
+  readonly bomb: BombData;
+  readonly round: RoundState;
   /** Events of the last tick, as observe() reports them. */
   readonly events: readonly ObsEvent[];
 }
@@ -164,6 +189,9 @@ export class Sim2DHost implements IHost {
   private nextGrenadeSeq = 1;
   private blocked: BlockedPair[] = [];
   private pendingDamage: DamageAction[] = [];
+  private pendingRound: QueuedRoundAction[] = [];
+  private bomb: BombData = freshBomb();
+  private round: RoundState;
   /** Events of the last completed tick (observe()). */
   private events: ObsEvent[] = [];
   /** Events being emitted by the tick in progress. */
@@ -171,7 +199,10 @@ export class Sim2DHost implements IHost {
   private readonly notes: HostNote[] = [];
   private readonly combat: CombatLogLine[] = [];
 
-  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[]) {
+  /**
+   * @param options score before the round and the round clock at tick 0; default 0 – 0 and `tuning.round.timeSec`.
+   */
+  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null = null) {
     if (roster.length === 0) throw new Error('Sim2DHost: empty roster');
     const seen = new Set<string>();
     for (const r of roster) {
@@ -182,6 +213,12 @@ export class Sim2DHost implements IHost {
     this.nav = nav;
     this.tuning = tuning;
     this.pawns = [...roster].sort((a, b) => compareOrdinal(a.id, b.id)).map((r) => spawnPawn(r));
+    const o = options ?? { score: { ct: 0, t: 0 }, roundTimeSec: tuning.round.timeSec };
+    if (!Number.isFinite(o.roundTimeSec) || o.roundTimeSec < 0) throw new Error(`Sim2DHost: bad roundTimeSec ${o.roundTimeSec}`);
+    if (!Number.isInteger(o.score.ct) || !Number.isInteger(o.score.t) || o.score.ct < 0 || o.score.t < 0) {
+      throw new Error(`Sim2DHost: bad score ${o.score.ct}-${o.score.t}`);
+    }
+    this.round = freshRound(o.roundTimeSec, o.score);
   }
 
   // ---- IHost ---------------------------------------------------------------------------------
@@ -193,12 +230,14 @@ export class Sim2DHost implements IHost {
       pawns: this.pawns.map((p) => pawnObs(p)),
       events: this.events.map((e) => ({ ...e })),
       human: this.human,
+      round: this.roundObs(),
     };
   }
 
   /**
    * Store `inputs` for the following ticks (replacing the previous set) and apply `actions` in order.
-   * Scripted `damage` is queued and applied in the next tick() after shots and grenades.
+   * Scripted `damage` is queued and applied in the next tick() after shots and grenades; `plant`,
+   * `defuse_start`, `defuse_stop` and `end_round` are queued and applied after that, before the bomb rules.
    */
   apply(act: Act): void {
     const a = canonicalize(act);
@@ -233,6 +272,9 @@ export class Sim2DHost implements IHost {
       nextGrenadeSeq: this.nextGrenadeSeq,
       blocked: this.blocked,
       pendingDamage: this.pendingDamage,
+      pendingRound: this.pendingRound,
+      bomb: this.bomb,
+      round: this.round,
       events: this.events,
     };
     return { kind: 'host', data: toJsonValue(state) };
@@ -251,6 +293,11 @@ export class Sim2DHost implements IHost {
       !Array.isArray(d.grenades) ||
       !Array.isArray(d.blocked) ||
       !Array.isArray(d.pendingDamage) ||
+      !Array.isArray(d.pendingRound) ||
+      typeof d.bomb !== 'object' ||
+      d.bomb === null ||
+      typeof d.round !== 'object' ||
+      d.round === null ||
       !Array.isArray(d.events)
     ) {
       throw new Error('Sim2DHost.restore: malformed snapshot');
@@ -270,26 +317,40 @@ export class Sim2DHost implements IHost {
     this.nextGrenadeSeq = copy.nextGrenadeSeq;
     this.blocked = [...copy.blocked];
     this.pendingDamage = [...copy.pendingDamage];
+    this.pendingRound = [...copy.pendingRound];
+    this.bomb = copy.bomb;
+    this.round = copy.round;
     this.events = [...copy.events];
   }
 
   // ---- Sim2D-specific ------------------------------------------------------------------------
 
   /**
-   * Advance one tick (1/64 s). Order (docs/combat.md): movement and footsteps; per alive pawn in id order
-   * its weapon (reload, fire with hitscan and damage, grenade throw); grenades (pops, effects, fire);
-   * the scripted damage queued by apply(). Deaths are applied at the damage that causes them, so a
-   * pawn killed earlier in the tick does not act later in it. Events become observe()'s events.
+   * Advance one tick (1/64 s). Order (docs/combat.md): movement with collision and footsteps (planting and
+   * defusing pawns don't move); per alive pawn in id order its weapon (reload, fire with hitscan and damage,
+   * grenade throw); grenades (pops, effects, fire); the scripted damage queued by apply(); the queued bomb
+   * and round actions; the bomb (plant, drop and pickup, explosion, defuse, beeps); the round rules.
+   * Deaths are applied at the damage that causes them, so a pawn killed earlier in the tick does not act
+   * later in it. Events become observe()'s events.
    */
   tick(): void {
     const t = this.tickNo;
     this.outbox = [];
-    this.moveAll(t);
+    const locked = lockedPawns(this.bomb, t, this.bombPawns(), this.tuning.bomb);
+    this.moveAll(t, locked);
     for (const p of this.pawns) if (p.alive) this.stepPawnWeapon(p, t);
     this.stepGrenades(t);
     const queued = this.pendingDamage;
     this.pendingDamage = [];
     for (const a of queued) this.applyScriptedDamage(a);
+    const roundActions = this.pendingRound;
+    this.pendingRound = [];
+    for (const a of roundActions) this.applyRoundAction(a, t);
+    const step = stepBomb(this.bomb, t, this.bombPawns(), this.tuning.bomb, this.tuning.damage.bandHeights['stomach'] ?? 0);
+    this.bomb = step.bomb;
+    this.applyBombOutcomes(step.outcomes, t);
+    const end = checkRoundEnd(this.round, t, this.teamCounts(), isTicking(this.bomb));
+    if (end !== null) this.finishRound(end, t);
     this.tickNo++;
     this.events = this.outbox;
     this.outbox = [];
@@ -353,18 +414,56 @@ export class Sim2DHost implements IHost {
     return activeEffects(this.grenades, this.tickNo, this.tuning.grenades);
   }
 
+  /** The solid pawn that cut `id`'s move short on the last tick (collision), or null. Debug hint, not in observe(). */
+  blockedBy(id: PlayerId): PlayerId | null {
+    return this.pawn(id)?.blockedBy ?? null;
+  }
+
+  /** Deep copy of the bomb state, including a plant or defuse in progress (debug; observe().round.bomb is the contract view). */
+  bombState(): BombData {
+    return JSON.parse(JSON.stringify(this.bomb)) as BombData;
+  }
+
+  /** Deep copy of the round state (score, end, round clock). */
+  roundState(): RoundState {
+    return JSON.parse(JSON.stringify(this.round)) as RoundState;
+  }
+
   // ---- tick phases ---------------------------------------------------------------------------
 
-  private moveAll(t: number): void {
+  /**
+   * Movement in id order. A `locked` pawn (planting or defusing) keeps its position and gets zero velocity, but
+   * still turns and crouches. Every other move is cut against the solid pawns (collision.ts): alive enemies,
+   * and alive teammates with `collision.solidTeammates`, at their positions so far this tick.
+   */
+  private moveAll(t: number, locked: readonly PlayerId[]): void {
     const m = this.tuning.movement;
     const snd = this.tuning.sound;
     for (const p of this.pawns) {
+      p.blockedBy = null;
       if (!p.alive) {
         p.move = { ...p.move, vel: { x: 0, y: 0, z: 0 } };
         continue;
       }
-      const step = stepMove(p.move, this.inputFor(p.id), p.weapon, this.nav, m, TICK_DT);
-      p.move = roundMove(step.state);
+      const input = this.inputFor(p.id);
+      const isLocked = locked.includes(p.id);
+      const from = p.move.pos;
+      const step = isLocked
+        ? stepMove({ ...p.move, vel: { x: 0, y: 0, z: 0 } }, input === null ? null : { ...input, forward: 0, side: 0 }, p.weapon, this.nav, m, TICK_DT)
+        : stepMove(p.move, input, p.weapon, this.nav, m, TICK_DT);
+      let next = step.state;
+      if (!isLocked) {
+        const obstacles = this.solidFor(p);
+        if (obstacles.length > 0) {
+          const c = collideMove(from, next.pos, obstacles, this.tuning.collision.pawnRadius, this.nav);
+          if (c.blockedBy !== null) {
+            const z = this.nav.zAt({ x: c.x, y: c.y, z: from.z });
+            next = { ...next, pos: { x: c.x, y: c.y, z }, vel: { x: (c.x - from.x) / TICK_DT, y: (c.y - from.y) / TICK_DT, z: 0 } };
+            p.blockedBy = c.blockedBy;
+          }
+        }
+      }
+      p.move = roundMove(next);
       const speed = Math.hypot(p.move.vel.x, p.move.vel.y);
       if (speed > snd.footstepSpeed && reached(t, p.nextFootstepTick)) {
         this.sound(p, 'footstep');
@@ -493,6 +592,121 @@ export class Sim2DHost implements IHost {
     return this.blocked.some((b) => b.attacker === attacker && b.victim === victim);
   }
 
+  // ---- collision, bomb and round -------------------------------------------------------------
+
+  /** Pawns `p` collides with: alive, not `p`, enemies (and teammates with solidTeammates), in id order. */
+  private solidFor(p: PawnState): Obstacle[] {
+    const mates = this.tuning.collision.solidTeammates;
+    return this.pawns.filter((q) => q.id !== p.id && q.alive && (mates || q.team !== p.team)).map((q) => ({ id: q.id, x: q.move.pos.x, y: q.move.pos.y }));
+  }
+
+  /** What the bomb rules see of each pawn now (id order). Bombsite lookups only for pawns that could plant. */
+  private bombPawns(): BombPawn[] {
+    return this.pawns.map((p) => {
+      const input = this.inputFor(p.id);
+      const use = input !== null && input.buttons.includes('USE');
+      const hasC4 = p.inventory.some((q) => q.item === 'c4');
+      const inSite = p.alive && p.team === 'T' && use && p.weapon === 'c4' && isBombsite(this.nav.placeName(p.move.pos));
+      return { id: p.id, team: p.team, pos: copyVec(p.move.pos), alive: p.alive, weapon: p.weapon, use, hasC4, hasKit: p.inventory.some((q) => q.item === 'defuser'), inSite };
+    });
+  }
+
+  private applyRoundAction(a: QueuedRoundAction, t: number): void {
+    if (a.type === 'end_round') {
+      if (isOver(this.round)) return this.note('action', a.type, 'round already over', a);
+      this.finishRound({ winner: a.winner, reason: a.reason }, t);
+      return;
+    }
+    const r = applyBombAction(this.bomb, a, t, this.bombPawns(), this.tuning.bomb);
+    if (r.note !== null) return this.note('action', a.type, r.note, a);
+    this.bomb = r.bomb;
+    this.applyBombOutcomes(r.outcomes, t);
+  }
+
+  private applyBombOutcomes(outcomes: readonly BombOutcome[], t: number): void {
+    for (const o of outcomes) {
+      switch (o.type) {
+        case 'event':
+          this.outbox.push(o.event);
+          break;
+        case 'take_c4': {
+          const p = this.pawn(o.id);
+          if (p === null) break;
+          const i = p.inventory.findIndex((q) => q.item === 'c4');
+          if (i >= 0) p.inventory = [...p.inventory.slice(0, i), ...p.inventory.slice(i + 1)];
+          // A dead pawn keeps reporting the c4 as its last weapon; a planter draws its best gun.
+          if (p.alive && p.weapon === 'c4') {
+            p.weapon = fallbackWeapon(p.inventory.map((q) => q.item));
+            p.wpn = deployState(p.wpn, t, deploySec(p.weapon, this.tuning));
+          }
+          break;
+        }
+        case 'give_c4': {
+          const p = this.pawn(o.id);
+          if (p === null) break;
+          p.inventory = [...p.inventory, { item: 'c4', clip: 0, reserve: 0 }].sort((x, y) => compareOrdinal(x.item, y.item));
+          break;
+        }
+        case 'hurt': {
+          const victim = this.pawn(o.victim);
+          if (victim === null || !victim.alive) break;
+          const dmg = armorDamage(o.damage, this.tuning.bomb.armorPen, victim.armor, isArmored('generic', victim.helmet), this.tuning.damage);
+          this.hurt(null, victim, null, 'generic', dmg.health, dmg.armor, false, false);
+          break;
+        }
+        case 'round_end':
+          if (!isOver(this.round)) this.finishRound({ winner: o.winner, reason: o.reason }, t);
+          break;
+      }
+    }
+  }
+
+  /** End the round on tick `t`: `round_end`, score + 1, phase over. Only call while the round is on. */
+  private finishRound(end: RoundEnd, t: number): void {
+    this.round = endRound(this.round, t, end);
+    this.outbox.push({ type: 'round_end', winner: end.winner, reason: end.reason });
+  }
+
+  private teamCounts(): TeamCounts {
+    let ctTotal = 0;
+    let ctAlive = 0;
+    let tTotal = 0;
+    let tAlive = 0;
+    for (const p of this.pawns) {
+      if (p.team === 'CT') {
+        ctTotal++;
+        if (p.alive) ctAlive++;
+      } else {
+        tTotal++;
+        if (p.alive) tAlive++;
+      }
+    }
+    return { ctTotal, ctAlive, tTotal, tAlive };
+  }
+
+  private roundObs(): RoundObs {
+    const b = this.bomb;
+    const carrier = b.state === 'carried' ? (this.pawns.find((p) => p.inventory.some((q) => q.item === 'c4')) ?? null) : null;
+    const bomb: BombObs = {
+      state: b.state,
+      carrier: carrier === null ? null : carrier.id,
+      pos: b.state === 'carried' ? (carrier === null ? null : copyVec(carrier.move.pos)) : b.pos === null ? null : copyVec(b.pos),
+      plantTick: b.plantTick,
+      defuser: b.defuse !== null ? b.defuse.id : b.defusedBy,
+      defuseEndTick: b.defuse !== null ? b.defuse.endTick : b.defusedTick,
+    };
+    const r = this.round;
+    return {
+      phase: roundPhase(r, isTicking(b)),
+      score: { ct: r.score.ct, t: r.score.t },
+      winner: r.winner,
+      reason: r.reason,
+      endTick: r.endTick,
+      timeLeftSec: timeLeftSec(r, this.tickNo, { state: b.state, explodeTick: b.explodeTick, defusedTick: b.defusedTick }),
+      bomb,
+    };
+  }
+
   // ---- internals -----------------------------------------------------------------------------
 
   private pawn(id: string): PawnState | null {
@@ -568,6 +782,12 @@ export class Sim2DHost implements IHost {
       case 'damage':
         this.pendingDamage.push(action);
         return;
+      case 'plant':
+      case 'defuse_start':
+      case 'defuse_stop':
+      case 'end_round':
+        this.pendingRound.push(action);
+        return;
       case 'block_damage':
       case 'unblock_damage': {
         if (this.pawn(action.attacker) === null || this.pawn(action.victim) === null) return this.note('action', type, 'unknown pawn', action);
@@ -603,6 +823,7 @@ function spawnPawn(r: RosterEntry): PawnState {
     wpn: freshWeaponState(),
     blindUntilTick: 0,
     nextFootstepTick: 0,
+    blockedBy: null,
   };
 }
 

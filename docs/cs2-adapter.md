@@ -110,6 +110,7 @@ the latency, and Core must tolerate one tick of it (see contract findings).
 | `crouching` | `MovementServices` cast to `CCSPlayer_MovementServices`: `Ducked`, or `DuckAmount ≥ 0.5` | [css-schema-csmove] | likely | Which signal matches the 2D sim's meaning; P0b logs `DuckAmount` through a crouch |
 | `sees` | Adapter-computed for each pair: `Trace.TraceEndShape(eye(a), eye(b), ignore a)` with eye = `AbsOrigin + ViewOffset`; visible if nothing hits before b; then a FOV test against a's eye angles (`ai.fovDeg`); then our own smoke test (active smokes from `smokegrenade_detonate`/`_expired`) | [css-trace], [css-schema-model], [css-ev-smoke] | likely (API) / unknown — probe (smoke, cost: P6) | Native `CCSBot.IsEnemyVisible` is stale under the All lock (finding 3). A physics trace probably ignores smoke, and the round has four smokes (`data/round.json` `utility`). Cost: 90 ordered pairs per tick (P6) |
 | `human` | The one non-bot controller (`!IsBot`) on T or CT, mapped to its `PlayerId`; `null` when spectating | [css-controller] | verified in docs | |
+| `round` (C3) | `phase`/`winner`/`reason`/`endTick` from `EventRoundEnd` and `CCSGameRules` (bomb planted flag); `score` from the two team entities; `timeLeftSec` from the round clock (finding 9) or `CPlantedC4.C4Blow − CurrentTime`; `bomb` from the C4 carrier's inventory, the dropped `weapon_c4` and `planted_c4` (`AbsOrigin`, `BombDefuser`, `DefuseCountDown`) | [css-schema-gamerules], [css-schema-c4] | likely | Not probed yet; tick values (`plantTick`, `defuseEndTick`) are adapter ticks, so convert game times with the tick mapping above |
 
 ### ObsEvent (events since the previous tick)
 
@@ -122,7 +123,7 @@ the latency, and Core must tolerate one tick of it (see contract findings).
 | `sound` (land) | No `player_land` event exists. Derive it from `Flags` gaining `FL_ONGROUND` after a fall | [css-schema-entity] | likely | |
 | `sound` (shot, reload) | `EventWeaponFire`, `EventWeaponReload` | [css-ev-fire], [css-ev-reload] | verified in docs | |
 | `sound` (grenade) | `EventGrenadeThrown` and the `*_detonate` events | [css-ev-grenade] | verified in docs | |
-| `sound` (bomb) | `EventBombBeep` (`Entindex` only, no player) | [css-ev-beep] | verified in docs | The contract's `source` is non-null (finding F4) |
+| `sound` (bomb) | `EventBombBeep` (`Entindex` only, no player) → `source: null` | [css-ev-beep] | verified in docs | F4 resolved in C3: `source` is nullable |
 | `bomb` planted | `EventBombPlanted` (`Userid`, `Site`); `pos` from the `planted_c4` entity's `AbsOrigin` | [css-ev-planted], [css-schema-c4] | verified in docs | |
 | `bomb` defuse_start / defuse_stop | `EventBombBegindefuse` (`Userid`, `Haskit`) / `EventBombAbortdefuse` | [css-ev-begindefuse] | verified in docs | |
 | `bomb` defused / exploded | `EventBombDefused` / `EventBombExploded` | [css-ev-defused], [css-ev-exploded] | verified in docs | |
