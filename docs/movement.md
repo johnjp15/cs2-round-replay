@@ -2,8 +2,8 @@
 
 Source-style ground movement at 64 Hz, close enough to CS2 that tuning found in the 2D sim carries
 over to the CS2 plugin and back. The movement functions are pure (`MoveState` in, `MoveState` out), and
-every parameter comes from `data/tuning.json` → `movement`. `Sim2DHost` implements `IHost` on top of them
-(v0: movement only).
+every parameter comes from `data/tuning.json` → `movement`. `Sim2DHost` implements `IHost` on top of them.
+Weapons, damage, grenades and sounds (C2) are in `docs/combat.md`.
 
 ## Conventions
 
@@ -147,7 +147,7 @@ eradicate 5.7 and snarlbot 8.1. What the model can't follow:
   This is a controller problem, not a movement one. Core's replay controller needs the wall-aware rule (or a
   nav path) and drift handling (`driftNudgeUnits` / `driftSnapUnits`).
 
-## Sim2DHost (v0: movement only)
+## Sim2DHost (movement and bookkeeping; combat in `docs/combat.md`)
 
 ```ts
 const host = new Sim2DHost(nav, tuning, roster);   // roster: the ten {id, team}; the host does not read round.json
@@ -162,16 +162,17 @@ for (;;) {
 
 `IHost` has no `tick()`: the driver (app or test) owns the clock. For the CS2 host the game advances itself.
 
-| Input / action | v0 behaviour |
+| Input / action | Behaviour |
 | --- | --- |
 | `inputs` | Replace the stored set; persist across ticks until the next `apply`. Pawns without an input get no command (friction only, buttons released). Inputs for unknown pawns and duplicates (first kept) are noted. |
 | `teleport` | Sets pos (as given) and yaw, zeroes vel. The next tick snaps z to the nav floor. |
 | `set_hp` | Sets hp and armor (≥ 0); `alive = hp > 0`, so `set_hp 0` kills and `set_hp > 0` revives (restart/setup). Reads B1's `helmet` boolean when present. |
-| `give` | Adds or replaces the inventory entry `{item, clip, reserve}`. Items are strings, so B1's `glock` and `defuser` work before the shared types know them. |
-| `set_weapon` | Switches the active item if it is in the inventory. Otherwise it is noted as `not in inventory`, and a `defuser` as `item cannot be held`. Ammo in `observe()` is the active item's entry. |
-| `set_mode` | Records mode and goal per pawn (`pawnState(id)`); v0 does not act on them. |
+| `give` | Adds or replaces the inventory entry `{item, clip, reserve}`; each grenade `give` adds another entry (C2). Items are strings, so unknown items are kept. |
+| `set_weapon` | Switches the active item if it is in the inventory, starting its deploy (C2; instant when the same act teleported the pawn). Otherwise it is noted as `not in inventory`, and a `defuser` as `item cannot be held`. Ammo in `observe()` is the active item's entry. |
+| `set_mode` | Records mode and goal per pawn (`pawnState(id)`); the host does not act on them. |
 | `log` | Ignored (the app reads Core logs from the Act / SessionLog). |
-| `damage`, `block_damage`, `unblock_damage`, `plant`, `defuse_start`, `defuse_stop`, `end_round`, unknown types | Noted as `unsupported in v0` in `unhandled()`; nothing else happens. |
+| `damage`, `block_damage`, `unblock_damage` | C2: see `docs/combat.md` (scripted damage is applied in the next `tick()`). |
+| `plant`, `defuse_start`, `defuse_stop`, `end_round`, unknown types | Noted as `unsupported in v0` in `unhandled()`; nothing else happens (bomb and round rules: C3). |
 | `control(c)` | Noted as `unsupported in v0`. |
 
 - **Spawn state** (before Core sets a pawn up): pos (0, 0, 0), 100 HP, 0 armor, no helmet, knife only
@@ -179,10 +180,12 @@ for (;;) {
 - **Human**: `human` defaults to `cart`; `setHuman(id | null)` changes it. `setHumanInput(input)` drives the
   human pawn instead of any Core input for it, until replaced or cleared with `null`, which hands the pawn
   back to Core. `input.id` must be the human pawn.
-- **observe()**: all roster pawns sorted by id, `sees: []`, `events: []`, `t = tick / 64`.
-- **snapshot() / restore()**: `{version, tick, human, humanInput, inputs, pawns}` via `toJsonValue`. It is
-  exact because the state is canonical. `restore` checks the version and roster. `unhandled()` is
-  diagnostics and is not part of snapshots.
+- **observe()**: all roster pawns sorted by id, `sees: []` (C4), the last tick's events in emission order
+  (C2), `t = tick / 64`.
+- **snapshot() / restore()**: version 2 adds the combat state (`docs/combat.md`, Snapshot) to
+  `{tick, human, humanInput, inputs, pawns}`, via `toJsonValue`. It is exact because the state is canonical.
+  `restore` checks the version and roster. `unhandled()` and `combatLog()` are diagnostics and are not part of
+  snapshots.
 - **Determinism**: no randomness or clocks. `apply` and `setHumanInput` canonicalize what they receive, and
   the movement state is rounded to the log's 6 decimals after each tick. So `observe()` is canonical, the
   logged acts alone reproduce the logged observes (tested), and snapshots round-trip exactly. Caveat:

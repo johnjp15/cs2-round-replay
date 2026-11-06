@@ -166,7 +166,7 @@ describe('Sim2DHost actions', () => {
     expect(host.unhandled().map((n) => [n.type, n.reason])).toEqual([['set_weapon', 'not in inventory']]);
   });
 
-  it('records combat, bomb and round actions and controls as unsupported in v0 (nothing vanishes)', () => {
+  it('records bomb and round actions and controls as unsupported (nothing vanishes); combat actions are applied', () => {
     const host = newHost();
     const actions: Action[] = [
       { type: 'damage', attacker: 'cart', victim: 'lokier', amount: 27, armor: 5, hitgroup: 'chest', weapon: 'ak47', lethal: false },
@@ -182,12 +182,15 @@ describe('Sim2DHost actions', () => {
     host.apply(act(actions));
     host.control({ type: 'pause', paused: true });
     const notes = host.unhandled();
-    expect(notes.map((n) => n.type)).toEqual(['damage', 'block_damage', 'unblock_damage', 'plant', 'defuse_start', 'defuse_stop', 'end_round', 'future_action', 'pause']);
+    expect(notes.map((n) => n.type)).toEqual(['plant', 'defuse_start', 'defuse_stop', 'end_round', 'future_action', 'pause']);
     for (const n of notes) expect(n.reason).toBe(UNSUPPORTED_V0);
-    expect(notes[0]?.data).toEqual(actions[0]);
+    expect(notes[0]?.data).toEqual(actions[3]);
     expect(notes.at(-1)?.kind).toBe('control');
-    // Unsupported damage does not touch HP.
+    // Scripted damage is queued by apply() and applied by the next tick().
     expect(pawn(host.observe(), 'lokier').hp).toBe(100);
+    host.tick();
+    expect(pawn(host.observe(), 'lokier').hp).toBe(73);
+    expect(host.blockedPairs()).toEqual([]);
   });
 
   it('tolerates B1 fields: glock, defuser item, set_hp.helmet', () => {

@@ -8,6 +8,8 @@ export type {
   WeaponTuning,
   BombTuning,
   GrenadeTuning,
+  DamageTuning,
+  SoundTuning,
   AiTuning,
   NavTuning,
 } from './tuning';
