@@ -52,7 +52,11 @@ export type ItemId = (typeof ITEM_IDS)[number];
 export const BUTTONS = ['ATTACK', 'ATTACK2', 'USE', 'DUCK', 'WALK', 'JUMP', 'RELOAD'] as const;
 export type Button = (typeof BUTTONS)[number];
 
-export const HITGROUPS = ['head', 'chest', 'stomach', 'arm', 'leg'] as const;
+/**
+ * Body part hit. `neck` exists in CS2 (hitgroup 8); the 2D engine never produces it. `generic` = no body part
+ * (CS2 hitgroup 0): grenade, fire, bomb and other world damage.
+ */
+export const HITGROUPS = ['head', 'chest', 'stomach', 'arm', 'leg', 'neck', 'generic'] as const;
 export type Hitgroup = (typeof HITGROUPS)[number];
 
 /** Per-pawn control mode. DEAD is reported in status only; set_mode accepts REPLAY | LIVE. */

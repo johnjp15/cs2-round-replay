@@ -204,7 +204,7 @@ download sheet for the Blob link), and the JavaScriptCore vs. V8 numeric caveat 
   snarlbot −58.3, incredibad 121.7, barely/cart/donk from motion. Cart keeps his yaw because the human
   pawn gets no Core input. The fix belongs in Core: no inputs on the setup tick, or the setup yaw. It is
   visible in the screenshot above.
-- Sim2DHost v0 merges duplicate grenades into one inventory entry (cart's two smokes are one).
+- ~~Sim2DHost v0 merges duplicate grenades into one inventory entry.~~ Fixed in C2: each grenade `give` adds its own entry (cart has two smokes), and throwing removes one (`docs/combat.md`).
 - D2: reuse `radar.ts` (`fitView`, `worldToScreen`, `screenToWorld`, `yawToScreenDir`) and keep
   `DebugRenderer`'s interface (`resize()`, `view`, `draw(frame)`), or replace both in `main.ts`, where
   the renderer is built and called. `input-dom.ts` maps the cursor through `renderer.view`, so a new
