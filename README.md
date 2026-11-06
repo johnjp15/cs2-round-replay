@@ -13,7 +13,9 @@ npm run dev        # then open http://localhost:5173
 
 You play cart: WASD moves relative to the screen (W = up on the map), the mouse aims, click fires,
 Shift walks, Ctrl or C crouches, R reloads, E uses, and 1–5 switch weapons. Press **Start**; the bar
-under the map has Pause, Restart, speed 0.25–4×, Spectate (no human) and the log/trace downloads.
+under the map has Pause, Restart, speed 0.25–4×, the view toggles, Spectate and the log/trace downloads.
+F follows cart, G shows his recorded position (the ghost), T everyone's recorded path, Tab the status
+panel; the wheel zooms, dragging pans and a double-click shows the whole map.
 On a phone it starts in spectate mode. To serve the static build, run `npm run build && npm run preview`
 (http://localhost:4173). To try it on a phone on the same network, run `npm run dev -- --host` and open
 the Network URL it prints. Details: [`docs/app.md`](docs/app.md).
@@ -25,7 +27,7 @@ the Network URL it prints. Details: [`docs/app.md`](docs/app.md).
 | `src/contracts/` | Shared types, seeded PRNG (`rng.ts`), tuning loader (`tuning.ts`). Imports nothing else from `src/`. |
 | `src/core/` | Engine-agnostic replay brain (ICore). May import only `src/contracts`. No `Date` / `Math.random`. |
 | `src/sim2d/` | 2D top-down engine/host (IHost). May import only `src/contracts`. |
-| `src/app/` | Browser app: `Session` driver, 64 Hz loop, input mapping, debug renderer; `main.ts` is the page entry. May import anything. |
+| `src/app/` | Browser app: `Session` driver, 64 Hz loop, input mapping, canvas renderer, HUD and camera; `main.ts` is the page entry. May import anything. |
 | `index.html` | Page entry for Vite. |
 | `data/` | Round data and `tuning.json` (all tunable numbers). |
 | `tests/` | Vitest tests. |
