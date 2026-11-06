@@ -6,8 +6,10 @@
  * wins a LIVE fight), the tests assert the trigger logic and the invariants and print the winner.
  *
  * The invariant every scenario shares ("small drift doesn't spread"): a puppet nothing touched replays exactly. On
- * every tick a pawn is REPLAY and alive both here and in the no-human golden master, and has not been body-blocked,
- * it is where the golden master has it (within 0.01 units).
+ * every tick a pawn is REPLAY and alive both here and in the no-human golden master, has not been body-blocked and
+ * has not been LIVE yet, it is where the golden master has it (within 0.01 units). G1: a pawn that rejoined its
+ * recording is REPLAY again but catching up from where its LIVE self left it, so it is measured up to its first switch
+ * (tests/rejoin.test.ts checks what it does after).
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -48,11 +50,12 @@ function damages(entries: readonly LogEntry[]): (DamageEvent & { tick: number })
   return out;
 }
 
-/** Per pawn, the largest distance from the golden master's position on ticks it is REPLAY and alive in both runs and not body-blocked yet. */
+/** Per pawn, the largest distance from the golden master's position on ticks it is REPLAY and alive in both runs, not body-blocked yet and not LIVE yet. */
 function replayDeviation(run: HarnessRun): Map<PlayerId, number> {
   const out = new Map<PlayerId, number>();
   const firstBlock = new Map<PlayerId, number>();
   for (const b of run.bodyBlocks) if (!firstBlock.has(b.id)) firstBlock.set(b.id, b.tick);
+  for (const s of liveSwitches(run.entries)) if ((firstBlock.get(s.id) ?? Infinity) > s.tick) firstBlock.set(s.id, s.tick);
   for (let k = 1; k < run.entries.length && k < golden.entries.length; k++) {
     const e = run.entries[k] as LogEntry;
     const g = golden.entries[k] as LogEntry;

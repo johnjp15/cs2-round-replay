@@ -913,7 +913,8 @@ export class ScriptedEvents {
     // Plant: c4 out, USE (input), then back to the gun; fallback `plant` if the engine didn't plant.
     const pl = this.plantItem();
     if (pl !== null && actorOk(o, modes, pl.id)) {
-      if (tick === pl.selectTick && s.plantShift === 0) out.push({ type: 'set_weapon', id: pl.id, weapon: 'c4' });
+      // (G1: a plant shifted after a rejoin draws the c4 on its new draw tick only if it isn't out already.)
+      if (tick === pl.selectTick && (s.plantShift === 0 || pawnOf(o, pl.id)?.weapon !== 'c4')) out.push({ type: 'set_weapon', id: pl.id, weapon: 'c4' });
       const plantedNow = s.plantedTick === tick && tick >= pl.useFrom;
       // G1: no fallback for a planter who was LIVE in the USE window (he isn't where the tape has him planting).
       const fallback = tick === pl.fallbackTick && s.plantedTick === null && !this.liveDuring(pl.id, pl.useFrom, pl.fallbackTick);

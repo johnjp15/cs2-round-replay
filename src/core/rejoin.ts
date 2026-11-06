@@ -34,7 +34,7 @@
  */
 import { PLAYER_IDS, roundNumber, type Action, type Goal, type Observe, type PawnObs, type PlayerId, type Tuning, type TrackSample, type Vec3, type WalkQuery, type WeaponId } from '../contracts/index';
 import { TICK_RATE } from './clock';
-import { encounterOwnsSighting, gunfireTrigger, humanOnCourse, intText, isOffScript, tenthsText, trackPosAt, type Divergence } from './divergence';
+import { encounterOwnsSighting, gunfireTrigger, humanOnCourse, intText, isOffScript, liveGoal, tenthsText, trackPosAt, type Divergence } from './divergence';
 import { loadoutOf, type PawnLoadout } from './loadout';
 import { dist2, runSpeedOf, type PuppetTrack } from './puppet';
 import type { RoundModel } from './round-model';
@@ -48,13 +48,17 @@ export const REJOIN_ROLE = 'rejoin';
 /** At most this many path queries per plan: a cost cap, not a calibration value. */
 export const REJOIN_MAX_PATH_QUERIES = 32;
 
-/** A planned way back: the reference position at `tick`, reachable when planned on `plannedTick`. */
+/**
+ * A planned way back: the reference position at `tick`, reachable in time when planned on `plannedTick`, or (`chase`)
+ * the furthest fitting point of the horizon when none was: the pawn runs after its track and the switch catches it up.
+ */
 export interface RejoinTarget {
   readonly tick: number;
   readonly pos: Vec3;
   readonly plannedTick: number;
   /** Nav path length (units) when planned. */
   readonly pathUnits: number;
+  readonly chase: boolean;
 }
 
 /** One LIVE pawn's rejoin bookkeeping (plain data; ReplayCore snapshots it). */
@@ -71,6 +75,11 @@ export interface RejoinState {
   nextPlanTick: number;
   /** The planter on an approach inside his plant window: the act tick the Core drew the c4 for him, else null. */
   drawTick: number | null;
+}
+
+/** What the rejoin reads of a pawn's Core state: its mode, and whether its B3 blocks are lifted (LIVE, or died LIVE). */
+export interface RejoinPawn extends PawnMode {
+  readonly blocksLifted: boolean;
 }
 
 /** A pawn going back to REPLAY this tick. */
@@ -169,7 +178,7 @@ export class Rejoin {
       liveSince: r.liveSince,
       trigger: r.trigger,
       calmSince: r.calmSince,
-      target: r.target === null ? null : { tick: r.target.tick, pos: copyVec(r.target.pos), plannedTick: r.target.plannedTick, pathUnits: r.target.pathUnits },
+      target: r.target === null ? null : { tick: r.target.tick, pos: copyVec(r.target.pos), plannedTick: r.target.plannedTick, pathUnits: r.target.pathUnits, chase: r.target.chase },
       nextPlanTick: r.nextPlanTick,
       drawTick: r.drawTick ?? null,
     }));
@@ -189,11 +198,11 @@ export class Rejoin {
   }
 
   /**
-   * One tick. `modes`: every pawn's Core mode after this tick's LIVE switches. `tracks`: each pawn's puppet track
+   * One tick. `modes`: every pawn's Core mode (and whether its blocks are lifted) after this tick's LIVE switches. `tracks`: each pawn's puppet track
    * (PLAYER_IDS order). Appends the approach `set_mode`s and every rejoin's actions to `out`, in id order, and returns
    * the pawns that go back to REPLAY.
    */
-  step(o: Observe, modes: readonly PawnMode[], tracks: readonly PuppetTrack[], loadouts: readonly PawnLoadout[], out: Action[]): RejoinHit[] {
+  step(o: Observe, modes: readonly RejoinPawn[], tracks: readonly PuppetTrack[], loadouts: readonly PawnLoadout[], out: Action[]): RejoinHit[] {
     const r = this.tuning.replay;
     const tick = o.tick;
     const hits: RejoinHit[] = [];
@@ -216,27 +225,39 @@ export class Rejoin {
       if (track === undefined || tick - s.liveSince < secTicks(r.rejoinMinLiveSec) || tick - s.calmSince < secTicks(r.rejoinCalmSec)) continue;
       if (busyReason(o, s.id, s.target !== null && s.drawTick !== null) !== null) continue;
       if (this.fitsAt(o, s.id, tick, track) && tick >= track.startTick && tick <= track.endTick) {
-        const d = dist2(me.pos, track.targetAt(tick));
-        if (d <= r.offCourseUnits) {
-          this.rejoinActions(s, o, modes, back, me, d, loadouts, out);
+        const lag = lagTicks(track, me.pos, tick, r.offCourseUnits, secTicks(r.steerFallbackSec));
+        if (lag !== null) {
+          this.rejoinActions(s, o, modes, back, me, track, dist2(me.pos, track.targetAt(tick)), lag, loadouts, out);
           back.push(s.id);
           hits.push({ id: s.id, reason: `rejoined at tick ${tick}` });
           continue;
         }
       }
       const stale = s.target === null || tick > s.target.tick + secTicks(r.rejoinLateSec) || s.calmSince > s.target.plannedTick;
-      if (!stale || tick < s.nextPlanTick) continue;
+      // A chase is checked again every rejoinRetrySec: it gives way to a point that has become reachable in time.
+      const recheck = !stale && s.target !== null && s.target.chase;
+      if ((!stale && !recheck) || tick < s.nextPlanTick) continue;
       const target = this.plan(o, s.id, me, track);
+      s.nextPlanTick = tick + Math.max(1, secTicks(r.rejoinRetrySec));
+      if (recheck && (target === null || target.chase)) continue;
+      const had = s.target;
       s.target = target;
       if (target === null) {
-        s.nextPlanTick = tick + Math.max(1, secTicks(r.rejoinRetrySec));
+        // The approach in force is dropped and there is no other: the pawn gets its regular LIVE goal back (a planter
+        // or defuser its objective).
+        if (had !== null) {
+          const goal = liveGoal(this.model, s.id, o, this.tuning);
+          out.push({ type: 'set_mode', id: s.id, mode: 'LIVE', goal });
+          out.push({ type: 'log', level: 'info', text: `${s.id} rejoin: gave up, no reachable point on its track; goal ${goal.role}, ${goal.route.length} waypoint${goal.route.length === 1 ? '' : 's'}` });
+          s.drawTick = null;
+        }
         continue;
       }
       out.push({ type: 'set_mode', id: s.id, mode: 'LIVE', goal: rejoinGoal(target.pos) });
       out.push({
         type: 'log',
         level: 'info',
-        text: `${s.id} rejoin: heading for its track at tick ${target.tick} (${tenthsText(target.tick - tick, true)} s), ${intText(target.pathUnits)} u by nav; goal ${REJOIN_ROLE}`,
+        text: `${s.id} rejoin: ${target.chase ? 'chasing' : 'heading for'} its track at tick ${target.tick} (${tenthsText(target.tick - tick, true)} s), ${intText(target.pathUnits)} u by nav; goal ${REJOIN_ROLE}`,
       });
       s.drawTick = null;
     }
@@ -280,47 +301,83 @@ export class Rejoin {
   /**
    * The earliest reachable point of `id`'s reference track (samples after now, up to `rejoinHorizonSec`) that fits:
    * its nav path from the pawn is at most run speed (held weapon) × `rejoinSpeedFactor` × (time to it − `rejoinLeadSec`).
-   * The straight line is checked first (a lower bound), and at most REJOIN_MAX_PATH_QUERIES paths are asked for.
+   * The straight line is checked first (a lower bound), and at most REJOIN_MAX_PATH_QUERIES paths are asked for. None
+   * in time: a chase of the furthest fitting point of the horizon (if the nav has a path to it), so a pawn that trails
+   * its running track runs after it; null if no point fits.
    */
   plan(o: Observe, id: PlayerId, me: PawnObs, track: PuppetTrack): RejoinTarget | null {
     const r = this.tuning.replay;
     const tick = o.tick;
+    const reach = (p: Vec3): number | null => (this.walk.isWalkableLine(me.pos, p) ? roundNumber(dist2(me.pos, p)) : this.walk.pathLength(me.pos, p));
     const speed = runSpeedOf(me.weapon, this.tuning.movement) * r.rejoinSpeedFactor;
     const horizon = tick + secTicks(r.rejoinHorizonSec);
+    const at = (i: number, len: number, chase: boolean): RejoinTarget => {
+      const p = track.ref[i] as Vec3;
+      return { tick: (track.raw[i] as TrackSample).tick, pos: { x: roundNumber(p.x), y: roundNumber(p.y), z: roundNumber(p.z) }, plannedTick: tick, pathUnits: roundNumber(len), chase };
+    };
     let queries = 0;
+    let furthest = -1;
     for (let i = 0; i < track.raw.length; i++) {
       const k = (track.raw[i] as TrackSample).tick;
       if (k <= tick) continue;
       if (k > horizon) break;
+      if (!this.fitsAt(o, id, k, track)) continue;
+      furthest = i;
       const sec = (k - tick) / TICK_RATE - r.rejoinLeadSec;
-      if (sec <= 0) continue;
+      if (sec <= 0 || queries >= REJOIN_MAX_PATH_QUERIES) continue;
       const budget = speed * sec;
       const p = track.ref[i] as Vec3;
-      if (dist2(me.pos, p) > budget || !this.fitsAt(o, id, k, track)) continue;
-      if (queries >= REJOIN_MAX_PATH_QUERIES) break;
+      if (dist2(me.pos, p) > budget) continue;
       queries++;
-      const len = this.walk.pathLength(me.pos, p);
-      if (len === null || len > budget) continue;
-      return { tick: k, pos: { x: roundNumber(p.x), y: roundNumber(p.y), z: roundNumber(p.z) }, plannedTick: tick, pathUnits: roundNumber(len) };
+      const len = reach(p);
+      if (len !== null && len <= budget) return at(i, len, false);
     }
-    return null;
+    if (furthest < 0 || this.objective(o, id)) return null;
+    // A chase must not be a detour: no longer a walk than catching the reference up and following the tape from there
+    // (the 2D nav has no one-way drops, so it walks round what the recording drops down).
+    const end = track.ref[furthest] as Vec3;
+    const len = reach(end);
+    const limit = dist2(me.pos, track.targetAt(tick)) + trackLength(track, tick, (track.raw[furthest] as TrackSample).tick) + r.offCourseUnits;
+    return len === null || len > limit ? null : at(furthest, len, true);
+  }
+
+  /**
+   * True when `id` carries an objective its LIVE AI pursues by itself (the planter with the bomb unplanted, the
+   * defuser with it planted): it heads back only to a point it can reach in time, never on a chase.
+   */
+  objective(o: Observe, id: PlayerId): boolean {
+    const b = o.round.bomb;
+    const pl = this.script.plan.plant;
+    const df = this.script.plan.defuse;
+    return (pl !== null && pl.id === id && b.plantTick === null) || (df !== null && df.id === id && b.state === 'planted');
   }
 
   /** The switch's actions: blocks back, the reconciliation, `set_mode REPLAY` and the log line. */
-  private rejoinActions(s: RejoinState, o: Observe, modes: readonly PawnMode[], backNow: readonly PlayerId[], me: PawnObs, off: number, loadouts: readonly PawnLoadout[], out: Action[]): void {
+  private rejoinActions(
+    s: RejoinState,
+    o: Observe,
+    modes: readonly RejoinPawn[],
+    backNow: readonly PlayerId[],
+    me: PawnObs,
+    track: PuppetTrack,
+    off: number,
+    lag: number,
+    loadouts: readonly PawnLoadout[],
+    out: Action[],
+  ): void {
     const id = s.id;
     const tick = o.tick;
     const team = this.model.player(id).team;
     // The blocks B3 set at the round start and the LIVE switch lifted: self, then both ways with every enemy that is
-    // neither the human nor LIVE (dead ones included, as the unblock did). A pawn rejoining earlier this tick counts
-    // as REPLAY.
+    // neither the human nor has its own blocks lifted (LIVE, or dead since it was LIVE: those pairs stay open, as the
+    // switches left them). Dead puppets count, as the unblock did; a pawn rejoining earlier this tick is back.
     for (const y of PLAYER_IDS) {
       if (y === id) {
         out.push({ type: 'block_damage', attacker: id, victim: id });
         continue;
       }
       if (y === o.human || this.model.player(y).team === team) continue;
-      if (modeOf(modes, y) === 'LIVE' && !backNow.includes(y)) continue;
+      if ((modes.find((m) => m.id === y)?.blocksLifted ?? false) && !backNow.includes(y)) continue;
       out.push({ type: 'block_damage', attacker: id, victim: y });
       out.push({ type: 'block_damage', attacker: y, victim: id });
     }
@@ -333,25 +390,62 @@ export class Rejoin {
       items.push(it.weapon);
     }
     const pl = plan.plant;
-    const planting = pl !== null && pl.id === id && o.round.bomb.plantTick === null && o.round.bomb.carrier === id && tick > pl.selectTick && tick <= pl.useTo;
+    const planter = pl !== null && pl.id === id && o.round.bomb.plantTick === null && o.round.bomb.carrier === id && tick <= pl.useTo;
+    const drawNow = planter && pl !== null && tick > pl.selectTick;
     let want: WeaponId = recordedWeaponAt(this.model, this.schedule, id, tick);
-    if (planting) want = 'c4';
+    if (drawNow) want = 'c4';
     if (me.weapon !== want && (want === 'knife' || want === 'c4' || items.includes(want))) out.push({ type: 'set_weapon', id, weapon: want });
-    if (planting && pl !== null) {
-      // A planter back in his plant window: the USE starts once the c4 is deployed (drawn on the approach, else now)
-      // and he is at the recorded spot (the puppet walks there), never before the recorded USE start.
-      const drawn = me.weapon === 'c4' && s.drawTick !== null ? s.drawTick : tick;
-      const reach = Math.ceil((dist2(me.pos, pl.pos) / runSpeedOf(me.weapon, this.tuning.movement)) * TICK_RATE);
-      const useFrom = Math.max(pl.useFrom, drawn + deployTicksOf('c4', this.tuning), tick + reach);
+    if (planter && pl !== null) {
+      // The planter back before his plant: the USE starts once the c4 is deployed (drawn on the approach, else now, or
+      // on the script's draw tick) and he can be at the recorded spot (the puppet walks there at run speed), never
+      // before the recorded USE start. Later than that, the plant runs late by as much (`shiftPlant`).
+      const drawn = !drawNow ? pl.selectTick : me.weapon === 'c4' && s.drawTick !== null ? s.drawTick : tick;
+      // The walk to the spot: straight or by nav, or (shorter, and the way the puppet goes) back to where the tape had
+      // him `lag` ago and along the tape to the spot (the tape stands on it from the USE start).
+      const from = tick - lag;
+      const byTape = dist2(me.pos, track.targetAt(from)) + (from < pl.useFrom ? trackLength(track, from, pl.useFrom) : dist2(track.targetAt(from), pl.pos));
+      const byNav = this.walk.isWalkableLine(me.pos, pl.pos) ? dist2(me.pos, pl.pos) : this.walk.pathLength(me.pos, pl.pos);
+      const toSpot = byNav === null || byTape < byNav ? byTape : byNav;
+      const arrive = tick + Math.ceil((toSpot / runSpeedOf(me.weapon, this.tuning.movement)) * TICK_RATE);
+      const useFrom = Math.max(pl.useFrom, drawn + deployTicksOf('c4', this.tuning), arrive);
       this.script.shiftPlant(useFrom - pl.useFrom, tick, out);
     }
     out.push({ type: 'set_mode', id, mode: 'REPLAY', goal: null });
     out.push({
       type: 'log',
       level: 'info',
-      text: `${id} REPLAY: rejoined at tick ${tick}, ${intText(off)} u from its track, after ${tenthsText(tick - s.liveSince, false)} s LIVE (${s.trigger})`,
+      text: `${id} REPLAY: rejoined at tick ${tick}, ${intText(off)} u from its track${lag > 0 ? ` (${tenthsText(lag, false)} s behind it)` : ''}, after ${tenthsText(tick - s.liveSince, false)} s LIVE (${s.trigger})`,
     });
   }
+}
+
+/**
+ * How far behind its recording a pawn at `pos` is, in ticks: the smallest lag (0, 4, 8, … up to `maxLag`, not before
+ * the track's start) at which its reference was within `tolerance` (2D) of it; null if none. Within `maxLag`
+ * (`steerFallbackSec`) the puppet's wall-aware steering follows the recorded way from there and catches up.
+ */
+export function lagTicks(track: PuppetTrack, pos: Vec3, tick: number, tolerance: number, maxLag: number): number | null {
+  for (let lag = 0; lag <= maxLag; lag += 4) {
+    const k = tick - lag;
+    if (k < track.startTick) break;
+    if (dist2(pos, track.targetAt(k)) <= tolerance) return lag;
+  }
+  return null;
+}
+
+/** The length (2D) of a reference track from tick `a` to tick `b` (its samples between, and the ends interpolated). */
+export function trackLength(track: PuppetTrack, a: number, b: number): number {
+  let len = 0;
+  let prev = track.targetAt(a);
+  for (let i = 0; i < track.raw.length; i++) {
+    const k = (track.raw[i] as TrackSample).tick;
+    if (k <= a) continue;
+    if (k >= b) break;
+    const p = track.ref[i] as Vec3;
+    len += dist2(prev, p);
+    prev = p;
+  }
+  return len + dist2(prev, track.targetAt(b));
 }
 
 /** The approach goal: run to `pos` (the rejoin point) and wait there. */

@@ -327,6 +327,8 @@ export interface HarnessOptions {
    * its speed buttons are used; they are logged on that tick's line. Default none (the Session sends `start` itself).
    */
   readonly controls?: readonly { readonly tick: number; readonly control: Control }[];
+  /** The Core to run (default: the app's `defaultCore`), e.g. a variant with G1's rejoin off. Not with `recordWalk`. */
+  readonly core?: CoreFactory;
 }
 
 export const NO_HUMAN: HarnessOptions = { human: null, driver: null, lastTick: 'end', seed: DEFAULT_SEED };
@@ -436,7 +438,8 @@ export function runHarness(data: SessionData, options: HarnessOptions): HarnessR
   const t0 = performance.now();
   // The app's Core (defaultCore), or the same Core with the walk query wrapped by a recorder.
   const recorder = options.recordWalk === true ? new RecordingWalk(new NavWalkQuery(data.nav)) : null;
-  const core: CoreFactory = recorder === null ? defaultCore : (p) => new ReplayCore(p.model, p.schedule, p.tuning, p.seed, recorder);
+  if (recorder !== null && options.core !== undefined) throw new Error('runHarness: core and recordWalk do not mix');
+  const core: CoreFactory = recorder === null ? (options.core ?? defaultCore) : (p) => new ReplayCore(p.model, p.schedule, p.tuning, p.seed, recorder);
   const session = new Session({ round: data.round, nav: data.nav, tuning: data.tuning, vision: data.vision, seed, human, core });
   const ticks = roundTicks(session.model, data.tuning.replay.holdLastPositionSec);
   const last = options.lastTick === 'end' ? ticks - 1 : options.lastTick;
