@@ -186,11 +186,19 @@ export class Session {
   private readonly checkpointTicks: number;
   /** B5: after a resync rewind, the checkpoint's observe for the next step (else null). */
   private resyncObserve: Observe | null = null;
-  /** B5: the human's inputs and weapon-slot presses by tick, replayed when a seek re-runs ticks he played. */
+  /** B5: the human's inputs and weapon-slot presses by tick in this run so far (a seek back replays them). */
   private humanTrack: HumanInputAt[] = [];
   private slotTrack: SlotAt[] = [];
-  /** B5: the seek in progress and the history it replays. */
-  private seekState: { from: number; target: number; rewound: string | null; inputs: HumanInputAt[]; slots: SlotAt[] } | null = null;
+  /**
+   * B5: the "tape": what the human did after the current tick before a rewind or seek took the run back. A forward
+   * seek replays it (scrubbing back and forth keeps the run); the first live step (not a seek) discards it.
+   */
+  private tapeInputs: HumanInputAt[] = [];
+  private tapeSlots: SlotAt[] = [];
+  /** True while advanceSeek steps (inputs are replayed, the tape is kept). */
+  private replaying = false;
+  /** B5: the seek in progress. */
+  private seekState: { from: number; target: number; rewound: string | null } | null = null;
 
   constructor(config: SessionConfig) {
     this.round = config.round;
@@ -220,6 +228,11 @@ export class Session {
    */
   step(): Act {
     if (this.resyncObserve === null && this.tick % this.checkpointTicks === 0 && !this.checkpoints.hasAt(this.tick)) this.takeCheckpoint(autoCheckpointId(this.tick), true);
+    // Played live: the run goes its own way from here, and the old future is gone.
+    if (!this.replaying && (this.tapeInputs.length > 0 || this.tapeSlots.length > 0)) {
+      this.tapeInputs = [];
+      this.tapeSlots = [];
+    }
     const o = this.resyncObserve ?? canonicalize(this.host.observe());
     this.resyncObserve = null;
     const controls = this.pending;
@@ -282,15 +295,20 @@ export class Session {
 
   /**
    * Back to checkpoint `id` (see the file comment): exact with the snapshot capability, else a resync on the next
-   * step. Later checkpoints and the human's later input history are dropped. Throws for an unknown id.
+   * step. Later checkpoints are dropped; what the human did after the checkpoint becomes the tape a forward seek
+   * replays. Throws for an unknown id.
    */
   rewind(id: string): Checkpoint {
     const cp = this.checkpoints.get(id);
     if (cp === null) throw new Error(`rewind: no checkpoint ${id}`);
     this.seekState = null;
-    this.rewindTo(cp);
+    const lastInput = this.humanTrack.length === 0 ? -1 : (this.humanTrack[this.humanTrack.length - 1] as HumanInputAt).tick;
+    const lastSlot = this.slotTrack.length === 0 ? -1 : (this.slotTrack[this.slotTrack.length - 1] as SlotAt).tick;
+    this.tapeInputs = [...this.humanTrack.filter((e) => e.tick >= cp.tick), ...this.tapeInputs.filter((e) => e.tick > lastInput)];
+    this.tapeSlots = [...this.slotTrack.filter((e) => e.tick >= cp.tick), ...this.tapeSlots.filter((e) => e.tick > lastSlot)];
     this.humanTrack = this.humanTrack.filter((e) => e.tick < cp.tick);
     this.slotTrack = this.slotTrack.filter((e) => e.tick < cp.tick);
+    this.rewindTo(cp);
     return cp;
   }
 
@@ -301,9 +319,9 @@ export class Session {
 
   /**
    * Start a seek to video second `t` (B5). Behind the current tick: rewind to checkpointFor(t) first. Then (seek
-   * capability) step to the target with advanceSeek, replaying the human's recorded inputs and slots on the ticks he
-   * played; without it the seek ends at the checkpoint (a live server can't run ahead). A forward seek without the
-   * capability throws.
+   * capability) step to the target with advanceSeek, replaying the human's inputs and weapon slots from the tape
+   * (what he did on those ticks before); without it the seek ends at the checkpoint (a live server can't run ahead).
+   * A forward seek without the capability throws.
    */
   beginSeek(t: number): SeekProgress {
     if (!Number.isFinite(t) || t < 0) throw new RangeError(`seek: expected seconds >= 0, got ${t}`);
@@ -311,28 +329,13 @@ export class Session {
     const from = this.tick;
     if (target >= from && !this.capabilities.seek) throw new Error('seek: the host can only run in real time (no seeking ahead)');
     let rewound: string | null = null;
-    // The history the seek replays: what the human did from the start point to the target (before it is dropped).
-    let inputs = this.humanTrack;
-    let slots = this.slotTrack;
     if (target < from) {
       const cp = this.checkpointFor(target);
       if (cp === null) throw new Error(`seek: no checkpoint at or before tick ${target}`);
-      const keepInputs = this.humanTrack;
-      const keepSlots = this.slotTrack;
       this.rewind(cp.id);
       rewound = cp.id;
-      inputs = keepInputs;
-      slots = keepSlots;
     }
-    const start = this.tick;
-    const stop = this.capabilities.seek ? target : start;
-    this.seekState = {
-      from,
-      target: stop,
-      rewound,
-      inputs: inputs.filter((e) => e.tick >= start && e.tick < stop),
-      slots: slots.filter((e) => e.tick >= start && e.tick < stop),
-    };
+    this.seekState = { from, target: this.capabilities.seek ? target : this.tick, rewound };
     return this.seekProgress();
   }
 
@@ -340,11 +343,20 @@ export class Session {
   advanceSeek(maxTicks: number): SeekProgress {
     const sk = this.seekState;
     if (sk === null) throw new Error('advanceSeek: no seek in progress');
-    for (let n = 0; n < maxTicks && this.tick < sk.target; n++) {
-      const k = this.tick;
-      for (const e of sk.inputs) if (e.tick === k) this.setHumanInput(e.input);
-      for (const e of sk.slots) if (e.tick === k) this.requestWeaponSlot(e.slot);
-      this.step();
+    this.replaying = true;
+    try {
+      for (let n = 0; n < maxTicks && this.tick < sk.target; n++) {
+        const k = this.tick;
+        const inputs = this.tapeInputs.filter((e) => e.tick === k);
+        const slots = this.tapeSlots.filter((e) => e.tick === k);
+        if (inputs.length > 0) this.tapeInputs = this.tapeInputs.filter((e) => e.tick !== k);
+        if (slots.length > 0) this.tapeSlots = this.tapeSlots.filter((e) => e.tick !== k);
+        for (const e of inputs) this.setHumanInput(e.input);
+        for (const e of slots) this.requestWeaponSlot(e.slot);
+        this.step();
+      }
+    } finally {
+      this.replaying = false;
     }
     const p = this.seekProgress();
     if (p.done) this.seekState = null;
@@ -370,6 +382,14 @@ export class Session {
   /** Seek `sec` seconds back from the next tick (the −5 s / −10 s buttons), not before 0. */
   rewindBy(sec: number): SeekProgress {
     return this.seek(Math.max(0, this.tick - sec * 64) / 64);
+  }
+
+  /** The last tick the tape (the human's replayable future) reaches, or null when there is none. */
+  get tapeEnd(): number | null {
+    let end: number | null = null;
+    for (const e of this.tapeInputs) if (end === null || e.tick > end) end = e.tick;
+    for (const e of this.tapeSlots) if (end === null || e.tick > end) end = e.tick;
+    return end;
   }
 
   private seekProgress(): SeekProgress {
@@ -430,6 +450,8 @@ export class Session {
     this.checkpoints.clear();
     this.humanTrack = [];
     this.slotTrack = [];
+    this.tapeInputs = [];
+    this.tapeSlots = [];
   }
 
   /**
@@ -502,6 +524,8 @@ export class Session {
     this.checkpoints.dropAfter(tick);
     this.humanTrack = this.humanTrack.filter((e) => e.tick < tick);
     this.slotTrack = this.slotTrack.filter((e) => e.tick < tick);
+    this.tapeInputs = [];
+    this.tapeSlots = [];
   }
 
   /** The current state as the next step will see it (already canonical). After a resync rewind: the checkpoint's. */

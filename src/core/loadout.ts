@@ -7,15 +7,19 @@
  *   one), and `strip` (everything but the knife goes);
  * - every observe: the held item's clip and reserve (ammo only changes while a gun is held: firing, reloading), a
  *   held item the ledger lacks (added), the c4 from `round.bomb` (the carrier has it; dropped, planted, defused or
- *   exploded: nobody), and grenade pops (`sound` kind `grenade`): one grenade of the thrower goes, the kind he was last
- *   seen holding if he still has one, else his first. A grenade in flight is still in the ledger until it pops.
+ *   exploded: nobody), and grenade pops (`sound` kind `grenade`, the only trace of a throw in Observe): one grenade
+ *   of the thrower goes. Which kind: a pawn that stops holding a grenade has maybe thrown it (a "release"); a pop
+ *   takes the oldest release of the last `releaseWindowTicks` whose kind the pawn still has, else the grenade it was
+ *   last seen holding, else its first. A grenade in flight is still in the ledger until it pops (a resync gives it
+ *   back), and a human who draws and puts away grenades just before a throw can fool the release rule.
  *
  * `helmet` comes from the round's kit: nobody buys mid-round, and CS2 keeps a helmet until death.
  *
  * Plain data in the Core snapshot; pure functions, ids in PLAYER_IDS order, items sorted ordinally (duplicates in
  * the order they were added), like Sim2DHost's inventory.
  */
-import { GRENADE_IDS, PLAYER_IDS, compareOrdinal, type Action, type GrenadeId, type ItemId, type Observe, type PlayerId } from '../contracts/index';
+import { GRENADE_IDS, PLAYER_IDS, compareOrdinal, type Action, type GrenadeId, type GrenadeTuning, type ItemId, type Observe, type PlayerId } from '../contracts/index';
+import { TICK_RATE } from './clock';
 import type { RoundModel } from './round-model';
 
 export interface LoadoutItem {
@@ -31,6 +35,10 @@ export interface PawnLoadout {
   readonly helmet: boolean;
   /** The grenade this pawn was last seen holding (pop attribution), or null. */
   lastGrenade: GrenadeId | null;
+  /** The item held at the last observe (release detection). */
+  held: string;
+  /** Grenades it stopped holding (maybe thrown) and the observe tick, oldest first. */
+  released: { item: GrenadeId; tick: number }[];
 }
 
 /** One per player, PLAYER_IDS order. */
@@ -38,11 +46,28 @@ export type LoadoutState = PawnLoadout[];
 
 /** Before the setup: knives only. */
 export function initialLoadouts(model: RoundModel): LoadoutState {
-  return PLAYER_IDS.map((id) => ({ id, items: [], helmet: model.player(id).helmet, lastGrenade: null }));
+  return PLAYER_IDS.map((id) => ({ id, items: [], helmet: model.player(id).helmet, lastGrenade: null, held: 'knife', released: [] }));
 }
 
 export function copyLoadouts(s: readonly PawnLoadout[]): LoadoutState {
-  return s.map((p) => ({ id: p.id, items: p.items.map((q) => ({ item: q.item, clip: q.clip, reserve: q.reserve })), helmet: p.helmet, lastGrenade: p.lastGrenade }));
+  return s.map((p) => ({
+    id: p.id,
+    items: p.items.map((q) => ({ item: q.item, clip: q.clip, reserve: q.reserve })),
+    helmet: p.helmet,
+    lastGrenade: p.lastGrenade,
+    held: p.held,
+    released: p.released.map((r) => ({ item: r.item, tick: r.tick })),
+  }));
+}
+
+/**
+ * How long after a release its grenade can still pop: the longest fuse, or the longest flight (`throwRange` at
+ * `throwSpeed`), plus a second. 2D tuning: max(1.5, 2, 2.22) + 1 s = 206 ticks.
+ */
+export function releaseWindowTicks(g: GrenadeTuning): number {
+  const flight = g.throwSpeed > 0 ? g.throwRange / g.throwSpeed : 0;
+  const sec = Math.max(g.fuseSec, g.molotovFuseSec, flight) + 1;
+  return Math.ceil(sec * TICK_RATE - 1e-9);
 }
 
 export function isGrenadeItem(item: string): item is GrenadeId {
@@ -78,11 +103,15 @@ function removeOne(p: PawnLoadout, item: ItemId): boolean {
  * What an observe tells: the held item and its ammo, grenade pops and the c4. On the setup step the observe predates
  * the setup (everyone holds a knife at the origin) and changes nothing that matters.
  */
-export function noteObserve(s: LoadoutState, o: Observe): void {
+export function noteObserve(s: LoadoutState, o: Observe, window: number): void {
   for (const pawn of o.pawns) {
     const p = find(s, pawn.id);
     if (!pawn.alive) continue;
     const held: string = pawn.weapon;
+    if (held !== p.held) {
+      if (isGrenadeItem(p.held)) p.released.push({ item: p.held, tick: o.tick });
+      p.held = held;
+    }
     if (held === 'knife') continue;
     if (isGrenadeItem(held)) p.lastGrenade = held;
     const i = p.items.findIndex((q) => q.item === held);
@@ -99,6 +128,13 @@ export function noteObserve(s: LoadoutState, o: Observe): void {
   for (const e of o.events) {
     if (e.type !== 'sound' || e.kind !== 'grenade' || e.source === null) continue;
     const p = find(s, e.source);
+    p.released = p.released.filter((r) => o.tick - r.tick <= window);
+    const r = p.released.findIndex((x) => p.items.some((q) => q.item === x.item));
+    if (r >= 0) {
+      removeOne(p, (p.released[r] as { item: GrenadeId }).item);
+      p.released = [...p.released.slice(0, r), ...p.released.slice(r + 1)];
+      continue;
+    }
     const last = p.lastGrenade;
     if (last !== null && removeOne(p, last)) continue;
     const first = p.items.find((q) => isGrenadeItem(q.item));

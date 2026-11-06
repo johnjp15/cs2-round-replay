@@ -104,7 +104,7 @@ export {
 export type { ContactState, DivergenceState, EncounterPhase, EncounterPlan, EncounterState, FireSpan, LiveIntent, PairSpan, TriggerHit, TriggerKind } from './divergence';
 export { CheckpointStore, autoCheckpointId, checkpointInterval } from './checkpoints';
 export type { Checkpoint } from './checkpoints';
-export { copyLoadouts, initialLoadouts, isGrenadeItem, loadoutOf, noteActions, noteObserve } from './loadout';
+export { copyLoadouts, initialLoadouts, isGrenadeItem, loadoutOf, noteActions, noteObserve, releaseWindowTicks } from './loadout';
 export type { LoadoutItem, LoadoutState, PawnLoadout } from './loadout';
 export { blockedPairs, resyncActions, resyncHazards } from './resync';
 export type { ResyncPawn, StandingBlock } from './resync';

@@ -28,7 +28,7 @@ import {
 } from '../contracts/index';
 import { RoundClock, TICK_RATE } from './clock';
 import { Divergence, type DivergenceState } from './divergence';
-import { copyLoadouts, initialLoadouts, noteActions, noteObserve, type LoadoutState } from './loadout';
+import { copyLoadouts, initialLoadouts, noteActions, noteObserve, releaseWindowTicks, type LoadoutState } from './loadout';
 import { PuppetController, PuppetTrack, type PuppetState } from './puppet';
 import { resyncActions, resyncHazards, type StandingBlock } from './resync';
 import type { RoundModel } from './round-model';
@@ -127,7 +127,7 @@ export class ReplayCore implements ICore {
     const actions: Action[] = [];
     s.setupThisStep = false;
     // B5: the ledger notes what this observe shows (held ammo, pops, the c4); the setup's observe predates the setup.
-    if (!s.setupPending) noteObserve(this.loadout, o);
+    if (!s.setupPending) noteObserve(this.loadout, o, releaseWindowTicks(this.tuning.grenades));
     if (s.setupPending) {
       for (const a of startActions(this.model, this.tuning)) actions.push(a);
       s.setupPending = false;
