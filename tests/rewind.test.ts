@@ -280,7 +280,7 @@ describe('resync rewind (no host snapshot, as in CS2)', () => {
     const d = drift(straightEntries.slice(cp.logLength), es.slice(cp.logLength));
     console.log(`[resync 40 s] drift against the straight run: ${driftText(d)}`);
     for (const v of d.values()) expect(v.max).toBeLessThan(48);
-    const r = replay(s.log(), defaultCore({ model: s.model, schedule: s.schedule, tuning: s.tuning, seed: 1, nav: s.nav }));
+    const r = replay(s.log(), defaultCore({ model: s.model, schedule: s.schedule, tuning: s.tuning, seed: 1, nav: s.nav, geometry: s.geometry }));
     expect([r.identical, r.mismatchCount]).toEqual([true, 0]);
     expect(s.hostNotes()).toEqual([]);
   });

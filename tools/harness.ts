@@ -112,6 +112,13 @@ export function logDigest(log: SessionLog): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+/** FNV-1a 32-bit over byte arrays in order (the movement mesh's two files). */
+export function bytesHash(...parts: readonly Uint8Array[]): string {
+  let h = 0x811c9dc5;
+  for (const b of parts) for (let i = 0; i < b.length; i++) h = Math.imul(h ^ (b[i] as number), 0x01000193);
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
 /** FNV-1a 32-bit of a JSON file's canonical form (stableStringify of its parsed value), so whitespace and key order don't matter. */
 export function canonicalHash(jsonText: string): string {
   return fnv1a32Hex(stableStringify(JSON.parse(jsonText) as unknown));

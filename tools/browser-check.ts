@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright-core';
 import { SessionLog, fnv1a32Hex, replay, stableStringify, type Control } from '../src/contracts/index';
 import { Session, defaultCore, parseSessionData } from '../src/app/session';
-import { NO_HUMAN, loadHarnessData, runHarness } from './harness';
+import { NO_HUMAN, loadHarnessData, readWorld3d, runHarness } from './harness';
 
 function read(rel: string): string {
   return readFileSync(new URL(rel, import.meta.url), 'utf8');
@@ -308,9 +308,9 @@ async function rewindAndSummary(browser: Awaited<ReturnType<typeof chromium.laun
   // The rewound log is one straight run: it replays against a fresh Core.
   const text = await page.evaluate(() => window.__cs2replay?.session().log().toText() ?? '');
   const log = SessionLog.fromText(text);
-  const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'));
+  const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'), readWorld3d());
   const ref = new Session({ ...data, seed: 1 });
-  const rp = replay(log, defaultCore({ model: ref.model, schedule: ref.schedule, tuning: data.tuning, seed: 1, nav: data.nav }));
+  const rp = replay(log, defaultCore({ model: ref.model, schedule: ref.schedule, tuning: data.tuning, seed: 1, nav: data.nav, geometry: data.geometry ?? null }));
   const straight = log.lines().every((l, i) => (JSON.parse(l) as { observe: { tick: number } }).observe.tick === i);
   console.log(`page log after the rewinds: ${log.length} lines, straight ${straight}, replays in Node ${rp.identical}`);
   if (!straight || !rp.identical) problems.push(`rewound page log: straight ${straight}, replays ${rp.identical} (first mismatch ${rp.firstMismatchTick})`);
@@ -698,14 +698,14 @@ async function main(): Promise<void> {
     await live.close();
 
     // 7. Determinism, Node vs. Chrome.
-    const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'));
+    const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'), readWorld3d());
     const node = new Session({ ...data, seed: 1, human: null });
     for (let i = 0; i < (browserLog?.lines ?? 0); i++) node.step();
     console.log(`spectate log: Chrome ${browserLog?.lines} lines ${browserLog?.digest}, Node ${node.log().length} lines ${node.log().digest()}`);
     if (browserLog === null || browserLog.digest !== node.log().digest()) problems.push('spectate log differs between Chrome and Node');
     const human = SessionLog.fromText(readFileSync(logPath, 'utf8'));
     // The app's Core: puppets steer with the nav mesh's walkable-line query (B2).
-    const result = replay(human, defaultCore({ model: node.model, schedule: node.schedule, tuning: data.tuning, seed: 1, nav: data.nav }));
+    const result = replay(human, defaultCore({ model: node.model, schedule: node.schedule, tuning: data.tuning, seed: 1, nav: data.nav, geometry: data.geometry ?? null }));
     console.log(`desktop log (human cart, ${human.length} lines) replayed in Node: identical ${result.identical}`);
     if (!result.identical) problems.push(`desktop log does not replay: first mismatch at tick ${result.firstMismatchTick}`);
 

@@ -657,15 +657,18 @@ export function unstick(g: MapGeometry, pos: Vec3, hull: Hull): Vec3 {
 }
 
 /**
- * Put a pawn that was placed (teleported, spawned) at `pos` on the floor: the hull is moved out of anything it cuts
- * into (`unstick`), traced down from `up` units above to `down` units below, and stands where it lands (on the ground
- * if that is walkable).
+ * Put a pawn that was placed (teleported, spawned) at `pos` on the floor: the hull is traced down from `up` units above
+ * `pos` (or from where `unstick` frees it, if that is blocked) to `down` units below, and stands where it lands (on the
+ * ground if that is walkable).
  */
 export function settle(g: MapGeometry, pos: Vec3, crouching: boolean, m: MovementTuning, up = 18, down = 64): { pos: Vec3; onGround: boolean } {
   const hull = hullOf(crouching);
-  const at = unstick(g, pos, hull);
-  const from = { x: at.x, y: at.y, z: at.z + up };
-  if (g.hullBlocked(from.x, from.y, from.z, hull)) from.z = at.z;
+  let at = pos;
+  let from = { x: pos.x, y: pos.y, z: pos.z + up };
+  if (g.hullBlocked(from.x, from.y, from.z, hull)) {
+    at = unstick(g, pos, hull);
+    from = { x: at.x, y: at.y, z: at.z };
+  }
   const t = g.traceBox(from, { x: at.x, y: at.y, z: at.z - down }, hull);
   return { pos: { x: t.endX, y: t.endY, z: t.endZ }, onGround: t.hit && t.normalZ >= m.standableNormal };
 }

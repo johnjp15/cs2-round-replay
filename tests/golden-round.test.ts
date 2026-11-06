@@ -79,7 +79,7 @@ describe('golden master: the run', () => {
   });
 
   it('replays identically through a fresh Core (the app’s defaultCore, same seed)', () => {
-    const core = defaultCore({ model: run.model, schedule: run.session.schedule, tuning: data.tuning, seed: DEFAULT_SEED, nav: data.nav });
+    const core = defaultCore({ model: run.model, schedule: run.session.schedule, tuning: data.tuning, seed: DEFAULT_SEED, nav: data.nav, geometry: data.geometry ?? null });
     expect(replay(run.log, core)).toMatchObject({ identical: true, mismatchCount: 0, ticks: run.ticks });
   });
 
