@@ -47,6 +47,9 @@ npm test               # Vitest
 npm run lint           # ESLint, incl. import boundaries
 npm run typecheck
 npm run build          # static build to dist/ (npm run preview to serve it)
+npm run build:single   # one self-contained page, dist-single/index.html, for johnjp15.github.io/cs2/sim/ (docs/deploy.md)
+tools/stage-web-apps.sh ~/path/to/web-apps   # build:single, copy it to web-apps/cs2/sim/ and list it there (no password, no deploy)
+npm run check:locked -- --web-apps ~/path/to/web-apps   # the locked page end to end with a throwaway password, in a temp copy
 npm run bench:session  # cost of one Session.step() over a full round (docs/app.md)
 npm run check:browser  # after build: headless Chromium screenshots, fps and ticks/s (docs/app.md)
 npm run ghost          # whole round with no human: logs/ghost-round.jsonl + logs/ghost-trace.json, prints the tracking table
@@ -60,4 +63,4 @@ npm run vision         # the labelled vision set against the sight mask (docs/vi
 
 ## Docs
 
-Read [`docs/conventions.md`](docs/conventions.md) (stack, units, time, determinism, definition of done) and [`docs/contracts.md`](docs/contracts.md) (the Core ↔ engine interface) before starting a task. [`docs/round-data.md`](docs/round-data.md) describes `data/round.json` and how to regenerate it. [`docs/core.md`](docs/core.md) describes the Core: round model, clock, start state, event schedule and `ReplayCore`. [`docs/nav.md`](docs/nav.md) covers the nav mesh and [`docs/movement.md`](docs/movement.md) the 2D movement model and `Sim2DHost`, and [`docs/combat.md`](docs/combat.md) its weapons, damage, grenades, sounds, bomb, round rules and pawn collision; [`docs/vision.md`](docs/vision.md) covers sight (the radar mask, `sees`) and [`docs/ai.md`](docs/ai.md) the LIVE AI. [`docs/app.md`](docs/app.md) covers the browser app: `Session`, the game loop, controls and performance. [`docs/golden.md`](docs/golden.md) covers the headless harness, the golden master, the port fixtures and the replay contract for the C# port.
+Read [`docs/conventions.md`](docs/conventions.md) (stack, units, time, determinism, definition of done) and [`docs/contracts.md`](docs/contracts.md) (the Core ↔ engine interface) before starting a task. [`docs/round-data.md`](docs/round-data.md) describes `data/round.json` and how to regenerate it. [`docs/core.md`](docs/core.md) describes the Core: round model, clock, start state, event schedule and `ReplayCore`. [`docs/nav.md`](docs/nav.md) covers the nav mesh and [`docs/movement.md`](docs/movement.md) the 2D movement model and `Sim2DHost`, and [`docs/combat.md`](docs/combat.md) its weapons, damage, grenades, sounds, bomb, round rules and pawn collision; [`docs/vision.md`](docs/vision.md) covers sight (the radar mask, `sees`) and [`docs/ai.md`](docs/ai.md) the LIVE AI. [`docs/app.md`](docs/app.md) covers the browser app: `Session`, the game loop, controls and performance. [`docs/deploy.md`](docs/deploy.md) covers publishing it on the password-locked johnjp15.github.io/cs2/sim/. [`docs/golden.md`](docs/golden.md) covers the headless harness, the golden master, the port fixtures and the replay contract for the C# port.
