@@ -1,15 +1,22 @@
 # C# port notes
 
-Things in `src/contracts` that need care when ported to C# (CS2 server plugin). The session logs written by the TypeScript build are the fixtures: a correct port reproduces them byte for byte.
+Things in `src/contracts` (and, at the end, `src/core`) that need care when ported to C# (CS2 server plugin). The session logs written by the TypeScript build are the fixtures: a correct port reproduces them byte for byte.
 
 ## Types
 
 - **Discriminated unions** (`ObsEvent`, `Action`, `Control`) → an `abstract record` base per union with one `sealed record` per member; (de)serialize with a `"type"` discriminator whose value is the TS `type` string (`System.Text.Json` `[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]` + `[JsonDerivedType(typeof(X), "block_damage")]`). Switches over `type` → `switch` on the record type; keep them exhaustive.
-- **String unions** (`PlayerId`, `Team`, `WeaponId`, `Button`, `Hitgroup`, `Mode`, `SoundKind`, `BombPhase`, `RoundEndReason`, `LogLevel`) → either `string` constants or enums with a converter that writes the exact TS spelling (lowercase ids, `REPLAY`, `ATTACK2`, `bomb_defused`). Never use the enum's integer value in logs.
+- **String unions** (`PlayerId`, `Team`, `WeaponId`, `ItemId`, `Button`, `Hitgroup`, `Mode`, `SoundKind`, `BombPhase`, `RoundEndReason`, `LogLevel`, and for round data `Confidence`, `GrenadeId`, `ShotKind`) → either `string` constants or enums with a converter that writes the exact TS spelling (lowercase ids, `REPLAY`, `ATTACK2`, `bomb_defused`). Never use the enum's integer value in logs.
 - **`readonly` fields** → `init`-only record properties. **`readonly T[]`** → `ImmutableArray<T>` (note: record equality on `ImmutableArray` is reference-based; compare logs by text, not by record `==`).
-- **`null` vs absent**: TS has no optional fields; every property is always written, `null` included. Do not set `JsonIgnoreCondition.WhenWritingNull`.
+- **`null` vs absent**: TS has no optional fields; every property is always written, `null` included. Do not set `JsonIgnoreCondition.WhenWritingNull`. The one exception is input, not output: `data/round.json` omits `TrackSample.uncertainty` and `TrackSample.resampled` when they don't apply, so read them as `double?` / `bool?`.
+- **`ItemId`** = every `WeaponId` plus `defuser` (`ITEM_IDS` keeps `WEAPON_IDS` order, then `defuser`). `WeaponId` gained `glock` (between `m4a4` and `knife`). `give.item` is an `ItemId`; `set_hp` has `helmet` (bool).
 - **`number`** is a double everywhere, including ticks, hp and counts. Ticks are integral doubles; `Math.round(i * 6.4)` (trace sampling) is JS rounding (half up toward +∞) → `Math.Floor(i * 6.4 + 0.5)` in C#, not `Math.Round` (banker's).
 - **Snapshots**: `data` is a `JsonValue` → `JsonNode`/`JsonElement`.
+
+## Round data (round.ts)
+
+- `RoundData` is the deserialized `data/round.json`. Objects keyed by player id (`tracks`, `timelines.*`) → `Dictionary<string, T>`; look up by id, never iterate them for output (iterate `PLAYER_IDS`).
+- `parseRound` is the validator: port it as hand-written checks after deserializing (or a JSON schema), with the same `path: message` errors. It accepts the parsed object or the JSON text and does no file I/O. Every `tick` must equal `toTick(t)` = `Math.Floor(t * 64 + 0.5)`.
+- `shot.raw` is `Dictionary<string, string>` (CSV header → cell).
 
 ## Ordering
 
@@ -43,3 +50,13 @@ The log format is defined by this function; `System.Text.Json` defaults do not m
 - Feed Core canonical observes (`parse(stableStringify(observe))`, i.e. numbers already rounded to 6 decimals) so that live runs and replays see identical input.
 - `Math.cos`/`Math.sin` etc. are not guaranteed bit-identical between V8 and .NET; Core logic that depends on them should round (or compare with tolerance) before branching. Plain `+ - * /` and `Math.Floor`/`Math.Sqrt` are IEEE-exact on both.
 - Integer bit math (`>>> 0`, `Math.imul`) → `uint` with `unchecked`.
+
+## Core (src/core)
+
+- **Rounding.** `tickOf` and the HUD bomb timer use JS `Math.round` (half up) → `Math.Floor(x + 0.5)`. `hudClock` uses `Math.Ceiling`. All clock arithmetic is on `tick / 64` (exact), so no rounding noise reaches these.
+- **Start yaw** uses `Math.Atan2`, which is not guaranteed bit-identical across runtimes; the result is rounded to 0.001° (`Math.Floor(deg * 1000 + 0.5) / 1000`, then −180 → 180) before it is logged.
+- **Sorting.** `EventSchedule` sorts with an explicit build-order index as the last key, because `List<T>.Sort` is not stable (or use LINQ `OrderBy().ThenBy()`, which is). Ids compare ordinally.
+- **Maps** (`RoundModel.index`, the HP walk in `schedule.ts`, `ReplayCore.step`'s pawn lookup) are lookups only and are never iterated, so `Dictionary` is fine.
+- **Union of schedule entries** (`ScheduledEvent`) → `abstract record` + one `sealed record` per entry type, like the contract unions; every entry has `Tick`. `ofType(type)` → `OfType<T>()`.
+- **ReplayCore hooks** `pawnInput` and `scheduledActions` are `protected virtual` methods for B2/B3 to override or fill in.
+- **Randomness.** `ReplayCore.rng` is only seeded; later tasks should draw through `rng.fork(label)` keyed by tick and id, so the Core snapshot needs only the seed.

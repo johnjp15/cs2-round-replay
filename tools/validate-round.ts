@@ -8,12 +8,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseCsv } from './extract-round';
-import { PLAYER_IDS, WEAPON_IDS, toTick, type Round } from './round-types';
+import { PLAYER_IDS, WEAPON_IDS, toTick, type RoundData } from '../src/contracts/index';
 
 const CONFIDENCES = ['observed', 'estimated', 'inferred'];
 
 /** Returns a list of problems; empty means valid. csvRows = data rows in the shots CSV, if known. */
-export function validateRound(round: Round, csvRows?: number): string[] {
+export function validateRound(round: RoundData, csvRows?: number): string[] {
   const errs: string[] = [];
   const ids = round.players.map((p) => p.id);
 
@@ -120,7 +120,7 @@ function main(argv: string[]): void {
     if (args[i] === '--csv') csvPath = args[++i] ?? csvPath;
     else roundPath = args[i] as string;
   }
-  const round = JSON.parse(readFileSync(roundPath, 'utf8')) as Round;
+  const round = JSON.parse(readFileSync(roundPath, 'utf8')) as RoundData;
   const csvRows = parseCsv(readFileSync(csvPath, 'utf8')).length - 1;
   const errs = validateRound(round, csvRows);
   if (errs.length > 0) {

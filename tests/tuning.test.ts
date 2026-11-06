@@ -18,7 +18,7 @@ describe('parseTuning', () => {
     expect(t.bomb.timerSec).toBe(40);
     expect(t.grenades.smokeSec).toBe(18);
     expect(t.ai.fovDeg).toBe(106);
-    expect(Object.keys(t.weapons)).toEqual(['ak47', 'awp', 'deagle', 'm4a4', 'ssg08']);
+    expect(Object.keys(t.weapons)).toEqual(['ak47', 'awp', 'deagle', 'glock', 'm4a4', 'ssg08']);
   });
 
   it('accepts a JSON string and ignores _note', () => {

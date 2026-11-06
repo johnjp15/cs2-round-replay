@@ -1,11 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { buildRound, parseCsv } from '../tools/extract-round';
-import type { PlayerId, Round } from '../tools/round-types';
+import type { PlayerId, RoundData } from '../src/contracts/index';
 import { validateRound } from '../tools/validate-round';
 
 const roundText = readFileSync(new URL('../data/round.json', import.meta.url), 'utf8');
-const round = JSON.parse(roundText) as Round;
+const round = JSON.parse(roundText) as RoundData;
 const csvUrl = new URL('../data/source/mirage-round-sp4rtan-1v3-shots.csv', import.meta.url);
 const csvText = readFileSync(csvUrl, 'utf8');
 const csvRows = parseCsv(csvText).length - 1;
