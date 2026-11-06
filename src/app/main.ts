@@ -7,6 +7,11 @@
  * After every Session.step() the Scene ingests the new observe, Core's Act and the host's active
  * effects, so events of every tick reach the kill feed and the effects layer even at 4×.
  *
+ * B5: the timeline under the map (timeline.ts) seeks by dragging; −10 s / −5 s / +5 s and `[` / `]` seek from
+ * the current tick. A seek runs Session.advanceSeek in slices of about 10 ms per animation frame (no rendering of
+ * the skipped ticks), then the Scene restarts from where it landed. The summary overlay (summary-overlay.ts)
+ * appears 2 s of round time after the round end, without pausing (the post-round kill still happens).
+ *
  * URL parameters: `?seed=<int>` (default 1); `?human=cart|none` (default cart, or none on touch-only
  * devices, which have no controls for the human yet).
  *
@@ -14,7 +19,8 @@
  * build (vite.single.config.ts) redirects that import to assets-embedded.ts, which reads them from the page.
  */
 import tuningJson from '../../data/tuning.json';
-import { isPlayerId, type PlayerId } from '../contracts/index';
+import { isPlayerId, type PlayerId, type RoundSummary } from '../contracts/index';
+import { summarize, tickOf } from '../core/index';
 import { loadAssets } from './assets';
 import type { Camera } from './camera';
 import { CameraInput } from './camera-dom';
@@ -28,6 +34,13 @@ import { screenToWorld, worldToScreen } from './radar';
 import { FOLLOWED, Renderer } from './renderer';
 import { Scene, interpolationAlpha } from './scene';
 import { DEFAULT_HUMAN, Session, parseSessionData, type SessionData } from './session';
+import { SUMMARY_DELAY_TICKS, SummaryOverlay, summaryDue, summaryView } from './summary-overlay';
+import { TimelineDom, seekFraction, seekStepForKey, stepTarget, timelineSpanTicks } from './timeline';
+
+/** A seek's wall-time budget per animation frame (ms), so the page stays responsive. */
+const SEEK_FRAME_MS = 10;
+/** Ticks per advanceSeek call inside that budget. */
+const SEEK_SLICE_TICKS = 16;
 
 type Phase = 'ready' | 'running' | 'paused';
 
@@ -46,6 +59,11 @@ export interface AppStats {
   readonly camera: Camera;
   /** Radar cache rebuilds since load. */
   readonly radarRebuilds: number;
+  /** B5: a seek is running. */
+  readonly seeking: boolean;
+  /** B5: the summary overlay is showing. */
+  readonly summaryOpen: boolean;
+  readonly checkpoints: number;
 }
 
 declare global {
@@ -57,6 +75,10 @@ declare global {
       scene: () => Scene;
       /** Viewport (client) coordinates of a world point, for automated mouse input. */
       screenOf: (x: number, y: number) => { x: number; y: number };
+      /** B5: the end-of-round summary of the run so far (summarize(model, log)). */
+      summary: () => RoundSummary;
+      /** B5: seek to video second t, as the timeline does (chunked per frame). */
+      seek: (t: number) => void;
     };
   }
 }
@@ -105,11 +127,26 @@ class App {
   private lastFrame: number | null = null;
   private frames = 0;
   private cursorStyle = '';
+  private readonly timeline: TimelineDom;
+  private readonly overlay: SummaryOverlay;
+  /** Ticks the timeline spans. */
+  private readonly span: number;
+  /** While a seek runs: the phase to go back to when it lands. */
+  private seekResume: Phase | null = null;
+  /** The summary was closed for this round end (it comes back after a rewind past it, or with the Summary button). */
+  private summaryDismissed = false;
+  /** Deaths ingested, and the count the open summary was made with (a later death, the post-round kill, refreshes it). */
+  private deaths = 0;
+  private summaryDeaths = -1;
   private readonly buttons: {
     start: HTMLButtonElement;
     pause: HTMLButtonElement;
     restart: HTMLButtonElement;
     spectate: HTMLButtonElement;
+    summary: HTMLButtonElement;
+    back5: HTMLButtonElement;
+    back10: HTMLButtonElement;
+    fwd5: HTMLButtonElement;
     speeds: HTMLButtonElement[];
     overlays: HTMLButtonElement[];
   };
@@ -126,6 +163,23 @@ class App {
     this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
     this.session = new Session({ ...this.data, seed: this.seed, human: this.human });
     this.scene = this.ready(this.session);
+    const m = this.session.model;
+    this.span = timelineSpanTicks(
+      m.players.map((p) => m.track(p.id).at(-1)?.tick ?? 0),
+      data.tuning.replay.holdLastPositionSec,
+    );
+    this.timeline = new TimelineDom(el('timeline', HTMLElement), { onSeek: (tick) => this.startSeek(tick / 64) });
+    this.overlay = new SummaryOverlay(el('summary', HTMLElement), {
+      onRewind: () => {
+        this.overlay.hide();
+        this.startSeek(stepTarget(this.session.tick, -10));
+      },
+      onRestart: () => this.restart(),
+      onDismiss: () => {
+        this.summaryDismissed = true;
+        this.updateControls();
+      },
+    });
     this.input = new InputDom(canvas, {
       active: () => this.playing(),
       onSlot: (slot) => {
@@ -150,6 +204,10 @@ class App {
       pause: el('pause', HTMLButtonElement),
       restart: el('restart', HTMLButtonElement),
       spectate: el('spectate', HTMLButtonElement),
+      summary: el('summary-open', HTMLButtonElement),
+      back5: el('back5', HTMLButtonElement),
+      back10: el('back10', HTMLButtonElement),
+      fwd5: el('fwd5', HTMLButtonElement),
       speeds: [...document.querySelectorAll<HTMLButtonElement>('button[data-speed]')],
       overlays: [...document.querySelectorAll<HTMLButtonElement>('button[data-overlay]')],
     };
@@ -164,13 +222,78 @@ class App {
         const rect = canvas.getBoundingClientRect();
         return { x: rect.left + s.x, y: rect.top + s.y };
       },
+      summary: () => summarize(this.session.model, this.session.log()),
+      seek: (t) => this.startSeek(t),
     };
     requestAnimationFrame(this.frame);
   }
 
   /** True while keyboard and mouse drive the human pawn. */
   private playing(): boolean {
-    return this.phase === 'running' && this.session.human !== null;
+    return this.phase === 'running' && this.seekResume === null && this.session.human !== null;
+  }
+
+  /**
+   * B5: seek to video second `t` (the timeline, the ±5 s / −10 s buttons and keys, the summary's Rewind 10 s). The
+   * loop stops while it runs; it lands paused, or running if the round was running. A forward seek past what the
+   * human has played leaves him standing (his held keys are let go).
+   */
+  private startSeek(t: number): void {
+    const s = this.session;
+    if (s.seeking !== null) s.cancelSeek();
+    const target = tickOf(Math.max(0, t));
+    const from = s.tick;
+    if (target === from) return;
+    if (target > from && !s.capabilities.seek) return;
+    this.seekResume ??= this.phase === 'running' ? 'running' : 'paused';
+    this.loop.paused = true;
+    if (s.human !== null && target > from && s.tapeEnd === null) s.setHumanInput(null);
+    s.beginSeek(target / 64);
+    this.updateControls();
+  }
+
+  /** One frame of a running seek: advance for about SEEK_FRAME_MS, then land when done. */
+  private advanceSeek(): void {
+    const s = this.session;
+    const t0 = performance.now();
+    let p = s.seeking;
+    while (p !== null && !p.done && performance.now() - t0 < SEEK_FRAME_MS) p = s.advanceSeek(SEEK_SLICE_TICKS);
+    if (p === null || p.done) this.landSeek();
+  }
+
+  /** The seek is done: restart the Scene where it landed and resume. */
+  private landSeek(): void {
+    const s = this.session;
+    if (s.speed !== this.loop.speed) s.control({ type: 'speed', x: this.loop.speed });
+    this.scene = new Scene(s.observe(), s.lastAct, this.effects(s).activeEffects(), s.nav);
+    this.phase = this.seekResume ?? this.phase;
+    this.seekResume = null;
+    this.loop.reset();
+    this.loop.paused = this.phase !== 'running';
+    if (this.scene.cur.round.phase !== 'over') {
+      this.overlay.hide();
+      this.summaryDismissed = false;
+    }
+    this.updateControls();
+  }
+
+  /** Back to the ready state (the Restart button and the summary's Restart). */
+  private restart(): void {
+    this.session.cancelSeek();
+    this.seekResume = null;
+    this.overlay.hide();
+    this.summaryDismissed = false;
+    this.session.restart();
+    this.scene = this.ready(this.session);
+    this.updateControls();
+  }
+
+  /** Show the summary of the run so far. */
+  private showSummary(): void {
+    const s = this.session;
+    this.overlay.show(summaryView(summarize(s.model, s.log()), (id) => s.model.player(id).team));
+    this.summaryDeaths = this.deaths;
+    this.updateControls();
   }
 
   /** The host's grenade effects (Sim2DHost.activeEffects). */
@@ -181,11 +304,16 @@ class App {
   /** One tick: step the session, then hand the Scene what happened. */
   private stepOnce(): void {
     const act = this.session.step();
-    this.scene.ingest(this.session.observe(), act, this.effects(this.session).activeEffects());
+    const o = this.session.observe();
+    for (const e of o.events) if (e.type === 'death') this.deaths++;
+    this.scene.ingest(o, act, this.effects(this.session).activeEffects());
   }
 
   /** A new session in the ready state: tick 0 (the round setup) has run, so the pawns are on their spots. */
   private newSession(): Session {
+    this.seekResume = null;
+    this.overlay.hide();
+    this.summaryDismissed = false;
     const s = new Session({ ...this.data, seed: this.seed, human: this.human });
     this.scene = this.ready(s);
     return s;
@@ -210,9 +338,15 @@ class App {
     this.updateControls();
   }
 
-  /** View toggles: F follow, G ghost, T tracks, Tab status panel. */
+  /** View toggles: F follow, G ghost, T tracks, Tab status panel; B5: `[` / `]` seek 5 s back / ahead. */
   private onKey(e: KeyboardEvent): void {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    const step = seekStepForKey(e.code);
+    if (step !== null) {
+      e.preventDefault();
+      if (this.phase !== 'ready' || this.session.tick > 1) this.startSeek(stepTarget(this.session.tick, step));
+      return;
+    }
     const key = overlayForKey(e.code);
     if (key === null) return;
     // Tab moves focus as usual inside the controls bar; from the page it toggles the panel.
@@ -232,22 +366,31 @@ class App {
       });
     };
     on(b.start, () => {
-      if (this.phase !== 'ready') return;
+      if (this.phase !== 'ready' || this.seekResume !== null) return;
       this.phase = 'running';
       this.loop.reset();
       this.loop.paused = false;
     });
     on(b.pause, () => {
       if (this.phase === 'ready') return;
+      if (this.seekResume !== null) {
+        // Pausing during a seek: land paused.
+        this.seekResume = this.seekResume === 'running' ? 'paused' : 'running';
+        return;
+      }
       const paused = this.phase === 'running';
       this.phase = paused ? 'paused' : 'running';
       this.loop.paused = paused;
       this.session.control({ type: 'pause', paused });
     });
-    on(b.restart, () => {
-      this.session.restart();
-      this.scene = this.ready(this.session);
+    on(b.restart, () => this.restart());
+    on(b.summary, () => {
+      if (this.overlay.open) this.overlay.hide();
+      else this.showSummary();
     });
+    on(b.back5, () => this.startSeek(stepTarget(this.session.tick, -5)));
+    on(b.back10, () => this.startSeek(stepTarget(this.session.tick, -10)));
+    on(b.fwd5, () => this.startSeek(stepTarget(this.session.tick, 5)));
     on(b.spectate, () => {
       this.human = this.human === null ? DEFAULT_HUMAN : null;
       this.session = this.newSession();
@@ -279,6 +422,15 @@ class App {
     b.pause.disabled = this.phase === 'ready';
     b.pause.textContent = this.phase === 'paused' ? 'Resume' : 'Pause';
     b.restart.disabled = false;
+    const seeking = this.seekResume !== null;
+    const over = this.scene.cur.round.phase === 'over';
+    b.summary.disabled = !over;
+    b.summary.setAttribute('aria-pressed', String(this.overlay.open));
+    const started = this.scene.cur.tick > 1;
+    b.back5.disabled = !started;
+    b.back10.disabled = !started;
+    b.fwd5.disabled = !this.session.capabilities.seek;
+    b.start.disabled = this.phase !== 'ready' || seeking;
     b.spectate.setAttribute('aria-pressed', String(this.human === null));
     for (const sb of b.speeds) sb.setAttribute('aria-pressed', String(Number(sb.dataset['speed']) === this.loop.speed));
     for (const ob of b.overlays) {
@@ -294,8 +446,10 @@ class App {
   private readonly frame = (now: number): void => {
     const dt = this.lastFrame === null ? 0 : now - this.lastFrame;
     this.lastFrame = now;
-    if (this.phase === 'running') this.feedHuman();
+    if (this.seekResume !== null) this.advanceSeek();
+    if (this.playing()) this.feedHuman();
     const n = this.loop.advance(dt);
+    this.updateSummary();
     this.frames++;
     this.fpsMeter.add(now, 1);
     this.tpsMeter.add(now, n);
@@ -326,9 +480,44 @@ class App {
       fps: this.fpsMeter.rate(now),
       tps: this.tpsMeter.rate(now),
     });
+    this.updateTimeline();
     this.updateCursor();
     requestAnimationFrame(this.frame);
   };
+
+  /** The summary overlay: due 2 s after the round end, unless closed; gone once a rewind takes the round back. */
+  private updateSummary(): void {
+    if (this.seekResume !== null) return;
+    const cur = this.scene.cur;
+    if (cur.round.phase !== 'over') {
+      if (this.overlay.open || this.summaryDismissed) {
+        this.overlay.hide();
+        this.summaryDismissed = false;
+        this.updateControls();
+      }
+      return;
+    }
+    if (!this.overlay.open && !this.summaryDismissed && summaryDue(cur.round, cur.tick, SUMMARY_DELAY_TICKS)) this.showSummary();
+    else if (this.overlay.open && this.summaryDeaths !== this.deaths) this.showSummary();
+    if (this.buttons.summary.disabled) this.updateControls();
+  }
+
+  private updateTimeline(): void {
+    const s = this.session;
+    const seek = s.seeking;
+    const cur = this.scene.cur;
+    const tick = seek === null ? cur.tick : seek.tick;
+    this.timeline.update({
+      tick,
+      span: Math.max(this.span, tick),
+      marks: s.checkpoints.list().map((c) => ({ tick: c.tick, auto: c.auto })),
+      endTick: seek === null && cur.round.endTick !== null ? cur.round.endTick + 1 : null,
+      tapeEnd: s.tapeEnd,
+      seek: seek === null ? null : { target: seek.target, fraction: seekFraction(seek.start, seek.target, seek.tick) },
+    });
+    const started = tick > 1;
+    if (this.buttons.back5.disabled === started) this.updateControls();
+  }
 
   /** Crosshair while playing; a grab hand where dragging pans. */
   private updateCursor(): void {
@@ -365,6 +554,9 @@ class App {
       overlays: this.overlays,
       camera: this.renderer.camera,
       radarRebuilds: this.renderer.cacheRebuilds,
+      seeking: this.seekResume !== null,
+      summaryOpen: this.overlay.open,
+      checkpoints: this.session.checkpoints.size,
     };
   }
 }

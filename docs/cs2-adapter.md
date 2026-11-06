@@ -171,8 +171,8 @@ the latency, and Core must tolerate one tick of it (see contract findings).
 | --- | --- | --- | --- | --- |
 | `start` | Arm the plan, `mp_restartgame 1`; set up kits during freeze time; release at `EventRoundFreezeEnd` (clock route in P7) | [css-ev-freezeend] | likely | |
 | `restart` | Same as `start` | — | likely | |
-| `seek {t}` | Only t = 0 (a restart). Mid-round state (grenades, bomb, animation, client prediction) can't be rebuilt | — | unknown (deferred) | Contract finding F6 |
-| `checkpoint` / `rewind` | No engine snapshot. A positions/HP/kit restore is possible, but humans would see it teleport | — | unknown (deferred) | `IHost.snapshot/restore` has the same problem (F6) |
+| `seek {t}` | Back: a resync rewind to the latest safe checkpoint at or before t, then real time. Ahead: refused (`capabilities().seek` false) | — | B5: Core and driver side done; adapter untested | Contract finding F6 |
+| `checkpoint` / `rewind` | No engine snapshot (`capabilities().snapshot` false): the driver keeps Core snapshots; a rewind is a **resync** (B5): `set_round` (tick base, round start time, `planted_c4`), `set_hp` / `teleport` / `strip` / `give` / `set_weapon` per pawn, `set_mode`, all damage blocks. Humans see the teleport. Velocity, grenades, plant / defuse progress are lost | — | B5: Core side done and tested in 2D with snapshots off; adapter untested | `docs/port-notes.md` "Checkpoints, rewind, summary" |
 | `pause {paused}` | `mp_pause_match` (takes effect at the next freeze time), or `sv_pausable 1` + `pause` (behaviour on a dedicated server unknown) | — | unknown (deferred) | |
 | `speed {x}` | `host_timescale` (cheat-protected, server-wide) | — | unknown (deferred) | |
 
@@ -299,7 +299,9 @@ These are proposals for the contracts owner (task A4). This task changes no inte
   (`docs/contracts.md`, "sees"; the 2D version in `docs/vision.md`).
 - **F6. Control and snapshots.** `seek` (except t = 0), `checkpoint`/`rewind`, `speed` and
   `IHost.snapshot()/restore()` can't be done faithfully on a live CS2 server. Make them optional host capabilities
-  (e.g. an `IHost.capabilities()` list) so Core and the app degrade gracefully.
+  (e.g. an `IHost.capabilities()` list) so Core and the app degrade gracefully. **Done in B5:** `HostCapabilities
+  {snapshot, seek, speed}`; the CS2 adapter returns all false and rewinds resync (`docs/core.md` "Checkpoints, rewind,
+  summary", `docs/port-notes.md`).
 - **F7. Shots.** Single-tick `ATTACK` taps can't reproduce a 600 rpm spray at 64 tick: the 6.4-tick cycle means taps 6
   ticks apart probably arrive early and are dropped (P3 confirms). Core should express a spray as `ATTACK` held for
   the whole window and let the engine set the cadence; keep single taps for single shots.

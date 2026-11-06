@@ -15,6 +15,7 @@
  * an exact JSON round-trip.
  */
 import {
+  ALL_CAPABILITIES,
   Rng,
   canonicalize,
   compareOrdinal,
@@ -30,6 +31,7 @@ import {
   type EndRoundAction,
   type Goal,
   type Hitgroup,
+  type HostCapabilities,
   type HostSnapshot,
   type IHost,
   type JsonValue,
@@ -40,6 +42,7 @@ import {
   type PlayerId,
   type RoundObs,
   type Score,
+  type SetRoundAction,
   type SettableMode,
   type SoundKind,
   type Team,
@@ -48,7 +51,7 @@ import {
   type WeaponId,
 } from '../contracts/index';
 import { freshAiState, roleOf, stepAi, type AiBehaviour, type AiOther, type AiState } from './ai';
-import { applyBombAction, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
+import { applyBombAction, bombFromObs, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
 import { collideMove, type Obstacle } from './collision';
 import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeOutcome } from './grenades';
 import { traceShot, type ScanPawn } from './hitscan';
@@ -270,6 +273,11 @@ export class Sim2DHost implements IHost {
   }
 
   // ---- IHost ---------------------------------------------------------------------------------
+
+  /** B5: the 2D engine can do everything: exact snapshots, ticks back to back (seek), any rate. */
+  capabilities(): HostCapabilities {
+    return { ...ALL_CAPABILITIES };
+  }
 
   observe(): Observe {
     const sees = this.currentSees();
@@ -895,6 +903,29 @@ export class Sim2DHost implements IHost {
     this.notes.push({ tick: this.tickNo, kind, type, reason, data: toJsonValue(data) });
   }
 
+  /**
+   * B5 `set_round` (resync rewind): the clock becomes `tick` (this tick() processes it, the next observe reports
+   * tick + 1) and the round and bomb state the checkpoint's. What CS2 can't put back isn't put back here either:
+   * grenades in flight, smokes and fires are dropped (the Core gives an in-flight one back to its thrower), a plant or
+   * defuse in progress is gone (bombFromObs), and per-pawn timers (weapon, flash, footsteps) keep running in real
+   * time: they move with the clock, like CS2 game-time timers under a relabelled adapter tick.
+   */
+  private setRound(a: SetRoundAction): void {
+    const delta = a.tick - this.tickNo;
+    this.tickNo = a.tick;
+    for (const p of this.pawns) {
+      p.wpn = shiftWeaponState(p.wpn, delta);
+      p.blindUntilTick = p.blindUntilTick === 0 ? 0 : Math.max(0, roundNumber(p.blindUntilTick + delta));
+      p.nextFootstepTick = Math.max(0, roundNumber(p.nextFootstepTick + delta));
+    }
+    this.grenades = [];
+    this.pendingDamage = [];
+    this.pendingRound = [];
+    const r = a.round;
+    this.round = { ...this.round, score: { ct: r.score.ct, t: r.score.t }, winner: r.winner, reason: r.reason, endTick: r.endTick };
+    this.bomb = bombFromObs(r.bomb, a.tick, this.tuning.bomb);
+  }
+
   private applyAction(action: Act['actions'][number], teleported: Set<string>): void {
     // Switch on the string so action types added later fall into `default` instead of vanishing.
     const type: string = action.type;
@@ -967,6 +998,18 @@ export class Sim2DHost implements IHost {
             : others;
         return;
       }
+      case 'set_round':
+        this.setRound(action);
+        return;
+      case 'strip': {
+        const p = this.pawn(action.id);
+        if (p === null) return this.note('action', type, 'unknown pawn', action);
+        // New weapon entities in CS2: no reload, cadence or deploy left over; with a teleport (resync) ready at once.
+        p.inventory = [{ item: SPAWN_WEAPON, clip: 0, reserve: 0 }];
+        p.weapon = SPAWN_WEAPON;
+        p.wpn = deployState(freshWeaponState(), this.tickNo, teleported.has(p.id) ? 0 : deploySec(SPAWN_WEAPON, this.tuning));
+        return;
+      }
       case 'log':
         // For the app's status panel; it reads Core logs from the Act / SessionLog.
         return;
@@ -974,6 +1017,16 @@ export class Sim2DHost implements IHost {
         this.note('action', type, UNSUPPORTED_V0, action);
     }
   }
+}
+
+/** A weapon state's timers moved by `delta` ticks (a `set_round` clock change). */
+function shiftWeaponState(w: WeaponState, delta: number): WeaponState {
+  return {
+    ...w,
+    nextAttackTick: roundNumber(w.nextAttackTick + delta),
+    deployEndTick: roundNumber(w.deployEndTick + delta),
+    reloadEndTick: w.reloadEndTick === null ? null : roundNumber(w.reloadEndTick + delta),
+  };
 }
 
 function spawnPawn(r: RosterEntry): PawnState {

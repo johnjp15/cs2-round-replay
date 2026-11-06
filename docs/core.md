@@ -124,9 +124,9 @@ Other cases:
 
 - `start` and `restart` reset the state and arm the setup. `paused` and `speed` carry over.
 - `pause {paused}` and `speed {x}` are stored; `x` must be positive. The driver does the actual pausing and pacing: Core doesn't stop stepping by itself.
-- `seek`, `checkpoint` and `rewind` throw "not implemented until B5".
+- B5: `checkpoint {id}` and `seek {t}` are checked (a non-empty id; seconds ≥ 0) and change nothing: checkpoints and seeking are the driver's work (a checkpoint stores `snapshot()`, a seek steps every tick as usual). `rewind {id}` arms a **resync**: the driver has restored this Core to the checkpoint and the engine couldn't be (no snapshot capability), so the next step puts the engine back first. See "Checkpoints, rewind, summary".
 
-`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `setupThisStep`, `startTick`, `lastTick`, `paused`, `speed`, each pawn's mode, trigger and since tick, each puppet's `PuppetState`, the scripted events' `ScriptState` and (B4) the `DivergenceState`) together with the seed. Restoring checks that the seed matches. Every stored number is already canonical (yaw to 0.001°, `behind` to 6 decimals), so a restore continues exactly.
+`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `setupThisStep`, `startTick`, `lastTick`, `paused`, `speed`, each pawn's mode, trigger, since tick and (B5) `everLive`, the armed `resync`, each puppet's `PuppetState`, the scripted events' `ScriptState`, (B4) the `DivergenceState` and (B5) the loadout ledger) together with the seed. Restoring checks that the seed matches. Every stored number is already canonical (yaw to 0.001°, `behind` to 6 decimals), so a restore continues exactly. A snapshot from before B5 restores with an empty ledger.
 
 `puppet(id)` returns a pawn's `PuppetController` (or null without puppets) and `snapCount` the snaps since the last start. `script` is the `ScriptedEvents` (its `plan` and `state`), `divergence` the B4 `Divergence` (its `index`, `encounters` and `state`), `modeOf(id)` a pawn's Core mode, `triggerOf(id)` its trigger, and the protected `setPawnMode(id, mode, tick, trigger)` is what the triggers switch through.
 
@@ -525,3 +525,72 @@ Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aim
 - **2D sight**: the sight mask's window over B is the whole Apartments wall, and Truck sees down the whole corridor (Lokier sees cart at 7–11 s in several runs), so sighting-driven divergence is wider in 2D than it would be in CS2. Expected spans are per pair and time, not position.
 - **Toy AI**: LIVE fights are the C4 bot's; a 2D LIVE Lokier at 1,750 u rarely lands a hit, and Ts guarding the bomb die in its blast.
 - **Encounters** exist only for the default human (cart); with another human pawn there are none.
+
+## Checkpoints, rewind, summary (B5)
+
+Players retry moments ("rewind 10 s and take the duel differently") and compare their run with the recording at the end. The Core will run in CS2, where the engine can't be snapshotted, so rewind has two paths, chosen by the host's **capabilities** (`IHost.capabilities()`, contract finding F6): `{snapshot, seek, speed}`. `Sim2DHost` has all three; the CS2 adapter none.
+
+### Checkpoints (`checkpoints.ts`, the driver)
+
+A checkpoint is taken **between two steps**, before the step of `tick`, and holds: the Core's `snapshot()`, the host's snapshot (with the capability, else null), the observe that step sees (canonical), the SessionLog's length, its resync `hazards` and the driver's own bits (Session: controls not yet logged, queued weapon slots, pause, speed). `CheckpointStore` (portable plain data, for the C# driver too) keeps the last `replay.checkpointMax` (16), oldest out first; adding an id again replaces it; `atOrBefore(tick, safe)` picks a rewind target; a rewind drops every checkpoint after its tick.
+
+- **Automatic** before the step of every multiple of `replay.checkpointSec` (5 s = 320 ticks): 0, 5, …, 70 s, 15 in the round. **On demand**: `checkpoint {id}`.
+- **Not logged and changes nothing**: the golden master with checkpoints on is still `e6c2be70` (`tests/rewind.test.ts`).
+- **Memory** (measured, golden round): 15 checkpoints, 233 K JSON chars: Core 57 K (3.8 K each), host 134 K (8.9 K), observe 41 K (2.7 K), 15.5 K per checkpoint. The SessionLog itself is ~17 MB.
+- **Hazards** (`ReplayCore.checkpointHazards(o)`, `resyncHazards`): a defuse in progress (`round.bomb.defuser` while planted) or the scripted plant's USE window open (`ScriptPlan.plant`, planter on script). A resync can't restore either (see below), so a driver without snapshots skips such checkpoints: in the round 25 s (barely planting, 1555–1761) and 65 s (sp4rtan defusing, 3954–4274) are skipped (20 s and 60 s are used instead). A plant by the human or a LIVE pawn isn't visible to the Core.
+
+### Exact rewind (host snapshot)
+
+Restore the host and the Core from the checkpoint, put back the driver bits and cut the log back to the checkpoint's length. Nothing is logged: the log stays one straight run that replays, and given the same inputs what follows is byte-identical. Rewinding across a REPLAY → LIVE switch restores the engine's mode, AI state and damage blocks with it.
+
+Measured (`tests/rewind.test.ts`): run to 40 s, checkpoint, run to 60 s, rewind, run to 60 s again: the 1,281 lines from the checkpoint are byte-identical, with no human and with the flank-sp4rtan human-bot (inputs and its scenario teleport replayed; sp4rtan's switch at 44.61 s and donk's at 53.34 s are undone: both REPLAY, alive, blocked again), and the no-human round finished after the rewind has the golden digest.
+
+### Resync rewind (no host snapshot: CS2)
+
+The driver restores the Core's snapshot, cuts the log back, sends the Core `rewind {id}` (logged) and feeds the **checkpoint's observe** to the next step instead of the engine's. That step's Act starts with `resyncActions` (`resync.ts`) and then is exactly the checkpoint step's Act, so the log stays a straight run (one line with the `rewind` control and the resync prefix) and **replays** through a fresh Core (`replay()`, tested). The prefix, a pure function of that observe and the Core's state:
+
+1. `set_round {tick, round}` (new action): the engine's clock becomes the checkpoint tick (its next observe reports tick + 1) and its round state the checkpoint's: score, winner / reason / end tick, the bomb (carried, dropped where, planted on which tick, so the timer and the beeps; defused; exploded). 2D: `Sim2DHost` relabels its tick, drops grenades in flight, smokes and fires, and moves per-pawn timers (weapon, flash, footsteps) by the same amount, as CS2 game-time timers would keep running; CS2: the adapter's tick base, the round start time, `planted_c4`'s `C4Blow`.
+2. For every **living** pawn, in id order: `set_hp {hp, armor, helmet}` (a dead pawn comes back), `teleport {pos, yaw}`, `strip` (new action: everything but the knife), one `give` per ledger item with its clip / reserve, `set_weapon` (the observed weapon), and for every pawn but the human `set_mode` REPLAY, or LIVE with a fresh `liveGoal` from there. A pawn dead at the checkpoint is dead now too and gets nothing.
+3. `block_damage` / `unblock_damage` for **every** self pair and ordered enemy pair: blocked when neither pawn is the human or was ever LIVE (`everLive`), plus a scheduled encounter's standing block. 50 + 10 actions.
+4. `log {info, "rewind <id>: resync to tick <k>, <n> pawns placed, <m> LIVE, <b> blocked pairs"}`.
+
+So rewinding across a LIVE switch returns the pawn to REPLAY in both paths (B4's note: the engine is told again).
+
+**Not restored** (no contract action; CS2 can't either): **velocity** (a teleport stops the pawn; it catches up through the puppet's feedback), **grenades in flight** and active **smokes and fires** (dropped; an in-flight grenade is still in the ledger, so its thrower gets it back), **bomb progress** (a plant or defuse in progress starts again: hence the hazards), weapon timers (reload, deploy, fire cadence), flashes in progress, and the LIVE AI's memory and random draws (a LIVE fight after a resync can go another way). A round that ended stays ended in CS2 (the 2D `set_round` takes it back).
+
+**The loadout ledger** (`loadout.ts`). Observe shows only the held weapon, so the Core keeps every pawn's items with clip and reserve: from its own `give` / `strip` actions, the held gun's ammo in every observe (ammo only changes while held), the c4 from `round.bomb`, and grenade pops (`sound` kind `grenade`, the only trace of a throw): a pawn that stops holding a grenade has maybe thrown it (a release); a pop takes the oldest release within `releaseWindowTicks` (longest fuse or flight + 1 s, 206 ticks) whose kind it still has, else its last-held grenade, else its first. Measured over the golden round: on all 22,753 living pawn-ticks the ledger equals the engine's inventory with ammo, except for a pawn's own grenade in flight (686 pawn-ticks), which the ledger still has. A human who draws and puts away grenades just before a throw can fool the release rule.
+
+**Measured** (no human, snapshots forced off; `tests/rewind.test.ts`, worst |Δ| against the straight run):
+
+| rewind | checkpoint | kills, bomb, round end after it | Δ | LIVE | drift RMS / max (worst pawn) |
+| --- | --- | --- | ---: | --- | --- |
+| 60 → 40 s | 40 s | 7 (barely → zwomp … defuse, round end, post-round kill) | 0 ticks | none | zwomp 7.4 / 22.6 u (running at the checkpoint), sp4rtan 3.4 / 19.4, donk 0.3 / 1.8, others < 0.1 |
+| 30 → 20 s | 20 s (25 s is mid-plant) | 8 (the plant included) | 0 | none | cart 5.9 / 65.3 u (his Balcony-drop snap comes 0.13 s later), sp4rtan 4.1 / 27.1, donk 4.6 / 25.8, barely 3.1 / 18.6 |
+| 70 → 60 s | 60 s (65 s is mid-defuse) | 4 (defuse start, defuse, round end CT 12 – 15 again, post-round kill) | 0 | none | cart 0.8 / 4.2 u, sp4rtan 0.2 / 1.7 |
+
+The drift comes from the lost velocity at the checkpoint and closes within about a second; no scripted event moves. With a human (never-peeks, 23 s → 20 s): Lokier (dead) and barely (LIVE) are REPLAY again, alive and blocked again, and switch again on the same ticks (1395, 1396); the LIVE fight after that went another way (donk heard it and went LIVE too), as expected without the AI's state.
+
+### Seek
+
+- **Forward** steps tick by tick as fast as possible (the driver, without rendering; the app slices it per animation frame). Triggers see every observe.
+- **Backward** = rewind to the latest checkpoint at or before t (resync: one without hazards), then forward.
+- The driver replays what the human did on ticks he already played (Session: his inputs and weapon slots by tick, "the tape"), so seek back and forth lands where a straight run would, byte for byte (tested with lokier-late: 50 s → 33 s → 45 s → 20.5 s). Playing live discards the tape.
+- Without the `seek` capability (CS2) a seek ahead is refused and a seek back ends at the checkpoint (play on in real time). Without `speed`, the `speed` control is refused.
+
+### End-of-round summary (`summary.ts`)
+
+`summarize(model, log, {player, sameTicks})` is a pure function of `RoundModel` (B5 added `kills`, the kill feed) and a SessionLog (or its parsed lines), returning `RoundSummary` (`src/contracts/summary.ts`):
+
+- **Result** from the log's `round_end` against the recording (`recordedResult`: winner from `meta.score` → `scoreAfter`, reason from `bomb`: CT `bomb_defused` at tick 4275, 12 – 15).
+- **Kills**: each recorded kill against the run's `death` events: `same` (same killer and victim within `sameTicks`, 2), `shifted` (Δt), `missed` (didn't happen, with why: the victim already dead, the killer dead, the victim died later to someone else, or survived), `pending` (the log ends before it: the overlay opens before the 69.4 s post-round kill), and every other death `new` (`killer` null = the bomb).
+- **LIVE switches**: status mode LIVE starting on its tick, with the trigger and the reason from the Core's `<id> LIVE: <reason>; goal …` log line.
+- **Player stats** (the human's pawn, else cart): kills, damage dealt (HP removed from others) and taken, seconds alive, RMS 2D distance from his recorded track over the ticks alive with a recorded position.
+- **Bomb**: plant, defuse or explosion ticks, and the margin (timer left at the defuse; negative: the defuse in progress at the explosion needed that much more).
+- **Headline** by verdict: `tape` "Played it like the tape: CT defuse, 0.72 s left"; `same_result` "Same result, different round: CT defuse, 0.41 s left (recorded 0.72 s); 3 kills changed"; `changed` "You changed history: Ts win by elimination (recorded: CT defuse)" ("History changed" when spectating); `unfinished` "Round still on (recorded: CT defuse)". Times are written from integer arithmetic (`fixed2`), not `toFixed`.
+
+| run | headline | kills | switches | cart |
+| --- | --- | --- | --- | --- |
+| golden (no human) | Played it like the tape: CT defuse, 0.72 s left | all 9 `same`, Δ 0 | none | watched; 1 kill, 100 dealt, 100 taken, alive 69.39 s, died 69.41 s, RMS 13.9 u |
+| flank-sp4rtan (B4 #5) | You changed history: Ts win by elimination (recorded: CT defuse) | 5 `same`; cart → lokier `shifted` −0.30 s; **new** cart → sp4rtan 44.63 s (HS); sp4rtan → donk, → barely, → cart `missed` ("sp4rtan was dead (44.63 s)"); **new** bomb → barely and → donk 67.52 s | sp4rtan sighting 44.61 s, donk outlived 53.34 s, barely outlived 61.84 s | you; 2 kills, 200 dealt, 41 taken, alive the whole round, RMS 1,145 u (he waited in Back Alley) |
+
+Summarizing the whole round's log takes ~250 ms in Node and ~80 ms in Chrome (it parses every line).

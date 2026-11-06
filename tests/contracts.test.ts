@@ -46,6 +46,20 @@ const ACTIONS: { readonly [K in ActionType]: Extract<Action, { type: K }> } = {
   defuse_start: { type: 'defuse_start', id: 'sp4rtan' },
   defuse_stop: { type: 'defuse_stop', id: 'sp4rtan' },
   end_round: { type: 'end_round', winner: 'T', reason: 'elimination' },
+  set_round: {
+    type: 'set_round',
+    tick: 2560,
+    round: {
+      phase: 'planted',
+      score: { ct: 11, t: 15 },
+      winner: null,
+      reason: null,
+      endTick: null,
+      timeLeftSec: 27.5,
+      bomb: { state: 'planted', carrier: null, pos: v(-1982, 311, -160), plantTick: 1760, defuser: null, defuseEndTick: null },
+    },
+  },
+  strip: { type: 'strip', id: 'sp4rtan' },
   log: { type: 'log', level: 'info', text: 'trigger "seen" fired → LIVE ☃' },
 };
 
@@ -114,7 +128,7 @@ describe('contract types', () => {
       expect(stableStringify(parseJsonLine(text))).toBe(text);
     }
     expect(Object.keys(EVENTS)).toHaveLength(6);
-    expect(Object.keys(ACTIONS)).toHaveLength(13);
+    expect(Object.keys(ACTIONS)).toHaveLength(15);
     expect(Object.keys(CONTROLS)).toHaveLength(7);
   });
 

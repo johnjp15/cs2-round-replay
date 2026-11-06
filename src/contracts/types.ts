@@ -346,6 +346,26 @@ export interface EndRoundAction {
   readonly reason: RoundEndReason;
 }
 
+/**
+ * B5 (resync rewind): put the engine's clock and round state back to a checkpoint. `tick` is the tick this Act is
+ * for: the engine relabels its clock so that its next Observe reports `tick + 1` (2D: its tick counter; CS2: the
+ * adapter's tick base and the game rules' round start time). `round` is the checkpoint's `Observe.round`: score,
+ * winner / reason / end tick, and the bomb (carried, dropped where, planted on which tick, defused, exploded). A plant
+ * or defuse in progress is not restored (the contract doesn't carry it; CS2 can't). Sent first in the Act, before the
+ * per-pawn actions.
+ */
+export interface SetRoundAction {
+  readonly type: 'set_round';
+  readonly tick: number;
+  readonly round: RoundObs;
+}
+
+/** B5 (resync rewind): remove every item but the knife (2D: inventory = knife, held; CS2: `RemoveWeapons`). `give`s follow. */
+export interface StripAction {
+  readonly type: 'strip';
+  readonly id: PlayerId;
+}
+
 export interface LogAction {
   readonly type: 'log';
   readonly level: LogLevel;
@@ -366,6 +386,8 @@ export type Action =
   | DefuseStartAction
   | DefuseStopAction
   | EndRoundAction
+  | SetRoundAction
+  | StripAction
   | LogAction;
 
 export type ActionType = Action['type'];

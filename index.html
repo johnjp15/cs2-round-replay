@@ -223,6 +223,92 @@
         #killfeed, #panel { top: var(--edge); }
       }
     </style>
+    <style>
+      /* ---------- B5: timeline scrubber and the end-of-round summary ---------- */
+      #timeline {
+        flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+        padding: 6px 10px; border-top: 1px solid var(--rule); background: #070b10;
+        font-family: var(--display); font-variant-numeric: tabular-nums;
+      }
+      #timeline button { min-height: 32px; padding: 5px 9px; }
+      #timeline kbd { margin-left: 5px; font: 500 12px/1 var(--display); opacity: 0.6; }
+      #scrub {
+        position: relative; flex: 1 1 auto; height: 32px; min-width: 120px; cursor: pointer;
+        touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+      }
+      #scrub:focus-visible { outline: 2px solid var(--sand); outline-offset: 0; border-radius: 4px; }
+      .scrub-track { position: absolute; left: 8px; right: 8px; top: 13px; height: 6px; border-radius: 3px; background: #1a232e; }
+      .scrub-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--sand-dim); }
+      .scrub-tape { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(90deg, rgba(236, 226, 204, 0.35) 0 4px, transparent 4px 7px); }
+      .scrub-marks .mark { position: absolute; top: -5px; width: 2px; height: 16px; margin-left: -1px; border-radius: 1px; background: rgba(236, 226, 204, 0.32); }
+      .scrub-marks .mark.mine { background: var(--amber); }
+      .scrub-end { position: absolute; top: -7px; width: 3px; height: 20px; margin-left: -1.5px; border-radius: 1px; background: var(--defuse); }
+      .scrub-end[hidden] { display: none; }
+      .scrub-thumb {
+        position: absolute; top: -6px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%;
+        background: var(--sand); box-shadow: 0 0 0 3px rgba(5, 8, 12, 0.85);
+      }
+      #scrub[data-seeking="true"] .scrub-thumb { background: var(--amber); }
+      #scrub-time { min-width: 7.6em; text-align: right; font-size: 14px; font-weight: 600; color: var(--sand-dim); white-space: nowrap; }
+
+      #summary {
+        position: absolute; right: var(--edge); bottom: 34px; z-index: 5;
+        width: min(460px, calc(100% - 2 * var(--edge))); max-height: calc(100% - 190px);
+        display: flex; flex-direction: column; pointer-events: auto;
+        background: rgba(10, 15, 21, 0.97); border: 1px solid var(--rule); border-radius: 10px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55); overflow: hidden;
+      }
+      #summary[hidden] { display: none; }
+      #summary header { position: relative; padding: 12px 44px 10px 16px; border-bottom: 1px solid var(--rule); box-shadow: inset 3px 0 0 var(--sand-dim); }
+      #summary[data-verdict="tape"] header { box-shadow: inset 3px 0 0 var(--defuse); }
+      #summary[data-verdict="changed"] header { box-shadow: inset 3px 0 0 var(--live); }
+      #summary[data-verdict="same_result"] header { box-shadow: inset 3px 0 0 var(--amber); }
+      .sum-kicker { margin: 0 0 2px; font: 600 12px/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--sand-dim); }
+      #sum-head { margin: 0; font: 700 21px/1.2 var(--display); color: var(--sand); }
+      #sum-close { position: absolute; top: 8px; right: 8px; width: 32px; min-height: 32px; padding: 0; font-size: 20px; line-height: 1; }
+      .sum-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 16px 10px; -webkit-overflow-scrolling: touch; }
+      .sum-body h3 { margin: 12px 0 5px; font: 600 13px/1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--sand-dim); }
+      .sum-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 8px 0 0; font-size: 14px; }
+      .sum-grid dt { color: var(--sand-dim); font-family: var(--display); }
+      .sum-grid dd { margin: 0; }
+      #sum-kills { width: 100%; border-collapse: collapse; font: 14px/1.3 var(--display); font-variant-numeric: tabular-nums; }
+      #sum-kills th { text-align: left; font-weight: 500; font-size: 12px; color: var(--sand-dim); padding: 2px 4px; }
+      #sum-kills td { padding: 3px 4px; border-top: 1px solid rgba(38, 51, 66, 0.6); vertical-align: top; }
+      #sum-kills .num { text-align: right; white-space: nowrap; }
+      #sum-kills .st { white-space: nowrap; font-weight: 700; font-size: 12px; }
+      #sum-kills tr.same .st { color: var(--defuse); }
+      #sum-kills tr.shifted .st { color: var(--amber); }
+      #sum-kills tr.missed .st { color: var(--bomb); }
+      #sum-kills tr.new .st { color: var(--live); }
+      #sum-kills tr.pending { opacity: 0.6; }
+      #sum-kills tr.missed .who-cell { text-decoration: line-through; text-decoration-color: rgba(255, 84, 80, 0.7); }
+      #sum-kills .note { color: var(--sand-dim); font-size: 13px; }
+      #sum-kills .who-cell { white-space: nowrap; }
+      .who.world { color: var(--bomb); }
+      .arrow { color: var(--sand-dim); }
+      #sum-switches { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+      #sum-switches li { padding: 2px 0; }
+      #sum-switches .at { display: inline-block; min-width: 4.2em; color: var(--sand-dim); font-variant-numeric: tabular-nums; }
+      #sum-switches b { color: var(--live); font-weight: 600; }
+      #sum-switches .trig { color: var(--sand); }
+      #sum-switches .why, #sum-switches .empty { color: var(--sand-dim); }
+      #summary footer { display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); }
+      #summary footer button { flex: 1 1 0; }
+      #sum-keep { background: var(--sand); border-color: var(--sand); color: #0a0f15; }
+
+      @media (max-width: 700px) {
+        #timeline { gap: 5px; padding: 5px 6px; }
+        #timeline button { padding: 5px 7px; font-size: 14px; }
+        #scrub-time { min-width: 0; font-size: 13px; }
+        #summary { left: 0; right: 0; bottom: 0; width: auto; max-height: 64%; border-radius: 12px 12px 0 0; border-bottom: 0; }
+        #sum-head { font-size: 19px; }
+        #sum-kills .note { display: block; }
+      }
+      @media (max-width: 380px) { #scrub-time { display: none; } }
+      @media (orientation: landscape) and (max-height: 540px) {
+        #summary { left: auto; right: var(--edge); bottom: var(--edge); top: var(--edge); width: min(420px, 60%); max-height: none; border-radius: 10px; border-bottom: 1px solid var(--rule); }
+      }
+    </style>
   </head>
   <body>
     <main id="app">
@@ -256,12 +342,51 @@
           </section>
           <p id="perf"></p>
         </div>
+        <section id="summary" role="dialog" aria-modal="false" aria-labelledby="sum-head" hidden>
+          <header>
+            <p class="sum-kicker">Round over</p>
+            <h2 id="sum-head"></h2>
+            <button id="sum-close" type="button" aria-label="Close the summary">×</button>
+          </header>
+          <div class="sum-body">
+            <dl class="sum-grid">
+              <dt>This run</dt><dd id="sum-result"></dd>
+              <dt>Recorded</dt><dd id="sum-recorded"></dd>
+              <dt>Bomb</dt><dd id="sum-bomb"></dd>
+              <dt>Recorded</dt><dd id="sum-rbomb"></dd>
+            </dl>
+            <h3>Kills against the recording</h3>
+            <table>
+              <thead><tr><th></th><th>Kill</th><th class="num">Rec. s</th><th class="num">Run s</th><th></th></tr></thead>
+              <tbody id="sum-kills"></tbody>
+            </table>
+            <h3>Went LIVE</h3>
+            <ol id="sum-switches"></ol>
+            <h3 id="sum-player"></h3>
+            <dl class="sum-grid" id="sum-stats"></dl>
+          </div>
+          <footer>
+            <button id="sum-rewind" type="button">Rewind 10 s</button>
+            <button id="sum-restart" type="button">Restart</button>
+            <button id="sum-keep" type="button">Keep watching</button>
+          </footer>
+        </section>
         <p id="status" role="status">Loading round…</p>
+      </div>
+      <div id="timeline" role="group" aria-label="Round timeline">
+        <button id="back10" type="button" disabled>−10 s</button>
+        <button id="back5" type="button" disabled>−5 s<kbd>[</kbd></button>
+        <div id="scrub" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="70.6" aria-valuenow="0">
+          <div class="scrub-track"><div class="scrub-fill"></div><div class="scrub-tape"></div><div class="scrub-marks"></div><div class="scrub-end" hidden></div><div class="scrub-thumb"></div></div>
+        </div>
+        <span id="scrub-time"></span>
+        <button id="fwd5" type="button" disabled>+5 s<kbd>]</kbd></button>
       </div>
       <div id="controls" role="toolbar" aria-label="Replay controls">
         <button id="start" type="button" disabled>Start</button>
         <button id="pause" type="button" disabled>Pause</button>
         <button id="restart" type="button" disabled>Restart</button>
+        <button id="summary-open" type="button" disabled>Summary</button>
         <span class="group" role="group" aria-label="Speed">
           <button type="button" data-speed="0.25" aria-pressed="false">0.25×</button>
           <button type="button" data-speed="0.5" aria-pressed="false">0.5×</button>
@@ -278,7 +403,7 @@
         <button id="spectate" type="button" aria-pressed="false">Spectate</button>
         <button id="dl-log" type="button">Download log</button>
         <button id="dl-trace" type="button">Download trace</button>
-        <p id="help">You play cart: WASD moves (W is up on the map), the mouse aims, click fires, Shift walks, Ctrl or C crouches, R reloads, E uses, 1–5 switch weapons. Wheel zooms; drag pans (middle button while playing); double-click shows the whole map. Ghost is cart’s recorded position; Tracks shows everyone’s recorded path for the next 3 s.</p>
+        <p id="help">You play cart: WASD moves (W is up on the map), the mouse aims, click fires, Shift walks, Ctrl or C crouches, R reloads, E uses, 1–5 switch weapons. Wheel zooms; drag pans (middle button while playing); double-click shows the whole map. Ghost is cart’s recorded position; Tracks shows everyone’s recorded path for the next 3 s. [ and ] seek 5 s back and ahead; drag the timeline to seek (its marks are the checkpoints).</p>
       </div>
     </main>
     <script type="module" src="/src/app/main.ts"></script>

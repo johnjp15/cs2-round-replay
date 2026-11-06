@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAYER_IDS, SessionLog, replay, type Action, type Control, type ObsEvent, type PlayerId } from '../src/contracts/index';
+import { PLAYER_IDS, SessionLog, replay, stableStringify, type Action, type Control, type ObsEvent, type PlayerId } from '../src/contracts/index';
 import { EventSchedule, ReplayCore, RoundModel, startActions } from '../src/core/index';
 import { ScriptedHost, runSession } from './fakes';
 import { loadRound, loadTuning } from './round-fixture';
@@ -85,7 +85,7 @@ describe('ReplayCore', () => {
     expect(log.at(45)?.act.status.find((s) => s.id === 'barely')).toMatchObject({ mode: 'REPLAY', sinceTick: 40 });
   });
 
-  it('handles pause and speed, and refuses seek / checkpoint / rewind until B5', () => {
+  it('handles pause and speed, and checks seek / checkpoint / rewind (B5)', () => {
     const core = newCore();
     core.control({ type: 'pause', paused: true });
     core.control({ type: 'speed', x: 0.25 });
@@ -93,9 +93,18 @@ describe('ReplayCore', () => {
     core.control({ type: 'pause', paused: false });
     expect(core.paused).toBe(false);
     expect(() => core.control({ type: 'speed', x: 0 })).toThrow(RangeError);
-    expect(() => core.control({ type: 'seek', t: 12.5 })).toThrow(/not implemented until B5/);
-    expect(() => core.control({ type: 'checkpoint', id: 'cp' })).toThrow(/not implemented until B5/);
-    expect(() => core.control({ type: 'rewind', id: 'cp' })).toThrow(/not implemented until B5/);
+    // Checkpoints and seeks are the driver's: the Core only checks them.
+    const before = stableStringify(core.snapshot());
+    core.control({ type: 'seek', t: 12.5 });
+    core.control({ type: 'checkpoint', id: 'cp' });
+    expect(stableStringify(core.snapshot())).toBe(before);
+    expect(() => core.control({ type: 'seek', t: -1 })).toThrow(RangeError);
+    expect(() => core.control({ type: 'seek', t: Number.NaN })).toThrow(RangeError);
+    expect(() => core.control({ type: 'checkpoint', id: '' })).toThrow(/checkpoint id/);
+    expect(() => core.control({ type: 'rewind', id: '' })).toThrow(/checkpoint id/);
+    // rewind arms a resync of the engine on the next step (the driver restored the Core first).
+    core.control({ type: 'rewind', id: 'cp' });
+    expect(stableStringify(core.snapshot())).not.toBe(before);
   });
 
   it('snapshot / restore continues exactly where it left off', () => {

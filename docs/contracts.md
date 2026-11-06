@@ -19,10 +19,13 @@ Act (Core → engine, same tick):
   - `teleport {id, pos, yaw}` (setup, rewinds, unseen snaps only)
   - `plant {id, pos}`, `defuse_start {id}`, `defuse_stop {id}`
   - `end_round {winner, reason}`
+  - `set_round {tick, round}`, `strip {id}` (B5, resync rewind only)
   - `log {level, text}` — for the trigger/status panel
 - `status`: per pawn `{mode, trigger, sinceTick}` for the UI (`mode` REPLAY, LIVE, DEAD or HUMAN, B4)
 
 Control (app → Core/engine): `start`, `restart`, `seek {t}`, `checkpoint`, `rewind {id}`, `pause`, `speed {x}`.
+
+Capabilities (B5, finding F6): `IHost.capabilities()` → `{snapshot, seek, speed}`, what the engine can do beyond observe / apply. The driver degrades: without `snapshot` a rewind resyncs the engine through actions, without `seek` it can't run ahead of real time, without `speed` the `speed` control is refused.
 
 Logging: `SessionLog` writes one JSON line per tick `{observe, act}`. `Replayer` feeds a logged observe stream back into any `ICore` and diffs the act output. These logs are also the fixtures for the C# port.
 
@@ -35,11 +38,12 @@ The spec above is implemented in `src/contracts/` (re-exported from `src/contrac
 | File | Contents |
 | --- | --- |
 | `types.ts` | `PlayerId`, `Team`, `Vec3`, `WeaponId`, `ItemId`, `Button`, `Hitgroup`, `Mode`, `PawnObs`, `ObsEvent`, `Observe`, `RoundObs`, `BombObs`, `Score`, `RoundPhase`, `BombState`, `PawnInput`, `Action`, `PawnStatus`, `Act`, `Control`; const arrays (`PLAYER_IDS`, `BUTTONS`, `ROUND_PHASES`, `BOMB_STATES`, …); `sortById`, `sortIds`, `sortButtons`, `compareOrdinal` |
-| `host.ts` | `IHost`, `ICore`, `HostSnapshot`, `CoreSnapshot` |
+| `host.ts` | `IHost`, `ICore`, `HostSnapshot`, `CoreSnapshot`; (B5) `HostCapabilities`, `ALL_CAPABILITIES`, `CS2_CAPABILITIES` |
+| `summary.ts` | B5: the end-of-round summary's shape (`RoundSummary`, `KillRow`, `KillStatus`, `SwitchRow`, `RoundResult`, `BombSummary`, `PlayerStats`, `SummaryVerdict`); built by `summarize()` in `src/core/summary.ts` |
 | `walk.ts` | `WalkQuery` (B2): the engine's walkable-line query, passed to `ReplayCore` |
 | `round.ts` | The shape of `data/round.json` (`RoundData`, `Player`, `Kit`, `Track`, `TrackSample`, `Shot`, `Kill`, `Damage`, `Utility`, `Radio`, `Chat`, `Bomb`, …; `Confidence`, `GrenadeId`, `ShotKind`), `parseRound`, `RoundDataError`, `TICKS_PER_SEC`, `toTick`. No file I/O. Field reference: `docs/round-data.md`. |
 | `json.ts` | `JsonValue`, `stableStringify`, `parseJsonLine`, `formatNumber`, `roundNumber`, `canonicalize`, `toJsonValue`, `fnv1a32Hex` |
-| `session-log.ts` | `SessionLog` (`append`, `lines`, `toText`, `fromText`, `get`, `at`, `length`, `digest`) |
+| `session-log.ts` | `SessionLog` (`append`, `lines`, `toText`, `fromText`, `get`, `at`, `length`, `digest`; B5 `head(n)`, the first n lines without a re-parse) |
 | `replayer.ts` | `replay(log, core)` → `{identical, firstMismatchTick, diffs (≤ 20), mismatchCount, ticks}` |
 | `trace.ts` | `toReplayTrace(log)` → data for the web replay page; `DISPLAY_IDS` |
 
@@ -81,3 +85,8 @@ Details the spec left open, as decided:
 - **block_damage with attacker = victim** (B3) blocks a pawn's own grenade damage on itself; the Core sends it for every REPLAY puppet at round start.
 - **Tuning** (B4). `ReplayTuning` gained `expectedSightingWindowSec`, `expectedGunfireWindowSec`, `encounterDelaySec`, `humanSpotToleranceUnits`, `routeThinUnits`, `offCourseUnits`, `contactSlackUnits`, `blockedSec` and `dwellUnits` (all required by `parseTuning`; values and meaning in `docs/core.md` "Divergence"). `hearingRangeUnits` and `outliveGraceSec` are now used (gunfire and outlived triggers).
 - **LIVE switches** (B4). When the Core makes a pawn LIVE it sends, in this order: `unblock_damage` for every pair it blocked that involves the pawn (self pair first in id order, then both directions per enemy), `set_mode {id, mode: LIVE, goal}` and a `log` (`<id> LIVE: <reason>; goal <role>, <n> waypoints`). A scheduled encounter may send `block_damage {shooter, human}` with its scripted shot and `unblock_damage` for it afterwards: the human's pairs are otherwise never blocked.
+- **Capabilities** (B5). `IHost.capabilities(): HostCapabilities` = `{snapshot, seek, speed}`, constant for the host's lifetime. `snapshot`: `snapshot()` / `restore()` are exact (velocities, grenades, bomb progress, timers). `seek`: the driver may step ticks back to back, faster than real time. `speed`: the engine can run at another rate. `Sim2DHost` returns all true (`ALL_CAPABILITIES`); the **CS2 adapter returns `{snapshot: false, seek: false, speed: false}`** (`CS2_CAPABILITIES`). Then the Core and the driver: a rewind restores the Core's snapshot and **resyncs** the engine (`rewind {id}` to the Core, the checkpoint's observe to the next step, whose Act starts with the resync actions; `docs/core.md` "Checkpoints, rewind, summary"); a seek back rewinds to the latest checkpoint at or before t without a plant or defuse in progress and plays on in real time; a seek ahead and `speed` are refused; `pause` stays a driver matter.
+- **Control semantics** (B5). `checkpoint {id}` (a non-empty id) and `seek {t}` (seconds ≥ 0) are driver work: the Core only checks them (a checkpoint stores `ICore.snapshot()`, and the host's with the capability; a seek steps every tick). `rewind {id}` to the Core means: the driver restored this Core to checkpoint `id` and the engine could not be restored; the next step resyncs it. With an engine snapshot the driver restores both and sends the Core nothing. The app's Session logs none of them except that `rewind`.
+- **set_round** (B5, resync only): `{tick, round: RoundObs}`. The tick this Act is for: the engine relabels its clock so its next Observe reports `tick + 1`, and its round state becomes `round` (score, winner, reason, end tick; bomb state, position, plant tick, defuser and tick after a defuse). A plant or defuse in progress is not carried and not restored. Sent first in the Act. 2D: also drops grenades in flight, smokes and fires and moves per-pawn timers by the clock change; CS2: adapter tick base, `CCSGameRules` round start time, `planted_c4.C4Blow`, team scores.
+- **strip** (B5, resync only): `{id}`: every item but the knife goes; the pawn holds the knife (2D: weapon timers fresh, ready at once with a teleport in the same Act; CS2: `RemoveWeapons()` and a knife). The `give`s that follow refill the inventory.
+- **Summary** (B5). `RoundSummary` (`summary.ts`): `headline`, `verdict` (`tape same_result changed unfinished`), `result` / `recorded` (`RoundResult {winner, reason, endTick, score}`), `bomb` / `recordedBomb` (`BombSummary {plantTick, defuseTick, explodeTick, marginSec}`), `kills` (`KillRow {status: same|shifted|missed|pending|new, killer (null = the world), victim, weapon, headshot, recordedTick, runTick, deltaTicks, postRound, text}`), `switches` (`SwitchRow {id, tick, trigger, reason}`), `player` (`PlayerStats {id, human, kills, damageDealt, damageTaken, aliveSec, deathTick, rmsFromRecording, rmsTicks}`), `ticks`, `lastTick`. No optional fields.

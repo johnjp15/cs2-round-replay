@@ -177,10 +177,12 @@ describe('Session', () => {
     expect(h.log().at(2)?.act.inputs.map((q) => q.id)).not.toContain('cart');
   });
 
-  it('forwards controls: bad speed and B5 controls throw and are not logged', () => {
+  it('forwards controls: bad speed throws and is not logged; checkpoint / rewind / seek are not logged (B5)', () => {
     const s = newSession();
     expect(() => s.control({ type: 'speed', x: 0 })).toThrow(RangeError);
-    expect(() => s.control({ type: 'seek', t: 10 })).toThrow(/B5/);
+    expect(() => s.control({ type: 'rewind', id: 'nope' })).toThrow(/no checkpoint nope/);
+    s.control({ type: 'checkpoint', id: 'zero' });
+    s.control({ type: 'seek', t: 0 });
     s.control({ type: 'speed', x: 4 });
     s.step();
     expect(s.log().at(0)?.controls).toEqual([{ type: 'start' }, { type: 'speed', x: 4 }]);
