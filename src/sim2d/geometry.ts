@@ -383,7 +383,12 @@ export class MapGeometry {
     const counts = new Int32Array(ncell + 1);
     for (let t = 0; t < nt; t++) {
       const [i0, i1, j0, j1] = this.triCells(t);
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) counts[j * this.gridNX + i + 1]++;
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const k = j * this.gridNX + i + 1;
+          counts[k] = (counts[k] as number) + 1;
+        }
+      }
     }
     for (let k = 0; k < ncell; k++) counts[k + 1] = (counts[k + 1] as number) + (counts[k] as number);
     this.cellStart = counts;
@@ -395,7 +400,7 @@ export class MapGeometry {
         for (let i = i0; i <= i1; i++) {
           const k = j * this.gridNX + i;
           this.cellTris[(counts[k] as number) + (fill[k] as number)] = t;
-          fill[k]++;
+          fill[k] = (fill[k] as number) + 1;
         }
       }
     }
