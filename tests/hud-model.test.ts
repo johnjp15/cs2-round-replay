@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Observe, PawnObs } from '../src/contracts/index';
 import { RoundClock } from '../src/core/index';
 import {
+  aiDebugLine,
+  chooseLabelSpot,
   clockView,
   hasAmmo,
   hpBand,
@@ -137,5 +139,37 @@ describe('clock and score from observe.round (C3)', () => {
     const over: RoundStateLike = { ...planted, phase: 'over', winner: 'CT', reason: 'bomb_defused', endTick: 4275, score: { ct: 12, t: 15 } };
     expect(clockView(obs(4300, over), CLOCK, NO_BOMB, null)).toMatchObject({ mode: 'defused', winner: 'CT', text: CLOCK.hudBomb(4275, 1761) });
     expect(scoreView(obs(4300, over), BEFORE, null)).toEqual({ ct: 12, t: 15 });
+  });
+});
+
+describe('labels clear of the HUD (F)', () => {
+  const W = 40;
+  const H = 12;
+  const cands = [
+    { x: 100, y: 50 }, // above the pawn
+    { x: 130, y: 62 }, // right
+    { x: 100, y: 80 }, // below
+  ];
+  const scoreboard = { x: 80, y: 0, w: 200, h: 64 };
+
+  it('takes the first spot clear of other labels and the HUD', () => {
+    expect(chooseLabelSpot(cands, W, H, [], [])).toEqual({ x: 100, y: 50 });
+    // Under the scoreboard: moves to the first spot clear of it.
+    expect(chooseLabelSpot(cands, W, H, [], [scoreboard])).toEqual({ x: 100, y: 80 });
+    // A label already below too: still out of the HUD, overlapping that label (as labels did before).
+    expect(chooseLabelSpot(cands, W, H, [{ x: 100, y: 80, w: W, h: H }], [scoreboard])).toEqual({ x: 100, y: 80 });
+  });
+
+  it('drops the text (null) when every spot is under the HUD', () => {
+    expect(chooseLabelSpot(cands, W, H, [], [{ x: 0, y: 0, w: 400, h: 120 }])).toBeNull();
+  });
+});
+
+describe('LIVE AI line in the status panel (F)', () => {
+  it('reads behaviour, target and goal from aiDebug; nothing for a pawn that is not LIVE', () => {
+    expect(aiDebugLine(null)).toBeNull();
+    expect(aiDebugLine({ role: 'defuse', behaviour: 'moving', target: null, targetVisible: false, dest: { x: -1982.4, y: 311.2, z: -160 }, path: [] })).toBe('moving · defuse → (-1982, 311)');
+    expect(aiDebugLine({ role: 'guard_bomb', behaviour: 'fighting', target: 'cart', targetVisible: true, dest: null, path: [] })).toBe('fighting · target cart · guard_bomb');
+    expect(aiDebugLine({ role: 'hold', behaviour: 'reacting', target: 'lokier', targetVisible: false, dest: null, path: [] })).toBe('reacting · target lokier (out of sight) · hold');
   });
 });

@@ -128,16 +128,19 @@ describe('1. no-op guard', () => {
     expect(golden.entries.some((e) => e.act.status.some((s) => s.mode === 'HUMAN' || s.trigger !== null))).toBe(false);
   });
 
-  it('cart follows his recording: only sp4rtan goes LIVE, hit by cart for real during the defuse', () => {
+  it('cart follows his recording: nobody goes LIVE, and the round ends CT bomb_defused 12 – 15 like the tape', () => {
     const run = playScript(data, readFileSync(`${ROOT}/${FOLLOW_SCRIPT}`, 'utf8'));
     const sw = switches(run);
     console.log(`[no-op guard, cart-follows-recording] switches:\n${sw.map((s) => `  ${s.tick} (${(s.tick / 64).toFixed(2)} s) ${s.text}`).join('\n')}\n${formatTimeline(timeline(run.entries))}\n`);
-    // The one switch: cart's recorded spray at the defusing sp4rtan (65.9 s) hits him in 2D (the B-site boxes, which
-    // stopped it in the recording, are open in the radar mask), so his damage is unscripted.
-    expect(sw.map((s) => [s.id, s.trigger])).toEqual([['sp4rtan', 'damage']]);
-    const hit = damages(run.entries).find((d) => d.victim === 'sp4rtan' && d.tick === (sw[0] as { tick: number }).tick);
-    expect(hit).toMatchObject({ attacker: 'cart', scripted: false });
-    expect((sw[0] as { tick: number }).tick).toBeGreaterThan(3955); // after the defuse start
+    expect(sw).toEqual([]);
+    // Cart's recorded spray during the defuse (65.9–66.9 s, 11 shots, no damage on the tape): the follow script looks
+    // where his recorded view does (tools/follow-aim.ts), 17–22° off sp4rtan, so it misses as it did; sp4rtan defuses.
+    const spray = run.entries.filter((e) => e.observe.tick >= 4210 && e.observe.tick <= 4290 && e.observe.events.some((ev) => ev.type === 'shot' && ev.shooter === 'cart'));
+    expect(spray.length).toBeGreaterThanOrEqual(10);
+    expect(damages(run.entries).some((d) => d.attacker === 'cart' && d.victim === 'sp4rtan')).toBe(false);
+    const end = expectRoundEndByRules(run);
+    expect(end).toEqual({ tick: 4275, winner: 'CT', reason: 'bomb_defused' });
+    expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.score).toEqual({ ct: 12, t: 15 });
     // Lokier: the encounter starts when he sees cart at the window, but cart's real AK headshot (E1's re-check: with C4's
     // sight mask his bullets do reach Lokier through the Apartments window) kills him before the scripted hit is due.
     const seen = seenTick(run);
@@ -185,10 +188,10 @@ describe('2. cart kills Lokier about 3 s late', () => {
     const sw = switches(run);
     const first = sw[0];
     expect(first === undefined || first.tick > 1761).toBe(true); // the plant, on B site
-    // Until the first switch (sp4rtan, hit by cart during the defuse, as in the follow run) everything not involving
-    // cart and Lokier lands on the golden master's ticks.
+    // No switch at all: cart's later spray at the defusing sp4rtan misses as on the tape (he follows his recording
+    // again, tools/follow-aim.ts), so everything not involving cart and Lokier lands on the golden master's ticks.
     const until = first === undefined ? Infinity : first.tick;
-    expect(sw.map((s) => [s.id, s.trigger])).toEqual([['sp4rtan', 'damage']]);
+    expect(sw).toEqual([]);
     expect(recordedHits(run.entries, ['cart', 'lokier'], until)).toEqual(recordedHits(golden.entries, ['cart', 'lokier'], until));
     const bomb = (r: HarnessRun) => r.entries.flatMap((e) => e.observe.events.filter((ev) => ev.type === 'bomb' && e.observe.tick < until).map((ev) => [e.observe.tick, ev.type === 'bomb' ? ev.phase : '']));
     expect(bomb(run)).toEqual(bomb(golden));
@@ -304,6 +307,22 @@ describe('5. cart catches sp4rtan on his flank around 45 s', () => {
     expect(end).toEqual({ tick: sp?.tick, winner: 'T', reason: 'elimination' });
     expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.score).toEqual({ ct: 11, t: 16 });
     expectUntouchedReplay(run);
+  });
+
+  it('after the round the bomb still ticks: the LIVE guards leave its blast and survive it (they used to die in it)', () => {
+    const blast = run.entries.find((e) => e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'exploded')) as LogEntry;
+    expect(blast.observe.tick).toBe(4321);
+    const bomb = blast.observe.round.bomb.pos as { x: number; y: number; z: number };
+    for (const id of ['donk', 'barely'] as const) {
+      const p = pawnAt(blast, id);
+      const d = Math.hypot(p.pos.x - bomb.x, p.pos.y - bomb.y, p.pos.z - bomb.z);
+      console.log(`[flank-sp4rtan] ${id} at the explosion: ${d.toFixed(0)} u from the bomb, ${p.hp} HP`);
+      expect(p.alive, id).toBe(true);
+    }
+    expect(deaths(run.entries).filter((d) => d.victim === 'donk' || d.victim === 'barely')).toEqual([]);
+    // donk (LIVE from 53.3 s) is out of the radius; barely (from 61.8 s) runs and takes only the edge of it.
+    const donk = pawnAt(blast, 'donk');
+    expect(Math.hypot(donk.pos.x - bomb.x, donk.pos.y - bomb.y, donk.pos.z - bomb.z)).toBeGreaterThanOrEqual(tuning.bomb.radius);
   });
 });
 

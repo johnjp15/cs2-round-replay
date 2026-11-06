@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, type Action, type PlayerId, type Vec3 } from '../src/contracts/index';
 import { Sim2DHost } from '../src/sim2d/host';
 import { NavMesh, navOptionsFromTuning } from '../src/sim2d/nav';
-import { Sight, VisMask, computeSees, decodeVisMaskJson, encodeRow, sightOptionsFromTuning, type SeePawn } from '../src/sim2d/vision';
+import { aimPitch, traceShot, type ScanPawn } from '../src/sim2d/hitscan';
+import { CELL_COVER, Sight, VisMask, computeSees, decodeVisMaskJson, encodeRow, sightOptionsFromTuning, type SeePawn, type SightNav } from '../src/sim2d/vision';
 import { MASK_PATH, RADAR_PATH, buildMask, maskJsonText } from '../tools/extract-vismask';
 import { LABELS_PATH, buildLabels, evaluate, labelsJsonText, loadVision, reportTable, type VisionLabels } from '../tools/vision-labels';
 import { act } from './combat-fixtures';
@@ -19,12 +20,12 @@ const ROOT = new URL('..', import.meta.url);
 const read = (rel: string): string => readFileSync(new URL(rel, ROOT), 'utf8');
 const { round, nav, mask, sight } = loadVision();
 
-/** A synthetic mask from rows of '#' (wall) and '.' (open); 1 unit per cell, origin (0, rows). */
+/** A synthetic mask from rows of '#' (wall), 'o' (cover) and '.' (open); 1 unit per cell, origin (0, rows). */
 function gridMask(rows: string[], wallTol = 1, endTol = 0): VisMask {
   const h = rows.length;
   const w = (rows[0] as string).length;
   const cells = new Uint8Array(w * h);
-  rows.forEach((r, j) => [...r].forEach((c, i) => (cells[j * w + i] = c === '#' ? 1 : 0)));
+  rows.forEach((r, j) => [...r].forEach((c, i) => (cells[j * w + i] = c === '#' ? 1 : c === 'o' ? CELL_COVER : 0)));
   return new VisMask({ width: w, height: h, unitsPerPx: 1, originX: 0, originY: h, cells }, { wallTolerancePx: wallTol, endpointTolerancePx: endTol });
 }
 /** World point at the centre of cell (i, j) of a gridMask with `h` rows. */
@@ -177,6 +178,102 @@ describe('labelled set (the acceptance)', () => {
   it('the mask beats the nav LOS on the recording (the reason for A5)', () => {
     const asserted = results.filter((r) => r.kind === 'see' && r.asserted);
     expect(asserted.filter((r) => r.nav).length).toBeLessThan(asserted.length);
+  });
+});
+
+describe('cover (boxes): the mask class and the rule', () => {
+  // 200 × 5 cells of 1 unit, open floor at z 0, a box (cover) 10 units thick across it at x 100–110.
+  const box = gridMask(Array.from({ length: 5 }, () => '.'.repeat(100) + 'o'.repeat(10) + '.'.repeat(90)));
+  const flatNav: SightNav = { lineOfSight: () => true, floorsAt: () => [0] };
+  const s = new Sight(box, flatNav, sightOptionsFromTuning(tuning));
+  const P = (x: number, z = 0): { x: number; y: number; z: number } => ({ x, y: 2.5, z });
+  const eye = tuning.damage.eyeHeight;
+  const crouch = tuning.damage.crouchEyeHeight;
+  const near = tuning.ai.losCoverNearUnits;
+
+  it('the radar boxes are cover: the B-site box stacks, never on a wall cell; walls are unchanged by it', () => {
+    // The bottom-right stack of B site (radar px 255, 310) and the top-left one (px 212, 262) are cover; the plant
+    // spot between them and the floor around are open.
+    expect(mask.isCover({ x: -3230 + 255 * 5, y: 1713 - 310 * 5 })).toBe(true);
+    expect(mask.isCover({ x: -3230 + 212 * 5, y: 1713 - 262 * 5 })).toBe(true);
+    expect(mask.isCover({ x: -1982, y: 311 })).toBe(false);
+    expect(mask.isOpen({ x: -1982, y: 311 })).toBe(true);
+    const doc = JSON.parse(read(MASK_PATH)) as { stats: Record<string, number> };
+    expect(doc.stats['wall']).toBe(738_507); // as before cover (C4)
+    expect(mask.counts().cover).toBe(doc.stats['cover']);
+  });
+
+  it('coverRuns lists the box crossings as distances from the first end, the same seen from either end', () => {
+    const runs = (a: number, b: number): number[][] => box.coverRuns(P(a), P(b)).map((r) => [Math.round(r.from * 1e6) / 1e6, Math.round(r.to * 1e6) / 1e6]);
+    expect(runs(10, 190)).toEqual([[90, 100]]);
+    expect(runs(190, 10)).toEqual([[80, 90]]);
+    expect(runs(10, 90)).toEqual([]);
+    expect(box.lineOfSight(P(10), P(190))).toBe(true); // cover is not wall
+  });
+
+  it('blocks a line between two pawns away from it; an upright pawn at the box sees and is seen over it', () => {
+    const at = (x: number, low = false): { pos: { x: number; y: number; z: number }; height: number; low: boolean } => ({ pos: P(x), height: low ? crouch : eye, low });
+    expect(s.coverClear(at(10), at(190))).toBe(false);
+    expect(s.coverClear(at(100 - near), at(190))).toBe(true);
+    expect(s.coverClear(at(190), at(100 - near))).toBe(true);
+    expect(s.coverClear(at(110 + near), at(10))).toBe(true);
+    expect(s.coverClear(at(100 - near - 1), at(190))).toBe(false);
+    // Crouched (or planting / defusing) at the box: hidden behind it, and it doesn't look over it either.
+    expect(s.coverClear(at(100 - near, true), at(190))).toBe(false);
+    expect(s.coverClear(at(10), at(110 + 16, true))).toBe(false);
+    // Standing on (in) the box: never blocked by it.
+    expect(s.coverClear(at(105, true), at(190))).toBe(true);
+    // From well above (a balcony), the line passes over the box.
+    expect(s.coverClear({ pos: P(10, 200), height: eye, low: false }, at(190, true))).toBe(true);
+    expect(s.coverClear({ pos: P(10, 4), height: eye, low: false }, at(190))).toBe(false);
+    // Symmetric, and `clear` applies it with the posture flags.
+    expect(s.clear(P(10), eye, P(190), eye)).toBe(false);
+    expect(s.clear(P(60), eye, P(190), eye)).toBe(true);
+    expect(s.clear(P(60), crouch, P(190), eye, true, false)).toBe(false);
+  });
+
+  it('grazing a box corner (≤ losCoverTolerancePx cells along the line) does not block', () => {
+    const corner = gridMask(['.'.repeat(60), '.'.repeat(30) + 'o'.repeat(10) + '.'.repeat(20), '.'.repeat(60)]);
+    const cs = new Sight(corner, flatNav, sightOptionsFromTuning(tuning));
+    const a = { pos: { x: 0.5, y: 1.95, z: 0 }, height: eye, low: true };
+    const b = { pos: { x: 59.5, y: 1.05, z: 0 }, height: eye, low: true };
+    const runs = corner.coverRuns(a.pos, b.pos);
+    expect(runs.length).toBe(1);
+    expect((runs[0] as { from: number; to: number }).to - (runs[0] as { from: number; to: number }).from).toBeGreaterThan(tuning.ai.losCoverTolerancePx);
+    expect(cs.coverClear(a, b)).toBe(false);
+    const graze = { pos: { x: 59.5, y: 2.9, z: 0 }, height: eye, low: true };
+    const g = corner.coverRuns({ x: 0.5, y: 2.1 }, graze.pos);
+    expect(g.every((r) => r.to - r.from <= tuning.ai.losCoverTolerancePx)).toBe(true);
+    expect(cs.coverClear({ ...a, pos: { x: 0.5, y: 2.1, z: 0 } }, graze)).toBe(true);
+  });
+
+  it('sees: a defusing or crouched pawn behind a box is hidden from a pawn across the site; standing, it is seen over it', () => {
+    const viewer: SeePawn = { id: 'cart', pos: P(10), yaw: 0, crouching: false, alive: true, blind: false };
+    const target: SeePawn = { id: 'sp4rtan', pos: P(120), yaw: 180, crouching: false, alive: true, blind: false };
+    const opts = { fovDeg: tuning.ai.fovDeg, eyeHeight: eye, crouchEyeHeight: crouch };
+    const smoke = { smokeBlocks: (): boolean => false };
+    expect(computeSees([viewer, target], s, smoke, opts)).toEqual([['sp4rtan'], ['cart']]);
+    expect(computeSees([viewer, { ...target, busy: true }], s, smoke, opts)).toEqual([[], []]);
+    expect(computeSees([viewer, { ...target, crouching: true }], s, smoke, opts)).toEqual([[], []]);
+  });
+
+  it('bullets: a body shot at a defusing pawn behind a box hits the box; at him standing there, he is hit', () => {
+    const shooter: ScanPawn = { id: 'cart', team: 'T', pos: P(10), yaw: 0, pitch: 0, crouching: false, alive: true };
+    const victim: ScanPawn = { id: 'sp4rtan', team: 'CT', pos: P(130), yaw: 180, pitch: 0, crouching: false, alive: true };
+    const chest = { ...shooter, pitch: aimPitch(shooter, victim, 'chest', tuning.damage) };
+    expect(traceShot(chest, [chest, victim], s, tuning.damage)).toMatchObject({ victim: 'sp4rtan', hitgroup: 'chest' });
+    expect(traceShot(chest, [chest, { ...victim, busy: true }], s, tuning.damage)).toBeNull();
+    // Without the cover rule (the nav mesh as the query), nothing is a box.
+    expect(traceShot(chest, [chest, { ...victim, busy: true }], { lineOfSight: () => true }, tuning.damage)).toMatchObject({ victim: 'sp4rtan' });
+  });
+
+  it('a mask in the old format (@1) still decodes, without cover', () => {
+    const v1 = { format: 'cs2-round-replay/vismask@1', width: 3, height: 1, unitsPerPx: 5, originX: 0, originY: 0, rows: [[1, 1, 1]] };
+    const g = decodeVisMaskJson(v1);
+    expect([...g.cells]).toEqual([1, 0, 1]);
+    expect(new VisMask(g, { wallTolerancePx: 1, endpointTolerancePx: 3 }).hasCover).toBe(false);
+    expect(() => decodeVisMaskJson({ ...v1, format: 'cs2-round-replay/vismask@2' })).toThrow(/cover/);
+    expect(() => decodeVisMaskJson({ ...v1, format: 'cs2-round-replay/vismask@2', cover: [[0, 1, 2]] })).toThrow(/wall cell/);
   });
 });
 
