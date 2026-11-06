@@ -21,8 +21,10 @@ const CLOCK = new RoundClock(98.25, 40);
 const BEFORE = { ct: 11, t: 15 };
 
 function obs(tick: number, round?: RoundStateLike): Observe {
-  const o: Observe = { tick, t: tick / 64, pawns: [], events: [], human: null };
-  return round === undefined ? o : ({ ...o, round } as Observe);
+  // Without `round`, this exercises the HUD's fallback path (RoundClock + bomb events);
+  // every engine now provides Observe.round (C3), so the omission needs a cast.
+  const o = { tick, t: tick / 64, pawns: [], events: [], human: null };
+  return round === undefined ? (o as unknown as Observe) : ({ ...o, round } as Observe);
 }
 
 describe('status badges', () => {

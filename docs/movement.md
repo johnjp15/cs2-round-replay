@@ -153,7 +153,7 @@ unseen snaps at teleport points. Its whole-round results (all ten pawns, no huma
 ## Sim2DHost (movement and bookkeeping; combat in `docs/combat.md`)
 
 ```ts
-const host = new Sim2DHost(nav, tuning, roster);   // roster: the ten {id, team}; the host does not read round.json
+const host = new Sim2DHost(nav, tuning, roster, { score, roundTimeSec });   // roster: the ten {id, team}; options optional (C3)
 for (;;) {
   const o = host.observe();       // already canonical (6 decimals)
   const a = core.step(o);
@@ -175,7 +175,8 @@ for (;;) {
 | `set_mode` | Records mode and goal per pawn (`pawnState(id)`); the host does not act on them. |
 | `log` | Ignored (the app reads Core logs from the Act / SessionLog). |
 | `damage`, `block_damage`, `unblock_damage` | C2: see `docs/combat.md` (scripted damage is applied in the next `tick()`). |
-| `plant`, `defuse_start`, `defuse_stop`, `end_round`, unknown types | Noted as `unsupported in v0` in `unhandled()`; nothing else happens (bomb and round rules: C3). |
+| `plant`, `defuse_start`, `defuse_stop`, `end_round` | C3: queued and applied in the next `tick()` after the scripted damage (`docs/combat.md`, "Bomb and round rules"). |
+| unknown types | Noted as `unsupported in v0` in `unhandled()`; nothing else happens. |
 | `control(c)` | Noted as `unsupported in v0`. |
 
 - **Spawn state** (before Core sets a pawn up): pos (0, 0, 0), 100 HP, 0 armor, no helmet, knife only
@@ -184,8 +185,10 @@ for (;;) {
   human pawn instead of any Core input for it, until replaced or cleared with `null`, which hands the pawn
   back to Core. `input.id` must be the human pawn.
 - **observe()**: all roster pawns sorted by id, `sees: []` (C4), the last tick's events in emission order
-  (C2), `t = tick / 64`.
-- **snapshot() / restore()**: version 2 adds the combat state (`docs/combat.md`, Snapshot) to
+  (C2), `t = tick / 64`, and `round` (C3: phase, score, clock, bomb).
+- **Collision and locks** (C3): pawns don't overlap alive enemies (radius 16 circles, teammates pass through), and a
+  planting or defusing pawn doesn't move (`docs/combat.md`, "Collision" and "Bomb and round rules").
+- **snapshot() / restore()**: version 3 adds the combat, bomb and round state (`docs/combat.md`, Snapshot) to
   `{tick, human, humanInput, inputs, pawns}`, via `toJsonValue`. It is exact because the state is canonical.
   `restore` checks the version and roster. `unhandled()` and `combatLog()` are diagnostics and are not part of
   snapshots.
@@ -201,4 +204,5 @@ for (;;) {
 Jumping, air movement and falling; stamina and landing slowdown; tagging (slowdown when hit); scoped
 speeds (AWP 100); crouch transition time (crouch is instant); surface friction; sub-tick input; step-up
 and ledges (z just follows the nav floor). Whether WALK and DUCK stack in CS2 is to be checked. The player
-hull is implicit: nav areas are player-centre space.
+hull is implicit against the world (nav areas are player-centre space); between pawns it is a 16-unit circle
+(C3, `docs/combat.md`, "Collision").

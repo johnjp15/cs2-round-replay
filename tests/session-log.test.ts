@@ -3,7 +3,7 @@ import { JsonError, SessionLog, parseJsonLine, stableStringify } from '../src/co
 import { EchoCore, ScriptedHost, runSession } from './fakes';
 
 /** Golden digest of runSession(100). If it changes, every recorded fixture changes too. */
-const GOLDEN_DIGEST_100 = 'eedf9df9';
+const GOLDEN_DIGEST_100 = '1e8d5654'; // C3: Observe gained `round`
 
 describe('SessionLog', () => {
   it('stores one canonical line per tick', () => {

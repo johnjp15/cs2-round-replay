@@ -16,7 +16,7 @@ import {
 } from '../src/core/index';
 import { NavWalkQuery } from '../src/sim2d/walk-query';
 import { Sim2DHost } from '../src/sim2d/host';
-import { ScriptedHost, runSession } from './fakes';
+import { ScriptedHost, liveRound, runSession } from './fakes';
 import { loadRound, loadTuning } from './round-fixture';
 import { nav, roster } from './sim2d-fixtures';
 
@@ -63,7 +63,7 @@ function pawn(id: PlayerId, x: number, y: number, yaw = 0): PawnObs {
 }
 
 function observe(tick: number, pawns: PawnObs[], human: PlayerId | null): Observe {
-  return { tick, t: tick / 64, pawns, events: [], human };
+  return { tick, t: tick / 64, pawns, events: [], human, round: liveRound(tick) };
 }
 
 describe('stick conversion (forward / side in the pawn yaw frame)', () => {

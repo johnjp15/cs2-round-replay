@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Act, ObsEvent, Observe, PawnObs, PawnStatus, PlayerId, Team } from '../src/contracts/index';
 import type { Effect } from '../src/app/effects';
+import { liveRound } from './fakes';
 import { TRACER_TICKS } from '../src/app/effects';
 import { TICK_MS } from '../src/app/loop';
 import {
@@ -39,7 +40,7 @@ function pawn(id: PlayerId, team: Team, x: number, y: number, yaw = 0, extra: Pa
 }
 
 function obs(tick: number, pawns: PawnObs[], events: ObsEvent[] = []): Observe {
-  return { tick, t: tick / 64, pawns, events, human: null };
+  return { tick, t: tick / 64, pawns, events, human: null, round: liveRound(tick) };
 }
 
 function status(mode: PawnStatus['mode'] = 'REPLAY'): PawnStatus[] {

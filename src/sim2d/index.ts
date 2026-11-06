@@ -15,7 +15,24 @@ export {
 } from './movement';
 export type { MoveState, MoveInput, MoveStep, Wish } from './movement';
 export { Sim2DHost, UNSUPPORTED_V0 } from './host';
-export type { RosterEntry, InventoryItem, PawnState, HostNote, CombatLogLine, BlockedPair } from './host';
+export type { RosterEntry, InventoryItem, PawnState, HostNote, CombatLogLine, BlockedPair, Sim2DOptions } from './host';
+export {
+  BOMBSITE_PREFIX,
+  isBombsite,
+  freshBomb,
+  isTicking,
+  nextBeep,
+  explosionDamage,
+  within2D,
+  lockedPawns,
+  stepBomb,
+  applyBombAction,
+} from './bomb';
+export type { BombData, PlantProgress, DefuseProgress, BombPawn, BombOutcome, BombStep, BombAction, BombActionResult } from './bomb';
+export { dueTick, ticksAfter, freshRound, isOver, checkRoundEnd, endRound, roundPhase, timeLeftSec } from './round';
+export type { RoundEnd, RoundState, TeamCounts, BombClock } from './round';
+export { contactTime, validEnd, collideMove } from './collision';
+export type { Obstacle, CollisionNav, CollideResult } from './collision';
 export {
   GRENADE_KINDS,
   isGrenade,
