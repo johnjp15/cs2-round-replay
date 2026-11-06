@@ -24,6 +24,7 @@ the only requests are the page's own assets.
 | `renderer.ts` | `Renderer`: the canvas (radar cache, pawns, overlays, effects layer). `resize()`, `view`, `draw(frame)`. | yes |
 | `hud.ts` | `Hud`: the DOM overlay (scoreboard and clock, kill feed, status panel, your status, rates). | yes |
 | `main.ts` | Entry: loads data, builds the Session, runs the loop on `requestAnimationFrame`, feeds the Scene, wires the controls bar and view keys. | yes |
+| `assets.ts` | `loadAssets()`: fetches the round, nav and sight-mask JSON and the radar. The single-file build swaps in `assets-embedded.ts`, which reads them from the page (docs/deploy.md). | yes |
 | `index.ts` | Barrel of the DOM-free parts, for Node (C5's headless harness). | no |
 
 The DOM-free files hold the logic and are unit-tested in Node (`tests/session.test.ts`,
@@ -163,7 +164,12 @@ Build output (`npm run build`):
 | `assets/mirage-nav-*.json` | 173 KB | 17.7 KB |
 | `assets/mirage-radar-*.jpg` | 136 KB | (jpeg) |
 
-That's about 260 KB over the wire with gzip (GitHub Pages compresses JSON). Of the script, C2's combat
+That's about 260 KB over the wire with gzip (GitHub Pages compresses JSON).
+
+`npm run build:single` (`vite.single.config.ts`) makes the same app one self-contained `dist-single/index.html`
+(447 KB) for the password-locked johnjp15.github.io/cs2/sim/: the JSON is embedded gzipped and base64-encoded and
+inflated with `DecompressionStream`, the radar is a data: URI, and the page makes no requests. See
+[`deploy.md`](deploy.md). Of the script, C2's combat
 code took it from 58.7 to 82.9 KB and D2's renderer, HUD and camera add 29.9 KB (10.3 KB gzip).
 
 ## Renderer and HUD (D2)

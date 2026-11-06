@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:single": "tsc --noEmit && vite build --config vite.single.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint .",
@@ -25,7 +26,9 @@
     "harness": "tsx tools/harness.ts",
     "fixtures:update": "tsx tools/golden-fixtures.ts",
     "extract:vismask": "tsx tools/extract-vismask.ts",
-    "vision": "tsx tools/vision-labels.ts"
+    "vision": "tsx tools/vision-labels.ts",
+    "stage:web-apps": "bash tools/stage-web-apps.sh",
+    "check:locked": "tsx tools/e2e-locked.ts"
   },
   "repository": {
     "type": "git",
@@ -43,6 +46,7 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.6",
+    "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^5.1.0"
   }
 }
