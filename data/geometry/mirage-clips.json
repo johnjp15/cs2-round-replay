@@ -1,0 +1,120 @@
+{
+  "format": "cs2-round-replay/clips@1",
+  "note": "Player clips for G3 movement: prisms over walkable surfaces a pawn could reach that the CS2 nav does not cover (wall tops, ledges, roofs, out-of-map floors). G2GM like mirage-geometry.bin; merged into it for movement. Built by tools/extract-clips.ts; see docs/geometry.md \"Player clips\".",
+  "binary": {
+    "file": "data/geometry/mirage-clips.bin",
+    "bytes": 151199,
+    "sha256": "30b8e23325178ba443004b1bb9f7e99c0d7e56ed4cf422dfc297cacf6faf4a57"
+  },
+  "sources": [
+    {
+      "file": "data/geometry/mirage-geometry.bin",
+      "sha256": "4456186c18d2f9ff161dde5120ca0b10c36889bbc0f6cd6ebe02ada0a367ad6a"
+    },
+    {
+      "file": "data/source/cs2/de_mirage.nav",
+      "sha256": "2ba8608994c178dc5ff2553fefdd2a8473aadd0e0b09b8004201e1fa578bb0bd"
+    },
+    {
+      "file": "data/round.json",
+      "sha256": "c86b77b776fe0fe79a3d4804b151d120e023c7c7404982e44814623c3c4a48c8"
+    }
+  ],
+  "params": {
+    "maskGrow": 64,
+    "jumpUp": 72,
+    "navExactDz": 16,
+    "navNearRadius": 24,
+    "navNearDz": 16,
+    "navProbe": 4,
+    "pieceCell": 8,
+    "clipHeight": 512,
+    "ceilingGap": 0.125,
+    "seedSearchPx": 13,
+    "seedDz": 24,
+    "maxRounds": 8
+  },
+  "pieces": 3864,
+  "rounds": [
+    {
+      "round": 0,
+      "pixels": 389930,
+      "levels": 610742,
+      "seedsMoved": 4,
+      "walkEdges": 242216,
+      "dropEdges": 973,
+      "jumpEdges": 1118,
+      "frontierWalk": 1304,
+      "frontierDrop": 367,
+      "frontierJump": 613,
+      "reachedLevels": 242033,
+      "frontierLevels": 2284,
+      "added": 3580,
+      "thin": 62
+    },
+    {
+      "round": 1,
+      "pixels": 389930,
+      "levels": 602001,
+      "seedsMoved": 4,
+      "walkEdges": 242089,
+      "dropEdges": 800,
+      "jumpEdges": 823,
+      "frontierWalk": 158,
+      "frontierDrop": 41,
+      "frontierJump": 65,
+      "reachedLevels": 243458,
+      "frontierLevels": 264,
+      "added": 284,
+      "thin": 9
+    },
+    {
+      "round": 2,
+      "pixels": 389930,
+      "levels": 601493,
+      "seedsMoved": 4,
+      "walkEdges": 242080,
+      "dropEdges": 771,
+      "jumpEdges": 788,
+      "frontierWalk": 150,
+      "frontierDrop": 11,
+      "frontierJump": 28,
+      "reachedLevels": 243460,
+      "frontierLevels": 189,
+      "added": 0,
+      "thin": 0
+    }
+  ],
+  "mesh": {
+    "caps": 7790,
+    "walls": 19702,
+    "degenerate": 329,
+    "vertices": 16593,
+    "triangles": 27155
+  },
+  "validation": {
+    "reachedLevels": 243495,
+    "notAllowedByNav": 35,
+    "notAllowedCells": [
+      "-128,-2432,-163",
+      "-1600,-2432,-240",
+      "-1600,-2432,-241",
+      "-192,-1664,-71",
+      "-2304,-704,-168",
+      "-320,-2112,-102",
+      "-384,-2368,-151",
+      "-448,-2368,-151",
+      "-960,-2560,-158",
+      "256,-576,-125",
+      "320,-576,-162",
+      "320,-576,-163",
+      "320,-640,-163",
+      "384,640,-259",
+      "704,-1280,-257",
+      "704,-1472,-262",
+      "704,-1472,-263",
+      "704,-1472,-264",
+      "704,-1536,-264"
+    ]
+  }
+}
