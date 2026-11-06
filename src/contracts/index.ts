@@ -87,6 +87,7 @@ export type {
 } from './types';
 
 export type { IHost, ICore, HostSnapshot, CoreSnapshot } from './host';
+export type { WalkQuery } from './walk';
 
 export { TICKS_PER_SEC, toTick, CONFIDENCES, GRENADE_IDS, SHOT_KINDS, RoundDataError, parseRound } from './round';
 export type {

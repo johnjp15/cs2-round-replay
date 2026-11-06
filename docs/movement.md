@@ -147,6 +147,9 @@ eradicate 5.7 and snarlbot 8.1. What the model can't follow:
   This is a controller problem, not a movement one. Core's replay controller needs the wall-aware rule (or a
   nav path) and drift handling (`driftNudgeUnits` / `driftSnapUnits`).
 
+B2 built that controller into the Core (`src/core/puppet.ts`): wall-aware pursuit plus track preprocessing and
+unseen snaps at teleport points. Its whole-round results (all ten pawns, no human) are in `docs/core.md`, "Puppets".
+
 ## Sim2DHost (movement and bookkeeping; combat in `docs/combat.md`)
 
 ```ts

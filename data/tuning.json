@@ -33,7 +33,14 @@
     "crouchSpeedThreshold": 60,
     "maxTurnRateDegPerTick": 12,
     "hearingRangeUnits": 1500,
-    "outliveGraceSec": 3
+    "outliveGraceSec": 3,
+    "spikeSpeedFactor": 1.6,
+    "spikeMaxSec": 0.5,
+    "teleportWindowSec": 1,
+    "holdLastPositionSec": 0.25,
+    "standSpeedThreshold": 20,
+    "buttonMinSec": 0.25,
+    "steerFallbackSec": 2
   },
   "weapons": {
     "ak47": { "damage": 36, "rpm": 600, "headshotMult": 4, "armorPen": 0.775, "rangeModifier": 0.98, "clip": 30, "reserve": 90, "reloadSec": 2.5, "deploySec": 1, "automatic": true },

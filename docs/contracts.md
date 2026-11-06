@@ -35,6 +35,7 @@ The spec above is implemented in `src/contracts/` (re-exported from `src/contrac
 | --- | --- |
 | `types.ts` | `PlayerId`, `Team`, `Vec3`, `WeaponId`, `ItemId`, `Button`, `Hitgroup`, `Mode`, `PawnObs`, `ObsEvent`, `Observe`, `PawnInput`, `Action`, `PawnStatus`, `Act`, `Control`; const arrays (`PLAYER_IDS`, `BUTTONS`, …); `sortById`, `sortIds`, `sortButtons`, `compareOrdinal` |
 | `host.ts` | `IHost`, `ICore`, `HostSnapshot`, `CoreSnapshot` |
+| `walk.ts` | `WalkQuery` (B2): the engine's walkable-line query, passed to `ReplayCore` |
 | `round.ts` | The shape of `data/round.json` (`RoundData`, `Player`, `Kit`, `Track`, `TrackSample`, `Shot`, `Kill`, `Damage`, `Utility`, `Radio`, `Chat`, `Bomb`, …; `Confidence`, `GrenadeId`, `ShotKind`), `parseRound`, `RoundDataError`, `TICKS_PER_SEC`, `toTick`. No file I/O. Field reference: `docs/round-data.md`. |
 | `json.ts` | `JsonValue`, `stableStringify`, `parseJsonLine`, `formatNumber`, `roundNumber`, `canonicalize`, `toJsonValue`, `fnv1a32Hex` |
 | `session-log.ts` | `SessionLog` (`append`, `lines`, `toText`, `fromText`, `get`, `at`, `length`, `digest`) |
@@ -63,3 +64,5 @@ Details the spec left open, as decided:
 - **Replayer diffs** carry the expected and actual `Act` objects (actual canonicalized), plus a total `mismatchCount`.
 - **digest()** is FNV-1a 32-bit over the UTF-8 bytes of `toText()`, 8 lowercase hex digits. `toText()` ends every line with `\n`.
 - **Trace.** 10 Hz samples at log ticks `Math.round(i * 6.4)`; `t` is the sample's `observe.t` (3 decimals), positions rounded to whole units, flag always `0` ("observed"); a track stops after its first dead sample. Also emits `players [{id, team, death}]`, `kills` from death events and `events` from death/bomb/round_end events and Core `log` actions (kinds `kill bomb state info`).
+- **WalkQuery** (B2). `isWalkableLine(a: Vec3, b: Vec3): boolean` is true if a pawn at `a` can walk straight to `b` (every point of the segment walkable). It must be a pure function of its arguments, because the Core branches on it and a replay must take the same branches. The engine passes it to `new ReplayCore(model, schedule, tuning, seed, walk)`; `null` (the default) turns the puppets off. 2D sim: `NavWalkQuery` (`src/sim2d/walk-query.ts`, `NavMesh.segmentWalkable`, height ignored). CS2: see `docs/port-notes.md` ("Puppets").
+- **Tuning** (B2). `ReplayTuning` gained `spikeSpeedFactor`, `spikeMaxSec`, `teleportWindowSec`, `holdLastPositionSec`, `standSpeedThreshold`, `buttonMinSec` and `steerFallbackSec` (all required by `parseTuning`; values and meaning in `docs/core.md` "Puppets").

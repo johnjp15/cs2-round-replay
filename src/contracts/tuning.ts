@@ -19,15 +19,36 @@ export interface MovementTuning {
   runSpeedByWeapon: Record<string, number>;
 }
 
+/** Puppet (REPLAY pawn) control. See docs/core.md "Puppets". */
 export interface ReplayTuning {
+  /** Steer at the track this far ahead of now (seconds). */
   lookaheadSec: number;
+  /** Behind the track by more than this (units, 2D): run to catch up (no WALK / DUCK). */
   driftNudgeUnits: number;
+  /** Behind by more than this (units, 2D), unseen, at a teleport point: snap to the track. */
   driftSnapUnits: number;
+  /** Recorded speed (units/s) below which the puppet holds WALK. */
   walkSpeedThreshold: number;
+  /** Recorded speed (units/s) below which a moving puppet holds DUCK (instead of WALK). */
   crouchSpeedThreshold: number;
+  /** Yaw turn-rate limit (degrees per tick). */
   maxTurnRateDegPerTick: number;
   hearingRangeUnits: number;
   outliveGraceSec: number;
+  /** A track step faster than this × the recorded weapon's run speed is over-speed (spike or discontinuity). */
+  spikeSpeedFactor: number;
+  /** A spike must come back to a reachable path within this long (seconds) to be repaired; else it is a discontinuity. */
+  spikeMaxSec: number;
+  /** A snap is allowed from a teleport point's last over-speed step until this long (seconds) after it. */
+  teleportWindowSec: number;
+  /** After its track ends the puppet holds the last position this long (seconds), then gets no move input. */
+  holdLastPositionSec: number;
+  /** Recorded speed (units/s) below which the puppet counts as standing: no DUCK / WALK, yaw held. */
+  standSpeedThreshold: number;
+  /** WALK / DUCK stretches of a puppet's button plan shorter than this (seconds) are dropped (no flicker). */
+  buttonMinSec: number;
+  /** When the line to the lookahead point is not walkable, look back this far (seconds) along the track for one that is. */
+  steerFallbackSec: number;
 }
 
 /** One gun (`weapons.<id>`). Sources and the damage formula: docs/combat.md. */
@@ -186,6 +207,13 @@ const REPLAY_KEYS = [
   'maxTurnRateDegPerTick',
   'hearingRangeUnits',
   'outliveGraceSec',
+  'spikeSpeedFactor',
+  'spikeMaxSec',
+  'teleportWindowSec',
+  'holdLastPositionSec',
+  'standSpeedThreshold',
+  'buttonMinSec',
+  'steerFallbackSec',
 ] as const;
 const WEAPON_KEYS = ['damage', 'rpm', 'headshotMult', 'armorPen', 'rangeModifier', 'clip', 'reserve', 'reloadSec', 'deploySec'] as const;
 const BOMB_KEYS = ['plantSec', 'timerSec', 'defuseSec', 'defuseKitSec'] as const;
