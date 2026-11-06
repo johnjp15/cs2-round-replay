@@ -33,6 +33,7 @@ import {
 import { EventSchedule, ReplayCore, RoundModel, describeEvent, type PuppetTrack } from '../src/core/index';
 import { NavMesh, navOptionsFromTuning } from '../src/sim2d/nav';
 import { Sim2DHost } from '../src/sim2d/host';
+import { VisMask, visOptionsFromTuning } from '../src/sim2d/vision';
 import { NavWalkQuery } from '../src/sim2d/walk-query';
 import { writeSessionLog } from './session-log-io';
 
@@ -49,11 +50,18 @@ export interface GhostInputs {
   readonly round: RoundData;
   readonly tuning: Tuning;
   readonly nav: NavMesh;
+  /** The sight mask (C4), as the Session loads it. */
+  readonly vision: VisMask;
 }
 
 export function loadGhostInputs(): GhostInputs {
   const tuning = parseTuning(readJson('data/tuning.json'));
-  return { round: parseRound(readJson('data/round.json')), tuning, nav: NavMesh.fromJson(readJson('data/mirage-nav.json'), navOptionsFromTuning(tuning)) };
+  return {
+    round: parseRound(readJson('data/round.json')),
+    tuning,
+    nav: NavMesh.fromJson(readJson('data/mirage-nav.json'), navOptionsFromTuning(tuning)),
+    vision: VisMask.fromJson(readJson('data/mirage-vismask.json'), visOptionsFromTuning(tuning.ai)),
+  };
 }
 
 /** A host the driver can advance: IHost plus the 2D sim's tick(). */
@@ -125,11 +133,17 @@ export function ghostTicks(model: RoundModel, tuning: Tuning): number {
 }
 
 export function runGhostRound(inputs: GhostInputs = loadGhostInputs(), ticks: number | null = null): GhostRun {
-  const { round, tuning, nav } = inputs;
+  const { round, tuning, nav, vision } = inputs;
   const model = new RoundModel(round);
   const core = new ReplayCore(model, new EventSchedule(round), tuning, GHOST_SEED, new NavWalkQuery(nav));
-  // Like the Session: the round's score before it (CT 11 – T 15) and its clock at t = 0 (98.25 s).
-  const host = new Sim2DHost(nav, tuning, model.players.map((p) => ({ id: p.id, team: p.team })), { score: round.meta.score, roundTimeSec: round.meta.clock0 });
+  // Like the Session: the round's score before it (CT 11 – T 15), its clock at t = 0 (98.25 s), the sight mask and the seed.
+  const host = new Sim2DHost(
+    nav,
+    tuning,
+    model.players.map((p) => ({ id: p.id, team: p.team })),
+    { score: round.meta.score, roundTimeSec: round.meta.clock0 },
+    { mask: vision, seed: GHOST_SEED },
+  );
   host.setHuman(null);
   const n = ticks ?? ghostTicks(model, tuning);
   const positions: Vec3[][] = [];

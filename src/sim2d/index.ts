@@ -15,7 +15,23 @@ export {
 } from './movement';
 export type { MoveState, MoveInput, MoveStep, Wish } from './movement';
 export { Sim2DHost, UNSUPPORTED_V0 } from './host';
-export type { RosterEntry, InventoryItem, PawnState, HostNote, CombatLogLine, BlockedPair, Sim2DOptions } from './host';
+export type { RosterEntry, InventoryItem, PawnState, HostNote, CombatLogLine, BlockedPair, Sim2DOptions, Sim2DVision, AiDebug } from './host';
+export {
+  VISMASK_FORMAT,
+  VisMask,
+  VisMaskError,
+  Sight,
+  GrenadeSight,
+  visOptionsFromTuning,
+  sightOptionsFromTuning,
+  angleOff,
+  computeSees,
+  encodeRow,
+  decodeVisMaskJson,
+} from './vision';
+export type { VisMaskGrid, VisOptions, SightTrace, VisMaskJson, SightNav, SightOptions, SeePawn, SeesOptions, SmokeQuery } from './vision';
+export { AI_ROLES, freshAiState, roleOf, stepAi, placeCentre, nearestBombsitePoint, holdFacing, guardSpot } from './ai';
+export type { AiRole, AiBehaviour, AiState, AiSelf, AiOther, AiContext, AiStep } from './ai';
 export {
   BOMBSITE_PREFIX,
   isBombsite,

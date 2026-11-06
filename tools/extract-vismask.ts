@@ -17,6 +17,10 @@
  * 3. Remove open specks: 8-connected open components smaller than `minOpenArea` cells become wall (labels, ringing).
  * 4. Remove wall specks: 4-connected wall components smaller than `minWallArea` cells that don't touch the image
  *    border become open (dark JPEG noise on floors); pillars and wall stubs are larger.
+ * 5. Open thin lines (`openThinLines`): a wall cell with open cells on both sides along x or along y (a line one
+ *    cell thick) becomes open, in one pass, so lines two or more cells thick are untouched. On this radar such
+ *    1-px dark lines are drawn over floors for windows and railings (the Apartments window over B site, the Mid
+ *    window of Sniper's Nest, the Tunnel Stairs railing), not walls; full-height walls are black gaps ≥ 2 cells.
  *
  * The output is run-length encoded per row (wall, open, wall, …), one row per line, at the radar's 5 units per
  * cell, with the radar transform. Same image in, same bytes out. jpeg-js is a devDependency (tools only).
@@ -47,6 +51,8 @@ export const PARAMS = {
   minOpenArea: 64,
   /** Wall components smaller than this (cells, 4-connected, not touching the border) become open. */
   minWallArea: 6,
+  /** Step 5: wall lines exactly one cell thick (open on both sides) become open (windows, railings). */
+  openThinLines: true,
 } as const;
 
 /** The radar transform (docs/conventions.md): px = (x + 3230) / 5, py = (1713 − y) / 5. */
@@ -76,16 +82,21 @@ export function buildMask(jpg: Uint8Array): BuiltMask {
     const b = rgba[i * 4 + 2] as number;
     raw[i] = isOpenColor(r, g, b) ? 0 : 1;
   }
-  const stats: Record<string, number> = { rawWall: count(raw) };
+  const rawWall = count(raw);
+  const stats: Record<string, number> = { rawWall };
   let cells = closeWalls(raw, width, height, PARAMS.closeRadius);
-  stats['closed'] = count(cells) - stats['rawWall'];
+  stats['closed'] = count(cells) - rawWall;
   const openRemoved = removeSmall(cells, width, height, 0, PARAMS.minOpenArea, 8, false);
   stats['openSpecksRemoved'] = openRemoved.components;
   stats['openSpeckCells'] = openRemoved.cells;
   const wallRemoved = removeSmall(cells, width, height, 1, PARAMS.minWallArea, 4, true);
   stats['wallSpecksRemoved'] = wallRemoved.components;
   stats['wallSpeckCells'] = wallRemoved.cells;
-  cells = new Uint8Array(cells);
+  if (PARAMS.openThinLines) {
+    const thin = openThinLines(cells, width, height);
+    stats['thinLineCells'] = thin.flipped;
+    cells = thin.cells;
+  }
   stats['wall'] = count(cells);
   stats['open'] = width * height - stats['wall'];
   return { width, height, cells, raw, rgba, stats };
@@ -143,6 +154,23 @@ function closeWalls(src: Uint8Array, w: number, h: number, r: number): Uint8Arra
     }
   }
   return out;
+}
+
+/** Step 5: wall cells with open neighbours on both sides along x or along y become open (one pass). */
+function openThinLines(src: Uint8Array, w: number, h: number): { cells: Uint8Array; flipped: number } {
+  const out = new Uint8Array(src);
+  const open = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < w && y < h && src[y * w + x] === 0;
+  let flipped = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (src[y * w + x] !== 1) continue;
+      if ((open(x - 1, y) && open(x + 1, y)) || (open(x, y - 1) && open(x, y + 1))) {
+        out[y * w + x] = 0;
+        flipped++;
+      }
+    }
+  }
+  return { cells: out, flipped };
 }
 
 /**
@@ -240,7 +268,7 @@ export function debugImage(m: BuiltMask): Uint8Array {
       tint = [160, 0, 0];
       a = 0.55;
     }
-    if (tint !== null) for (let c = 0; c < 3; c++) out[i * 4 + c] = Math.round((out[i * 4 + c] as number) * (1 - a) + tint[c] * a);
+    if (tint !== null) for (let c = 0; c < 3; c++) out[i * 4 + c] = Math.round((out[i * 4 + c] as number) * (1 - a) + (tint[c] as number) * a);
     out[i * 4 + 3] = 255;
   }
   return out;

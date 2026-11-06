@@ -14,7 +14,7 @@
  * `endpointTolerancePx` long (a pawn's centre is a few units inside a wall on the mask). Grazing a
  * corner crosses a wall cell for a tiny length, so it does not block. Pure and deterministic.
  */
-import type { AiTuning } from '../contracts/index';
+import type { AiTuning, PlayerId, Tuning, Vec3 } from '../contracts/index';
 import type { NavPoint } from './nav';
 
 /** Identifies the JSON layout of data/mirage-vismask.json. */
@@ -50,6 +50,11 @@ export interface VisOptions {
 
 export function visOptionsFromTuning(ai: Pick<AiTuning, 'losWallTolerancePx' | 'losEndpointTolerancePx'>): VisOptions {
   return { wallTolerancePx: ai.losWallTolerancePx, endpointTolerancePx: ai.losEndpointTolerancePx };
+}
+
+/** Sight options from parsed tuning. */
+export function sightOptionsFromTuning(t: Pick<Tuning, 'ai' | 'damage' | 'nav'>): SightOptions {
+  return { eyeHeight: t.damage.eyeHeight, levelStepUnits: t.ai.losLevelStepUnits, levelSlackUnits: t.ai.losLevelSlackUnits, stepHeight: t.nav.stepHeight };
 }
 
 /** What a sight query found (for tests, tools and debugging). */
@@ -216,6 +221,190 @@ export class VisMask {
     const runAt = maxRunT < 0 ? null : { x: this.originX + (ax + dx * maxRunT) * u, y: this.originY - (ay + dy * maxRunT) * u };
     return { visible, maxRunPx: maxRun, runAt };
   }
+}
+
+// ---- Sight: the 2D mask plus a level check on the nav floors ----------------------------------------
+
+/** 2D line of sight (VisMask, or NavMesh as the fallback) plus floor heights (NavMesh fits both). */
+export interface SightNav {
+  lineOfSight(a: NavPoint, b: NavPoint): boolean;
+  floorsAt(x: number, y: number): number[];
+}
+
+/** Level-check parameters (`tuning.ai` and `tuning.nav`). */
+export interface SightOptions {
+  /** Eye height above the floor for `lineOfSight` (`damage.eyeHeight`). */
+  readonly eyeHeight: number;
+  /** Sample spacing along the line (units; `ai.losLevelStepUnits`). */
+  readonly levelStepUnits: number;
+  /** A sample is inside a floor only when this far below it (units; `ai.losLevelSlackUnits`), for the nav's height-model error. */
+  readonly levelSlackUnits: number;
+  /** Floors at consecutive samples within this height of each other are the same surface (`nav.stepHeight`). */
+  readonly stepHeight: number;
+}
+
+/**
+ * What `sees`, bullets and grenades ask (C4). `flat(a, b)` is the 2D test: the sight mask if there is one, else
+ * the nav mesh's lineOfSight (synthetic test meshes). `clear(a, eyeA, b, eyeB)` adds a level check on the
+ * straight 3D line between the two eyes (eye = floor z + eye height), sampled every `levelStepUnits` against the
+ * nav floors under it: the line is blocked where it is more than `levelSlackUnits` below every floor under a
+ * sample (inside the ground: a ledge face seen from below), or where, over one floor surface, it is both more than
+ * `levelSlackUnits` below it and above it (through a floor slab: Catwalk over the Tunnel). Off-mesh samples don't
+ * constrain. The slack absorbs the nav's height-model error, so only clear cases block.
+ */
+export class Sight {
+  readonly mask: VisMask | null;
+  readonly options: SightOptions;
+  private readonly nav: SightNav;
+
+  constructor(mask: VisMask | null, nav: SightNav, options: SightOptions) {
+    this.mask = mask;
+    this.nav = nav;
+    this.options = { ...options };
+  }
+
+  /** 2D sight: the mask, or the nav mesh without one. */
+  flat(a: NavPoint, b: NavPoint): boolean {
+    return this.mask === null ? this.nav.lineOfSight(a, b) : this.mask.lineOfSight(a, b);
+  }
+
+  /** Eye to eye: `flat` and the level check, with eyes `eyeA` / `eyeB` above a.z / b.z. */
+  clear(a: Vec3, eyeA: number, b: Vec3, eyeB: number): boolean {
+    return this.flat(a, b) && this.levelsClear(a, a.z + eyeA, b, b.z + eyeB);
+  }
+
+  /** `clear` with the standing eye height at both ends; 2D only when either end has no z. Fits hitscan's LosQuery. */
+  lineOfSight(a: NavPoint, b: NavPoint): boolean {
+    if (a.z === undefined || b.z === undefined) return this.flat(a, b);
+    return this.clear({ x: a.x, y: a.y, z: a.z }, this.options.eyeHeight, { x: b.x, y: b.y, z: b.z }, this.options.eyeHeight);
+  }
+
+  /**
+   * The level check alone, between heights ha at a and hb at b. Samples are matched to the previous sample's
+   * floors within stepHeight (the same surface continuing); along each such run the line's lowest and highest
+   * height relative to the surface are kept. Blocked if the line is more than levelSlackUnits below every floor
+   * at a sample, or if over one surface it is both more than levelSlackUnits below it and above it.
+   */
+  levelsClear(a: NavPoint, ha: number, b: NavPoint, hb: number): boolean {
+    const { levelStepUnits: step, levelSlackUnits: slack, stepHeight } = this.options;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const n = Math.max(1, Math.ceil(Math.sqrt(dx * dx + dy * dy) / step));
+    let prevFloors: number[] = [];
+    let prevMin: number[] = [];
+    let prevMax: number[] = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const h = ha + (hb - ha) * t;
+      const floors = this.nav.floorsAt(a.x + dx * t, a.y + dy * t);
+      if (floors.length > 0 && h < (floors[0] as number) - slack) return false;
+      const mins: number[] = [];
+      const maxs: number[] = [];
+      for (const f of floors) {
+        let lo = h - f;
+        let hi = h - f;
+        for (let k = 0; k < prevFloors.length; k++) {
+          if (Math.abs((prevFloors[k] as number) - f) <= stepHeight) {
+            lo = Math.min(lo, prevMin[k] as number);
+            hi = Math.max(hi, prevMax[k] as number);
+            break;
+          }
+        }
+        if (lo < -slack && hi > 0) return false;
+        mins.push(lo);
+        maxs.push(hi);
+      }
+      prevFloors = floors;
+      prevMin = mins;
+      prevMax = maxs;
+    }
+    return true;
+  }
+}
+
+/** Grenades' world queries on the 2D sight (throw clamp, flash and HE line of sight) with the nav's floor height. */
+export class GrenadeSight {
+  private readonly sight: Sight;
+  private readonly floor: { zAt(p: NavPoint): number };
+
+  constructor(sight: Sight, floor: { zAt(p: NavPoint): number }) {
+    this.sight = sight;
+    this.floor = floor;
+  }
+
+  lineOfSight(a: NavPoint, b: NavPoint): boolean {
+    return this.sight.flat(a, b);
+  }
+
+  zAt(p: NavPoint): number {
+    return this.floor.zAt(p);
+  }
+}
+
+// ---- sees (contract F5) ----------------------------------------------------------------------------
+
+/** What `sees` needs to know about a pawn. */
+export interface SeePawn {
+  readonly id: PlayerId;
+  readonly pos: Vec3;
+  readonly yaw: number;
+  readonly crouching: boolean;
+  readonly alive: boolean;
+  /** Flashed: blind sees nothing (it can still be seen). */
+  readonly blind: boolean;
+}
+
+/** Eye heights and FOV for `sees`. */
+export interface SeesOptions {
+  readonly fovDeg: number;
+  readonly eyeHeight: number;
+  readonly crouchEyeHeight: number;
+}
+
+/** Smoke between two points (Sim2DHost.smokeBlocks fits). */
+export interface SmokeQuery {
+  smokeBlocks(a: NavPoint, b: NavPoint): boolean;
+}
+
+/** Absolute angle (degrees, 0..180) between `yaw` and the bearing from `from` to `to`; 0 for the same point. */
+export function angleOff(yaw: number, from: NavPoint, to: NavPoint): number {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (dx === 0 && dy === 0) return 0;
+  let diff = ((Math.atan2(dy, dx) * 180) / Math.PI - yaw) % 360;
+  if (diff < -180) diff += 360;
+  if (diff > 180) diff -= 360;
+  return Math.abs(diff);
+}
+
+/**
+ * `sees` for every pawn (contract F5; docs/contracts.md): `pawns` in id order, result in the same order, each list
+ * sorted by id. Viewer V sees target T (another pawn, either team) when both are alive, V is not blind, T is within
+ * fovDeg / 2 of V's yaw, the eye-to-eye line is clear (`sight.clear`: the 2D mask and the level check; eyes at
+ * eyeHeight, crouchEyeHeight when crouched), and no active smoke crosses the 2D segment. Sight and smoke are
+ * symmetric, so each unordered pair is traced once and only if one side looks at the other.
+ */
+export function computeSees(pawns: readonly SeePawn[], sight: Sight, smoke: SmokeQuery, o: SeesOptions): PlayerId[][] {
+  const half = o.fovDeg / 2;
+  const out: PlayerId[][] = pawns.map(() => []);
+  for (let i = 0; i < pawns.length; i++) {
+    const a = pawns[i] as SeePawn;
+    if (!a.alive) continue;
+    for (let j = i + 1; j < pawns.length; j++) {
+      const b = pawns[j] as SeePawn;
+      if (!b.alive) continue;
+      const ab = !a.blind && angleOff(a.yaw, a.pos, b.pos) <= half;
+      const ba = !b.blind && angleOff(b.yaw, b.pos, a.pos) <= half;
+      if (!ab && !ba) continue;
+      const eyeA = a.crouching ? o.crouchEyeHeight : o.eyeHeight;
+      const eyeB = b.crouching ? o.crouchEyeHeight : o.eyeHeight;
+      if (!sight.clear(a.pos, eyeA, b.pos, eyeB) || smoke.smokeBlocks(a.pos, b.pos)) continue;
+      if (ab) (out[i] as PlayerId[]).push(b.id);
+      if (ba) (out[j] as PlayerId[]).push(a.id);
+    }
+  }
+  // Pairs are visited in id order, so each list is already sorted (j > i appended in order; earlier i first).
+  return out.map((xs) => [...xs].sort((p, q) => (p < q ? -1 : p > q ? 1 : 0)));
 }
 
 // ---- JSON (run-length encoded) ---------------------------------------------------------------------

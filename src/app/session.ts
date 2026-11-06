@@ -36,7 +36,7 @@ import {
   type Tuning,
 } from '../contracts/index';
 import { EventSchedule, ReplayCore, RoundModel, type RoundClock } from '../core/index';
-import { NavMesh, NavWalkQuery, Sim2DHost, navOptionsFromTuning, type HostNote, type PawnState, type RosterEntry } from '../sim2d/index';
+import { NavMesh, NavWalkQuery, Sim2DHost, VisMask, navOptionsFromTuning, visOptionsFromTuning, type HostNote, type PawnState, type RosterEntry } from '../sim2d/index';
 import { weaponForSlot, type WeaponSlot } from './input';
 
 /** The pawn a human plays unless told otherwise. */
@@ -47,13 +47,20 @@ export interface SessionData {
   readonly round: RoundData;
   readonly nav: NavMesh;
   readonly tuning: Tuning;
+  /** The sight mask (`mirage-vismask.json`, C4), or null for the nav mesh's line of sight. */
+  readonly vision: VisMask | null;
 }
 
-/** Parse `round.json`, `mirage-nav.json` and `tuning.json` (as JSON values or text). Throws on bad data. */
-export function parseSessionData(roundJson: unknown, navJson: unknown, tuningJson: unknown): SessionData {
+/**
+ * Parse `round.json`, `mirage-nav.json`, `tuning.json` and `mirage-vismask.json` (as JSON values or text; the mask
+ * may be null). Throws on bad data.
+ */
+export function parseSessionData(roundJson: unknown, navJson: unknown, tuningJson: unknown, visionJson: unknown = null): SessionData {
   const tuning = parseTuning(tuningJson);
   const nav = NavMesh.fromJson(typeof navJson === 'string' ? (JSON.parse(navJson) as unknown) : navJson, navOptionsFromTuning(tuning));
-  return { round: parseRound(roundJson), nav, tuning };
+  const vis = typeof visionJson === 'string' ? (JSON.parse(visionJson) as unknown) : visionJson;
+  const vision = vis === null ? null : VisMask.fromJson(vis, visOptionsFromTuning(tuning.ai));
+  return { round: parseRound(roundJson), nav, tuning, vision };
 }
 
 /** What a Core is built from. */
@@ -78,6 +85,8 @@ export interface SessionConfig {
   readonly nav: NavMesh;
   readonly tuning: Tuning;
   readonly seed: number;
+  /** The sight mask (C4); without it (or null) the engine uses the nav mesh's line of sight. */
+  readonly vision?: VisMask | null;
   /** The pawn the human plays: `cart` by default, or null to spectate (all ten pawns replay). */
   readonly human?: PlayerId | null;
   /** Builds the Core (default: defaultCore). For tests, benchmarks and Core variants. */
@@ -134,7 +143,7 @@ export class Session {
     this.model = new RoundModel(config.round);
     this.schedule = new EventSchedule(config.round);
     const roster: RosterEntry[] = this.model.players.map((p) => ({ id: p.id, team: p.team }));
-    this.host = new Sim2DHost(config.nav, config.tuning, roster, { score: config.round.meta.score, roundTimeSec: config.round.meta.clock0 });
+    this.host = new Sim2DHost(config.nav, config.tuning, roster, { score: config.round.meta.score, roundTimeSec: config.round.meta.clock0 }, { mask: config.vision ?? null, seed: config.seed });
     this.host.setHuman(this.human);
     const makeCore = config.core ?? defaultCore;
     this.core = makeCore({ model: this.model, schedule: this.schedule, tuning: config.tuning, seed: config.seed, nav: config.nav });
