@@ -1,7 +1,7 @@
 /** Core: engine-agnostic replay brain (ICore); may import only src/contracts so it ports mechanically to C#. */
 export { TICK_RATE, tickOf, tOf, RoundClock } from './clock';
-export { RoundModel } from './round-model';
-export type { ModelPlayer, TrackPoint } from './round-model';
+export { RoundModel, sightingObservers } from './round-model';
+export type { ModelPlayer, ModelSighting, TrackPoint } from './round-model';
 export { startActions, startYaw, FACING_PAIRS, MOTION_LOOKAHEAD_TICKS, MOTION_MIN_DIST } from './start-state';
 export type { StartYaw, StartYawSource } from './start-state';
 export { EventSchedule, ScheduleError, SCHEDULE_TYPE_ORDER, actorOf, involves, typeRank, compareEntries } from './schedule';
@@ -23,6 +23,7 @@ export type {
   ChatEntry,
 } from './schedule';
 export { ReplayCore } from './replay-core';
+export type { ReplayCoreOptions } from './replay-core';
 export {
   PuppetTrack,
   PuppetController,
@@ -76,3 +77,28 @@ export type {
 } from './scripted';
 export { AIM_BANDS, MAX_PITCH_DEG, aimPitchAt, bandHeightOf, bandPoint, eyeHeightOf, lookToward, pitchTo, roundPitch, turnPitchToward } from './aim';
 export type { AimBand, Look } from './aim';
+export {
+  TRIGGER_KINDS,
+  Divergence,
+  ExpectedEncounters,
+  blockedTrigger,
+  blockingPawn,
+  buildEncounters,
+  damageTrigger,
+  dwellSpot,
+  encounterOwnsSighting,
+  gunfireTrigger,
+  humanOnCourse,
+  intText,
+  isOffScript,
+  isPuppet,
+  liveGoal,
+  liveIntent,
+  outlivedTrigger,
+  recordedFire,
+  sightingTrigger,
+  tenthsText,
+  thinRoute,
+  trackPosAt,
+} from './divergence';
+export type { ContactState, DivergenceState, EncounterPhase, EncounterPlan, EncounterState, FireSpan, LiveIntent, PairSpan, TriggerHit, TriggerKind } from './divergence';

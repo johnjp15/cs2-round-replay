@@ -617,6 +617,27 @@ export interface ScriptState {
   defuseEndedTick: number | null;
   /** Decisions so far, in the order they were made. */
   decisions: ScriptDecision[];
+  /**
+   * B4: fire items and engagements added at run time (a scheduled encounter's time-shifted shot, src/core/divergence.ts),
+   * in the order added. They are decided and played like the plan's own.
+   */
+  extraFire: FireItem[];
+  extraEngagements: Engagement[];
+  /** B4: angles held at a point (a scheduled encounter's shooter watching the recorded spot), in the order added. */
+  holds: HoldItem[];
+}
+
+/**
+ * B4: a puppet holds an angle: from `fromTick` until `toTick` (inclusive; null = open) it looks at `point` whenever no
+ * defuse look or engagement is active. A scheduled encounter's shooter watches the spot where the recording has the
+ * human (Lokier holding the Apartments window).
+ */
+export interface HoldItem {
+  readonly key: string;
+  readonly id: PlayerId;
+  readonly point: Vec3;
+  readonly fromTick: number;
+  toTick: number | null;
 }
 
 /** A pawn's Core mode (ReplayCore's per-pawn state fits). */
@@ -626,7 +647,11 @@ export interface PawnMode {
 }
 
 export function initialScriptState(): ScriptState {
-  return { plantedTick: null, defuseStartedTick: null, defuseEndedTick: null, decisions: [] };
+  return { plantedTick: null, defuseStartedTick: null, defuseEndedTick: null, decisions: [], extraFire: [], extraEngagements: [], holds: [] };
+}
+
+function copyFire(f: FireItem): FireItem {
+  return { ...f, attack: f.attack.map((a) => ({ from: a.from, to: a.to })), shotTicks: [...f.shotTicks], recordedTicks: [...f.recordedTicks] };
 }
 
 /**
@@ -670,6 +695,9 @@ export class ScriptedEvents {
       defuseStartedTick: s.defuseStartedTick,
       defuseEndedTick: s.defuseEndedTick,
       decisions: s.decisions.map((d) => ({ key: d.key, ok: d.ok })),
+      extraFire: s.extraFire.map(copyFire),
+      extraEngagements: s.extraEngagements.map((e) => ({ ...e })),
+      holds: s.holds.map((h) => ({ key: h.key, id: h.id, point: { x: h.point.x, y: h.point.y, z: h.point.z }, fromTick: h.fromTick, toTick: h.toTick })),
     };
   }
 
@@ -677,6 +705,56 @@ export class ScriptedEvents {
   decision(key: string): boolean | null {
     const d = this.st.decisions.find((x) => x.key === key);
     return d === undefined ? null : d.ok;
+  }
+
+  /**
+   * B4: decide a fire item or engagement now as not going ahead, silently (a scheduled encounter replaces the
+   * recorded shot with a time-shifted one). No effect if it is decided already.
+   */
+  suppress(key: string): void {
+    if (this.decision(key) === null) this.st.decisions.push({ key, ok: false });
+  }
+
+  /** B4: add a fire item at run time (decided on its first active tick, like the plan's). Keys must be unique. */
+  addFire(f: FireItem): void {
+    if (this.st.extraFire.some((x) => x.key === f.key) || this.plan.fire.some((x) => x.key === f.key)) throw new Error(`ScriptedEvents.addFire: duplicate key ${f.key}`);
+    this.st.extraFire.push(copyFire(f));
+  }
+
+  /** B4: add an engagement at run time. Keys must be unique. */
+  addEngagement(e: Engagement): void {
+    if (this.st.extraEngagements.some((x) => x.key === e.key) || this.plan.engagements.some((x) => x.key === e.key)) throw new Error(`ScriptedEvents.addEngagement: duplicate key ${e.key}`);
+    this.st.extraEngagements.push({ ...e });
+  }
+
+  /** B4: hold an angle (see HoldItem). Keys must be unique. */
+  addHold(h: HoldItem): void {
+    if (this.st.holds.some((x) => x.key === h.key)) throw new Error(`ScriptedEvents.addHold: duplicate key ${h.key}`);
+    this.st.holds.push({ key: h.key, id: h.id, point: { x: h.point.x, y: h.point.y, z: h.point.z }, fromTick: h.fromTick, toTick: h.toTick });
+  }
+
+  /** B4: stop holding an angle after `tick` (no effect on an unknown or ended hold). */
+  endHold(key: string, tick: number): void {
+    const h = this.st.holds.find((x) => x.key === key);
+    if (h !== undefined && h.toTick === null) h.toTick = tick;
+  }
+
+  /** The angle `id` holds at `tick` (the first open hold), or null. */
+  holdAt(id: PlayerId, tick: number): HoldItem | null {
+    for (const h of this.st.holds) if (h.id === id && tick >= h.fromTick && (h.toTick === null || tick <= h.toTick)) return h;
+    return null;
+  }
+
+  /** Fire items of one shooter: the plan's, then the run-time ones (B4). */
+  private fireItemsOf(id: PlayerId): readonly FireItem[] {
+    const extra = this.st.extraFire.filter((f) => f.shooter === id);
+    return extra.length === 0 ? this.plan.fireOf(id) : [...this.plan.fireOf(id), ...extra];
+  }
+
+  /** Engagements of one shooter: the plan's, then the run-time ones (B4). */
+  private engagementItemsOf(id: PlayerId): readonly Engagement[] {
+    const extra = this.st.extraEngagements.filter((e) => e.shooter === id);
+    return extra.length === 0 ? this.plan.engagementsOf(id) : [...this.plan.engagementsOf(id), ...extra];
   }
 
   /**
@@ -736,8 +814,10 @@ export class ScriptedEvents {
       out.push({ type: 'damage', attacker: e.attacker, victim: e.victim, amount: e.amount, armor: e.armor ?? 0, hitgroup: e.hitgroup, weapon: e.weapon, lethal: e.lethal });
     }
 
-    // Fire items and engagements: decide on the first active tick.
-    for (const f of this.plan.fire) {
+    // Fire items and engagements (the plan's, then B4's run-time ones): decide on the first active tick.
+    const fire = s.extraFire.length === 0 ? this.plan.fire : [...this.plan.fire, ...s.extraFire];
+    const engagements = s.extraEngagements.length === 0 ? this.plan.engagements : [...this.plan.engagements, ...s.extraEngagements];
+    for (const f of fire) {
       if (tick < f.fromTick || tick > f.toTick || this.decision(f.key) !== null) continue;
       let ok = f.shooter !== o.human;
       if (ok) {
@@ -750,7 +830,7 @@ export class ScriptedEvents {
       }
       s.decisions.push({ key: f.key, ok });
     }
-    for (const e of this.plan.engagements) {
+    for (const e of engagements) {
       if (tick < e.fromTick || tick > e.toTick || this.decision(e.key) !== null) continue;
       const ok = e.shooter !== o.human && unavailable(o, modes, e.shooter) === null && unavailable(o, modes, e.target) === null;
       s.decisions.push({ key: e.key, ok });
@@ -786,7 +866,7 @@ export class ScriptedEvents {
   /**
    * The scripted look and buttons on top of a puppet's movement input `base` (B2), for pawn `p`:
    * - look: at the bomb during the defuse (from `lookFrom`), else at the target's `band` point during an
-   *   engagement; turned from `prevYaw` (the last commanded yaw) and the observed pitch at most
+   *   engagement, else at a held angle's point (B4); turned from `prevYaw` (the last commanded yaw) and the observed pitch at most
    *   `aimTurnRateDegPerTick`. A grenade throw (ATTACK window and release) uses `throwPitchDeg`. Applied
    *   with `withLook`, so the pawn keeps moving the same way.
    * - ATTACK: the grenade's pin window during a throw; none while a grenade or the c4 is out for the
@@ -814,6 +894,10 @@ export class ScriptedEvents {
         look = lookToward(prev, p.pos, crouching, bandPoint(target.pos, target.crouching, eng.band, d), d, r.aimTurnRateDegPerTick);
       }
     }
+    if (look === null) {
+      const hold = this.holdAt(p.id, tick);
+      if (hold !== null) look = lookToward(prev, p.pos, crouching, hold.point, d, r.aimTurnRateDegPerTick);
+    }
 
     const u = this.plan.utility.find((x) => x.id === p.id && tick >= x.selectTick && tick <= x.releaseTick) ?? null;
     if (u !== null && tick >= u.attackFrom) look = { yaw: look === null ? base.yaw : look.yaw, pitch: r.throwPitchDeg };
@@ -838,7 +922,7 @@ export class ScriptedEvents {
 
   /** True if a fire item of `id` that goes ahead holds ATTACK at `tick`. */
   attacking(id: PlayerId, tick: number): boolean {
-    for (const f of this.plan.fireOf(id)) {
+    for (const f of this.fireItemsOf(id)) {
       if (tick < f.fromTick || tick > f.toTick || this.decision(f.key) !== true) continue;
       if (f.attack.some((a) => tick >= a.from && tick <= a.to)) return true;
     }
@@ -848,7 +932,7 @@ export class ScriptedEvents {
   /** The engagement `id` aims in at `tick`: among those that go ahead, the one ending first (then starting first, then by target). */
   activeEngagement(id: PlayerId, tick: number): Engagement | null {
     let best: Engagement | null = null;
-    for (const e of this.plan.engagementsOf(id)) {
+    for (const e of this.engagementItemsOf(id)) {
       if (tick < e.fromTick || tick > e.toTick || this.decision(e.key) !== true) continue;
       if (best === null || e.toTick < best.toTick || (e.toTick === best.toTick && (e.fromTick < best.fromTick || (e.fromTick === best.fromTick && compareOrdinal(e.target, best.target) < 0)))) best = e;
     }

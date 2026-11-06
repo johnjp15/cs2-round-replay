@@ -49,13 +49,48 @@ export interface TrackPoint {
   readonly uncertainty: number | null;
 }
 
+/**
+ * A `sightings[]` entry (B4): `who` was seen over [tick0, tick1] by the players named in `by` (the free text names
+ * them, e.g. "eradicate's radar", "cart / barely"; `by` lists the player ids it contains, in PLAYER_IDS order).
+ */
+export interface ModelSighting {
+  readonly who: PlayerId;
+  readonly tick0: number;
+  readonly tick1: number;
+  readonly by: readonly PlayerId[];
+  readonly place: string;
+}
+
 const CONFIDENCE_RANK: { readonly [K in Confidence]: number } = { observed: 0, estimated: 1, inferred: 2 };
+
+/**
+ * The player ids named in a sighting's `by` text: its lowercase words (split at anything but a–z and 0–9) that are
+ * player ids, in PLAYER_IDS order without repeats. "eradicate's radar" → eradicate; "cart / barely" → barely, cart.
+ */
+export function sightingObservers(by: string): PlayerId[] {
+  const words = by.toLowerCase().split(/[^a-z0-9]+/);
+  return PLAYER_IDS.filter((id) => words.includes(id));
+}
+
+/** Validate `round.sightings` (parseRound checks only that it is an array) into ModelSightings; throws on bad entries. */
+function readSightings(round: RoundData): ModelSighting[] {
+  return round.sightings.map((s, i) => {
+    const where = `sightings[${i}]`;
+    if (typeof s !== 'object' || s === null) throw new Error(`RoundModel: ${where}: expected an object`);
+    if (!(PLAYER_IDS as readonly string[]).includes(s.who)) throw new Error(`RoundModel: ${where}.who: unknown player ${String(s.who)}`);
+    if (!Number.isInteger(s.tick0) || !Number.isInteger(s.tick1) || s.tick1 < s.tick0) throw new Error(`RoundModel: ${where}: bad ticks ${String(s.tick0)}-${String(s.tick1)}`);
+    if (typeof s.by !== 'string') throw new Error(`RoundModel: ${where}.by: expected text`);
+    return { who: s.who, tick0: s.tick0, tick1: s.tick1, by: sightingObservers(s.by).filter((id) => id !== s.who), place: typeof s.place === 'string' ? s.place : '' };
+  });
+}
 
 export class RoundModel {
   readonly meta: RoundMeta;
   readonly bomb: Bomb;
   /** All ten players, sorted by id (PLAYER_IDS order). */
   readonly players: readonly ModelPlayer[];
+  /** `sightings[]` in file order, with `by` resolved to player ids (B4: the expected-encounter index). */
+  readonly sightings: readonly ModelSighting[];
   /** 10 Hz track samples, parallel to `players`. */
   private readonly samples: readonly (readonly TrackSample[])[];
   /** Recorded yaw samples (camera POVs only), parallel to `players`. */
@@ -97,6 +132,7 @@ export class RoundModel {
     this.meta = round.meta;
     this.bomb = round.bomb;
     this.players = players;
+    this.sightings = readSightings(round);
     this.samples = samples;
     this.yaws = yaws;
     this.index = index;

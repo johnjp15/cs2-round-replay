@@ -1,0 +1,15 @@
+{
+  "name": "mid-zwomp",
+  "description": "cart plays his recording to 29.7 s, then (teleported, this tests Core logic, not pathing) pushes Middle and kills Zwomp at about 30 s, as Zwomp rotates through Connector. barely's 44.2 s kill of Zwomp is dropped and barely keeps replaying.",
+  "human": "cart",
+  "seed": 1,
+  "until": "end",
+  "steps": [
+    { "do": "followRecording", "until": 29.7 },
+    { "do": "teleport", "pos": [-600, -560], "yaw": -99 },
+    { "do": "aimAt", "id": "zwomp" },
+    { "do": "fire", "untilDead": true, "maxSec": 2 },
+    { "do": "aimAt", "id": null },
+    { "do": "holdStill", "until": 70.6 }
+  ]
+}

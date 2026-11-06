@@ -59,10 +59,13 @@ export type Button = (typeof BUTTONS)[number];
 export const HITGROUPS = ['head', 'chest', 'stomach', 'arm', 'leg', 'neck', 'generic'] as const;
 export type Hitgroup = (typeof HITGROUPS)[number];
 
-/** Per-pawn control mode. DEAD is reported in status only; set_mode accepts REPLAY | LIVE. */
-export const MODES = ['REPLAY', 'LIVE', 'DEAD'] as const;
+/**
+ * Per-pawn control mode. DEAD and HUMAN (B4: the pawn `observe.human` plays, while alive) are reported in
+ * status only; set_mode accepts REPLAY | LIVE.
+ */
+export const MODES = ['REPLAY', 'LIVE', 'DEAD', 'HUMAN'] as const;
 export type Mode = (typeof MODES)[number];
-export type SettableMode = Exclude<Mode, 'DEAD'>;
+export type SettableMode = Exclude<Mode, 'DEAD' | 'HUMAN'>;
 
 export const SOUND_KINDS = ['footstep', 'land', 'shot', 'reload', 'grenade', 'bomb'] as const;
 export type SoundKind = (typeof SOUND_KINDS)[number];

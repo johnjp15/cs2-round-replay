@@ -67,6 +67,30 @@ export interface ReplayTuning {
   plantFallbackTicks: number;
   /** No `defuse_start` bomb event this many ticks after the recorded defuse start: send a `defuse_start` action. */
   defuseFallbackTicks: number;
+  /**
+   * B4 divergence (docs/core.md "Divergence"). A pair of players counts as having seen each other in the
+   * recording within this long (seconds) of a recorded shot, hit, kill or `sightings[]` entry between them.
+   */
+  expectedSightingWindowSec: number;
+  /** A shot by the human or a LIVE pawn is recorded fire when the recording has that shooter firing within this long (seconds). */
+  expectedGunfireWindowSec: number;
+  /** A scheduled encounter's scripted hit lands this long (seconds) after the shooter first sees the human at the recorded spot. */
+  encounterDelaySec: number;
+  /** The human counts as at an encounter's recorded spot within this distance (units, 2D). */
+  humanSpotToleranceUnits: number;
+  /** LIVE route: the remaining recorded track thinned (Ramer–Douglas–Peucker) to this tolerance (units, 2D). */
+  routeThinUnits: number;
+  /**
+   * A pawn more than this far (units, 2D) from its recorded track is off course: a puppet body-blocked off course while
+   * the human sees it goes LIVE, and the human inside it is on script (sightings of him are as recorded).
+   */
+  offCourseUnits: number;
+  /** Two solid pawns are in contact (body block) within 2 × collision.pawnRadius + this (units, 2D). */
+  contactSlackUnits: number;
+  /** A puppet held in contact (slower than standSpeedThreshold) this long (seconds) while off course is body-blocked. */
+  blockedSec: number;
+  /** A T's guard spot after the plant is its longest recorded stay within this radius (units, 2D). */
+  dwellUnits: number;
 }
 
 /** One gun (`weapons.<id>`). Sources and the damage formula: docs/combat.md. */
@@ -333,6 +357,15 @@ const REPLAY_KEYS = [
   'throwHoldSec',
   'plantFallbackTicks',
   'defuseFallbackTicks',
+  'expectedSightingWindowSec',
+  'expectedGunfireWindowSec',
+  'encounterDelaySec',
+  'humanSpotToleranceUnits',
+  'routeThinUnits',
+  'offCourseUnits',
+  'contactSlackUnits',
+  'blockedSec',
+  'dwellUnits',
 ] as const;
 const WEAPON_KEYS = ['damage', 'rpm', 'headshotMult', 'armorPen', 'rangeModifier', 'clip', 'reserve', 'reloadSec', 'deploySec'] as const;
 const BOMB_KEYS = [

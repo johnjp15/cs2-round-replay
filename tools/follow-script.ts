@@ -53,7 +53,8 @@ export class FollowDriver implements HumanDriver {
   constructor(data: HarnessData, seed: number, id: PlayerId) {
     this.id = id;
     const tuning: Tuning = { ...data.tuning, replay: { ...data.tuning.replay, driftSnapUnits: NO_SNAP_UNITS } };
-    this.shadow = new ReplayCore(new RoundModel(data.round), new EventSchedule(data.round), tuning, seed, new NavWalkQuery(data.nav));
+    // B2/B3 only: the shadow decides cart's input as a puppet; B4's triggers would only act on its own (unused) pawns.
+    this.shadow = new ReplayCore(new RoundModel(data.round), new EventSchedule(data.round), tuning, seed, new NavWalkQuery(data.nav), { divergence: false });
     this.shadow.control({ type: 'start' });
   }
 

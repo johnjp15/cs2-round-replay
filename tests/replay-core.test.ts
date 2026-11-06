@@ -10,7 +10,9 @@ const model = new RoundModel(round);
 const schedule = new EventSchedule(round);
 const SEED = 12;
 
-const newCore = (): ReplayCore => new ReplayCore(model, schedule, tuning, SEED);
+// ScriptedHost is no world (every pawn sees every other, at fixed positions off their tracks, and sp4rtan is the
+// human), so B4's triggers would switch everyone LIVE: these B1 tests run the Core without divergence.
+const newCore = (): ReplayCore => new ReplayCore(model, schedule, tuning, SEED, null, { divergence: false });
 const START = new Map<number, readonly Control[]>([[0, [{ type: 'start' }]]]);
 const DEATH = new Map<number, readonly ObsEvent[]>([[21, [{ type: 'death', victim: 'incredibad', attacker: 'snarlbot', weapon: 'ak47', headshot: false }]]]);
 
@@ -57,11 +59,13 @@ describe('ReplayCore', () => {
     }
   });
 
-  it('reports REPLAY / DEAD status for all ten pawns with sinceTick', () => {
+  it('reports REPLAY / DEAD / HUMAN status for all ten pawns with sinceTick', () => {
     const log = run(30);
     const before = log.at(20)?.act.status ?? [];
     expect(before.map((s) => s.id)).toEqual([...PLAYER_IDS]);
-    expect(before.every((s) => s.mode === 'REPLAY' && s.trigger === null && s.sinceTick === 0)).toBe(true);
+    // B4: the human's living pawn is HUMAN (ScriptedHost's human is sp4rtan).
+    expect(before.filter((s) => s.id !== 'sp4rtan').every((s) => s.mode === 'REPLAY' && s.trigger === null && s.sinceTick === 0)).toBe(true);
+    expect(before.find((s) => s.id === 'sp4rtan')).toEqual({ id: 'sp4rtan', mode: 'HUMAN', trigger: null, sinceTick: 0 });
     const after = log.at(25)?.act;
     expect(after?.status.find((s) => s.id === 'incredibad')).toEqual({ id: 'incredibad', mode: 'DEAD', trigger: null, sinceTick: 21 });
     expect(after?.inputs.some((i) => i.id === 'incredibad')).toBe(false);

@@ -414,13 +414,17 @@ describe('the human', () => {
   });
 
   it('puppets still aim and shoot at the human (the engine decides those hits)', () => {
-    expect(spans(human.log, 'lokier', 'ATTACK', 1100, 1300)).toEqual([{ from: 1183, to: 1183 }]);
     expect(spans(human.log, 'sp4rtan', 'ATTACK', 4400, 4460)).toEqual([{ from: 4441, to: 4441 }]);
+    // B4: Lokier's recorded 73 HP hit on cart is a scheduled encounter. The recorded shot and aim are replaced by a
+    // time-shifted one that waits until Lokier sees cart at the window (src/core/divergence.ts); the stub's `sees` is
+    // empty, so he never fires, but from the recorded aim's start (tick 1161) he holds the angle on the window spot.
+    expect(spans(human.log, 'lokier', 'ATTACK', 1100, 1300)).toEqual([]);
     const o = human.log.get(1183)?.observe;
     const lk = o?.pawns.find((p) => p.id === 'lokier');
     const ct = o?.pawns.find((p) => p.id === 'cart');
     if (lk === undefined || ct === undefined) throw new Error('missing pawns');
-    expect(Math.abs((input(human.log, 1183, 'lokier')?.yaw ?? NaN) - bearing(lk.pos, ct.pos))).toBeLessThan(0.01);
+    expect(Math.abs((input(human.log, 1183, 'lokier')?.yaw ?? NaN) - bearing(lk.pos, ct.pos))).toBeLessThan(0.5);
+    expect(Math.abs((input(human.log, 1150, 'lokier')?.yaw ?? NaN) - bearing(lk.pos, ct.pos))).toBeGreaterThan(5);
   });
 });
 

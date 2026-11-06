@@ -20,12 +20,12 @@ export interface Badge {
 }
 
 /**
- * The badge for a pawn from its `act.status` mode. The human's own living pawn is "YOU" whatever Core
- * reports for it; no status yet (before the first step) reads as REPLAY.
+ * The badge for a pawn from its `act.status` mode: Core reports the human's own living pawn as HUMAN (B4),
+ * which reads "YOU". No status yet (before the first step) reads as REPLAY, or YOU for the human's pawn.
  */
 export function statusBadge(mode: Mode | null, isHuman: boolean, alive = true): Badge {
   if (mode === 'DEAD' || !alive) return { text: 'DEAD', tone: 'dead' };
-  if (isHuman) return { text: 'YOU', tone: 'human' };
+  if (mode === 'HUMAN' || (mode === null && isHuman)) return { text: 'YOU', tone: 'human' };
   if (mode === 'LIVE') return { text: 'LIVE', tone: 'alert' };
   return { text: 'REPLAY', tone: 'subtle' };
 }
