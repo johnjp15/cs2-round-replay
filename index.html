@@ -4,20 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#05080c" />
     <link rel="icon" href="data:," />
     <title>CS2 round replay — 2D Mirage</title>
     <style>
+      /*
+       * "Mirage after dusk", the existing replay page's palette (src/app/style.ts mirrors it for the canvas):
+       * night under everything, sand text, Ts warm gold, CTs cool blue, bomb red, defuse green, and one
+       * alarm colour (magenta) kept for LIVE pawns.
+       */
       :root {
-        --bg: #0d1117;
-        --fg: #e6edf3;
-        --btn: #21262d;
-        --btn-hover: #30363d;
-        --on: #1f6feb;
-        --border: #30363d;
+        --night: #05080c;
+        --slab: rgba(14, 20, 27, 0.94);
+        --slab-solid: #0e141b;
+        --rule: #263342;
+        --sand: #ece2cc;
+        --sand-dim: #9f988a;
+        --t: #ebc75e;
+        --ct: #8bbcf3;
+        --bomb: #ff5450;
+        --defuse: #4cc982;
+        --live: #ff4fd8;
+        --amber: #f2b84b;
+        --display: "Avenir Next Condensed", "DIN Condensed", "Saira Condensed", "Roboto Condensed", "Arial Narrow", "TeX Gyre Heros Cn", "DejaVu Sans Condensed", sans-serif;
+        --text: system-ui, -apple-system, "Segoe UI", Inter, sans-serif;
+        --edge: 10px;
       }
       * { box-sizing: border-box; }
-      html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg); }
-      body { font: 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-text-size-adjust: 100%; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night); color: var(--sand); }
+      body { font: 14px/1.3 var(--text); -webkit-text-size-adjust: 100%; }
+      :focus-visible { outline: 2px solid var(--sand); outline-offset: 2px; }
       #app {
         display: flex;
         flex-direction: column;
@@ -25,49 +41,186 @@
         height: 100dvh;
         padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
       }
-      #stage { position: relative; flex: 1 1 auto; min-height: 0; }
-      #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+      #stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+      #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; -webkit-user-select: none; user-select: none; }
       #status {
         position: absolute; inset: 0; margin: 0; padding: 1rem;
         display: flex; align-items: center; justify-content: center; text-align: center;
         pointer-events: none; font-size: 16px;
       }
       #status[hidden] { display: none; }
+
+      /* ---------- HUD over the canvas ---------- */
+      #hud { position: absolute; inset: 0; pointer-events: none; font-family: var(--display); font-variant-numeric: tabular-nums; }
+      #hud[hidden] { display: none; }
+
+      /* Scoreboard: the clock hangs from the top edge between the two teams. */
+      #scoreboard {
+        position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+        display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start;
+        width: min(560px, calc(100% - 2 * var(--edge)));
+      }
+      .side {
+        display: flex; align-items: center; gap: 10px; height: 42px; margin-top: 8px; padding: 0 12px;
+        background: var(--slab); min-width: 0;
+      }
+      .side.ct { justify-content: flex-end; border-radius: 6px 0 0 6px; box-shadow: inset 3px 0 0 var(--ct); }
+      .side.t { border-radius: 0 6px 6px 0; box-shadow: inset -3px 0 0 var(--t); }
+      .team-name { font-size: 14px; font-weight: 600; line-height: 1.1; color: var(--sand-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+      .side.ct .team-name { text-align: right; }
+      .pts { font-size: 30px; font-weight: 700; line-height: 1; }
+      .side.ct .pts { color: var(--ct); }
+      .side.t .pts { color: var(--t); }
+      #clock {
+        min-width: 116px; padding: 6px 14px 7px; text-align: center;
+        background: #070b10; border: 1px solid var(--rule); border-top: 0; border-radius: 0 0 8px 8px;
+      }
+      #clock-text { display: block; font-size: 38px; font-weight: 700; line-height: 1; letter-spacing: 0.01em; }
+      .clock-bar { display: block; height: 3px; margin: 5px 2px 0; border-radius: 2px; background: rgba(255, 84, 80, 0.2); overflow: hidden; visibility: hidden; }
+      #bomb-bar { display: block; height: 100%; background: var(--bomb); transform-origin: left center; }
+      #clock-note { display: block; min-height: 15px; margin-top: 3px; font-size: 13px; font-weight: 600; line-height: 15px; color: var(--sand-dim); white-space: nowrap; }
+      #clock[data-mode="bomb"], #clock[data-mode="defusing"], #clock[data-mode="exploded"] { background: #1a0b0c; border-color: #5b2424; }
+      #clock[data-mode="bomb"] #clock-text, #clock[data-mode="defusing"] #clock-text, #clock[data-mode="exploded"] #clock-text { color: var(--bomb); }
+      #clock[data-mode="bomb"] .clock-bar, #clock[data-mode="defusing"] .clock-bar { visibility: visible; }
+      #clock[data-mode="defusing"] #clock-note { color: var(--defuse); }
+      #clock[data-mode="defused"] { background: #0a1611; border-color: #1e4a32; }
+      #clock[data-mode="defused"] #clock-text { color: var(--defuse); }
+
+      /* Kill feed, newest at the bottom. */
+      #killfeed {
+        position: absolute; top: var(--edge); right: var(--edge); margin: 0; padding: 0; list-style: none;
+        display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: calc(50% - 150px);
+      }
+      .kill {
+        display: flex; align-items: center; gap: 7px; padding: 4px 10px; white-space: nowrap;
+        background: rgba(8, 12, 17, 0.86); border: 1px solid transparent; border-radius: 4px;
+        font-size: 15px; font-weight: 600; line-height: 1.15;
+      }
+      .kill.mine { border-color: rgba(255, 84, 80, 0.9); background: rgba(38, 10, 12, 0.88); }
+      .who.t { color: var(--t); }
+      .who.ct { color: var(--ct); }
+      .gun { font-size: 13px; font-weight: 500; color: var(--sand); padding: 1px 6px; border-radius: 3px; background: rgba(236, 226, 204, 0.09); }
+      .hs { width: 15px; height: 15px; color: var(--sand); flex: none; }
+
+      /* Status panel (Tab). */
+      #panel {
+        position: absolute; left: var(--edge); top: var(--edge); width: 262px; max-height: calc(100% - 150px);
+        display: flex; flex-direction: column; pointer-events: auto;
+        background: var(--slab); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden;
+      }
+      #panel[data-open="false"] { width: auto; }
+      #panel[data-open="false"] .panel-body { display: none; }
+      #panel-toggle {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+        padding: 7px 10px; border: 0; background: none; color: var(--sand); cursor: pointer;
+        font: 600 15px/1.2 var(--display); text-align: left; -webkit-tap-highlight-color: transparent;
+      }
+      #panel-toggle kbd { font: 500 12px/1 var(--display); color: var(--sand-dim); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 5px; }
+      .panel-body { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--rule); }
+      #pawns { width: 100%; border-collapse: collapse; font-size: 14px; }
+      #pawns td { padding: 3px 6px; white-space: nowrap; }
+      #pawns td:first-child { padding-left: 10px; }
+      #pawns td:last-child { padding-right: 10px; text-align: right; color: var(--sand-dim); }
+      #pawns tr.t + tr.ct td { border-top: 1px solid var(--rule); }
+      #pawns .nm { font-weight: 600; }
+      #pawns tr.t .nm { color: var(--t); }
+      #pawns tr.ct .nm { color: var(--ct); }
+      #pawns tr.me .nm { color: #fff; }
+      .chip { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--pc); box-shadow: 0 0 0 1.5px rgba(3, 5, 8, 0.9); vertical-align: 1px; }
+      #pawns .trig { color: var(--sand-dim); max-width: 70px; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+      #pawns .trig .none { opacity: 0.6; }
+      .badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-weight: 700; line-height: 1.3; letter-spacing: 0.04em; }
+      .badge.subtle { color: var(--sand-dim); box-shadow: inset 0 0 0 1px var(--rule); }
+      .badge.alert { background: var(--live); color: #1c0218; }
+      .badge.dead { color: rgba(236, 226, 204, 0.45); box-shadow: inset 0 0 0 1px rgba(236, 226, 204, 0.12); }
+      .badge.human { background: var(--sand); color: #0a0f15; }
+      .log-head { margin: 0; padding: 7px 10px 3px; border-top: 1px solid var(--rule); font-size: 13px; font-weight: 600; color: var(--sand-dim); }
+      #log {
+        margin: 0; padding: 0 10px 8px; list-style: none; overflow-y: auto; min-height: 0;
+        font: 12px/1.35 var(--text); color: var(--sand-dim); font-variant-numeric: tabular-nums;
+      }
+      #log li { padding: 2px 0; overflow-wrap: anywhere; }
+      #log .at { display: inline-block; min-width: 3.1em; color: var(--sand); opacity: 0.75; }
+      #log .warn { color: var(--amber); }
+      #log .error { color: var(--bomb); }
+      #log .empty { opacity: 0.7; }
+
+      /* Your status, bottom left. */
+      #you {
+        position: absolute; left: var(--edge); bottom: var(--edge);
+        display: grid; grid-template-columns: auto auto; column-gap: 18px; row-gap: 1px; align-items: baseline;
+        padding: 7px 14px 8px 13px; min-width: 190px;
+        background: var(--slab); border-radius: 8px; box-shadow: inset 3px 0 0 var(--t);
+      }
+      #you[data-team="CT"] { box-shadow: inset 3px 0 0 var(--ct); }
+      .you-who { grid-column: 1 / -1; font-size: 15px; font-weight: 600; }
+      #you-note { margin-left: 6px; font-weight: 500; color: var(--sand-dim); }
+      .stat { white-space: nowrap; }
+      .stat b { font-size: 30px; font-weight: 700; line-height: 1.05; }
+      .stat small { margin-left: 4px; font-size: 13px; font-weight: 500; color: var(--sand-dim); }
+      #you-armor { font-size: 22px; }
+      #you[data-band="hurt"] #you-hp { color: var(--amber); }
+      #you[data-band="low"] #you-hp { color: var(--bomb); }
+      #you[data-band="dead"] { opacity: 0.6; }
+      #you-weapon { font-size: 15px; font-weight: 600; }
+      #you-ammo { font-size: 15px; font-weight: 600; text-align: right; color: var(--sand-dim); }
+
+      #perf { position: absolute; right: var(--edge); bottom: 8px; margin: 0; font-size: 12px; color: var(--sand-dim); opacity: 0.75; white-space: pre; }
+
+      /* ---------- controls bar ---------- */
       #controls {
         flex: 0 0 auto;
         display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center;
         padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
-        border-top: 1px solid var(--border);
+        border-top: 1px solid var(--rule); background: #080c11;
       }
       button {
-        font: inherit; color: var(--fg); background: var(--btn);
-        border: 1px solid var(--border); border-radius: 6px;
-        padding: 7px 10px; min-height: 36px;
+        font: 600 15px/1.1 var(--display); color: var(--sand); background: var(--slab-solid);
+        border: 1px solid var(--rule); border-radius: 6px;
+        padding: 7px 11px; min-height: 36px;
         cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
       }
-      @media (hover: hover) { button:hover:not(:disabled) { background: var(--btn-hover); } }
-      button[aria-pressed="true"] { background: var(--on); border-color: var(--on); }
-      button:disabled { opacity: 0.45; cursor: default; }
+      @media (hover: hover) { #controls button:hover:not(:disabled) { border-color: #3d5068; background: #131b24; } }
+      #controls button[aria-pressed="true"] { background: var(--sand); border-color: var(--sand); color: #0a0f15; }
+      button:disabled { opacity: 0.4; cursor: default; }
+      #controls kbd { margin-left: 5px; font: 500 12px/1 var(--display); opacity: 0.6; }
       .group { display: inline-flex; }
       .group button { border-radius: 0; margin-left: -1px; min-width: 2.75rem; }
       .group button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
       .group button:last-child { border-radius: 0 6px 6px 0; }
-      #help { flex-basis: 100%; margin: 0; text-align: center; font-size: 12px; opacity: 0.7; }
-      @media (hover: none) { #help { display: none; } }
-      @media (max-width: 430px) {
+      #help { flex-basis: 100%; margin: 0; text-align: center; font: 12px/1.4 var(--text); color: var(--sand-dim); }
+      @media (hover: none) { #help, #controls kbd, #panel-toggle kbd { display: none; } }
+
+      /* Narrow screens (phones): the map is full width, so the HUD stacks above and below it. */
+      @media (max-width: 700px) {
+        :root { --edge: 8px; }
         body { font-size: 13px; }
-        button { padding: 6px 8px; }
+        button { padding: 6px 8px; font-size: 14px; }
         #controls { gap: 5px; }
+        #scoreboard { width: calc(100% - 2 * var(--edge)); }
+        .side { height: 36px; gap: 8px; padding: 0 10px; }
+        .team-name { font-size: 12px; }
+        .pts { font-size: 26px; }
+        #clock { min-width: 96px; padding: 5px 10px 6px; }
+        #clock-text { font-size: 32px; }
+        #killfeed { top: 92px; max-width: calc(100% - 2 * var(--edge)); }
+        .kill { font-size: 14px; padding: 3px 8px; }
+        #panel { top: 92px; width: 248px; max-height: calc(100% - 200px); }
+        #you { min-width: 0; padding: 6px 12px 7px 11px; }
+        .stat b { font-size: 26px; }
+        #perf { font-size: 11px; }
       }
+      @media (max-width: 380px) { .team-name { display: none; } }
       /* Phones in landscape: controls in a column on the right, so the map keeps the height. */
       @media (orientation: landscape) and (max-height: 540px) {
         #app { flex-direction: row; padding-bottom: env(safe-area-inset-bottom); }
         #controls {
           flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; align-items: stretch;
-          width: 11.5rem; overflow-y: auto; border-top: 0; border-left: 1px solid var(--border); padding: 8px;
+          width: 11.5rem; overflow-y: auto; border-top: 0; border-left: 1px solid var(--rule); padding: 8px;
         }
         .group { display: flex; }
         .group button { flex: 1 1 0; min-width: 0; padding-left: 2px; padding-right: 2px; }
+        #killfeed, #panel { top: var(--edge); }
       }
     </style>
   </head>
@@ -75,6 +228,34 @@
     <main id="app">
       <div id="stage">
         <canvas id="view" aria-label="Map of the round"></canvas>
+        <div id="hud" hidden>
+          <header id="scoreboard" aria-label="Score and round clock">
+            <div class="side ct"><span class="team-name" id="ct-name"></span><span class="pts" id="ct-score" aria-label="CT score"></span></div>
+            <div id="clock" data-mode="round" role="timer">
+              <span id="clock-text"></span>
+              <span class="clock-bar"><i id="bomb-bar"></i></span>
+              <span id="clock-note"></span>
+            </div>
+            <div class="side t"><span class="pts" id="t-score" aria-label="T score"></span><span class="team-name" id="t-name"></span></div>
+          </header>
+          <ol id="killfeed" aria-label="Kill feed"></ol>
+          <aside id="panel" data-open="true" aria-label="Pawn status">
+            <button id="panel-toggle" type="button">Pawns <kbd>Tab</kbd></button>
+            <div class="panel-body">
+              <table id="pawns"><tbody id="pawn-rows"></tbody></table>
+              <p class="log-head">Core messages</p>
+              <ol id="log"></ol>
+            </div>
+          </aside>
+          <section id="you" data-team="T" aria-label="Your status">
+            <div class="you-who"><span id="you-name"></span><span id="you-note"></span></div>
+            <span class="stat"><b id="you-hp"></b><small>HP</small></span>
+            <span class="stat"><b id="you-armor"></b><small>armor</small></span>
+            <span id="you-weapon"></span>
+            <span id="you-ammo"></span>
+          </section>
+          <p id="perf"></p>
+        </div>
         <p id="status" role="status">Loading round…</p>
       </div>
       <div id="controls" role="toolbar" aria-label="Replay controls">
@@ -88,10 +269,16 @@
           <button type="button" data-speed="2" aria-pressed="false">2×</button>
           <button type="button" data-speed="4" aria-pressed="false">4×</button>
         </span>
-        <button id="spectate" type="button" aria-pressed="false">Spectate (no human)</button>
-        <button id="dl-log" type="button">Download log (JSONL)</button>
-        <button id="dl-trace" type="button">Download trace (JSON)</button>
-        <p id="help">You play cart: WASD move (W = up on the map) · mouse aims · click fires · Shift walk · Ctrl/C crouch · R reload · E use · 1–5 weapons</p>
+        <span class="group" role="group" aria-label="View">
+          <button type="button" data-overlay="follow" aria-pressed="false">Follow<kbd>F</kbd></button>
+          <button type="button" data-overlay="ghost" aria-pressed="true">Ghost<kbd>G</kbd></button>
+          <button type="button" data-overlay="tracks" aria-pressed="false">Tracks<kbd>T</kbd></button>
+          <button type="button" data-overlay="panel" aria-pressed="true">Panel<kbd>Tab</kbd></button>
+        </span>
+        <button id="spectate" type="button" aria-pressed="false">Spectate</button>
+        <button id="dl-log" type="button">Download log</button>
+        <button id="dl-trace" type="button">Download trace</button>
+        <p id="help">You play cart: WASD moves (W is up on the map), the mouse aims, click fires, Shift walks, Ctrl or C crouches, R reloads, E uses, 1–5 switch weapons. Wheel zooms; drag pans (middle button while playing); double-click shows the whole map. Ghost is cart’s recorded position; Tracks shows everyone’s recorded path for the next 3 s.</p>
       </div>
     </main>
     <script type="module" src="/src/app/main.ts"></script>

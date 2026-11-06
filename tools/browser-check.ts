@@ -6,15 +6,20 @@
  * Serves dist/ with `vite preview`, opens it in headless Chromium (playwright-core; the browser
  * comes from PLAYWRIGHT_BROWSERS_PATH, `npx playwright-core install chromium`, or CHROME_PATH),
  * and:
- *  1. desktop 1280×860: screenshot of the ready state (round set up, 1:39), Start, a few seconds
+ *  1. desktop 1280×860: screenshot (a) of the ready state (round set up, 1:39), Start, a few seconds
  *     at 1×, screenshot again;
  *  2. plays cart: aims east of him with the mouse and holds S for 1 s (he must face east and move
  *     south: WASD is screen-relative), presses 3 (knife) and downloads the log and the trace;
- *  3. measures frames/s and ticks/s at 4× over `--seconds` (target 256 ticks/s ± 1 %);
- *  4. an iPhone-sized viewport (390×844, touch, DPR 3): starts in spectate mode, screenshot;
- *  5. checks determinism: the phone's spectate log has the same digest as a Node run of the same
+ *  3. measures frames/s and ticks/s at 4× over `--seconds` with every overlay on (tracks, ghost,
+ *     status panel, follow camera zoomed in) (target 256 ticks/s ± 1 %);
+ *  4. spectates on the desktop with the tracks overlay: screenshot (b) ~20 s in, when the Ts are
+ *     coming through Apartments; checks that the wheel zooms about the cursor;
+ *  5. follow camera zoomed in on cart: throws a smoke and fires a burst, checks that aiming through
+ *     the zoomed view turns cart toward the cursor, screenshot (c) with the smoke and the tracers;
+ *  6. an iPhone-sized viewport (390×844, touch, DPR 3): starts in spectate mode, screenshot (d);
+ *  7. checks determinism: the phone's spectate log has the same digest as a Node run of the same
  *     length, and the desktop's downloaded log (with a human) replays identically against a fresh Core;
- *  6. fails on console errors, page errors or requests to other origins.
+ *  8. fails on console errors, page errors or requests to other origins.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
@@ -22,8 +27,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright-core';
 import { SessionLog, replay } from '../src/contracts/index';
-import { ReplayCore } from '../src/core/index';
-import { Session, parseSessionData } from '../src/app/session';
+import { Session, defaultCore, parseSessionData } from '../src/app/session';
 
 function read(rel: string): string {
   return readFileSync(new URL(rel, import.meta.url), 'utf8');
@@ -37,6 +41,9 @@ interface Stats {
   droppedTicks: number;
   speed: number;
   human: string | null;
+  overlays: { follow: boolean; ghost: boolean; tracks: boolean; panel: boolean };
+  camera: { zoom: number; cx: number; cy: number };
+  radarRebuilds: number;
 }
 
 function arg(name: string, fallback: string): string {
@@ -85,6 +92,16 @@ async function cart(page: Page): Promise<{ x: number; y: number; yaw: number; we
   });
 }
 
+/** Screenshot as PNG and as a JPEG (for docs). */
+async function shoot(page: Page, name: string): Promise<void> {
+  await page.screenshot({ path: join(OUT, `${name}.png`) });
+  await page.screenshot({ path: join(OUT, `${name}.jpg`), type: 'jpeg', quality: 72 });
+}
+
+async function waitTick(page: Page, tick: number, ms = 30_000): Promise<void> {
+  await page.waitForFunction((k) => (window.__cs2replay?.stats().tick ?? 0) >= k, tick, { timeout: ms });
+}
+
 async function clockText(page: Page): Promise<string> {
   return page.evaluate(() => {
     const s = window.__cs2replay?.session();
@@ -120,13 +137,12 @@ async function main(): Promise<void> {
     await desk.waitForTimeout(500);
     const ready = await stats(desk);
     console.log(`ready: tick ${ready.tick}, clock ${await clockText(desk)}, human ${ready.human}, phase ${ready.phase}`);
-    await desk.screenshot({ path: join(OUT, 'desktop-ready.png') });
+    await shoot(desk, 'a-desktop-ready');
     await desk.click('#start');
     await desk.waitForTimeout(3000);
     const ran = await stats(desk);
     console.log(`after ~3 s at 1x: tick ${ran.tick}, clock ${await clockText(desk)}`);
     await desk.screenshot({ path: join(OUT, 'desktop-running.png') });
-    await desk.screenshot({ path: join(OUT, 'desktop-running.jpg'), type: 'jpeg', quality: 80 });
 
     let logPath = '';
     // 2. Play cart: aim east, hold S (screen-down = south) for 1 s, switch to the knife, download.
@@ -159,7 +175,10 @@ async function main(): Promise<void> {
       if (name === 'log') logPath = path;
     }
 
-    // 3. Rate at 4x.
+    // 3. Rate at 4x, every overlay on: tracks (T), ghost (on by default), panel (open on a desktop),
+    //    and the follow camera (F, zoomed in, so the radar cache is rebuilt as the camera moves).
+    await desk.keyboard.press('t');
+    await desk.keyboard.press('f');
     await desk.click('button[data-speed="4"]');
     await desk.waitForTimeout(1000);
     const a = await stats(desk);
@@ -171,22 +190,147 @@ async function main(): Promise<void> {
     const err = (tps / 256 - 1) * 100;
     console.log(
       `4x over ${sec.toFixed(2)} s: ${fps.toFixed(1)} fps, ${tps.toFixed(1)} ticks/s (target 256, ${err >= 0 ? '+' : ''}${err.toFixed(2)} %), ` +
-        `dropped ${b.droppedTicks - a.droppedTicks}, speed ${b.speed}`,
+        `dropped ${b.droppedTicks - a.droppedTicks}, speed ${b.speed}, overlays ${JSON.stringify(b.overlays)}, zoom ${b.camera.zoom.toFixed(2)}, ` +
+        `radar cache rebuilds ${b.radarRebuilds - a.radarRebuilds}`,
     );
     if (Math.abs(err) > 1) problems.push(`ticks/s at 4x off by ${err.toFixed(2)} %`);
+    if (fps < 55) problems.push(`only ${fps.toFixed(1)} fps at 4x with every overlay on`);
+    if (!(b.overlays.tracks && b.overlays.ghost && b.overlays.panel && b.overlays.follow)) problems.push(`overlays not all on: ${JSON.stringify(b.overlays)}`);
     await desk.close();
 
-    // 4. Phone-sized, touch: spectate by default.
+    // 4. (b) Spectating with the tracks overlay, ~20 s in: the Ts come through Apartments.
+    const spec = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+    watch(spec, problems);
+    await spec.goto(ORIGIN + '/?human=none');
+    await spec.waitForFunction(() => window.__cs2replay !== undefined);
+    await spec.keyboard.press('t');
+    await spec.keyboard.press('f');
+    await spec.click('button[data-speed="4"]');
+    await spec.click('#start');
+    // Rate again at 4x, now with the follow camera moving with cart (the radar cache is rebuilt as it pans).
+    await spec.waitForTimeout(700);
+    const sa = await stats(spec);
+    await spec.waitForTimeout(3500);
+    const sb = await stats(spec);
+    const ssec = (sb.now - sa.now) / 1000;
+    console.log(
+      `4x spectating, follow cam on moving cart, every overlay on: ${((sb.frames - sa.frames) / ssec).toFixed(1)} fps, ` +
+        `${((sb.ticksRun - sa.ticksRun) / ssec).toFixed(1)} ticks/s over ${ssec.toFixed(2)} s, dropped ${sb.droppedTicks - sa.droppedTicks}, ` +
+        `radar cache rebuilds ${sb.radarRebuilds - sa.radarRebuilds}`,
+    );
+    if ((sb.frames - sa.frames) / ssec < 55) problems.push(`only ${((sb.frames - sa.frames) / ssec).toFixed(1)} fps at 4x with the follow camera moving`);
+    await waitTick(spec, 20 * 64);
+    await spec.click('#pause');
+    // Back to the whole map for the screenshot: follow off, double-click resets the view.
+    await spec.keyboard.press('f');
+    await spec.dblclick('#view', { position: { x: 640, y: 400 } });
+    await spec.waitForTimeout(100);
+    const sp = await stats(spec);
+    console.log(`spectate: paused at tick ${sp.tick} (${(sp.tick / 64).toFixed(1)} s), clock ${await clockText(spec)}, tracks ${sp.overlays.tracks}`);
+    await shoot(spec, 'b-desktop-spectate-tracks');
+    // The wheel zooms about the cursor: the world point under it stays put.
+    const anchor = { x: -1200, y: 700 };
+    const before = await spec.evaluate(([x, y]) => window.__cs2replay?.screenOf(x, y), [anchor.x, anchor.y] as const);
+    if (before === undefined) throw new Error('no screenOf');
+    await spec.mouse.move(before.x, before.y);
+    for (let i = 0; i < 6; i++) await spec.mouse.wheel(0, -100);
+    await spec.waitForTimeout(200);
+    const after = await spec.evaluate(([x, y]) => window.__cs2replay?.screenOf(x, y), [anchor.x, anchor.y] as const);
+    const zoomed = await stats(spec);
+    const drift = after === undefined ? Infinity : Math.hypot(after.x - before.x, after.y - before.y);
+    console.log(`wheel: 6 notches in about (${anchor.x}, ${anchor.y}): zoom ${zoomed.camera.zoom.toFixed(2)}, point moved ${drift.toFixed(2)} px`);
+    if (drift > 2) problems.push(`wheel zoom moved the point under the cursor by ${drift.toFixed(2)} px`);
+    await shoot(spec, 'b2-desktop-spectate-zoomed');
+    await spec.close();
+
+    // 5. (c) Follow camera zoomed in on cart: a smoke, a burst, aiming through the zoomed view.
+    const play = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+    watch(play, problems);
+    await play.goto(ORIGIN + '/');
+    await play.waitForFunction(() => window.__cs2replay !== undefined);
+    await play.click('#start');
+    await play.keyboard.press('f');
+    await play.mouse.move(640, 430);
+    for (let i = 0; i < 2; i++) await play.mouse.wheel(0, -100);
+    await play.waitForTimeout(600);
+    const p0 = await cart(play);
+    // Smoke toward the south-west, then the rifle.
+    const smokeAim = await play.evaluate(([x, y]) => window.__cs2replay?.screenOf(x, y), [p0.x - 300, p0.y - 250] as const);
+    if (smokeAim === undefined) throw new Error('no screenOf');
+    await play.mouse.move(smokeAim.x, smokeAim.y);
+    await play.keyboard.press('4');
+    await play.waitForTimeout(1100);
+    await play.mouse.down();
+    await play.waitForTimeout(100);
+    await play.mouse.up();
+    // Let the release throw before switching (set_weapon cancels a primed grenade).
+    await play.waitForTimeout(300);
+    await play.keyboard.press('1');
+    // Step south off the wall cart starts against, into the corridor.
+    await play.keyboard.down('s');
+    await play.waitForTimeout(700);
+    await play.keyboard.up('s');
+    await play.waitForTimeout(1300);
+    // Aim through the zoomed, following view along the longest clear line (2D nav line of sight, which
+    // is also where bullets stop): cart must turn to face it.
+    const p1 = await cart(play);
+    const yaw = await play.evaluate(([x, y]) => {
+      const nav = window.__cs2replay?.session().nav;
+      let best = { deg: 0, d: 0 };
+      for (let deg = -180; deg < 180; deg += 15) {
+        const r = (deg * Math.PI) / 180;
+        for (let d = 50; d <= 800; d += 50) {
+          if (nav?.lineOfSight({ x, y }, { x: x + Math.cos(r) * d, y: y + Math.sin(r) * d }) !== true) break;
+          if (d > best.d) best = { deg, d };
+        }
+      }
+      return best.deg;
+    }, [p1.x, p1.y] as const);
+    const target = { x: p1.x + Math.cos((yaw * Math.PI) / 180) * 400, y: p1.y + Math.sin((yaw * Math.PI) / 180) * 400 };
+    const aimAt = await play.evaluate(([x, y]) => window.__cs2replay?.screenOf(x, y), [target.x, target.y] as const);
+    if (aimAt === undefined) throw new Error('no screenOf');
+    await play.mouse.move(aimAt.x, aimAt.y);
+    await play.waitForTimeout(150);
+    const p2 = await cart(play);
+    const wantYaw = (Math.atan2(target.y - p2.y, target.x - p2.x) * 180) / Math.PI;
+    const camNow = (await stats(play)).camera;
+    console.log(`aim at zoom ${camNow.zoom.toFixed(2)} (following): cart yaw ${p2.yaw.toFixed(2)}, expected ${wantYaw.toFixed(2)}`);
+    if (Math.abs(p2.yaw - wantYaw) > 2) problems.push(`aiming at zoom ${camNow.zoom.toFixed(2)}: cart yaw ${p2.yaw} != ${wantYaw.toFixed(2)}`);
+    // Fire a burst and pause on the frame right after a shot, so its tracer is in the screenshot.
+    await play.mouse.down();
+    await play.waitForTimeout(200);
+    await play.waitForFunction(
+      () => {
+        const sc = window.__cs2replay?.scene();
+        if (sc === undefined || !sc.tracers.some((t) => sc.cur.tick - 1 - t.tick <= 1)) return false;
+        document.getElementById('pause')?.click();
+        return true;
+      },
+      null,
+      { polling: 'raf', timeout: 5000 },
+    );
+    await play.mouse.up();
+    const fx = await play.evaluate(() => {
+      const sc = window.__cs2replay?.scene();
+      return sc === undefined ? null : { effects: sc.effects.map((e) => `${e.kind}/${e.phase}`), tracers: sc.tracers.length };
+    });
+    console.log(`follow cam: effects ${JSON.stringify(fx?.effects)}, tracers on screen ${fx?.tracers}`);
+    if (fx === null || !fx.effects.includes('smoke/smoke')) problems.push(`no smoke cloud after the throw: ${JSON.stringify(fx)}`);
+    if (fx === null || fx.tracers === 0) problems.push('no tracers after the burst');
+    await shoot(play, 'c-desktop-follow-zoomed');
+    await play.close();
+
+    // 6. (d) Phone-sized, touch: spectate by default.
     const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
     watch(phone, problems);
     await phone.goto(ORIGIN + '/');
     await phone.waitForFunction(() => window.__cs2replay !== undefined);
     await phone.tap('#start');
-    await phone.waitForTimeout(2000);
+    await phone.waitForTimeout(3000);
     const ph = await stats(phone);
-    console.log(`phone: human ${ph.human}, tick ${ph.tick}, clock ${await clockText(phone)}`);
+    console.log(`phone: human ${ph.human}, tick ${ph.tick}, clock ${await clockText(phone)}, panel ${ph.overlays.panel ? 'open' : 'closed'}`);
     if (ph.human !== null) problems.push('phone did not start in spectate mode');
-    await phone.screenshot({ path: join(OUT, 'phone-spectate.png') });
+    await shoot(phone, 'd-phone-spectate');
     await phone.click('#pause');
     const browserLog = await phone.evaluate(() => {
       const log = window.__cs2replay?.session().log();
@@ -194,14 +338,15 @@ async function main(): Promise<void> {
     });
     await phone.close();
 
-    // 5. Determinism, Node vs. Chrome.
+    // 7. Determinism, Node vs. Chrome.
     const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'));
     const node = new Session({ ...data, seed: 1, human: null });
     for (let i = 0; i < (browserLog?.lines ?? 0); i++) node.step();
     console.log(`spectate log: Chrome ${browserLog?.lines} lines ${browserLog?.digest}, Node ${node.log().length} lines ${node.log().digest()}`);
     if (browserLog === null || browserLog.digest !== node.log().digest()) problems.push('spectate log differs between Chrome and Node');
     const human = SessionLog.fromText(readFileSync(logPath, 'utf8'));
-    const result = replay(human, new ReplayCore(node.model, node.schedule, data.tuning, 1));
+    // The app's Core: puppets steer with the nav mesh's walkable-line query (B2).
+    const result = replay(human, defaultCore({ model: node.model, schedule: node.schedule, tuning: data.tuning, seed: 1, nav: data.nav }));
     console.log(`desktop log (human cart, ${human.length} lines) replayed in Node: identical ${result.identical}`);
     if (!result.identical) problems.push(`desktop log does not replay: first mismatch at tick ${result.firstMismatchTick}`);
 
