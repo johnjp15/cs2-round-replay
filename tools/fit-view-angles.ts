@@ -248,6 +248,8 @@ export interface Engagement {
   readonly aim: readonly number[];
   /** Refine positions (false: the views only, no frame shows the other player at the crosshair). */
   readonly refine: boolean;
+  /** Before the window, the watched player follows the fit frame by frame over this span (the approach). */
+  readonly approach?: readonly [number, number];
   readonly note: string;
 }
 
@@ -259,6 +261,7 @@ export const ENGAGEMENTS: readonly Engagement[] = [
     window: [18.2, 18.8],
     aim: [18.75, 18.767, 18.783, 18.8],
     refine: true,
+    approach: [17.4, 17.9],
     note: "cart's Apartments window over B site; his headshot on Lokier at 18.8 s (shots 18.52-19.0 s)",
   },
   {
@@ -299,6 +302,11 @@ export interface Move {
   readonly player: PlayerId;
   readonly offset: { dx: number; dy: number };
   readonly window: readonly [number, number];
+  /**
+   * Optional offset profile before the window: the fitted per-frame offsets of an approach (median of 3), joined
+   * linearly to `offset` at `window[0]`; the taper then starts before the first point.
+   */
+  readonly points?: readonly { t: number; dx: number; dy: number }[];
   readonly frames: string;
   readonly reason: string;
 }
@@ -410,11 +418,40 @@ export function engagementMoves(round: RoundData, frames: readonly FitFrame[], s
       }
     }
     const ts = fr.map((f) => f.t);
+    // The approach: the fitted offset of each observed 10 Hz frame, median of 3.
+    const ap = e.approach;
+    const apFr = ap === undefined ? [] : frames.filter((f) => f.player === e.watched && f.on10Hz && f.t >= ap[0] - 1e-9 && f.t <= ap[1] + 1e-9 && f.confidence === 'observed');
+    const med3 = (k: number, key: 'dx' | 'dy'): number => median(apFr.slice(Math.max(0, k - 1), k + 2).map((f) => f.view[key]));
+    // Each approach frame then gets the least move (forward along its own view at half cost, or sideways) that
+    // opens the eye-to-head line both ways to the other player (with his planned offset at that time), as in the
+    // window; the frames of the approach are where the recording has the other player in sight.
+    const otherWin: readonly [number, number] = [Math.min(...e.aim, e.window[1]) - 0.5, Math.max(...e.aim, e.window[1])];
+    const otherOff = (t: number): { dx: number; dy: number } => {
+      if (toff === null) return { dx: 0, dy: 0 };
+      const w = t < otherWin[0] ? 1 - (otherWin[0] - t) / TAPER_SEC : t > otherWin[1] ? 1 - (t - otherWin[1]) / TAPER_SEC : 1;
+      return w <= 0 ? { dx: 0, dy: 0 } : { dx: toff.dx * w, dy: toff.dy * w };
+    };
+    const points = apFr.map((f, k) => {
+      const o0 = clampLen(med3(k, 'dx'), med3(k, 'dy'), MAX_MOVE_T);
+      const fx = Math.cos((f.view.yaw * Math.PI) / 180);
+      const fy = Math.sin((f.view.yaw * Math.PI) / 180);
+      const a = snappedAt(sn, e.watched, f.t);
+      const bo = otherOff(f.t);
+      const b0 = snappedAt(sn, e.other, f.t);
+      const b = { x: b0.x + bo.dx, y: b0.y + bo.dy, z: b0.z };
+      for (const c of cands) {
+        const o = { dx: o0.dx + fx * c.s - fy * c.l, dy: o0.dy + fy * c.s + fx * c.l };
+        const pa = { x: a.x + o.dx, y: a.y + o.dy, z: a.z };
+        if (lineOpen(g, pa, b, HEAD) && lineOpen(g, b, pa, HEAD)) return { t: f.t, ...o };
+      }
+      return { t: f.t, ...o0 };
+    });
     moves.push({
       player: e.watched,
       offset: off,
       window: e.window,
-      frames: `${fr.length} observed frames ${Math.min(...ts).toFixed(2)}-${Math.max(...ts).toFixed(2)} s`,
+      ...(points.length > 0 ? { points } : {}),
+      frames: `${fr.length} observed frames ${Math.min(...ts).toFixed(2)}-${Math.max(...ts).toFixed(2)} s${points.length > 0 ? `; approach: ${points.length} frames ${(points[0] as { t: number }).t}-${(points[points.length - 1] as { t: number }).t} s, each its own fit` : ''}`,
       reason: `${e.name}: the fitted eye (median offset of the frames)${depth !== 0 || side !== 0 ? `, then ${depth} u forward and ${side} u to the left of the view (yaw ${yawRef.toFixed(1)}°) to open the shot lines` : ''}`,
     });
     if (toff === null) continue;
@@ -435,14 +472,26 @@ export function positionEdits(round: RoundData, original: (id: PlayerId, t: numb
   for (const m of moves) {
     const tr = round.tracks[m.player];
     for (const s of tr?.samples ?? []) {
-      const [a, b] = m.window;
+      const pts = [...(m.points ?? []), { t: m.window[0], ...m.offset }];
+      const a = (pts[0] as { t: number }).t;
+      const b = m.window[1];
       const w = s.t < a ? 1 - (a - s.t) / TAPER_SEC : s.t > b ? 1 - (s.t - b) / TAPER_SEC : 1;
       if (w <= 0) continue;
+      // The offset at t: the profile (linear between points), the window's offset from window[0] on.
+      let off = s.t <= a ? (pts[0] as { dx: number; dy: number }) : m.offset;
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const p = pts[i] as { t: number; dx: number; dy: number };
+        const q = pts[i + 1] as { t: number; dx: number; dy: number };
+        if (s.t >= p.t - 1e-9 && s.t <= q.t + 1e-9) {
+          const f = q.t > p.t ? (s.t - p.t) / (q.t - p.t) : 0;
+          off = { dx: p.dx + (q.dx - p.dx) * f, dy: p.dy + (q.dy - p.dy) * f };
+        }
+      }
       const from = original(m.player, s.t);
       // The offset is relative to the snapped (CS2 floor) spot the fit used as the eye base, so the edit puts the
       // sample there (snap-tracks keeps a spot where a hull stands); z stays the recording's.
       const sp = snapped(m.player, s.t);
-      const to = { x: Math.round(sp.x + m.offset.dx * w), y: Math.round(sp.y + m.offset.dy * w), z: from.z };
+      const to = { x: Math.round(sp.x + off.dx * w), y: Math.round(sp.y + off.dy * w), z: from.z };
       if (to.x === from.x && to.y === from.y) continue;
       const prev = out.find((q) => q.player === m.player && Math.abs(q.t - s.t) < 1e-9);
       if (prev !== undefined) continue; // the first move of a sample wins
@@ -629,7 +678,7 @@ function main(argv: string[]): void {
     format: VIEW_FIT_FORMAT,
     note: 'V2: the watched player\'s view fitted to the original video (tools/viewfit/fit.py + tools/fit-view-angles.ts, docs/viewfit.md) and the engagement positions it implies. Merged into data/round.json by tools/extract-round.ts.',
     params: { observedMinScore: OBSERVED_MIN_SCORE, observedMinMargin: OBSERVED_MIN_MARGIN, estimatedMinScore: ESTIMATED_MIN_SCORE, holdBackSec: HOLD_BACK_SEC, altDeg: ALT_DEG, taperSec: TAPER_SEC },
-    moves: moves.map((m) => ({ player: m.player, dx: r2(m.offset.dx), dy: r2(m.offset.dy), window: m.window, frames: m.frames, reason: m.reason })),
+    moves: moves.map((m) => ({ player: m.player, dx: r2(m.offset.dx), dy: r2(m.offset.dy), window: m.window, ...(m.points ? { points: m.points.map((p) => ({ t: p.t, dx: r2(p.dx), dy: r2(p.dy) })) } : {}), frames: m.frames, reason: m.reason })),
     views,
     positions,
   };

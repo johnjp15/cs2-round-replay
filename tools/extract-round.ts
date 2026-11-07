@@ -597,6 +597,12 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
     })
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 
+  // V2: an event position of a player whose sample at that time was refined from the video (`refined: 'viewfit'`)
+  // moves with it (x, y; z stays the page's), so events and tracks agree.
+  const refinedAt = (id: PlayerId, t: number, p: Vec3): Vec3 => {
+    const s = tracks[id]?.samples.find((q) => Math.abs(q.t - t) < 1e-6 && q.refined === 'viewfit');
+    return s === undefined ? p : { x: s.x, y: s.y, z: p.z };
+  };
   const kills = src.kills.map((k): Kill => {
     const killer = pid(k.killer);
     return {
@@ -608,8 +614,8 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
       hs: k.hs,
       assist: pidOrNull(k.assist),
       postRound: k.postround === true,
-      kpos: vec3(k.kpos),
-      vpos: vec3(k.vpos),
+      kpos: refinedAt(killer, k.t, vec3(k.kpos)),
+      vpos: refinedAt(pid(k.victim), k.t, vec3(k.vpos)),
       kplace: k.kplace,
       vplace: k.vplace,
     };
@@ -629,8 +635,8 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
       armor: csvRow?.armorDamage ?? null,
       weapon: weapon(d.weapon, attacker),
       note: d.note,
-      apos: vec3(d.apos),
-      vpos: vec3(d.vpos),
+      apos: refinedAt(attacker, d.t, vec3(d.apos)),
+      vpos: refinedAt(victim, d.t, vec3(d.vpos)),
       source: 'damage',
     };
   });

@@ -38,7 +38,7 @@
       },
       "viewFit": {
         "file": "data/source/view-fit.json",
-        "sha256": "b0bcee445d0d02043bd28ad05ad9a77272952853d0629a513ab48702098b4c29"
+        "sha256": "316367c1906d6f15152a4930bda0675041305df1596aad330fbe1db5e6f2e1d5"
       }
     }
   },
@@ -8070,72 +8070,80 @@
         {
           "t": 16.7,
           "tick": 1069,
-          "x": -1463,
-          "y": 742,
+          "x": -1462,
+          "y": 736,
           "z": -48,
-          "confidence": "observed"
+          "confidence": "observed",
+          "refined": "viewfit"
         },
         {
           "t": 16.8,
           "tick": 1075,
-          "x": -1484,
-          "y": 752,
+          "x": -1482,
+          "y": 740,
           "z": -48,
-          "confidence": "observed"
+          "confidence": "observed",
+          "refined": "viewfit"
         },
         {
           "t": 16.9,
           "tick": 1082,
-          "x": -1500,
-          "y": 757,
+          "x": -1497,
+          "y": 739,
           "z": -48,
-          "confidence": "observed"
+          "confidence": "observed",
+          "refined": "viewfit"
         },
         {
           "t": 17,
           "tick": 1088,
-          "x": -1509,
-          "y": 757,
+          "x": -1504,
+          "y": 732,
           "z": -48,
-          "confidence": "observed"
+          "confidence": "observed",
+          "refined": "viewfit"
         },
         {
           "t": 17.1,
           "tick": 1094,
-          "x": -1520,
-          "y": 751,
+          "x": -1514,
+          "y": 720,
           "z": -48,
-          "confidence": "observed"
+          "confidence": "observed",
+          "refined": "viewfit"
         },
         {
           "t": 17.2,
           "tick": 1101,
-          "x": -1531,
-          "y": 742,
+          "x": -1524,
+          "y": 705,
           "z": -48,
-          "confidence": "observed"
+          "confidence": "observed",
+          "refined": "viewfit"
         },
         {
           "t": 17.3,
           "tick": 1107,
-          "x": -1540,
-          "y": 736,
+          "x": -1532,
+          "y": 693,
           "z": -48,
-          "confidence": "observed"
+          "confidence": "observed",
+          "refined": "viewfit"
         },
         {
           "t": 17.4,
           "tick": 1114,
-          "x": -1556,
-          "y": 735,
+          "x": -1547,
+          "y": 686,
           "z": -48,
-          "confidence": "observed"
+          "confidence": "observed",
+          "refined": "viewfit"
         },
         {
           "t": 17.5,
           "tick": 1120,
-          "x": -1573,
-          "y": 721,
+          "x": -1564,
+          "y": 684,
           "z": -48,
           "confidence": "observed",
           "refined": "viewfit"
@@ -8143,8 +8151,8 @@
         {
           "t": 17.6,
           "tick": 1126,
-          "x": -1583,
-          "y": 714,
+          "x": -1571,
+          "y": 689,
           "z": -48,
           "confidence": "observed",
           "refined": "viewfit"
@@ -8152,8 +8160,8 @@
         {
           "t": 17.7,
           "tick": 1133,
-          "x": -1594,
-          "y": 717,
+          "x": -1585,
+          "y": 689,
           "z": -48,
           "confidence": "observed",
           "refined": "viewfit"
@@ -8161,8 +8169,8 @@
         {
           "t": 17.8,
           "tick": 1139,
-          "x": -1615,
-          "y": 715,
+          "x": -1609,
+          "y": 679,
           "z": -48,
           "confidence": "observed",
           "refined": "viewfit"
@@ -8170,8 +8178,8 @@
         {
           "t": 17.9,
           "tick": 1146,
-          "x": -1645,
-          "y": 709,
+          "x": -1644,
+          "y": 727,
           "z": -48,
           "confidence": "observed",
           "refined": "viewfit"
@@ -8179,8 +8187,8 @@
         {
           "t": 18,
           "tick": 1152,
-          "x": -1676,
-          "y": 700,
+          "x": -1675,
+          "y": 712,
           "z": -48,
           "confidence": "observed",
           "refined": "viewfit"
@@ -8189,7 +8197,7 @@
           "t": 18.1,
           "tick": 1158,
           "x": -1710,
-          "y": 689,
+          "y": 694,
           "z": -48,
           "confidence": "observed",
           "refined": "viewfit"
@@ -46774,13 +46782,13 @@
       "assist": null,
       "postRound": false,
       "kpos": {
-        "x": -1764,
-        "y": 794,
+        "x": -1773,
+        "y": 670,
         "z": -48
       },
       "vpos": {
-        "x": -2139,
-        "y": 439,
+        "x": -2087,
+        "y": 426,
         "z": -161
       },
       "kplace": "Apartments",
@@ -46886,13 +46894,13 @@
       "weapon": "ssg08",
       "note": "cart 100 → 27 HP",
       "apos": {
-        "x": -2125,
-        "y": 452,
+        "x": -2084,
+        "y": 426,
         "z": -164
       },
       "vpos": {
-        "x": -1764,
-        "y": 800,
+        "x": -1779,
+        "y": 677,
         "z": -48
       },
       "source": "damage"
