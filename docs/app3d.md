@@ -19,8 +19,9 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
 - **World**: the CS2 collision mesh (data/geometry/mirage-geometry.bin, no player clips), flat shaded, in Mirage's
   colours (below). Sky and distance fog.
 - **Players**: capsules in team colours (T yellow-orange, CT blue; the human lighter), a dark visor at eye height
-  along the view, crouched shorter, the dead lying flat and grey; name tags over the human's teammates (everyone's
-  while watching).
+  along the view, crouched shorter, the dead lying flat and grey; name tags over the viewer's living teammates, and
+  over an enemy only while the viewer sees it (`sees`: never through walls). The viewer is the human, else the
+  spectated player.
 - **Effects**: 3D tracers of the last 10 ticks' bullets (`Sim3DHost.shots()`), the muzzle flash on the viewmodel,
   smokes (grey domes), molotov fires (orange discs), grenades in flight, the bomb (red, blinking when planted).
 - **First person**: the camera at the eye, a box viewmodel coloured by weapon drawn in its own pass and camera
@@ -29,21 +30,68 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
   planted, who is defusing and how long is left, defused), the kill feed, the radar minimap (the CS2 radar around the
   camera, every pawn as a dot, the view cone), the team panel (HP bar, mode: REPLAY / LIVE / YOU), HP / armor and
   weapon / ammo of the pawn being viewed, the mode line, fps and ticks/s, and the end-of-round summary line 2 s after
-  the round end.
-- **Bar**: Start, Pause, Restart, Take control of cart (E), Camera (V), speed 0.25–4×, and the CS2 settings
-  (sensitivity, zoom_sensitivity_ratio, viewmodel_fov; kept in localStorage).
+  the round end. While spectating: the spectator panel and an edge vignette (below).
+- **Bar**: Start, Pause, Restart, Take control of cart (E), Camera (V), Radar (CS2 rules / show everyone), speed
+  0.25–4×, and the CS2 settings (sensitivity, zoom_sensitivity_ratio, viewmodel_fov; these and the radar toggle are
+  kept in localStorage).
 
 ## Controls
 
-Watching (default, every device): third person behind the followed pawn (the mouse orbits once the pointer is
-locked: click), V cycles third person → through its eyes → free fly (WASD, Space up, Ctrl down, Shift fast), Z / X
-the previous / next living player, P pause. When the followed pawn dies the camera moves on after 2 s.
+Watching (default, every device) and dead: spectating, as CS2 (below). P pause.
 
 **E** or the button takes control of cart from that tick (the speed drops to 1×; the pointer is locked): mouse look,
 W / S forward / back and A / D strafe relative to the view (CS2's), Space jump, Ctrl or C duck, Shift walk, mouse 1
 fire / throw, mouse 2 scope (AWP, SSG 08; the engine itself has no scope state yet, so scoped movement speed and
 accuracy come with H2), R reload, 1–5 weapon slots (as the 2D app), E use (plant, defuse). Esc frees the mouse. Dead,
-the camera spectates again. G (drop) is not implemented: the engine has no dropped weapons yet (H4).
+the camera spectates again (your living teammates first, as CS2 competitive's mp_forcecamera 1). G (drop) is not implemented: the engine has no dropped weapons yet (H4).
+
+## Spectating (U1)
+
+`src/app3d/spectate.ts` (pure), `main.ts`, `hud3d.ts`. Watching (nobody controlled) or dead:
+
+| Input | First person (default) | Third person | Free fly |
+| --- | --- | --- | --- |
+| Mouse 1 / Space | next player | next player (the click that grabs the pointer only grabs it) | mouse 1: first person on the next player (once the pointer is grabbed); Space flies up |
+| Mouse 2 | previous player | previous player | first person on the previous player |
+| Mouse | nothing (the view is theirs) | orbits | looks |
+| V | → third person | → free fly | → first person |
+| Z / X | previous / next player (kept from H1) | same | same |
+| E | take control of cart (when allowed) | same | same |
+
+- **First person** is through the spectated player's eyes exactly as they'd see it: their eye height (duck eased),
+  view angles (interpolated), their viewmodel (the box gun, flashing when they fire), their HP / armor / weapon /
+  ammo in the HUD, and their crosshair at their aim, moving with the recoil-tracked camera, the scope overlay
+  instead while scoped. The angles, crosshair and scope come from `Sim3DHost.aimView(id, view)` once H2b's weapon
+  mechanics land (camera = view + punch, crosshair = where the next bullet goes; `spectatedView` in main.ts);
+  until then the view itself, crosshair centred, no scope. The crosshair offset is the projection of the aim
+  direction through the camera (`aimOffsetPx`). No crosshair in third person or free fly.
+- **Who**: watching, every living player in id order; dead, your living teammates (everyone once they're dead).
+  When the spectated player dies the camera moves on after 2 s.
+- **Unmistakable**: the line under the score says "Watching" (or "You: cart (dead) · spectating") vs "You: cart";
+  the bottom panel says SPECTATING and the name in team colour, with the mode (1st person / 3rd person / free camera),
+  HP, armor, weapon, kills this round and the controls' hints; a soft vignette darkens the screen edges. The panel's
+  text nodes are written only when they change.
+
+## Radar (U1)
+
+`src/app3d/radar3d.ts` (pure; tests/app3d-radar.test.ts) feeds every tick's `Observe` to both teams' spotting; the
+minimap (redrawn at 10 Hz) shows the viewer's team view: the human's team, else the spectated player's.
+
+| Rule (CS2 rules, the default) | Value | Source |
+| --- | --- | --- |
+| Teammates | always shown | [SPOT] cs_player.cpp: a player's spot rules are SPOT_RULE_ENEMY \| SPOT_RULE_ALWAYS_SEEN_BY_FRIEND |
+| Enemy spotted | while any living teammate (you included) sees it (`sees`: FOV, walls, smoke) | [SPOT] cs_entity_spotting.cpp CanPlayerSeeTargetEntityFunctor |
+| Spotting cadence (the dot appears and lingers up to this late) | 0.5 s (`SPOT_INTERVAL_S`; every 32 ticks) | [SPOT] `ENTITY_SPOT_FREQUENCY 0.5f` |
+| Last seen | the dot becomes the "?" ghost at the last spotted position, fading linearly over 6 s (`GHOST_FADE_S`) | [RADAR] `GHOST_FADE_TIME 6.0f`, SetupIconsFromStates |
+| Dead | an X at the death position, fading over 4 s (`DEAD_FADE_S`); an enemy only if it was spotted when it died | [RADAR] `DEAD_FADE_TIME 4.0f` |
+| Bomb carrier | the bomb icon on the carrier's dot (Ts always; CTs while the carrier is spotted) | [RADAR] HasC4 → m_bBombIsSpotted; [SPOT] weapon_c4.cpp SPOT_RULE_CT \| SPOT_RULE_ALWAYS_SEEN_BY_T |
+| Dropped bomb | Ts only (the sim has no bomb spotting for CTs) | [SPOT] weapon_c4.cpp |
+| Planted bomb | everyone (`PLANTED_BOMB_FOR_ALL`; the brief: CS:GO's rule would need a CT to spot it) | — |
+
+Sources: the CS:GO source as mirrored in SwagSoftware/Kisak-Strike (commit `4c2fdc31`, read 2026-11-07):
+**[RADAR]** `game/client/cstrike15/Scaleform/HUD/sfhudradar.cpp`, **[SPOT]** `game/server/cstrike15/`. CS2's radar
+code isn't public; it shows the same "?" and fading X, but the timings are **unverified** for CS2 (hence tunables).
+"Radar: show everyone" (the toggle) draws every pawn, the dead as X without fading, and the bomb always.
 
 ## View: CS2's numbers, with sources
 
@@ -128,11 +176,15 @@ screenshot `#view`. The other hooks (`stats`, `session`, `takeControl`, `aimAt`,
 
 ## Browser check
 
-`tools/browser-check3d.ts` (port 4180; `--single` serves the single file). It screenshots (a) the start, (b) Lokier
+`tools/browser-check3d.ts` (port 4180, or `--port <n>` / `CHECK3D_PORT`; `--single` serves the single file). It screenshots (a) the start, (b) Lokier
 at B from cart's window (18.5 s, cart's eyes), (c) the plant (27.6 s, behind barely), (d) Sp4rtaN behind donk
 (49.95 s), (e) the defuse (64 s), (f) first person after taking control; checks the FOV (vertical 73.74°), that E
 takes control (YOU, 1×), that mouse counts turn the view by exactly counts × 1.25 × 0.022°, and that mouse 1 fires
-(ammo drops); measures fps and ticks/s at 1× and 4×.
+(ammo drops); measures fps and ticks/s at 1× and 4×. U1's spectating checks: at the start cart's radar shows the five
+Ts and exactly the CTs a T sees (the rest hidden), the toggle shows all ten and is stored; first person through
+Sp4rtaN's eyes shows his HP / armor / ammo / weapon, the crosshair, the panel ("SPECTATING sp4rtan 1st person"),
+the vignette and "Watching"; mouse 1 / mouse 2 / Space switch player; V cycles 1st → 3rd (no crosshair) → free →
+1st; playing on at 4×, an enemy spotted earlier turns into the "?" ghost. Screenshots `app3d-spectate-*.jpg`.
 
 WebGL in the sandbox's headless Chromium is software (lavapipe or SwiftShader) on two shared cores: a bare WebGL
 canvas that only clears reaches 26–50 fps at 1280 × 800 and 56–60 at 640 × 400, so the frame rate is measured at
@@ -142,3 +194,7 @@ logs/browser-check3d.json; the numbers of the H1 run are in the PR.
 
 ![The defuse](img/app3d-e-defuse.jpg)
 ![First person after taking control](img/app3d-f-first-person.jpg)
+
+![Spectating Sp4rtaN in first person: his viewmodel, crosshair and HUD, the spectator panel](img/app3d-spectate-first-person.jpg)
+![Third person: no crosshair](img/app3d-spectate-third-person.jpg)
+![The "?" on cart's radar where Sp4rtaN was last spotted](img/app3d-spectate-radar-ghost.jpg)
