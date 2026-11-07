@@ -36,7 +36,7 @@ const OUT = resolve(ROOT, arg('--out', 'logs/bench-app3d.json'));
 const LABEL = arg('--label', '');
 const DIR = resolve(ROOT, arg('--dir', 'dist-3d'));
 /** The scenarios (src/app3d/bench3d.ts SCENARIOS), one page load each. */
-const ALL = ['watch-1x-raf', 'watch-1x-loop', 'watch-1x-uncapped', 'watch-4x-uncapped', 'fp-1x-uncapped', 'inround-5s-120hz', 'postend-5s-120hz'];
+const ALL = ['watch-1x-raf', 'watch-1x-loop', 'watch-1x-uncapped', 'watch-4x-uncapped', 'fp-1x-uncapped', 'watch-1x-480hz', 'inround-5s-120hz', 'postend-5s-120hz'];
 const ONLY = arg('--only', ALL.join(',')).split(',').filter((x) => x !== '');
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.bin': 'application/octet-stream', '.css': 'text/css' };
 

@@ -113,6 +113,15 @@ const SCENARIOS: readonly Scenario[] = [
     frames: 600,
     setup: (a) => watchFrom(a, endTick(a) - 7 * 64),
   },
+  // What an uncapped loop on a fast machine does: many frames per tick (480 Hz: 7.5 frames per 64 Hz tick), so the
+  // per-frame cost is the scene, the render and whatever the HUD does between ticks.
+  {
+    name: 'watch-1x-480hz',
+    driver: 'uncapped',
+    hz: 480,
+    frames: 960,
+    setup: (a) => watchFrom(a, 10 * 64),
+  },
   {
     name: 'postend-5s-120hz',
     driver: 'uncapped',
