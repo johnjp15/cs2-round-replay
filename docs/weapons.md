@@ -3,7 +3,7 @@
 A pure, host-independent module (imports only `src/contracts`; ESLint enforces it, and the determinism rules of
 `src/core` apply) that models CS2's weapons as exactly as the public data allows: the weapon table, recoil tables and
 spray patterns, the inaccuracy and spread model, aim / view punch, tagging, fire rate, reloads, zoom, bursts, damage
-(the sim2d math, data-driven) and wall penetration. No host uses it yet: H1 / H4 plug it into the 3D hitscan.
+(the sim2d math, data-driven) and wall penetration. The 3D host uses it since H2b (below, "In the 3D host").
 
 ## Sources
 
@@ -267,6 +267,39 @@ recoilScale × `viewRecoilTracking` (0.45, CS:GO's `view_recoil_tracking`; CS2 h
 crosshair the spray climbs ~55 % above where the camera looks; with the recoil crosshair, the crosshair sits on the next
 bullet. The app must: render with `cameraAngles`, draw the crosshair at `crosshairAngles` (or centred if the player
 turns it off), and feed the mouse into `view` only (never write punch back into view).
+
+`cameraAngles(ctx, s, view, tracking?)` takes the tracking share as an optional argument (clamped to 0–1, default
+`viewRecoilTracking`): the 3D app's **Recoil tracking** setting (docs/app3d.md; 0.45 by default) passes it through
+`Sim3DHost.aimView(id, view, tracking)`. It changes only what the screen shows: the bullets and the crosshair are
+the same at every setting.
+
+## In the 3D host (H2b)
+
+`Sim3DHost` (src/sim3d/host.ts) keeps sim2d's fire / ammo / reload machine (`stepWeapon`, so cadence, ammo and the
+recorded fire ticks are unchanged) and runs the mechanics next to it for every pawn: `trackArms` each tick (weapon
+sync, penalties and decay, scope, punch decay, tagging recovery) and `trackShot` on each shot (`fireShot`: the
+direction from view + punch × 2 + the cone, RNG `Rng(seed).fork('spread:<id>:<tick>')`). State in snapshots
+(`arms`).
+
+| Who | Bullet | Speed |
+| --- | --- | --- |
+| The human (while controlled) and LIVE pawns | lands along the spread + recoil direction; may go through walls | `MoveOptions` (docs/movement.md): `runSpeed` = `maxSpeedOf` without tagging (the weapon's `m_flMaxSpeed` in its mode, AWP 100 scoped, × the attack factor while firing), `velocityModifier` = tagging; passed only where they differ from the table / 1 |
+| Puppets (REPLAY) | **outcome traced along the scripted view as before** (scripted damage is the truth; no recorded event changes); the drawn tracer follows the spread direction | the table's speeds (their tracks) |
+
+- **Tagging and hit punch**: `applyHit` on the victim of every bullet hit that lands (not on a blocked recorded pair).
+- **Scope**: ATTACK2 steps the zoom of scoped weapons; a reload or (AWP / SSG) a shot drops it until the bolt is back;
+  `aimView` reports the level and its FOV from the table.
+- **Penetration**: `meshSolidQuery(world mesh)` (src/sim3d/hitscan.ts; the faces along the ray in enter / exit pairs,
+  a face within 4 u after an exit continues the solid, default modifier: no materials) and `penetrate`. When a wall
+  stops the ray before any hitbox, the nearest hitbox behind it along the full range is the target; if the bullet
+  gets there, the damage is the penetration's (`damageAfterHitgroup` of what is left), else it stops in the wall.
+  Open-air hits keep the 2D table's `bulletDamage`, as before.
+- **Tests** (`tests/sim3d-spray.test.ts`, 1,000 seeded magazines in the host at a wall 1,024 u away): per-bullet mean
+  within 0.040° of the pattern (limit 0.1°), dispersion within 4.5 % of each bullet's cone (limit 6 %); recoil control
+  (view = − pattern before each bullet): every mean within 0.048° (limit 0.06°), bullets 1–10 median 6.99 u, 95 %
+  17.34 u, max 20.33 u (uncontrolled median 112.8 u), the engine's numbers above; an AK chest shot at 800 u: 27 HP in
+  the open, 16 through 8 u of wall, none through 120 u; a tagged victim runs at 105 u/s 10 ticks into a run vs 130
+  untouched and is back to 215 within 3 s; the camera and crosshair kick and recover; scoped AWP at most 100 u/s.
 
 **First shot and recovery** (AK-47; all from S1 values through the formulas above):
 

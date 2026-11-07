@@ -57,9 +57,10 @@ stride, no lean), a spherical head. H2's penetration and H4 may refine them.
 world mesh is traced first (`MapGeometry.traceLine`, the nearest crossing); then every pawn that can be hit (alive,
 not the shooter, an enemy unless `damage.friendlyFire`) has its hitboxes tested up to the wall; the nearest entry
 wins (ties: lower id). Damage: `bulletDamage(gun, distance, hitgroup, armor, helmet)` with the eye-to-impact
-distance. A blocked pair (the Core's `block_damage`) is traced and logged but not applied, as in 2D. No spread,
-recoil or penetration yet: H2's `src/engine/weapons` supplies them; the app already sends the firing angles (view +
-aim punch × 2, zero punch for now; docs/app3d.md).
+distance. A blocked pair (the Core's `block_damage`) is traced and logged but not applied, as in 2D. Since H2b the
+direction is the weapon mechanics' (view + aim punch × 2 + the inaccuracy cone) and the human's and LIVE pawns'
+bullets go through walls (`meshSolidQuery` + `penetrate`); puppets' outcomes are traced along their scripted view as
+before. docs/weapons.md "In the 3D host".
 
 ## Sight
 
@@ -74,7 +75,7 @@ logged (`script: scripted hit through geometry`, `combatLog()`), as in 2D.
 
 ## Results (headless, `npm run harness3d`, seed 1)
 
-- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `a2883aa0`; kills on 32, 794, 816, 1142, 1203,
+- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `7168c0a5`, the 2D golden master's (T1; `150f77b4` at G6; `a2883aa0` before #30, `cbb335eb` between #30 and G6; H2b's weapon mechanics leave it byte-identical: puppets' outcomes are traced along their scripted view, and nobody is mechanical in a run nobody plays); kills on 32, 794, 816, 1142, 1203,
   2829, 3222, 3766, 4442 (all nine, the recording's), every damage event identical to the 2D golden master's, plant
   1761, defuse 3955 → 4275, "Played it like the tape: CT defuse, 0.72 s left". Against the 2D golden master
   (`fixtures/golden/round-nohuman`, `tools/fixture-diff.ts`): since G6 **identical in every line**, `sees` included
@@ -86,8 +87,10 @@ logged (`script: scripted hit through geometry`, `combatLog()`), as in 2D.
   head hitbox and fires: the bullet enters `head` 512 units away (an AK-47 headshot that kills, by `bulletDamage`).
   G6: with pass 5's tracks the window opens before cart's recorded spray, inside his recorded duel with Lokier (G5), so
   the engine reports the hit as `blocked_hit {cart, lokier, ak47, head}` and the duel lands the tape's kill (before G6
-  the open tick was 19.86 s, after the duel). The same shot 10° off misses everyone; a shot at his head while the wall
-  is between stops on the wall.
+  the open tick was 19.86 s, after the duel). The same shot 10° off misses everyone. H2b: with CS2's spread cart first
+  stands still 16 ticks (running, the AK's cone is too wide for a head at 500 u) and the bullet enters `head` 502 u
+  away; a shot at his head while the window wall is between goes through it (one surface, 23 of 36 damage left, hits
+  the chest) and, inside the duel, is a `blocked_hit` with no damage.
 - **The follow-recording script** (`--human cart --script fixtures/scripts/cart-follows-recording.json`; numbers after
   G5's merge): in 2D cart kills Lokier at 18.80 s (HS) and the round "Played it like the tape" (G5's recorded duels).
   In 3D it **does not match yet**: the script's pitch is 0 (the recording has no pitch; 2D picks the hitgroup from

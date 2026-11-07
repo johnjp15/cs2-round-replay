@@ -229,9 +229,22 @@ export interface Utility {
   readonly thrower: PlayerId;
   readonly kind: GrenadeId;
   readonly place: string;
-  /** Thrower's position at the throw (landing spot unknown). */
+  /** Thrower's position at the throw. */
   readonly throwPos: Vec3;
+  /**
+   * V0: where the grenade comes to rest and pops (smoke bloom, flash/HE detonation, molotov fire), measured from the
+   * recording, with its uncertainty (units, radius); `null` when the recording never shows it (docs/round-data.md).
+   */
+  readonly landing: GrenadeLanding | null;
   readonly radio: string;
+}
+
+/** A measured grenade landing (Source units). */
+export interface GrenadeLanding {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly uncertainty: number;
 }
 
 export interface Radio {
@@ -562,6 +575,10 @@ function checkUtility(value: unknown, path: string): void {
   grenade(u['kind'], `${path}.kind`);
   str(u['place'], `${path}.place`);
   vec3(u['throwPos'], `${path}.throwPos`);
+  nullable(u['landing'], `${path}.landing`, (v, p) => {
+    vec3(v, p);
+    num((v as Record<string, unknown>)['uncertainty'], `${p}.uncertainty`);
+  });
   str(u['radio'], `${path}.radio`);
 }
 

@@ -143,10 +143,12 @@ the positions from the video and X1 brings the 2020 BSP. In the no-human round (
 | 1142 | 17.84 | sp4rtan → snarlbot | Deagle, chest | 31 / 441 u | no | sp4rtan's route is inferred |
 | ~~1184~~ | 18.50 | lokier → cart | SSG 08, chest | – | – | **the window duel: gone with V2** (`docs/viewfit.md` "Engagement positions": cart and Lokier placed from cart's first-person frames; G6 had the line meet the Apartments wall 10 u west of the window's edge) |
 | ~~1203~~ | 18.80 | cart → lokier | AK-47, head | – | – | **the window duel: gone with V2** (was 5 u west of the edge) |
-| 2829 | 44.20 | barely → zwomp | AK-47, chest | 79 / 200 u | no | barely's recorded level is wrong (excluded in the vision labels) |
 | 3194 | 49.91 | sp4rtan → donk | AK-47, chest | 424 / 528 u | yes | the Apartments corridor door frame |
 | 3206 | 50.09 | sp4rtan → donk | AK-47, chest | 434 / 529 u | yes | the same; donk's 3200 hit is open |
 | 3766 | 58.84 | sp4rtan → barely | AK-47, head | 222 / 784 u | no | the B-site pillar (excluded in the vision labels) |
+
+T1 took barely → Zwomp (2829, 44.20 s) off this list: the recording had barely a level too low, on the Tunnel Stairs
+under Catwalk, and on Catwalk (`docs/geometry.md`, "barely 33–48 s") the hit is in sight.
 
 ## Validation
 

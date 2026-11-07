@@ -107,6 +107,20 @@ export function validateRound(round: RoundData, csvRows?: number): string[] {
       errs.push(`${path}: unknown weapon id ${value}`);
   });
 
+  // V0: grenade landings (measured from the recording, or null when it never shows them)
+  round.utility.forEach((u, i) => {
+    const l = u.landing;
+    if (l === undefined) {
+      errs.push(`utility[${i}]: no landing field (null if unknown)`);
+      return;
+    }
+    if (l === null) return;
+    if (!(l.uncertainty > 0)) errs.push(`utility[${i}]: landing uncertainty ${l.uncertainty} must be > 0`);
+    if (Math.abs(l.x) > 4096 || Math.abs(l.y) > 4096 || l.z < -512 || l.z > 800) errs.push(`utility[${i}]: landing (${l.x}, ${l.y}, ${l.z}) off the map`);
+    const d = Math.hypot(l.x - u.throwPos.x, l.y - u.throwPos.y);
+    if (d > 2500) errs.push(`utility[${i}]: landing ${d.toFixed(0)} u from the throw (more than a grenade flies)`);
+  });
+
   // Lokier's rifle is a scout.
   for (const k of round.kills) if (k.killer === 'lokier' && k.weapon !== 'ssg08') errs.push(`lokier kill with ${k.weapon}`);
   for (const d of round.damage) if (d.attacker === 'lokier' && d.weapon !== 'ssg08') errs.push(`lokier damage with ${d.weapon}`);

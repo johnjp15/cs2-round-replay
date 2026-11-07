@@ -349,7 +349,10 @@ describe('3. cart never peeks', () => {
 
   it('G1: barely (after Lokier) and sp4rtan (after cart) rejoin, so the rest is the tape: CT defuse (B4 alone: T elimination at 59.61 s)', () => {
     expect([...new Set(rejoins(run.entries).map((b) => b.id))]).toEqual(['barely', 'sp4rtan']);
-    expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER); // tests/rejoin.test.ts has the details
+    // T1: barely holds Catwalk now (not the underpass beneath it), so when sp4rtan's gunfire makes him LIVE (40.30 s)
+    // he sees Zwomp walking up Catwalk on his inferred route and kills him for real at 2650 (41.41 s, tape 2829).
+    // Everything else is the tape. tests/rejoin.test.ts has the details.
+    expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER.map((e) => (e[2] === 'barely>zwomp' ? ['kill', 2650, 'barely>zwomp'] : e)));
   });
 });
 
