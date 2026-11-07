@@ -39,6 +39,21 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
   limit, Res (render scale) and Low latency (Performance, below). These and the radar toggle are kept in localStorage,
   `cs2-sim3d-settings`.
 
+### Layout and the hideable menu (L1, #80)
+
+The canvas and the HUD fill the **whole viewport** (`#stage` is `position: absolute; inset: 0`), so the crosshair is at
+the true screen centre, like CS2; the camera's aspect and CS2's 73.74° vertical FOV (`view-cs2.ts`) use that full size.
+The bar is an overlay along the bottom edge (translucent dark background), not a layout row. `main.ts` publishes the
+shown bar's height as the CSS variable `--bar-h` on `#app` (0 while hidden): the bottom HUD (HP / armor, ammo, the
+weapon slots, the spectator panel, the perf line, the Ctrl+W banner) sits `--bar-h` above the screen bottom, so
+nothing overlaps; hidden, they sit at their normal CS2 spots. The radar, team panel and kill feed are at the top.
+
+Hide the menu with the **▾ Hide** button at the bar's left, the **`** (Backquote) key (in nobody's key map and not
+bindable as a hotkey), or the **Hide menu** checkbox; the bar slides out and a small **▴ Menu** tab at the bottom centre
+brings it back. The choice is kept in the settings JSON (`barHidden`). `npm run check:browser:3d:layout` asserts the
+crosshair centre is within 1 px of the viewport centre (1280x720 and 1920x1080, bar shown and hidden; measured 0.000 px).
+Screenshots: `docs/img/app3d-menu-shown.jpg`, `docs/img/app3d-menu-hidden.jpg`.
+
 ## Tracers and impacts (W3, #50 / #51)
 
 `src/app3d/effects/shot-fx.ts`, fed once per shot from `Sim3DHost.shots()` (main.ts `stepOnce` → `Renderer3D.addShot`),

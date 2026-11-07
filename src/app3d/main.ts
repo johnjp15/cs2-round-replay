@@ -271,6 +271,8 @@ class App3D {
   private readonly hotkeys = new HotkeyMatcher();
   /** W1 (#53): go fullscreen with the keyboard locked on Start / takeover / a click into the game (setting). */
   private autoFullscreen = true;
+  /** L1: the bottom menu is slid out of view (the ` key, the ▾ Hide button, the Hide menu setting). */
+  private barHidden = false;
   /** The camera's duck amount (0..1, view-cs2.ts duckStep). */
   private duck = 0;
   private session: Session;
@@ -1176,9 +1178,10 @@ class App3D {
   /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
   private loadSettings(sensFromUrl: boolean): void {
     try {
-      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatencyOptIn?: boolean; res?: number; recoilTracking?: number; crosshairRecoil?: boolean; wheelJump?: { down?: unknown; up?: unknown }; hotkeys?: unknown; autoFullscreen?: boolean };
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatencyOptIn?: boolean; res?: number; recoilTracking?: number; crosshairRecoil?: boolean; wheelJump?: { down?: unknown; up?: unknown }; hotkeys?: unknown; autoFullscreen?: boolean; barHidden?: boolean };
       if (typeof j.crosshairRecoil === 'boolean') this.crosshairRecoil = j.crosshairRecoil;
       if (typeof j.autoFullscreen === 'boolean') this.autoFullscreen = j.autoFullscreen;
+      if (typeof j.barHidden === 'boolean') this.barHidden = j.barHidden;
       if (typeof j.wheelJump === 'object' && j.wheelJump !== null) this.wheelBinds = { down: j.wheelJump.down === true, up: j.wheelJump.up === true };
       this.hotkeys.keys = parseHotkeys(j.hotkeys);
       this.fpsLimit = parseFpsLimit(j.fps);
@@ -1197,7 +1200,7 @@ class App3D {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatencyOptIn: this.lowLatency, res: this.resScale, crosshairRecoil: this.crosshairRecoil, wheelJump: this.wheelBinds, hotkeys: this.hotkeys.keys, autoFullscreen: this.autoFullscreen }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatencyOptIn: this.lowLatency, res: this.resScale, crosshairRecoil: this.crosshairRecoil, wheelJump: this.wheelBinds, hotkeys: this.hotkeys.keys, autoFullscreen: this.autoFullscreen, barHidden: this.barHidden }));
     } catch {
       // ignore
     }
@@ -1234,7 +1237,43 @@ class App3D {
     };
     box('set-xhair-recoil', () => this.crosshairRecoil, (v) => (this.crosshairRecoil = v));
     box('set-autofs', () => this.autoFullscreen, (v) => (this.autoFullscreen = v));
+    box('set-hidebar', () => this.barHidden, (v) => this.setBarHidden(v));
+    this.wireBar();
     this.wirePerfSettings(field);
+  }
+
+  /** L1: slide the bottom menu out / back in; --bar-h tells the HUD how much of the bottom the shown bar covers. */
+  private setBarHidden(hidden: boolean): void {
+    this.barHidden = hidden;
+    const app = document.getElementById('app');
+    const bar = document.getElementById('bar');
+    app?.classList.toggle('bar-hidden', hidden);
+    app?.style.setProperty('--bar-h', hidden || !bar ? '0px' : `${bar.offsetHeight}px`);
+    const cb = document.getElementById('set-hidebar');
+    if (cb instanceof HTMLInputElement) cb.checked = hidden;
+  }
+
+  private wireBar(): void {
+    const bar = document.getElementById('bar');
+    this.setBarHidden(this.barHidden);
+    if (bar && typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.setBarHidden(this.barHidden)).observe(bar);
+    const toggle = (): void => {
+      this.setBarHidden(!this.barHidden);
+      this.saveSettings();
+    };
+    for (const id of ['bar-hide', 'bar-tab']) {
+      document.getElementById(id)?.addEventListener('click', (e) => {
+        toggle();
+        (e.currentTarget as HTMLElement).blur();
+      });
+    }
+    // Backquote is in nobody's key map (and can't be bound as a hotkey), so it is free for this.
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'Backquote' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+      e.preventDefault();
+      toggle();
+    });
   }
 
   /** P1: the FPS limit (frame-driver.ts: presets, a custom number), the render scale and the low-latency canvas. */
