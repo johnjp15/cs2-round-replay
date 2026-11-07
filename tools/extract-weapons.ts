@@ -72,8 +72,8 @@ const IDS: Readonly<Record<string, string>> = {
 };
 
 /** Spray weapons whose model patterns go into the table (task card H2), and the pistols' short patterns. */
-const SPRAYS = ['ak47', 'm4a4', 'm4a1s', 'galil', 'famas', 'aug', 'sg553', 'mp9', 'mac10', 'ump45', 'p90', 'bizon', 'mp7', 'mp5sd', 'negev', 'm249'];
-const PISTOL_SPRAY = ['glock', 'usps', 'p2000', 'p250', 'fiveseven', 'tec9', 'cz75a', 'deagle', 'elite', 'revolver'];
+export const SPRAYS = ['ak47', 'm4a4', 'm4a1s', 'galil', 'famas', 'aug', 'sg553', 'mp9', 'mac10', 'ump45', 'p90', 'bizon', 'mp7', 'mp5sd', 'negev', 'm249'];
+export const PISTOL_SPRAY = ['glock', 'usps', 'p2000', 'p250', 'fiveseven', 'tec9', 'cz75a', 'deagle', 'elite', 'revolver'];
 const PISTOL_SHOTS = 10;
 
 type Kv = string | number | boolean | Kv[] | { [k: string]: Kv };
@@ -124,9 +124,16 @@ export function parseKv3(text: string): Record<string, Kv> {
 function main(): void {
   const src = process.argv[2] ?? new URL('../data/source/cs2/weapons.vdata', import.meta.url).pathname;
   const out = process.argv[3] ?? new URL('../data/weapons.json', import.meta.url).pathname;
-  const text = readFileSync(src, 'utf8');
-  const sha256 = createHash('sha256').update(readFileSync(src)).digest('hex');
-  const vdata = parseKv3(text);
+  const text = buildWeaponsJson(readFileSync(src), readFileSync(new URL('../data/tuning.json', import.meta.url), 'utf8'));
+  writeFileSync(out, text);
+  const j = JSON.parse(text) as { weapons: object; sprays: object; source: { sha256: string } };
+  console.log(`wrote ${out}: ${Object.keys(j.weapons).length} weapons, ${Object.keys(j.sprays).length} spray patterns (vdata sha256 ${j.source.sha256.slice(0, 12)}…)`);
+}
+
+/** The text of data/weapons.json for the vdata bytes and the tuning JSON text (pure; the tests rebuild it). */
+export function buildWeaponsJson(vdataBytes: Uint8Array, tuningText: string): string {
+  const sha256 = createHash('sha256').update(vdataBytes).digest('hex');
+  const vdata = parseKv3(new TextDecoder().decode(vdataBytes));
   const weapons: Record<string, unknown> = {};
   for (const cls of Object.keys(IDS).sort()) {
     const v = vdata[cls];
@@ -136,8 +143,7 @@ function main(): void {
   }
   const table = { source: { ...SOURCE, sha256 }, weapons, sprays: {} };
   const parsed = parseWeaponTable(table);
-  const tuning = parseTuning(readFileSync(new URL('../data/tuning.json', import.meta.url), 'utf8'));
-  const model = tuning.weaponModel;
+  const model = parseTuning(tuningText).weaponModel;
   if (model === undefined) throw new Error('data/tuning.json has no weapons._engine');
   const sprays: Record<string, [number, number][]> = {};
   for (const id of [...SPRAYS, ...PISTOL_SPRAY].sort()) {
@@ -148,8 +154,7 @@ function main(): void {
   }
   const full = { source: table.source, weapons, sprays };
   parseWeaponTable(full);
-  writeFileSync(out, stringify(full) + '\n');
-  console.log(`wrote ${out}: ${Object.keys(weapons).length} weapons, ${Object.keys(sprays).length} spray patterns (vdata sha256 ${sha256.slice(0, 12)}…)`);
+  return stringify(full) + '\n';
 }
 
 function convert(id: string, cls: string, v: Record<string, Kv>): Record<string, unknown> {
