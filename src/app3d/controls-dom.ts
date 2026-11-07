@@ -20,6 +20,8 @@ export interface ControlsHooks {
   onAttack2(): void;
   /** True while the player controls a pawn (Ctrl combinations are then moves, not browser shortcuts). */
   playing?(): boolean;
+  /** True while fullscreen Keyboard Lock is on (Ctrl+W / S / T / N are then blocked even when watching). */
+  keyboardLocked?(): boolean;
 }
 
 export class ControlsDom {
@@ -40,7 +42,7 @@ export class ControlsDom {
       }
       const b = bindingForKey(e.code, this.map);
       // Bound keys never scroll or search; Ctrl+anything is a move while playing (Ctrl+W = crouch forward).
-      if (b !== null || blocksShortcut(e, false, hooks.playing?.() ?? false)) e.preventDefault();
+      if (b !== null || blocksShortcut(e, false, hooks.playing?.() ?? false, hooks.keyboardLocked?.() ?? false)) e.preventDefault();
       if (!e.repeat && hooks.onKey(e.code)) {
         e.preventDefault();
         return;

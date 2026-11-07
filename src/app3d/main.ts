@@ -242,6 +242,7 @@ class App3D {
       onKey: (code) => this.onKey(code),
       onFire: () => undefined,
       playing: () => this.playing(),
+      keyboardLocked: () => this.guard.keyboardLocked,
       onAttack2: () => {
         const p = this.session.human === null ? null : this.scene.pawn(this.session.human);
         if (this.playing() && p !== null) this.setZoom(p.weapon, nextZoom(p.weapon, this.zoomWeapon === p.weapon ? this.zoom : 0));

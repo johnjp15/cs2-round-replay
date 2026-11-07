@@ -126,7 +126,17 @@ describe('shortcut guard', () => {
     expect(blocksShortcut(k('Space'), true, true)).toBe(true);
     expect(blocksShortcut(k('KeyQ'), false, true)).toBe(false);
     expect(blocksShortcut(k('KeyW', { meta: true }), true, true)).toBe(false);
-    expect(blocksShortcut(k('KeyW', { ctrl: true }), true, false)).toBe(false);
+  });
+
+  it('Ctrl+W and Ctrl+S are blocked whatever the state; Ctrl+T / Ctrl+N also while the keyboard is locked', () => {
+    expect(blocksShortcut(k('KeyW', { ctrl: true }), true, false)).toBe(true);
+    expect(blocksShortcut(k('KeyS', { ctrl: true }), true, false)).toBe(true);
+    expect(blocksShortcut(k('KeyT', { ctrl: true }), false, false)).toBe(false);
+    expect(blocksShortcut(k('KeyN', { ctrl: true }), false, false)).toBe(false);
+    for (const c of ['KeyW', 'KeyS', 'KeyT', 'KeyN']) expect(blocksShortcut(k(c, { ctrl: true }), false, false, true), c).toBe(true);
+    expect(blocksShortcut(k('KeyR', { ctrl: true }), false, false, true)).toBe(false);
+    expect(blocksShortcut(k('KeyW'), true, false, true)).toBe(false);
+    expect(blocksShortcut(k('KeyW', { ctrl: true, meta: true }), true, false, true)).toBe(false);
   });
 
   it('fullscreen hint per browser', () => {
@@ -188,11 +198,28 @@ describe('keydown handling (2D InputDom)', () => {
     win.dispatchEvent(cmd);
     expect(cmd.defaultPrevented).toBe(false);
     expect(dom.controls().duck).toBe(false);
-    // Watching: the page's shortcuts are the browser's.
+    // Watching: Ctrl+W / Ctrl+S are still blocked, other Ctrl shortcuts are the browser's.
     playing = false;
     const idle = key('keydown', 'KeyW', { ctrl: true });
     win.dispatchEvent(idle);
-    expect(idle.defaultPrevented).toBe(false);
+    expect(idle.defaultPrevented).toBe(true);
+    const idleT = key('keydown', 'KeyT', { ctrl: true });
+    win.dispatchEvent(idleT);
+    expect(idleT.defaultPrevented).toBe(false);
+    dom.dispose();
+  });
+
+  it('keyboard locked while watching: Ctrl+T / Ctrl+N blocked too', () => {
+    const { win } = fakeDom();
+    const dom = new InputDom(new EventTarget() as unknown as HTMLElement, { active: () => false, onSlot: () => undefined, keyboardLocked: () => true });
+    for (const c of ['KeyW', 'KeyS', 'KeyT', 'KeyN']) {
+      const e = key('keydown', c, { ctrl: true });
+      win.dispatchEvent(e);
+      expect(e.defaultPrevented, c).toBe(true);
+    }
+    const r = key('keydown', 'KeyR', { ctrl: true });
+    win.dispatchEvent(r);
+    expect(r.defaultPrevented).toBe(false);
     dom.dispose();
   });
 

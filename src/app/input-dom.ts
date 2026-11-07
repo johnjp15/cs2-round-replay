@@ -4,7 +4,8 @@
  *
  * - Keys by `KeyboardEvent.code`, through `keyMap` (input.ts keyMapFor: the key-binding setting). While `active()`
  *   (a human is playing) bound keys and every Ctrl combination have their default action blocked (input.ts
- *   blocksShortcut: Ctrl is duck, Ctrl+W is crouch forward), except with ⌘ held, so browser shortcuts on the Mac keep
+ *   blocksShortcut: Ctrl is duck, Ctrl+W is crouch forward; Ctrl+W / Ctrl+S always, and Ctrl+T / Ctrl+N too while the
+ *   keyboard is locked), except with ⌘ held, so browser shortcuts on the Mac keep
  *   working. Chromium and Firefox still close the tab on Ctrl+W / Ctrl+T / Ctrl+N outside fullscreen Keyboard Lock:
  *   play-guard.ts (the fullscreen lock, and the leave-site guard), or move Duck to C.
  * - Mouse/pen pointers only; touch is ignored (no touch controls for the human yet).
@@ -19,6 +20,8 @@ export interface InputDomOptions {
   readonly active: () => boolean;
   /** A weapon-slot key was pressed (not repeats). */
   readonly onSlot: (slot: WeaponSlot) => void;
+  /** True while fullscreen Keyboard Lock is on (play-guard.ts): Ctrl+W / S / T / N are then blocked even when watching. */
+  readonly keyboardLocked?: () => boolean;
 }
 
 export class InputDom {
@@ -91,7 +94,7 @@ export class InputDom {
       return;
     }
     const b = bindingForKey(e.code, this.map);
-    if (down && blocksShortcut(e, b !== null, this.options.active())) e.preventDefault();
+    if (down && blocksShortcut(e, b !== null, this.options.active(), this.options.keyboardLocked?.() ?? false)) e.preventDefault();
     else if (!down && b !== null && this.options.active()) e.preventDefault();
     if (b !== null) this.apply(b, down, e.repeat);
   }

@@ -43,7 +43,18 @@ the previous / next living player, P pause. When the followed pawn dies the came
 W / S forward / back and A / D strafe relative to the view (CS2's), Space jump, Ctrl or C duck, Shift walk, mouse 1
 fire / throw, mouse 2 scope (AWP, SSG 08; the engine itself has no scope state yet, so scoped movement speed and
 accuracy come with H2), R reload, 1–5 weapon slots (as the 2D app), E use (plant, defuse). Esc frees the mouse. Dead,
-the camera spectates again. G (drop) is not implemented: the engine has no dropped weapons yet (H4).
+the camera spectates again. Duck, walk, jump and use are rebindable under **Keys** in the bar (one localStorage setting
+with the 2D page; Reset keys = CS2's defaults).
+
+**Ctrl+W** (crouch forward) is "close tab" on Windows and Linux. **⛶ Fullscreen** in the bar enters fullscreen and,
+in Chromium browsers (Chrome, Edge, Opera, Brave; feature-detected `navigator.keyboard.lock`), locks the keyboard, so
+Ctrl+W / S / T / N reach the page and are blocked there: Ctrl+W just crouches forward. Under the lock a **short Esc
+frees the mouse** (the page does it, the browser no longer does) and **holding Esc leaves fullscreen** (a hint line
+says so); leaving fullscreen unlocks. Firefox and Safari have no Keyboard Lock: there, and anywhere outside fullscreen,
+a `beforeunload` guard while you control a living pawn makes Ctrl+W (or ⌘W on a Mac) show the "Leave site?" dialog
+instead of closing the tab; moving Duck to C or Alt avoids it entirely. On macOS Ctrl+W is no shortcut, and **⌘W can't
+be captured by any page**, so only the dialog stands between it and the tab. Details and the per-browser table:
+docs/app.md "Ctrl+W, fullscreen and key bindings". G (drop) is not implemented: the engine has no dropped weapons yet (H4).
 
 ## View: CS2's numbers, with sources
 

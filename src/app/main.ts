@@ -224,6 +224,7 @@ class App {
       onSlot: (slot) => {
         if (this.phase === 'running') this.session.requestWeaponSlot(slot);
       },
+      keyboardLocked: () => this.guard.keyboardLocked,
     });
     this.input.keyMap = keyMapFor(this.keys.binds);
     this.keys.onChange((b) => (this.input.keyMap = keyMapFor(b)));

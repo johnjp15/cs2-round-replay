@@ -208,15 +208,24 @@ export interface KeyLike {
   readonly altKey: boolean;
 }
 
+/** Ctrl shortcuts blocked whatever the state: Ctrl+W (crouch forward: close tab), Ctrl+S (crouch back: save page). */
+export const ALWAYS_BLOCKED_CTRL: ReadonlySet<string> = new Set(['KeyW', 'KeyS']);
+
+/** Ctrl shortcuts also blocked whenever the keyboard is locked (fullscreen, play-guard.ts): close, save, new tab / window. */
+export const LOCKED_BLOCKED_CTRL: ReadonlySet<string> = new Set(['KeyW', 'KeyS', 'KeyT', 'KeyN']);
+
 /**
- * Whether a keydown's browser default must be blocked. While playing: every bound key (Space mustn't scroll, ' / '
- * mustn't search) and every Ctrl combination, bound or not: Ctrl is duck, so Ctrl+W (crouch forward), Ctrl+S, Ctrl+D,
- * Ctrl+T, Ctrl+N, Ctrl+R… are moves, not shortcuts. With ⌘ held nothing is blocked (Mac shortcuts keep working; the
- * browser wouldn't let a page block ⌘W anyway). The browser itself may still act on some of these (Chromium and
- * Firefox reserve Ctrl+W / Ctrl+T / Ctrl+N outside Keyboard Lock); see play-guard.ts.
+ * Whether a keydown's browser default must be blocked. Always: Ctrl+W and Ctrl+S (with duck on Ctrl they are crouch
+ * forward / back). While the keyboard is locked (play-guard.ts): Ctrl+W / S / T / N too. While playing: every bound key
+ * (Space mustn't scroll, ' / ' mustn't search) and every Ctrl combination, bound or not: Ctrl is duck, so Ctrl+D,
+ * Ctrl+R… are moves, not shortcuts. With ⌘ held nothing is blocked (Mac shortcuts keep working; the browser wouldn't
+ * let a page block ⌘W anyway). Outside Keyboard Lock, Chromium and Firefox act on Ctrl+W / Ctrl+T / Ctrl+N before the
+ * page sees them, so preventDefault there is only a best effort; see play-guard.ts.
  */
-export function blocksShortcut(k: KeyLike, bound: boolean, playing: boolean): boolean {
-  if (k.metaKey || !playing) return false;
+export function blocksShortcut(k: KeyLike, bound: boolean, playing: boolean, locked = false): boolean {
+  if (k.metaKey) return false;
+  if (k.ctrlKey && (ALWAYS_BLOCKED_CTRL.has(k.code) || (locked && LOCKED_BLOCKED_CTRL.has(k.code)))) return true;
+  if (!playing) return false;
   return bound || k.ctrlKey;
 }
 
