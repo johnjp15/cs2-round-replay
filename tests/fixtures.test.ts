@@ -123,7 +123,7 @@ for (const spec of FIXTURE_SPECS) {
         vision: canonicalHash(data.sources.vision),
       });
       expect(f.scriptHash, STALE).toBe(spec.script === null ? null : canonicalHash(readFileSync(resolve(ROOT, spec.script), 'utf8')));
-      expect({ human: f.human, script: f.script, seed: f.seed, until: f.until }, STALE).toEqual({ human: spec.human, script: spec.script, seed: spec.seed, until: spec.until });
+      expect({ human: f.human, script: f.script, seed: f.seed, until: f.until, takeover: f.takeover }, STALE).toEqual({ human: spec.human, script: spec.script, seed: spec.seed, until: spec.until, takeover: spec.takeover });
     });
 
     it('is gzip with a fixed header (no mtime, no file name, OS unknown) and matches the manifest', () => {

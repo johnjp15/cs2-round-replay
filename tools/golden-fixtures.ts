@@ -53,6 +53,8 @@ export interface FixtureSpec {
   /** Seconds, or 'end' (the golden length). */
   readonly until: number | 'end';
   readonly seed: number;
+  /** G4: seconds; nobody plays until `human` takes control on tick round(t × 64) (harness `--takeover`), or null: from the start. */
+  readonly takeover: number | null;
 }
 
 export const FIXTURE_SPECS: readonly FixtureSpec[] = [
@@ -63,6 +65,7 @@ export const FIXTURE_SPECS: readonly FixtureSpec[] = [
     script: null,
     until: 'end',
     seed: DEFAULT_SEED,
+    takeover: null,
   },
   {
     name: 'round-cart-idle',
@@ -72,6 +75,17 @@ export const FIXTURE_SPECS: readonly FixtureSpec[] = [
     script: 'fixtures/scripts/cart-idle.json',
     until: 45,
     seed: DEFAULT_SEED,
+    takeover: null,
+  },
+  {
+    name: 'round-cart-takeover',
+    description:
+      'G4: nobody plays until 15 s, where the player takes control of cart in the Apartments and then stands still (npm run harness -- --takeover 15 --until 24): ticks 0–959 are the golden master; on tick 960 observe.human becomes cart and the Core lifts his 11 damage blocks and activates Lokier’s encounter (waiting); Lokier outlives his recording, barely kills him and rejoins (G1).',
+    human: 'cart',
+    script: null,
+    until: 24,
+    seed: DEFAULT_SEED,
+    takeover: 15,
   },
 ];
 
@@ -88,6 +102,8 @@ export interface FixtureEntry {
   readonly scriptHash: string | null;
   readonly seed: number;
   readonly until: number | 'end';
+  /** G4: the takeover (seconds), or null (the human, if any, plays from the start). */
+  readonly takeover: number | null;
   /** Lines (one per tick; no repeated ticks). */
   readonly ticks: number;
   readonly firstTick: number;
@@ -175,7 +191,14 @@ export function parseWalkOracle(text: string): OracleTick[] {
 /** Run one fixture spec through the harness, recording the walk calls. */
 export function runFixture(data: HarnessData, spec: FixtureSpec, root = ROOT): HarnessRun {
   const driver = spec.script === null || spec.human === null ? null : new ScriptDriver(parseHumanScript(readFileSync(resolve(root, spec.script), 'utf8')), spec.human);
-  return runHarness(data, { human: spec.human, driver, lastTick: spec.until === 'end' ? 'end' : tickOf(spec.until), seed: spec.seed, recordWalk: true });
+  return runHarness(data, {
+    human: spec.human,
+    driver,
+    lastTick: spec.until === 'end' ? 'end' : tickOf(spec.until),
+    seed: spec.seed,
+    recordWalk: true,
+    takeover: spec.takeover === null ? null : tickOf(spec.takeover),
+  });
 }
 
 function git(args: readonly string[], root: string): string {
@@ -238,6 +261,7 @@ export function updateFixtures(data: HarnessData, write: boolean, root = ROOT): 
       scriptHash: spec.script === null ? null : canonicalHash(readFileSync(resolve(root, spec.script), 'utf8')),
       seed: spec.seed,
       until: spec.until,
+      takeover: spec.takeover,
       ticks: run.ticks,
       firstTick: first,
       lastTick: last,
