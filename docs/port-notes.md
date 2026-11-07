@@ -212,3 +212,22 @@ for tests would need:
   takeover tick next to the Core snapshot). A rewind to a checkpoint whose human is null undoes it (release, above);
   the takeover stays on the tape for a forward seek (2D only: CS2 can't seek ahead). The automatic checkpoint on the
   takeover tick is taken after it (before the step), so it keeps the human.
+
+## Weapon mechanics (src/engine/weapons, H2)
+
+What CS2 does natively vs what the module models (docs/weapons.md):
+
+| Mechanic | In CS2 (the C# Core on a server) | In the module (2D / 3D hosts) |
+| --- | --- | --- |
+| Weapon stats | `weapons.vdata` (the same file `data/weapons.json` is built from) | `parseWeaponTable`; ids map to CS2 classes via `className` (`m4a4` = `weapon_m4a1`) |
+| Fire rate, reload, deploy, zoom, burst | the weapon entity | `stepArms`; CS2 is sub-tick, the module is per tick |
+| Spread, inaccuracy, recoil, aim punch | engine, seeded by the usercmd's random seed | `fireShot` with the Core's seeded RNG; recoil tables from `m_nRecoilSeed` (`ValveUniformRandom`, NR ran1); constants in `weapons._engine` |
+| Damage, armor, hitgroups | `OnTakeDamage` on real hitboxes | `damageAfterHitgroup` (identical to sim2d) |
+| Wall penetration | engine traces with surface properties | `penetrate` with the host's `SolidQuery` (no materials on our mesh) |
+| Tagging, hit punch | engine | `applyHit` (unverified model) |
+
+The port does **not** reimplement these: the C# Core only issues inputs (aim, ATTACK, RELOAD) and reads events, so the
+module's numbers matter for the simulators and for comparing a 3D run with a CS2 run, not for the plugin. Port care if
+the module is ever transcribed: `ValveUniformRandom` uses 32-bit int maths and float32 (`Math.fround` → `float`); the
+recoil table must use float, the rest doubles; state numbers are rounded to 6 decimals like the other engines; RNG draw
+order per shot is r1, θ1, then r2, θ2 per pellet.
