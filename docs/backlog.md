@@ -10,7 +10,8 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 - Agents told to merge main and regenerate fixtures: G6 sight, G7 bots, V2 view fit.
 - 06:16 check-in #2: 11 agents active and pushing. PR #32 (round-end stutter: the HUD re-parsed the whole 4,500-line session log every frame after round end, 150–250 ms + 9 MB garbage per frame; now parsed incrementally and cached) is green but conflicts with #31's HUD changes — its agent is merging main; merge + deploy at the next check-in.
 - 07:02 check-in #3: a server restart at ~07:00 stopped all ten working agents; nine resumed from their transcripts, two (parity, grenades) relaunched as finishers on their nearly-done branches. **#32 merged and live** (Pages da9bc5d): no more stutter after the round ends.
-- 07:20 **#33 merged and live** (Pages 1a302dd): Ctrl+W fix — ⛶ Fullscreen + Keyboard Lock in Chromium browsers (Ctrl+W just crouch-walks), a leave-site guard elsewhere, a Keys group (Duck/Walk/Jump/Use rebindable, Reset). Next check-in 07:48.
+- 07:20 **#33 merged and live** (Pages 1a302dd): Ctrl+W fix — ⛶ Fullscreen + Keyboard Lock in Chromium browsers (Ctrl+W just crouch-walks), a leave-site guard elsewhere, a Keys group (Duck/Walk/Jump/Use rebindable, Reset).
+- 07:32 **#34 merged and live**: the Source BSP pipeline, the March-2020 CS:GO files recipe (`docs/csgo-2020-files.md`), and the map-package switch (`?map=mirage-2020`, `--map`). The default map is unchanged. **John's morning step is below.** Next check-in 07:48.
 
 ## Operating rules John set
 - Merge PRs without asking (2026-11-05). Fable orchestrates; Opus 5.5 agents do the expensive work (2026-11-07 02:02). Permission to read anything on any website (04:26). John's messages are not stop requests; agents stopped by client-side interrupts get resumed.
@@ -33,7 +34,7 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 11 | 11-07 03:23 | No KZ-only mechanics; stock competitive CS2; 95 % bar | done (rule) | `docs/sim3d-plan.md` |
 | 12 | 11-07 03:26 | Frame-by-frame comparison with the original video as a milestone gate; run it on the 2D game and fix | in progress | V0 (first 2D baseline done; findings → fix agents) |
 | 13 | 11-07 03:45 | Publish what we have of the 3D one and keep working | live | web-apps #8 → `cs2/sim3d/` |
-| 14 | 11-07 03:49 | Pull in the real CS:GO Mirage files from March 2020; render them at slightly higher fidelity; 100 % accurate clipping | in progress + **needs John** | X1: BSP reader done on public data; recipe for the Steam depot download coming in its first PR; John runs it and attaches the files |
+| 14 | 11-07 03:49 | Pull in the real CS:GO Mirage files from March 2020; render them at slightly higher fidelity; 100 % accurate clipping | **needs John** (pipeline live, #34) | X1: BSP reader (brushes, player clips, displacements, props with .phy, lightmaps, entities) tested on public maps; collision + render packages; `?map=mirage-2020`; recipe `docs/csgo-2020-files.md`. Once John's files are in, step 2 (build, compare, re-snap, rerun) runs |
 | 15 | 11-07 04:06 | Ctrl+W closes the tab | live | #33: ⛶ Fullscreen + Keyboard Lock (Chromium); leave-site guard elsewhere; macOS ⌘W can't be captured; rebindable keys. John should try Ctrl+W in fullscreen Chrome/Edge |
 | 16 | 11-07 04:18 | Aim for 500+ fps | in progress | P1 (restarted 04:29): ≤ 2 ms frames, input at render time |
 | 17 | 11-07 04:20 | Sound with real CS2 sounds; basic gun models; reloading | in progress + **needs John** | A1: Web Audio engine + placeholders + viewmodels now; real sounds need John's CS2 extraction (recipe in `docs/cs2-sounds.md`) |
@@ -61,6 +62,6 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 - Later phases from the original plan: playtest doc, C# port via CI, CS2 probe server (hosting choice open).
 
 ## Needs John
-- **#14:** run the Steam depot download recipe for the March 2020 CS:GO build and attach `de_mirage.bsp` + the extracted materials/models folder (recipe arrives with X1's first PR).
+- **#14 (ready now):** on your Mac, `brew tap steamre/tools && brew install depotdownloader`, then in the repo `npx tsx tools/csgo2020-files.ts fetch --username <your Steam login>` (full details and fallbacks in `docs/csgo-2020-files.md`). It pulls CS:GO depot 731, manifest `7867263815789485437` (build 4743948 = patch 1.37.4.4, live 5–22 Mar 2020, evidence in the doc): `de_mirage.bsp`, `de_mirage.nav` and only the VPK chunks Mirage needs, then extracts `~/mirage-2020/` (`maps/`, `materials/`, `models/`, `MANIFEST.json`). Any Steam account with CS2 works (needs a login, not anonymous). Attach that folder here or copy it to `data/source/csgo-2020/`; the pipeline then builds the exact-clipping 2020 map and the lightmapped render.
 - **#17:** extract CS2 sounds from his install with Source 2 Viewer per `docs/cs2-sounds.md` (when A1's PR lands) and attach the folder.
 - Report real-Mac frame rates for `cs2/sim3d/` (and whether duck/jump/air control feel right).
