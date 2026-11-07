@@ -409,6 +409,18 @@ export class Cs2Nav {
       // Anything in a further ring is at least (r * GRID) away.
       if (best !== null && bestD <= r * GRID) break;
     }
+    if (best === null) {
+      // Far off the mesh (beyond the rings): every area.
+      for (const a of this.areas) {
+        const q = closestOnPoly(a, p.x, p.y);
+        const z = polyZ(a, q.x, q.y);
+        const d = Math.hypot(q.x - p.x, q.y - p.y, p.z === undefined ? 0 : (z - p.z) * 2);
+        if (d < bestD) {
+          bestD = d;
+          best = { index: a.index, x: q.x, y: q.y, z };
+        }
+      }
+    }
     if (best === null) throw new Cs2NavError('nav: empty mesh');
     return best;
   }

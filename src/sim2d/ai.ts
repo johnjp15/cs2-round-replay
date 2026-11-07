@@ -885,6 +885,8 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
     if (Math.abs(self.vel.z) < 1e-6) jump = true;
     else duck = true;
   }
+  // Stuck on a CS2 nav (a lip, a crate edge the nav steps over): jump while nudging sideways, as players do.
+  if (nav.isJumpPoint !== undefined && tick < s.unstickUntilTick && Math.abs(self.vel.z) < 1e-6) jump = true;
   if (nav.isCrouchAt !== undefined && (nav.isCrouchAt(pos) || (dist2d(pos, next) <= 32 && nav.isCrouchAt(next)))) duck = !jump;
   return { dirX: dx, dirY: dy, mag, jump, duck };
 }

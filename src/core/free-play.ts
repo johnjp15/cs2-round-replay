@@ -64,6 +64,8 @@ export interface FreePlayPlan {
   readonly freezeTicks: number;
   /** The bomb site the Ts go for. */
   readonly site: string;
+  /** Every site's plant spot (the CTs head there once the bomb is planted: CS2 announces the plant). */
+  readonly sites: readonly { readonly name: string; readonly plant: Vec3 }[];
 }
 
 /** How far round a plant spot the default roles hold (units), and the angle step between pawns. */
@@ -106,7 +108,7 @@ export function freePlayPlan(s: Scenario, info: MapInfo): FreePlayPlan {
     }
     return { id: p.id, name: p.name, team: p.team, pos: start.pos, yaw: start.yaw, hp: p.hp, armor: p.armor, helmet: p.helmet, kit: p.kit, c4: p.c4, weapons: p.weapons, grenades: p.grenades, money: p.money, goal };
   });
-  return { pawns, freezeTicks: Math.round(s.rules.freezeTimeSec * TICKS_PER_SEC), site: target.name };
+  return { pawns, freezeTicks: Math.round(s.rules.freezeTimeSec * TICKS_PER_SEC), site: target.name, sites: info.bombsites.map((b) => ({ name: b.name, plant: b.plant })) };
 }
 
 /** Problems with a scenario on its map: starts or holds in a bomb site of the wrong kind, off the radar, … (validation). */
@@ -213,6 +215,8 @@ export function scenarioTuning(t: Tuning, s: Scenario): Tuning {
 
 interface FreePlayState {
   started: boolean;
+  /** The plant was announced (the CTs were sent to its site). */
+  planted: boolean;
   startTick: number;
   human: PlayerId | null;
   /** Per pawn (PLAYER_IDS order): mode, trigger, since. */
@@ -233,7 +237,7 @@ export class FreePlayCore extends ReplayCore {
   }
 
   private fresh(): FreePlayState {
-    return { started: false, startTick: 0, human: null, modes: this.plan.pawns.map((p) => ({ id: p.id, mode: 'REPLAY', trigger: null, since: 0 })), paused: false, speed: 1 };
+    return { started: false, planted: false, startTick: 0, human: null, modes: this.plan.pawns.map((p) => ({ id: p.id, mode: 'REPLAY', trigger: null, since: 0 })), paused: false, speed: 1 };
   }
 
   override step(o: Observe): Act {
@@ -280,6 +284,23 @@ export class FreePlayCore extends ReplayCore {
       m.since = o.tick;
     }
     if (humanChanged) s.human = o.human;
+    // CS2 announces the plant and its site: every LIVE CT retakes there (the beeps then lead it to the bomb).
+    const bomb = o.round.bomb;
+    if (!s.planted && bomb.state === 'planted' && bomb.pos !== null) {
+      s.planted = true;
+      const at = bomb.pos;
+      let site = this.plan.sites[0];
+      for (const q of this.plan.sites) if (site === undefined || Math.hypot(q.plant.x - at.x, q.plant.y - at.y) < Math.hypot(site.plant.x - at.x, site.plant.y - at.y)) site = q;
+      if (site !== undefined) {
+        for (const m of s.modes) {
+          const pawn = this.plan.pawns.find((q) => q.id === m.id) as FreePlayPawn;
+          if (m.mode !== 'LIVE' || pawn.team !== 'CT') continue;
+          actions.push({ type: 'set_mode', id: m.id, mode: 'LIVE', goal: { route: [], role: 'retake', hold: site.plant } });
+          m.trigger = 'bomb_planted';
+          m.since = o.tick;
+        }
+      }
+    }
     const status: PawnStatus[] = s.modes.map((m) => ({ id: m.id, mode: m.mode, trigger: m.trigger, sinceTick: m.since }));
     return { inputs: [], actions, status };
   }

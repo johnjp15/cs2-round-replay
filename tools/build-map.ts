@@ -349,6 +349,19 @@ export function mapInfo(facts: MapFacts, src: MapSource, file: Cs2NavFile, nav: 
       py /= w;
       pz = (z.zMin + z.zMax) / 2;
     }
+    // Inside the site's floor rects (Mirage's planter mean lies on A's box stack, a hole in the 2020 areas).
+    if (!inRects(rects, px, py)) {
+      let best = { x: px, y: py, d: Infinity };
+      for (const r of rects) {
+        const x = Math.min(Math.max(px, r.x1 + 8), r.x2 - 8);
+        const y = Math.min(Math.max(py, r.y1 + 8), r.y2 - 8);
+        const d = Math.hypot(x - px, y - py);
+        if (d < best.d) best = { x, y, d };
+      }
+      notes.push(`bomb site ${s.name}: plant spot moved ${best.d.toFixed(0)} units into the site's rects`);
+      px = best.x;
+      py = best.y;
+    }
     const plant = nav.snap({ x: px, y: py, z: pz });
     return { name: s.name, rects, z1: round3(z.zMin - SITE_Z_BELOW), z2: round3(z.zMax + SITE_Z_ABOVE), plant: { x: round3(plant.x), y: round3(plant.y), z: round3(plant.z) } };
   });
@@ -482,6 +495,7 @@ export function buildMap(map: string, src: MapSource, opts: BuildOptions = {}): 
             seeds,
             seedsPath: factsPath(map),
             previewRgba: () => radar.rgba,
+            navRelief: true,
             note: `Player clips for ${facts.name} (${map}): prisms over walkable surfaces a pawn could reach that the CS2 nav does not cover. G2GM; merged into geometry.bin for movement. Built by tools/build-map.ts (tools/extract-clips.ts method); see docs/geometry.md "Player clips".`,
           };
       clips = buildClipsFor(cspec, geometry.bin);

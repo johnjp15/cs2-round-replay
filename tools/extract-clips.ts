@@ -567,6 +567,83 @@ export interface ClipSpec {
   readonly previewRgba: () => Uint8Array;
   readonly note: string;
   readonly root?: string;
+  /**
+   * H3: after the flood, drop every prism that stands where CS2's own nav says a player walks (a standing hull free
+   * of the world at a nav sample but not of the prisms): the nav covers stairs and ramps whose decimated surfaces lie
+   * more than `navExactDz` off it, and a prism there walls the way off. Mirage's committed clips predate this (off).
+   */
+  readonly navRelief?: boolean;
+}
+
+/** H3 `navRelief`: points of a nav area a standing player must fit at (centroid, corners and edge midpoints pulled in). */
+function navSamples(a: Cs2NavArea): { x: number; y: number; z: number }[] {
+  const c = a.corners;
+  const n = c.length / 3;
+  let cx = 0;
+  let cy = 0;
+  let cz = 0;
+  for (let k = 0; k < n; k++) {
+    cx += c[k * 3] as number;
+    cy += c[k * 3 + 1] as number;
+    cz += c[k * 3 + 2] as number;
+  }
+  cx /= n;
+  cy /= n;
+  cz /= n;
+  const out = [{ x: cx, y: cy, z: cz }];
+  const toward = (x: number, y: number, z: number, d: number): { x: number; y: number; z: number } => {
+    const l = Math.hypot(cx - x, cy - y);
+    const f = l <= d ? 1 : d / l;
+    return { x: x + (cx - x) * f, y: y + (cy - y) * f, z: z + (cz - z) * f };
+  };
+  for (let k = 0; k < n; k++) {
+    const j = (k + 1) % n;
+    out.push(toward(c[k * 3] as number, c[k * 3 + 1] as number, c[k * 3 + 2] as number, 12));
+    out.push(toward(((c[k * 3] as number) + (c[j * 3] as number)) / 2, ((c[k * 3 + 1] as number) + (c[j * 3 + 1] as number)) / 2, ((c[k * 3 + 2] as number) + (c[j * 3 + 2] as number)) / 2, 4));
+  }
+  return out;
+}
+
+/** H3 `navRelief`: the clipped pieces that wall a standing hull off where the nav has floor, removed (rounds until none). */
+function relieveNav(world: MapGeometry, worldMesh: GeometryMesh, areas: readonly Cs2NavArea[], clipped: ClipPiece[]): { pieces: ClipPiece[]; removed: number; samples: number } {
+  let pieces = clipped;
+  let removed = 0;
+  let samples = 0;
+  const hw = STANDING_HULL.halfWidth;
+  for (let round = 0; round < 4; round++) {
+    const mesh = prismMesh(pieces, worldMesh.quant).mesh;
+    const merged = new MapGeometry(combineMeshes(worldMesh, mesh));
+    const drop = new Set<ClipPiece>();
+    for (const a of areas) {
+      for (const p of navSamples(a)) {
+        const f = world.floorBelow(p.x, p.y, p.z + 24, hw, STEP_HEIGHT, 48);
+        const z = f !== null && f.walkable ? f.z : p.z;
+        if (round === 0) samples++;
+        if (world.hullBlocked(p.x, p.y, z + 0.5, STANDING_HULL) || !merged.hullBlocked(p.x, p.y, z + 0.5, STANDING_HULL)) continue;
+        for (const pc of pieces) {
+          let x0 = Infinity;
+          let x1 = -Infinity;
+          let y0 = Infinity;
+          let y1 = -Infinity;
+          let z0 = Infinity;
+          for (const q of pc.poly) {
+            x0 = Math.min(x0, q[0]);
+            x1 = Math.max(x1, q[0]);
+            y0 = Math.min(y0, q[1]);
+            y1 = Math.max(y1, q[1]);
+            z0 = Math.min(z0, q[2]);
+          }
+          if (x1 <= p.x - hw || x0 >= p.x + hw || y1 <= p.y - hw || y0 >= p.y + hw) continue;
+          if (pc.top <= z + 0.5 || z0 >= z + STANDING_HULL.height) continue;
+          drop.add(pc);
+        }
+      }
+    }
+    if (drop.size === 0) break;
+    removed += drop.size;
+    pieces = pieces.filter((pc) => !drop.has(pc));
+  }
+  return { pieces, removed, samples };
 }
 
 const MIRAGE_CLIPS_NOTE = 'Player clips for G3 movement: prisms over walkable surfaces a pawn could reach that the CS2 nav does not cover (wall tops, ledges, roofs, out-of-map floors). G2GM like mirage-geometry.bin; merged into it for movement. Built by tools/extract-clips.ts; see docs/geometry.md "Player clips".';
@@ -621,6 +698,15 @@ export function buildClipsFor(spec: ClipSpec, worldBytesIn: Uint8Array | null = 
     merged = new MapGeometry(combineMeshes(worldMesh, built.mesh));
   }
   if (first === null) throw new Error('clips: no flood');
+  let relief: { removed: number; samples: number } | null = null;
+  if (spec.navRelief === true) {
+    const r = relieveNav(world, worldMesh, areas, clipped);
+    relief = { removed: r.removed, samples: r.samples };
+    clipped.length = 0;
+    clipped.push(...r.pieces);
+    built = prismMesh(clipped, worldMesh.quant);
+    merged = new MapGeometry(combineMeshes(worldMesh, built.mesh));
+  }
   const bin = encodeGeometry(built.mesh);
   // Step 5: flood the merged mesh with no nav filter, only stopped by the clips (a level resting on a clipped piece is
   // inside a prism); every level it reaches should be one the nav allows.
@@ -649,6 +735,7 @@ export function buildClipsFor(spec: ClipSpec, worldBytesIn: Uint8Array | null = 
     pieces: clipped.length,
     rounds,
     mesh: built.stats,
+    ...(relief === null ? {} : { navRelief: relief }),
     validation: {
       reachedLevels: check.stats['reachedLevels'],
       notAllowedByNav: leaks,

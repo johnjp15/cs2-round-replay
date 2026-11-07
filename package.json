@@ -38,7 +38,9 @@
     "vision": "tsx tools/vision-labels.ts",
     "stage:web-apps": "bash tools/stage-web-apps.sh",
     "check:locked": "tsx tools/e2e-locked.ts",
-    "harness3d": "tsx tools/harness3d.ts"
+    "harness3d": "tsx tools/harness3d.ts",
+    "map:build": "tsx tools/build-map.ts",
+    "map:check": "tsx tools/build-map.ts de_mirage --check && tsx tools/build-map.ts de_dust2 --check --skip-geometry && tsx tools/game-scenario.ts --check"
   },
   "repository": {
     "type": "git",
