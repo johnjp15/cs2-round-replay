@@ -8,7 +8,8 @@
  *   (docs/movement.md): forward = (cos yaw, sin yaw), +side = strafe right = yaw − 90° = (sin yaw, −cos yaw).
  * - The mouse sets yaw: the pawn faces the cursor in world coordinates (yawToward).
  * - Shift = WALK, Ctrl or C = DUCK, Space = JUMP (G3; held, it jumps once: the movement wants a fresh press, as CS2
- *   with sv_autobunnyhopping 0), left button = ATTACK, right button = ATTACK2, R = RELOAD, E = USE.
+ *   with sv_autobunnyhopping 0), left button = ATTACK, right button = ATTACK2, R = RELOAD, E = USE. Duck, walk, jump and use can
+ *   move to other keys (keyMapFor; the setting is keybinds.ts).
  * - 1–5 select a weapon slot. That is not a PawnInput button: the app turns the request into a
  *   `set_weapon` action for the human pawn through the Session's small action queue
  *   (Session.requestWeaponSlot). In CS2 the human switches weapons natively, so these never go
@@ -53,8 +54,8 @@ export type WeaponSlot = 1 | 2 | 3 | 4 | 5;
 
 export type Binding = { readonly kind: 'hold'; readonly control: HeldControl } | { readonly kind: 'slot'; readonly slot: WeaponSlot };
 
-/** Bindings by `KeyboardEvent.code` (physical key, so they do not depend on the keyboard layout). */
-const KEY_BINDINGS: ReadonlyMap<string, Binding> = new Map<string, Binding>([
+/** The fixed bindings by `KeyboardEvent.code` (physical key, so they do not depend on the keyboard layout). */
+const FIXED_KEYS: readonly (readonly [string, Binding])[] = [
   ['KeyW', { kind: 'hold', control: 'up' }],
   ['ArrowUp', { kind: 'hold', control: 'up' }],
   ['KeyS', { kind: 'hold', control: 'down' }],
@@ -63,14 +64,7 @@ const KEY_BINDINGS: ReadonlyMap<string, Binding> = new Map<string, Binding>([
   ['ArrowLeft', { kind: 'hold', control: 'left' }],
   ['KeyD', { kind: 'hold', control: 'right' }],
   ['ArrowRight', { kind: 'hold', control: 'right' }],
-  ['ShiftLeft', { kind: 'hold', control: 'walk' }],
-  ['ShiftRight', { kind: 'hold', control: 'walk' }],
-  ['ControlLeft', { kind: 'hold', control: 'duck' }],
-  ['ControlRight', { kind: 'hold', control: 'duck' }],
-  ['KeyC', { kind: 'hold', control: 'duck' }],
-  ['Space', { kind: 'hold', control: 'jump' }],
   ['KeyR', { kind: 'hold', control: 'reload' }],
-  ['KeyE', { kind: 'hold', control: 'use' }],
   ['Digit1', { kind: 'slot', slot: 1 }],
   ['Digit2', { kind: 'slot', slot: 2 }],
   ['Digit3', { kind: 'slot', slot: 3 }],
@@ -81,10 +75,148 @@ const KEY_BINDINGS: ReadonlyMap<string, Binding> = new Map<string, Binding>([
   ['Numpad3', { kind: 'slot', slot: 3 }],
   ['Numpad4', { kind: 'slot', slot: 4 }],
   ['Numpad5', { kind: 'slot', slot: 5 }],
+];
+
+/** The held controls the player can move to another key (the key-binding setting, keybinds.ts). */
+export type RebindableControl = 'duck' | 'walk' | 'jump' | 'use';
+export const REBINDABLE: readonly RebindableControl[] = ['duck', 'walk', 'jump', 'use'];
+
+/**
+ * A key per rebindable control: a `KeyboardEvent.code`, or `Control` / `Shift` / `Alt` for either side of that
+ * modifier.
+ */
+export type KeyBinds = { readonly [C in RebindableControl]: string };
+
+/** CS2's defaults: Ctrl duck, Shift walk, Space jump, E use. C also ducks while no other control has it. */
+export const DEFAULT_KEY_BINDS: KeyBinds = { duck: 'Control', walk: 'Shift', jump: 'Space', use: 'KeyE' };
+
+/** The extra duck key (the 2D app's alternative to Ctrl), kept while C isn't bound to another control. */
+export const ALT_DUCK_KEY = 'KeyC';
+
+/**
+ * Keys a rebindable control can't take: the fixed bindings, Escape (frees the mouse, leaves fullscreen), ⌘ / the OS
+ * key, Tab, and the pages' own keys (2D: E take control, F G T H overlays, [ ] seek; 3D: V camera, Z / X player, P
+ * pause).
+ */
+const RESERVED_KEYS: ReadonlySet<string> = new Set([
+  ...FIXED_KEYS.map(([code]) => code),
+  'Escape',
+  'MetaLeft',
+  'MetaRight',
+  'OSLeft',
+  'OSRight',
+  'ContextMenu',
+  'Tab',
+  'CapsLock',
+  'KeyF',
+  'KeyG',
+  'KeyT',
+  'KeyH',
+  'BracketLeft',
+  'BracketRight',
+  'KeyV',
+  'KeyZ',
+  'KeyX',
+  'KeyP',
+  'F11',
+  'F12',
 ]);
 
-export function bindingForKey(code: string): Binding | null {
-  return KEY_BINDINGS.get(code) ?? null;
+const MODIFIER_SIDES: { readonly [k: string]: readonly string[] } = {
+  Control: ['ControlLeft', 'ControlRight'],
+  Shift: ['ShiftLeft', 'ShiftRight'],
+  Alt: ['AltLeft', 'AltRight'],
+};
+
+/** The key a `KeyboardEvent.code` binds as: either side of a modifier is the modifier (`ControlLeft` → `Control`). */
+export function bindKeyOf(code: string): string {
+  for (const [k, sides] of Object.entries(MODIFIER_SIDES)) if (sides.includes(code)) return k;
+  return code;
+}
+
+/** The `KeyboardEvent.code`s a bound key stands for. */
+export function codesOfKey(key: string): readonly string[] {
+  return MODIFIER_SIDES[key] ?? [key];
+}
+
+/** Whether a key (as bindKeyOf gives it) can be bound to a rebindable control. */
+export function canBindKey(key: string): boolean {
+  if (key === '' || key === 'Unidentified') return false;
+  return codesOfKey(key).every((c) => !RESERVED_KEYS.has(c));
+}
+
+/** A short label for a bound key: Ctrl, Shift, Alt (⌥ on the Mac), C, Space, Mouse-less keys by their code. */
+export function keyLabel(key: string, mac = false): string {
+  if (key === 'Control') return 'Ctrl';
+  if (key === 'Alt') return mac ? 'Option' : 'Alt';
+  if (key.startsWith('Key')) return key.slice(3);
+  if (key.startsWith('Digit')) return key.slice(5);
+  if (key.startsWith('Numpad')) return `Num ${key.slice(6)}`;
+  const named: { readonly [k: string]: string } = { Backquote: '`', Minus: '-', Equal: '=', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\' };
+  return named[key] ?? key;
+}
+
+/**
+ * The binds with `control` on `key`, or null when the key can't be bound. A key another rebindable control has moves
+ * over: that control takes `control`'s old key (a swap), so every control keeps a key.
+ */
+export function rebind(binds: KeyBinds, control: RebindableControl, code: string): KeyBinds | null {
+  const key = bindKeyOf(code);
+  if (!canBindKey(key)) return null;
+  const next: { [C in RebindableControl]: string } = { ...binds };
+  const other = REBINDABLE.find((c) => c !== control && binds[c] === key);
+  if (other !== undefined) next[other] = binds[control];
+  next[control] = key;
+  return next;
+}
+
+/** Stored binds (JSON from localStorage, possibly old or hand-edited) → valid binds: bad or duplicate keys reset. */
+export function parseKeyBinds(raw: unknown): KeyBinds {
+  let b: KeyBinds = DEFAULT_KEY_BINDS;
+  if (typeof raw !== 'object' || raw === null) return b;
+  const r = raw as { readonly [k: string]: unknown };
+  for (const c of REBINDABLE) {
+    const v = r[c];
+    if (typeof v !== 'string') continue;
+    const n = rebind(b, c, v);
+    if (n !== null) b = n;
+  }
+  return b;
+}
+
+/** The whole key map for a set of binds (the fixed keys, the rebindable four, then C as the extra duck key). */
+export function keyMapFor(binds: KeyBinds): ReadonlyMap<string, Binding> {
+  const m = new Map<string, Binding>(FIXED_KEYS);
+  for (const c of REBINDABLE) for (const code of codesOfKey(binds[c])) m.set(code, { kind: 'hold', control: c });
+  if (!m.has(ALT_DUCK_KEY)) m.set(ALT_DUCK_KEY, { kind: 'hold', control: 'duck' });
+  return m;
+}
+
+/** The default key map (DEFAULT_KEY_BINDS). */
+export const DEFAULT_KEY_MAP: ReadonlyMap<string, Binding> = keyMapFor(DEFAULT_KEY_BINDS);
+
+export function bindingForKey(code: string, map: ReadonlyMap<string, Binding> = DEFAULT_KEY_MAP): Binding | null {
+  return map.get(code) ?? null;
+}
+
+/** A keydown as far as the shortcut guard cares. */
+export interface KeyLike {
+  readonly code: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly altKey: boolean;
+}
+
+/**
+ * Whether a keydown's browser default must be blocked. While playing: every bound key (Space mustn't scroll, ' / '
+ * mustn't search) and every Ctrl combination, bound or not: Ctrl is duck, so Ctrl+W (crouch forward), Ctrl+S, Ctrl+D,
+ * Ctrl+T, Ctrl+N, Ctrl+R… are moves, not shortcuts. With ⌘ held nothing is blocked (Mac shortcuts keep working; the
+ * browser wouldn't let a page block ⌘W anyway). The browser itself may still act on some of these (Chromium and
+ * Firefox reserve Ctrl+W / Ctrl+T / Ctrl+N outside Keyboard Lock); see play-guard.ts.
+ */
+export function blocksShortcut(k: KeyLike, bound: boolean, playing: boolean): boolean {
+  if (k.metaKey || !playing) return false;
+  return bound || k.ctrlKey;
 }
 
 /** `MouseEvent.button`: 0 = left = ATTACK, 2 = right = ATTACK2. */

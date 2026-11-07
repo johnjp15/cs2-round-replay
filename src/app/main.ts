@@ -32,6 +32,10 @@ import { Hud } from './hud';
 import { overlayForKey, toggleOverlay, type OverlayKey, type Overlays, type ScreenRect } from './hud-model';
 import { humanInput, yawToward } from './input';
 import { InputDom } from './input-dom';
+import { keyMapFor } from './input';
+import { KeyBindsStore, pageStorage } from './keybinds';
+import { KeyBindsDom } from './keybinds-dom';
+import { PlayGuard } from './play-guard';
 import { FixedLoop, RateMeter, TICK_MS } from './loop';
 import { screenToWorld, worldToScreen } from './radar';
 import { FOLLOWED, Renderer } from './renderer';
@@ -74,6 +78,8 @@ export interface AppStats {
   /** B5: the summary overlay is showing. */
   readonly summaryOpen: boolean;
   readonly checkpoints: number;
+  /** play-guard.ts: the leave-site guard is on, the keyboard is locked (fullscreen, Chromium), the duck key. */
+  readonly guard: { readonly leaveGuard: boolean; readonly keyboardLocked: boolean; readonly fullscreen: boolean; readonly duckKey: string };
 }
 
 declare global {
@@ -125,6 +131,9 @@ class App {
   private readonly renderer: Renderer;
   private readonly hud: Hud;
   private readonly input: InputDom;
+  /** The key-binding setting (duck / walk / jump / use) and the Ctrl+W guard (fullscreen Keyboard Lock, leave-site). */
+  private readonly keys = new KeyBindsStore(pageStorage());
+  private readonly guard: PlayGuard;
   private readonly loop: FixedLoop;
   private readonly fpsMeter = new RateMeter(1000);
   private readonly tpsMeter = new RateMeter(1000);
@@ -216,6 +225,18 @@ class App {
         if (this.phase === 'running') this.session.requestWeaponSlot(slot);
       },
     });
+    this.input.keyMap = keyMapFor(this.keys.binds);
+    this.keys.onChange((b) => (this.input.keyMap = keyMapFor(b)));
+    this.guard = new PlayGuard({
+      button: document.getElementById('fullscreen') as HTMLButtonElement | null,
+      hint: document.getElementById('kbhint'),
+      // The leave-site guard is on while cart is the player's and alive (paused too).
+      playing: () => this.session.human !== null && this.phase !== 'ready' && this.scene.pawn(this.session.human)?.alive === true,
+      binds: () => this.keys.binds,
+      pointerLock: false,
+    });
+    const keybinds = document.getElementById('keybinds');
+    if (keybinds !== null && !this.touchOnly) new KeyBindsDom(keybinds, this.keys, this.guard.mac);
     new CameraInput(canvas, {
       playing: () => this.playing(),
       onZoom: (at, factor) => this.renderer.zoomAt(this.overlays.follow ? null : at, factor),
@@ -506,6 +527,7 @@ class App {
     if (this.seekResume !== null) this.advanceSeek();
     if (this.playing()) this.feedHuman();
     const n = this.loop.advance(dt);
+    this.guard.update();
     this.updateSummary();
     this.frames++;
     this.fpsMeter.add(now, 1);
@@ -624,6 +646,7 @@ class App {
       seeking: this.seekResume !== null,
       summaryOpen: this.overlay.open,
       checkpoints: this.session.checkpoints.size,
+      guard: { leaveGuard: this.guard.guarded, keyboardLocked: this.guard.keyboardLocked, fullscreen: this.guard.fullscreen, duckKey: this.keys.binds.duck },
     };
   }
 }
