@@ -12,6 +12,8 @@ const boundaryZones = [
   { target: './src/core', from: './src', except: ['./core', './contracts'], message: 'src/core may import only src/contracts.' },
   // src/sim2d may import only src/contracts.
   { target: './src/sim2d', from: './src', except: ['./sim2d', './contracts'], message: 'src/sim2d may import only src/contracts.' },
+  // src/engine (H2: pure CS2 mechanics shared by hosts) may import only src/contracts.
+  { target: './src/engine', from: './src', except: ['./engine', './contracts'], message: 'src/engine may import only src/contracts.' },
   // src/app may import anything.
 ];
 
@@ -37,7 +39,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/core/**/*.ts', 'src/contracts/**/*.ts'],
+    files: ['src/core/**/*.ts', 'src/contracts/**/*.ts', 'src/engine/**/*.ts'],
     rules: {
       'no-restricted-properties': [
         'error',

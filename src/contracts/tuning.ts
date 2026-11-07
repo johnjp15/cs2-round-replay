@@ -174,6 +174,85 @@ export interface WeaponTuning {
   automatic: boolean;
 }
 
+/**
+ * H2: the CS2 weapon-mechanics constants that are not in the weapon table (`data/weapons.json`): recoil dynamics,
+ * the inaccuracy model's shape, tagging, hit punch and wall penetration (`src/engine/weapons`, docs/weapons.md).
+ * Stored as `weapons._engine` in data/tuning.json (keys starting with `_` are not guns). Most are CS:GO defaults or
+ * fits that CS2 doesn't expose: docs/weapons.md marks each verified or unverified.
+ */
+export interface WeaponModelTuning {
+  /** Bullet direction = view angles + aim punch × recoilScale (CS:GO `weapon_recoil_scale` 2; fitted for CS2). */
+  recoilScale: number;
+  /** Aim punch decay per second: exponential term (`weapon_recoil_decay2_exp`). */
+  recoilDecayExp: number;
+  /** ... and linear term, degrees per second (`weapon_recoil_decay2_lin`). */
+  recoilDecayLin: number;
+  /** Aim punch velocity decay per second (`weapon_recoil_vel_decay`). */
+  recoilVelDecay: number;
+  /** Recoil table smoothing between consecutive full-auto bullets (`weapon_recoil_variance`). */
+  recoilVariance: number;
+  /** First full-auto bullets with reduced recoil (`weapon_recoil_suppression_shots`) ... */
+  recoilSuppressionShots: number;
+  /** ... starting at this fraction of the magnitude (`weapon_recoil_suppression_factor`). */
+  recoilSuppressionFactor: number;
+  /** +1: a recoil angle of +90° kicks the view left (+yaw); −1 mirrors. */
+  recoilYawSign: number;
+  /** Screen shake per shot: view punch = kick × this (`weapon_recoil_view_punch_extra`). */
+  recoilViewPunchExtra: number;
+  /** View punch exponential decay per second (CS2 `view_punch_decay`). */
+  viewPunchDecay: number;
+  /** Recoil index decay per second (exponential) once no shot came for recoilIndexDelayCycles × the cycle time. */
+  recoilIndexDecay: number;
+  recoilIndexDelayCycles: number;
+  /** Rounds per Glock / FAMAS burst. */
+  burstShots: number;
+  /** Movement inaccuracy starts at this fraction of the weapon's max speed (CS_PLAYER_SPEED_DUCK_MODIFIER) ... */
+  moveStartFraction: number;
+  /** ... and is full at this fraction. */
+  moveFullFraction: number;
+  /** Exponent on the 0–1 movement scale (1 = linear). */
+  moveCurveExponent: number;
+  /** Jumping inaccuracy scale (CS2 `weapon_air_spread_scale`). */
+  airSpreadScale: number;
+  /** In the air: no vertical-speed penalty below this fraction of √(jump impulse) of √|vz| ... */
+  airLowSpeedFraction: number;
+  /** ... and at most this multiple of the weapon's jump inaccuracy. */
+  airMaxPenalty: number;
+  /** Take-off vertical speed (CS2 `sv_jump_impulse`). */
+  jumpImpulse: number;
+  /** The accuracy penalty falls by this factor over one recovery time (ln(10) / recovery per second). */
+  penaltyDecayRatio: number;
+  /** Total inaccuracy cap (radians-ish, the tangent of the cone). */
+  maxInaccuracy: number;
+  /** Seconds per shell for shell-by-shell shotgun reloads, after the weapon's reloadTime. */
+  shellReloadSec: number;
+  /** Tagging: victim speed modifier = min(current, flinch × taggingScale), recovering at taggingRecoveryPerSec. */
+  taggingScale: number;
+  taggingRecoveryPerSec: number;
+  /** Hit punch: pitch kick (degrees, up) of the aim punch when hit without armor on that hitgroup ... */
+  hitAimPunchDeg: number;
+  /** ... and of the view punch on any hit, × flinchPunchScale (CS2 `mp_flinch_punch_scale`). */
+  hitViewPunchDeg: number;
+  flinchPunchScale: number;
+  /** Wall penetration (penetration.ts): at most this many surfaces ... */
+  penMaxPenetrations: number;
+  /** ... while the bullet has travelled less than this (units) ... */
+  penMaxDistance: number;
+  /** ... through solids at most this thick (units). */
+  penMaxThickness: number;
+  /** Damage lost per surface: damage × penDamageLostFraction + (penPowerConst / penetration × penPowerFactor) × (penModFactor / mod) ... */
+  penDamageLostFraction: number;
+  penPowerConst: number;
+  penPowerFactor: number;
+  penModFactor: number;
+  /** ... + thickness² / (mod × penThicknessDivisor). */
+  penThicknessDivisor: number;
+  /** The penetration modifier of a surface the host doesn't know the material of. */
+  penDefaultModifier: number;
+  /** A bullet with less damage than this stops. */
+  penMinDamage: number;
+}
+
 /** The C4 (docs/combat.md, "Bomb and round rules"). Seconds and Source units. */
 export interface BombTuning {
   /** USE held this long with the c4 drawn inside a bombsite plants it. */
@@ -387,6 +466,8 @@ export interface Tuning {
   replay: ReplayTuning;
   /** Weapon stats by weapon id. */
   weapons: Record<string, WeaponTuning>;
+  /** H2: `weapons._engine`, the weapon-mechanics constants of src/engine/weapons; absent if the file has none. */
+  weaponModel?: WeaponModelTuning;
   bomb: BombTuning;
   grenades: GrenadeTuning;
   damage: DamageTuning;
@@ -475,6 +556,46 @@ const REPLAY_KEYS = [
   'jumpReachUnits',
 ] as const;
 const WEAPON_KEYS = ['damage', 'rpm', 'headshotMult', 'armorPen', 'rangeModifier', 'clip', 'reserve', 'reloadSec', 'deploySec'] as const;
+const WEAPON_MODEL_KEYS = [
+  'recoilScale',
+  'recoilDecayExp',
+  'recoilDecayLin',
+  'recoilVelDecay',
+  'recoilVariance',
+  'recoilSuppressionShots',
+  'recoilSuppressionFactor',
+  'recoilYawSign',
+  'recoilViewPunchExtra',
+  'viewPunchDecay',
+  'recoilIndexDecay',
+  'recoilIndexDelayCycles',
+  'burstShots',
+  'moveStartFraction',
+  'moveFullFraction',
+  'moveCurveExponent',
+  'airSpreadScale',
+  'airLowSpeedFraction',
+  'airMaxPenalty',
+  'jumpImpulse',
+  'penaltyDecayRatio',
+  'maxInaccuracy',
+  'shellReloadSec',
+  'taggingScale',
+  'taggingRecoveryPerSec',
+  'hitAimPunchDeg',
+  'hitViewPunchDeg',
+  'flinchPunchScale',
+  'penMaxPenetrations',
+  'penMaxDistance',
+  'penMaxThickness',
+  'penDamageLostFraction',
+  'penPowerConst',
+  'penPowerFactor',
+  'penModFactor',
+  'penThicknessDivisor',
+  'penDefaultModifier',
+  'penMinDamage',
+] as const;
 const BOMB_KEYS = [
   'plantSec',
   'timerSec',
@@ -579,7 +700,10 @@ export function parseTuning(json: unknown): Tuning {
     runSpeedByWeapon: numberRecord(movementObj['runSpeedByWeapon'], 'movement.runSpeedByWeapon'),
   };
   const weapons: Record<string, WeaponTuning> = {};
-  const weaponIds = Object.keys(weaponsObj).sort();
+  // Keys starting with `_` are not guns (`_engine`: H2's weapon model).
+  const weaponIds = Object.keys(weaponsObj)
+    .filter((k) => !k.startsWith('_'))
+    .sort();
   if (weaponIds.length === 0) throw new TuningError('weapons: must define at least one weapon');
   for (const id of weaponIds) {
     const w = asObject(weaponsObj[id], `weapons.${id}`);
@@ -603,8 +727,11 @@ export function parseTuning(json: unknown): Tuning {
     ...pickNumbers(collisionObj, COLLISION_KEYS, 'collision'),
     solidTeammates: asBoolean(collisionObj['solidTeammates'], 'collision.solidTeammates'),
   };
+  const engineObj = weaponsObj['_engine'];
+  const weaponModel = engineObj === undefined ? undefined : checkWeaponModel(pickNumbers(asObject(engineObj, 'weapons._engine'), WEAPON_MODEL_KEYS, 'weapons._engine'));
   return {
     movement,
+    ...(weaponModel === undefined ? {} : { weaponModel }),
     replay: checkReplay(pickNumbers(asObject(root['replay'], 'replay'), REPLAY_KEYS, 'replay')),
     weapons,
     bomb: pickNumbers(asObject(root['bomb'], 'bomb'), BOMB_KEYS, 'bomb'),
@@ -629,6 +756,17 @@ function checkReplay(r: ReplayTuning): ReplayTuning {
   if (!(r.rejoinSpeedFactor > 0 && r.rejoinSpeedFactor <= 1)) throw new TuningError(`replay.rejoinSpeedFactor: must be in (0, 1], got ${r.rejoinSpeedFactor}`);
   for (const k of ['jumpWindowSec', 'jumpReachUnits'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
   return r;
+}
+
+/** H2: ranges of the weapon model's constants (most only need to be numbers ≥ 0). */
+function checkWeaponModel(m: WeaponModelTuning): WeaponModelTuning {
+  for (const k of WEAPON_MODEL_KEYS) if (k !== 'recoilYawSign' && m[k] < 0) throw new TuningError(`weapons._engine.${k}: must be >= 0, got ${m[k]}`);
+  if (m.recoilYawSign !== 1 && m.recoilYawSign !== -1) throw new TuningError(`weapons._engine.recoilYawSign: must be 1 or -1, got ${m.recoilYawSign}`);
+  if (!(m.moveFullFraction > m.moveStartFraction)) throw new TuningError('weapons._engine.moveFullFraction: must be > moveStartFraction');
+  for (const k of ['recoilVariance', 'recoilSuppressionFactor'] as const) if (m[k] > 1) throw new TuningError(`weapons._engine.${k}: must be in [0, 1], got ${m[k]}`);
+  for (const k of ['penaltyDecayRatio', 'penThicknessDivisor', 'penDefaultModifier', 'burstShots', 'jumpImpulse', 'penPowerConst'] as const) if (!(m[k] > 0)) throw new TuningError(`weapons._engine.${k}: must be > 0, got ${m[k]}`);
+  for (const k of ['recoilSuppressionShots', 'burstShots', 'penMaxPenetrations'] as const) if (!Number.isInteger(m[k])) throw new TuningError(`weapons._engine.${k}: must be an integer, got ${m[k]}`);
+  return m;
 }
 
 function parseJsonText(text: string): unknown {
