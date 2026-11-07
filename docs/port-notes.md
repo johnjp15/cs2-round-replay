@@ -212,3 +212,22 @@ for tests would need:
   takeover tick next to the Core snapshot). A rewind to a checkpoint whose human is null undoes it (release, above);
   the takeover stays on the tape for a forward seek (2D only: CS2 can't seek ahead). The automatic checkpoint on the
   takeover tick is taken after it (before the step), so it keeps the human.
+
+## 3D host (H1: src/sim3d, src/engine/hitboxes.ts)
+
+What the 3D host does that the CS2 server provides natively (so the C# adapter drops it, docs/sim3d.md):
+
+| Sim3DHost | CS2 |
+| --- | --- |
+| Source movement on the collision mesh (`stepMove3d`, shared with 2D) | the engine's player movement (usercmds) |
+| per-pawn yaw + pitch from the input | usercmd view angles (`QAngle`, pitch + = down: the same convention) |
+| hitboxes (`HITBOXES`: a fixed rest pose sized to the hull) | the model's animated hitbox set |
+| 3D hitscan: eye ray, nearest of mesh and hitboxes, `bulletDamage` | `FireBullets` / `TraceAttack` with the weapon's spread, recoil and penetration |
+| `sees`: eye → head / chest / sides / legs traces on the world mesh, FOV, flash, smoke | `UTIL_TraceLine` (MASK_VISIBLE) eye to the same points, the same FOV / flash / smoke tests |
+| hearing: sound events as in 2D | game events (`player_footstep`, `weapon_fire`) |
+| the camera, FOV, sensitivity, aim punch display (src/app3d) | the client |
+
+Port care: `rayCapsule` / `raySphere` are plain + − × ÷ and sqrt in a fixed order (IEEE exact in C#); the poses use
+`Math.cos` / `Math.sin` of the yaw (use `Math.Cos` / `Math.Sin` on doubles; results can differ in the last bit
+between runtimes, which only matters for a ray grazing a capsule's surface). The Core is untouched: a run nobody plays
+gives the same acts in both hosts (tests/sim3d-golden.test.ts), so the 2D golden fixtures stay the Core's oracle.

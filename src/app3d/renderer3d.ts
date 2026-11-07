@@ -213,12 +213,12 @@ export class Renderer3D {
     // Viewmodel: a box gun at the lower right, its muzzle flash, drawn after the world with its own depth.
     this.vm = new Group();
     this.vmGunMat = new MeshBasicMaterial({ color: 0x6b4a2b });
-    this.vmGun = new Mesh(new BoxGeometry(0.07, 0.08, 0.55), this.vmGunMat);
-    this.vmGun.position.set(0.2, -0.2, -0.42);
-    const grip = new Mesh(new BoxGeometry(0.06, 0.14, 0.07), new MeshBasicMaterial({ color: 0x2a2a2a }));
-    grip.position.set(0.2, -0.29, -0.3);
+    this.vmGun = new Mesh(new BoxGeometry(0.045, 0.055, 0.42), this.vmGunMat);
+    this.vmGun.position.set(0.17, -0.17, -0.42);
+    const grip = new Mesh(new BoxGeometry(0.04, 0.1, 0.05), new MeshBasicMaterial({ color: 0x2a2a2a }));
+    grip.position.set(0.17, -0.24, -0.32);
     this.flash = new Mesh(new SphereGeometry(0.05, 8, 6), new MeshBasicMaterial({ color: 0xffe9a0 }));
-    this.flash.position.set(0.2, -0.17, -0.74);
+    this.flash.position.set(0.17, -0.15, -0.65);
     this.vm.add(this.vmGun, grip, this.flash);
     this.vmScene.add(this.vm);
   }

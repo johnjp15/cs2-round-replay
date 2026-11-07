@@ -22,6 +22,15 @@ On a phone you watch (there are no touch controls for playing). To serve the sta
 (http://localhost:4173). To try it on a phone on the same network, run `npm run dev -- --host` and open
 the Network URL it prints. Details: [`docs/app.md`](docs/app.md).
 
+## The 3D sim (H1)
+
+A second app, the same round in first person on CS2's own Mirage geometry: `npm run dev:3d`, `npm run build:3d`,
+`npm run build:single:3d` (the page for `johnjp15.github.io/cs2/sim3d/`), `npm run harness3d` (the round headless in
+the 3D engine), `npm run check:browser:3d`. It starts watching (third person, a player's eyes, or a free camera; V,
+Z / X); E takes control of cart: mouse look with CS2's sensitivity and FOV, WASD, Space, Ctrl, Shift, mouse 1 / 2,
+R, 1–5, E. Engine: [`docs/sim3d.md`](docs/sim3d.md); app: [`docs/app3d.md`](docs/app3d.md); plan:
+[`docs/sim3d-plan.md`](docs/sim3d-plan.md).
+
 ## Layout
 
 | Path | What lives there |
@@ -29,6 +38,9 @@ the Network URL it prints. Details: [`docs/app.md`](docs/app.md).
 | `src/contracts/` | Shared types, seeded PRNG (`rng.ts`), tuning loader (`tuning.ts`). Imports nothing else from `src/`. |
 | `src/core/` | Engine-agnostic replay brain (ICore). May import only `src/contracts`. No `Date` / `Math.random`. |
 | `src/sim2d/` | 2D top-down engine/host (IHost). May import only `src/contracts`. |
+| `src/engine/` | H1+: pure CS2 mechanics any host can use (hitboxes; H2: weapons). May import only `src/contracts`. |
+| `src/sim3d/` | H1: the 3D engine/host (Sim3DHost: 3D hitscan, hitboxes, mesh sight). May import `src/contracts`, `src/engine`, `src/sim2d`. |
+| `src/app3d/`, `sim3d/index.html` | H1: the 3D page (Three.js view, first-person controls, HUD). May import anything. |
 | `src/app/` | Browser app: `Session` driver, 64 Hz loop, input mapping, canvas renderer, HUD and camera; `main.ts` is the page entry. May import anything. |
 | `index.html` | Page entry for Vite. |
 | `data/` | Round data and `tuning.json` (all tunable numbers). |
