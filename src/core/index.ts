@@ -105,7 +105,7 @@ export {
   trackPosAt,
 } from './divergence';
 export type { ContactState, DivergenceState, EncounterPhase, EncounterPlan, EncounterState, FireSpan, LiveIntent, PairSpan, TriggerHit, TriggerKind } from './divergence';
-export { HumanDuels, buildDuels, duelSpot } from './duels';
+export { HumanDuels, buildDuels } from './duels';
 export type { DuelPlan, DuelState } from './duels';
 export { REJOIN_MAX_PATH_QUERIES, REJOIN_ROLE, REJOIN_TRIGGER, Rejoin, busyReason, lagTicks, rejoinGoal, trackLength, unrestReason } from './rejoin';
 export type { RejoinHit, RejoinPawn, RejoinState, RejoinTarget } from './rejoin';

@@ -18,7 +18,7 @@ import { tenthsText, trackPosAt } from './divergence';
 import { dist2 } from './puppet';
 import type { RoundModel } from './round-model';
 import type { DamageEntry } from './schedule';
-import { cycleTicksOf, tapSpacing, type PawnMode, type ScriptPlan } from './scripted';
+import { cycleTicksOf, tapSpacing, type PawnMode, type ScriptPlan, type ScriptedEvents } from './scripted';
 
 /** One recorded duel of the default human (built once from the plan; immutable). */
 export interface DuelPlan {
@@ -29,8 +29,11 @@ export interface DuelPlan {
   readonly target: PlayerId;
   /** The recorded weapon (the engagement's fire item). */
   readonly weapon: WeaponId;
-  /** The B3 engagement it replays (`aim:<i>`). */
+  /** The B3 engagement it replays (`aim:<i>`) and its fire items (`fire:<i>`: the puppet's recorded spray). */
   readonly aimKey: string;
+  readonly fireKeys: readonly string[];
+  /** The ticks the puppet's shots of those fire items land on (B3's fit), in order. */
+  readonly puppetShotTicks: readonly number[];
   /**
    * The recorded window (act ticks): the engagement's aim start (its first press − `preAimSec`) to its last press. A
    * duel that answers a scheduled encounter opens instead on the tick the shooter first saw the human at the spot
@@ -38,9 +41,15 @@ export interface DuelPlan {
    */
   readonly fromTick: number;
   readonly toTick: number;
-  /** The first and last recorded shot (observe ticks): the human's spot is his recorded track between them. */
+  /** The first and last recorded shot (observe ticks). */
   readonly firstShotTick: number;
   readonly lastShotTick: number;
+  /**
+   * Cart's recorded spot in the duel: an encounter's spot when it answers one (his position at the target's recorded
+   * hit, so the duel and the encounter agree on "at the spot"), else his recorded position halfway through his shots.
+   * He is in the duel within `humanSpotToleranceUnits` (2D) of it.
+   */
+  readonly spot: Vec3;
   /** The recorded damage of his shots on the target in the duel, in tick order (cart → Lokier: the lethal headshot); empty = no damage. */
   readonly hits: readonly DamageEntry[];
   /** The scheduled encounter it answers (the target's recorded hit on him in this duel), whose time shift it takes; null: on the recorded ticks. */
@@ -92,8 +101,13 @@ export function buildDuels(model: RoundModel, plan: ScriptPlan, encounters: read
     const first = fire[0];
     if (first === undefined) continue;
     const shots: number[] = [];
-    for (const f of fire) for (const k of f.recordedTicks.length > 0 ? f.recordedTicks : f.shotTicks) shots.push(k);
+    const landed: number[] = [];
+    for (const f of fire) {
+      for (const k of f.recordedTicks.length > 0 ? f.recordedTicks : f.shotTicks) shots.push(k);
+      for (const k of f.shotTicks) landed.push(k);
+    }
     shots.sort((a, b) => a - b);
+    landed.sort((a, b) => a - b);
     const hits = plan.damage.filter((d) => d.entry.attacker === human && d.entry.victim === e.target && d.entry.tick - li >= e.fromTick && d.entry.tick - li <= e.toTick).map((d) => d.entry);
     const enc = encounters.find((p) => p.shooter === e.target && p.victim === human && p.damage.tick - li >= e.fromTick && p.damage.tick - li <= e.toTick) ?? null;
     const gun = tuning.weapons[first.weapon];
@@ -103,10 +117,13 @@ export function buildDuels(model: RoundModel, plan: ScriptPlan, encounters: read
       target: e.target,
       weapon: first.weapon,
       aimKey: e.key,
+      fireKeys: fire.map((f) => f.key),
+      puppetShotTicks: landed,
       fromTick: e.fromTick,
       toTick: e.toTick,
       firstShotTick: shots[0] as number,
       lastShotTick: shots[shots.length - 1] as number,
+      spot: enc === null ? trackPosAt(model, human, Math.floor(((shots[0] as number) + (shots[shots.length - 1] as number)) / 2)) : { x: enc.spot.x, y: enc.spot.y, z: enc.spot.z },
       hits,
       encounter: enc === null ? null : enc.key,
       cycleTicks: gun === undefined ? 2 : tapSpacing(cycleTicksOf(gun)),
@@ -138,12 +155,10 @@ function hitText(h: DamageEntry): string {
  */
 export class HumanDuels {
   readonly duels: readonly DuelPlan[];
-  private readonly model: RoundModel;
   private readonly tuning: Tuning;
   private st: DuelState[];
 
   constructor(model: RoundModel, plan: ScriptPlan, encounters: readonly EncounterPlan[], tuning: Tuning) {
-    this.model = model;
     this.tuning = tuning;
     this.duels = buildDuels(model, plan, encounters, tuning);
     this.st = initialDuelStates(this.duels);
@@ -179,8 +194,8 @@ export class HumanDuels {
    * One tick (not the setup step), every duel in order; appends its actions to `out`. `modes`: every pawn's Core mode
    * after this tick's LIVE switches and rejoins. `encounters` / `states`: the scheduled encounters and their state.
    */
-  step(o: Observe, modes: readonly PawnMode[], encounters: readonly EncounterPlan[], states: readonly EncounterState[], out: Action[]): void {
-    for (let i = 0; i < this.duels.length; i++) this.duelStep(this.duels[i] as DuelPlan, this.st[i] as DuelState, o, modes, encounters, states, out);
+  step(o: Observe, modes: readonly PawnMode[], encounters: readonly EncounterPlan[], states: readonly EncounterState[], script: ScriptedEvents, out: Action[]): void {
+    for (let i = 0; i < this.duels.length; i++) this.duelStep(this.duels[i] as DuelPlan, this.st[i] as DuelState, o, modes, encounters, states, script, out);
   }
 
   /**
@@ -201,10 +216,10 @@ export class HumanDuels {
    *    dead or the target LIVE then; a non-lethal hit stays non-lethal).
    * 4. Over when the target or he is dead, or the window (and its last report) has passed with nothing due.
    * 5. The block is in force while he is in the duel: alive, the target alive and REPLAY, inside the window, within
-   *    `humanSpotToleranceUnits` of his recorded track (at the shifted tick, clamped to the recorded shots), or a hit
-   *    is due. Logged the first tick he is in it, and when it is over.
+   *    `humanSpotToleranceUnits` of the duel's spot, or a hit is due. Logged the first tick he is in it, and when it is
+   *    over.
    */
-  private duelStep(d: DuelPlan, s: DuelState, o: Observe, modes: readonly PawnMode[], encounters: readonly EncounterPlan[], states: readonly EncounterState[], out: Action[]): void {
+  private duelStep(d: DuelPlan, s: DuelState, o: Observe, modes: readonly PawnMode[], encounters: readonly EncounterPlan[], states: readonly EncounterState[], script: ScriptedEvents, out: Action[]): void {
     if (s.done) return;
     const tick = o.tick;
     const what = `duel ${d.shooter} -> ${d.target}`;
@@ -213,7 +228,7 @@ export class HumanDuels {
       if (s.blocked) this.unblock(d, s, out);
       return;
     }
-    if (s.shift === null && !this.arm(d, s, encounters, states)) return;
+    if (s.shift === null && !this.arm(d, s, o.tick, encounters, states, script)) return;
     const shift = s.shift as number;
     const from = s.fromTick as number;
     const to = s.toTick as number;
@@ -245,7 +260,7 @@ export class HumanDuels {
         out.push({
           type: 'log',
           level: 'info',
-          text: `${what}: his spray is on ${d.target} through the recorded ${hitText(h0)} (a would-hit shot at tick ${s.aimedTick}, firing at tick ${s.lastShotTick}): it lands at tick ${k0} (recorded ${h0.tick})`,
+          text: `${what}: his spray is on ${d.target} through the recorded ${hitText(h0)} (on target at tick ${s.aimedTick}, still firing at tick ${s.lastShotTick}): it lands at tick ${k0} (recorded ${h0.tick})`,
         });
       }
     }
@@ -278,9 +293,8 @@ export class HumanDuels {
     }
 
     // 5. In the duel now?
-    const spot = trackPosAt(this.model, d.shooter, clamp(tick - shift, d.firstShotTick, d.lastShotTick));
     const inDuel =
-      me !== undefined && target !== undefined && modeOf(modes, d.target) === 'REPLAY' && ((tick >= from && tick <= to && dist2(me.pos, spot) <= r.humanSpotToleranceUnits) || s.dueTick !== null);
+      me !== undefined && target !== undefined && modeOf(modes, d.target) === 'REPLAY' && ((tick >= from && tick <= to && dist2(me.pos, d.spot) <= r.humanSpotToleranceUnits) || s.dueTick !== null);
     if (inDuel && s.startedTick === null) {
       s.startedTick = tick;
       const outcome = d.hits.length === 0 ? 'no damage' : d.hits.map((h) => `${hitText(h)} at tick ${h.tick + shift}`).join(', ');
@@ -294,27 +308,39 @@ export class HumanDuels {
     }
   }
 
-  /** Arm the duel if its shift is known now (see duelStep); false while it isn't (or never will be: then it is over). */
-  private arm(d: DuelPlan, s: DuelState, encounters: readonly EncounterPlan[], states: readonly EncounterState[]): boolean {
+  /**
+   * Arm the duel if its shift is known now (see duelStep); false while it isn't (or never will be: then it is over). A
+   * takeover in the middle of the recorded spray (G4): the puppet's shots of it that went ahead (B3 decided the fire
+   * item while nobody played him, and aims it at the target) and landed before this tick start his spray, so a player
+   * who takes over at 18.6 s and keeps firing continues the tape's spray.
+   */
+  private arm(d: DuelPlan, s: DuelState, tick: number, encounters: readonly EncounterPlan[], states: readonly EncounterState[], script: ScriptedEvents): boolean {
     if (d.encounter === null) {
       s.shift = 0;
       s.fromTick = d.fromTick;
       s.toTick = d.toTick;
-      return true;
+    } else {
+      const i = encounters.findIndex((e) => e.key === d.encounter);
+      const p = encounters[i];
+      const e = states[i];
+      if (p === undefined || e === undefined) return false;
+      if (e.phase === 'done') {
+        // Its encounter ended before it saw him at the spot (the shooter LIVE or dead, or he died): no duel.
+        s.done = true;
+        return false;
+      }
+      if (e.seenTick === null || e.shotTick === null) return false;
+      s.shift = e.shotTick - p.damage.tick;
+      s.fromTick = e.seenTick;
+      s.toTick = d.toTick + s.shift;
     }
-    const i = encounters.findIndex((e) => e.key === d.encounter);
-    const p = encounters[i];
-    const e = states[i];
-    if (p === undefined || e === undefined) return false;
-    if (e.phase === 'done') {
-      // Its encounter ended before it saw him at the spot (the shooter LIVE or dead, or he died): no duel.
-      s.done = true;
-      return false;
+    if (d.fireKeys.some((k) => script.decision(k) === true)) {
+      for (const k of d.puppetShotTicks) {
+        if (k >= tick || k < d.firstShotTick + s.shift - d.cycleTicks) continue;
+        s.aimedTick = k;
+        s.lastShotTick = k;
+      }
     }
-    if (e.seenTick === null || e.shotTick === null) return false;
-    s.shift = e.shotTick - p.damage.tick;
-    s.fromTick = e.seenTick;
-    s.toTick = d.toTick + s.shift;
     return true;
   }
 
@@ -322,13 +348,4 @@ export class HumanDuels {
     out.push({ type: 'unblock_damage', attacker: d.shooter, victim: d.target });
     s.blocked = false;
   }
-}
-
-function clamp(x: number, lo: number, hi: number): number {
-  return x < lo ? lo : x > hi ? hi : x;
-}
-
-/** For tests and tools: a duel's spot at `tick` (the shooter's recorded track at the shifted tick, clamped to its recorded shots). */
-export function duelSpot(model: RoundModel, d: DuelPlan, tick: number, shift: number): Vec3 {
-  return trackPosAt(model, d.shooter, clamp(tick - shift, d.firstShotTick, d.lastShotTick));
 }

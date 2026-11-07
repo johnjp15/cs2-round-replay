@@ -228,7 +228,7 @@ export class ReplayCore implements ICore {
         }
       }
       // G5: the human's recorded duels (after this tick's switches, so a target that just went LIVE is out of it).
-      this.duels.step(o, s.pawns, this.divergence.encounters, this.divergence.state.encounters, actions);
+      this.duels.step(o, s.pawns, this.divergence.encounters, this.divergence.state.encounters, this.script, actions);
     }
 
     this.scheduledActions(o, actions);
