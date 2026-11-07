@@ -198,7 +198,10 @@ Before: main before G6 (the radar mask, H1's tracks); after: G6 (the mesh, pass 
 `tests/sight3d.test.ts`: 10 viewers × 9 targets at the snapped positions every 0.5 s of the round: **0.15 ms per tick**
 (132 segment tests, 30 full traces; 0.29 ms without the hints), against 0.09–0.11 ms for C4's mask in the same test.
 In whole runs sight costs less than C4's level check did: the harness's no-human round went from 899 to about 710 µs per
-tick (docs/app.md has the Session and browser numbers).
+tick (docs/app.md has the Session and browser numbers). After the aim-on-sight change and the M1 merge (measured on a
+shared 2-vCPU box at load average ≈ 16, so only the comparison means anything): `npm run harness -- --human none` main
+5,162 / 6,318 µs per tick, G6 5,755 / 4,943 (alternating runs: no difference beyond the noise); `npm run check:browser`
+at 4× main 168.6 ticks/s, G6 134.4 (both far off the 256 target under that load; the same PROBLEM lines on main).
 
 ## Known limits
 
