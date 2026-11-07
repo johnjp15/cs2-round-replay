@@ -16,7 +16,9 @@
  * The view is CS2's (view-cs2.ts, with sources): mouse counts × sensitivity × m_yaw / m_pitch (0.022°), no
  * acceleration; FOV 90° horizontal at 4:3, hor+ on wider screens (vertical ≈ 73.74°); scoped FOVs and the zoomed
  * sensitivity (mouse 2 with the AWP / SSG 08); viewmodel_fov 60 in its own camera; the eye eases between 64 and 46
- * through a duck. Bullets leave along the firing angles (view + aim punch × 2; the punch is zero until H2's recoil).
+ * through a duck. Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b);
+ * the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
+ * shake, and the crosshair sits where the next bullet goes.
  *
  * URL parameters: `?seed=<int>` (default 1), `?human=cart` plays cart from the start, `?sens=<CS2 sensitivity>`
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
@@ -55,15 +57,11 @@ import {
   VIEWMODEL_FOV,
   VIEWMODEL_FOV_MAX,
   VIEWMODEL_FOV_MIN,
-  ZERO_PUNCH,
-  cameraAngles,
+  VIEW_RECOIL_TRACKING,
   duckStep,
   effectiveSensitivity,
   eyeHeightFor,
-  firingAngles,
-  nextZoom,
   verticalFov,
-  zoomFov,
 } from './view-cs2';
 
 type Phase = 'ready' | 'running' | 'paused';
@@ -205,6 +203,13 @@ class App3D {
   /** Scope level of the human's weapon (0 = unscoped) and the weapon it is for. */
   private zoom = 0;
   private zoomWeapon: string | null = null;
+  /** H2b: the scoped FOV (4:3 degrees) of the current zoom level, from the host's weapon table. */
+  private zoomFov4x3 = 90;
+  /**
+   * H2b: share of the recoil the camera follows (CS:GO `view_recoil_tracking`, default 0.45; the "Recoil tracking"
+   * setting, 0–1): 0 = the screen stays still and only the crosshair climbs; 1 = the camera follows the bullets.
+   */
+  private recoilTracking = VIEW_RECOIL_TRACKING;
   /** The camera's duck amount (0..1, view-cs2.ts duckStep). */
   private duck = 0;
   private session: Session;
@@ -271,10 +276,9 @@ class App3D {
       onFire: () => this.spectateClick(1),
       playing: () => this.playing(),
       keyboardLocked: () => this.guard.keyboardLocked,
+      // H2b: while playing, mouse 2 reaches the host as ATTACK2 (the input's buttons): the host owns the scope.
       onAttack2: () => {
-        const p = this.session.human === null ? null : this.scene.pawn(this.session.human);
-        if (this.playing() && p !== null) this.setZoom(p.weapon, nextZoom(p.weapon, this.zoomWeapon === p.weapon ? this.zoom : 0));
-        else this.spectateClick(-1);
+        if (!this.playing()) this.spectateClick(-1);
       },
     });
     this.controls.keyMap = keyMapFor(this.keys.binds);
@@ -658,10 +662,12 @@ class App3D {
     const s = this.session;
     if (this.playing()) {
       const p = this.scene.pawn(s.human as PlayerId);
-      if (p !== null && p.weapon !== this.zoomWeapon) this.setZoom(p.weapon, 0);
+      // H2b: the scope is the host's (src/engine/weapons; FOVs from data/weapons.json).
+      const av = this.aimView(s.human as PlayerId, this.look);
+      if (p !== null) this.setZoom(p.weapon, av.zoom, av.fov4x3);
       this.look = turnView(this.look, mouse.dx, mouse.dy, effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio));
-      // The bullets leave along the firing angles: the view plus the aim punch (zero until H2's recoil, view-cs2.ts).
-      const inp = fpsInput(s.human as PlayerId, this.controls.controls(), firingAngles(this.look, this.aimPunch()));
+      // H2b: the input carries the plain view; the host adds the aim punch × weapon_recoil_scale and the inaccuracy cone.
+      const inp = fpsInput(s.human as PlayerId, this.controls.controls(), this.look);
       s.setHumanInput(inp);
       this.a1.input(inp, p, this.scene.cur.tick, this.scene.cur.round.bomb.state === 'planted');
     } else if (this.camMode === 'free') {
@@ -718,10 +724,12 @@ class App3D {
     if (firstPerson || this.camMode === 'pov') {
       eye = vp === null ? this.freePos : { x: vp.x, y: vp.y, z: vp.z + this.eyeZ };
       if (firstPerson) {
-        const cam = cameraAngles(this.look, this.aimPunch());
-        yaw = cam.yaw;
-        pitch = cam.pitch;
-        aim = firingAngles(this.look, this.aimPunch());
+        // H2b: the camera follows `recoilTracking` (view_recoil_tracking, default 0.45) of the recoil plus the screen
+        // shake; the crosshair sits where the next bullet goes (view + aim punch × 2).
+        const v = this.aimView(human as PlayerId, this.look);
+        yaw = v.camera.yaw;
+        pitch = v.camera.pitch;
+        aim = v.crosshair;
       } else {
         const prevPitch = this.scene.prev?.pawns.find((p) => p.id === viewId)?.pitch ?? vo?.pitch ?? 0;
         const v = this.spectatedView(viewId, { yaw: vp?.yaw ?? 0, pitch: prevPitch + ((vo?.pitch ?? 0) - prevPitch) * alpha });
@@ -889,25 +897,27 @@ class App3D {
    * `Sim3DHost.aimView`), else its view with no punch and no scope.
    */
   private spectatedView(id: PlayerId, view: { yaw: number; pitch: number }): { camera: { yaw: number; pitch: number }; crosshair: { yaw: number; pitch: number }; zoom: number; fov4x3: number } {
-    const h = this.host() as Sim3DHost & { aimView?: (id: PlayerId, view: { yaw: number; pitch: number }) => { camera: { yaw: number; pitch: number }; crosshair: { yaw: number; pitch: number }; zoom: number; fov4x3: number } };
-    if (typeof h.aimView === 'function') return h.aimView(id, view);
-    return { camera: view, crosshair: view, zoom: 0, fov4x3: 90 };
+    return this.aimView(id, view);
   }
 
-  /** The human's aim punch (degrees): zero until H2's recoil is wired in (H4). */
-  private aimPunch(): { yaw: number; pitch: number } {
-    return ZERO_PUNCH;
+  /**
+   * H2b: camera, crosshair and scope of `id` looking along `view`, from the host's weapon mechanics
+   * (`Sim3DHost.aimView`) with the player's recoil-tracking setting.
+   */
+  private aimView(id: PlayerId, view: { yaw: number; pitch: number }): { camera: { yaw: number; pitch: number }; crosshair: { yaw: number; pitch: number }; zoom: number; fov4x3: number } {
+    return this.host().aimView(id, view, this.recoilTracking);
   }
 
-  /** The view's FOV now (4:3 degrees): 90, or the scoped FOV of the human's weapon. */
+  /** The view's FOV now (4:3 degrees): 90, or the scoped FOV of the human's weapon (the host's, from data/weapons.json). */
   private currentFov4x3(): number {
-    return this.zoomWeapon === null ? 90 : zoomFov(this.zoomWeapon, this.zoom);
+    return this.zoomWeapon === null || this.zoom === 0 ? 90 : this.zoomFov4x3;
   }
 
-  /** The human's scope level (the overlay is the HUD's: HudFrame.scope). */
-  private setZoom(weapon: string, level: number): void {
+  /** The human's scope level and its FOV (the overlay is the HUD's: HudFrame.scope). */
+  private setZoom(weapon: string, level: number, fov4x3 = 90): void {
     this.zoomWeapon = weapon;
     this.zoom = level;
+    this.zoomFov4x3 = level === 0 ? 90 : fov4x3;
   }
 
   private viewInfo(): { vfov: number; hfov: number; aspect: number; viewmodelVfov: number; sensitivity: number; effectiveSensitivity: number; zoom: number; raw: boolean } {
@@ -919,9 +929,10 @@ class App3D {
   /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
   private loadSettings(sensFromUrl: boolean): void {
     try {
-      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string };
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; recoilTracking?: number };
       if (j.radar === 'cs2' || j.radar === 'all') this.radarRules = j.radar;
       if (!sensFromUrl && typeof j.sensitivity === 'number') this.sensitivity = clamp(j.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX);
+      if (typeof j.recoilTracking === 'number' && Number.isFinite(j.recoilTracking)) this.recoilTracking = clamp(j.recoilTracking, 0, 1);
       if (typeof j.zoomRatio === 'number') this.zoomRatio = clamp(j.zoomRatio, 0.01, 3);
       if (typeof j.viewmodelFov === 'number') this.viewmodelFov = clamp(j.viewmodelFov, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX);
     } catch {
@@ -931,7 +942,7 @@ class App3D {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking }));
     } catch {
       // ignore
     }
@@ -955,6 +966,7 @@ class App3D {
     field('set-sens', () => this.sensitivity, (v) => (this.sensitivity = clamp(v, SENSITIVITY_MIN, SENSITIVITY_MAX)));
     field('set-zoom', () => this.zoomRatio, (v) => (this.zoomRatio = clamp(v, 0.01, 3)));
     field('set-vmfov', () => this.viewmodelFov, (v) => (this.viewmodelFov = clamp(v, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX)));
+    field('set-tracking', () => this.recoilTracking, (v) => (this.recoilTracking = clamp(v, 0, 1)));
   }
 
   private stats(): App3DStats {
