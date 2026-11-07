@@ -107,22 +107,26 @@ aimed. In an aim engagement the recording shows him **missing** (no damage or ki
 looks where his recorded view does (his POV yaw, where the camera follows him) and keeps moving the same way (the stick
 re-expressed in that yaw); the pitch stays B3's. For cart that is the defuse spray at sp4rtan (65.55–66.89 s; his
 recorded yaw tracks a fixed point near (−2210, 275) within 0.8°, 17–22° off sp4rtan's spot, `docs/vision.md`) and the
-post-round spray (68.30–69.27 s); his Lokier engagement (a recorded kill) keeps B3's aim. The human-bot's
-`followRecording` does the same. The inputs are written as entries, a new one only where the held one would give a
-different input (`"track"` where the input's yaw is the recorded yaw: 2,455 of 4,460 entries), and the generator checks
-that playing the file reproduces the generation run byte for byte (digest `4d30f7f1`). Results:
+post-round spray (68.30–69.27 s); his Lokier engagement (a recorded kill) keeps B3's aim. (G5: these engagements are
+the human's recorded duels, so his shots there resolve like the tape whatever the aim; the recorded view is kept as
+the truer input.) The human-bot's `followRecording` does the same. The inputs are written as entries, a new one only
+where the held one would give a different input (`"track"` where the input's yaw is the recorded yaw: 2,325 of 3,962
+entries), and the generator checks that playing the file reproduces the generation run byte for byte (digest
+`0c4f0fa7`; before G5 `5a558c44`, 3,980 entries). Results:
 
-- cart, observed samples: RMS 20.5 u (13.5 as a puppet), max 152 u at 14.5 s: without the puppet's snaps he has to
-  catch up physically after the recording's jumps (217 u in 0.3 s at 14.2 s, the Balcony drop at 21.0 s). The
-  puppets' snaps of cart are gone; the other four happen as in the golden master.
-- With C4's sight mask cart's real AK headshot kills Lokier at 18.50 s through the Apartments window (0.3 s before the
-  recorded kill: 2D has no spread), before B4's time-shifted scripted hit is due (18.63 s), so cart keeps 100 HP.
-- **No pawn goes LIVE** (F). Cart's spray during the defuse misses as on the tape, sp4rtan defuses at 66.80 s and the
-  round ends CT `bomb_defused`, 12 – 15, with 0.72 s on the bomb, like the tape; after the round sp4rtan's one implied
-  shot hits cart for 27 (he ends on 73 HP; the tape has him killed). Until F the spray was aimed at sp4rtan and hit him
-  at 65.91 s (sp4rtan LIVE, T elimination 11 – 16). `docs/core.md` "Divergence", scenario 1. B5's summary (printed by
-  `npm run harness` as `round summary:`): "Same result, different round: CT defuse, 0.72 s left; 2 kills changed"
-  (cart's 2D window kill of Lokier 0.30 s early, and sp4rtan's post-round kill of cart that doesn't happen).
+- cart, observed samples: RMS 277.6 u, max 525 u at 33.7 s, unchanged by G5: without the puppet's snaps he has to
+  catch up physically after the recording's jumps, and on G3's CS2 Mirage he can't get past where the puppet snaps
+  (29.4 s, 64.3 s). The puppets' snaps of cart are gone; the others happen as in the golden master.
+- **G5: the tape.** Lokier sees him on course at the window (17.59 s), so his hit lands on the recorded tick (18.50 s,
+  73 / 7); cart is in the recorded duel, his bullets on Lokier are blocked, and his spray, on target (the first bullet
+  would hit) and still firing at the kill moment, lands the recorded kill on 18.80 s (tick 1203). His sprays at
+  sp4rtan (the defuse, after the round) are duels with no damage; sp4rtan defuses at 66.80 s (CT `bomb_defused`,
+  12 – 15, 0.72 s on the bomb) and his post-round shot kills cart on 27 HP at 69.41 s (tick 4442). **No pawn goes
+  LIVE**; every kill is on the golden master's tick; B5's summary (printed by `npm run harness` as `round summary:`):
+  "Played it like the tape: CT defuse, 0.72 s left". Before G5 cart's real AK headshot killed Lokier at 18.50 s
+  through the Apartments window (2D has no spread) before the time-shifted hit was due (18.59 s), so cart kept
+  100 HP and survived the post-round shot (on 73 HP): "Same result, different round: CT defuse, 0.72 s left; 2 kills
+  changed". `docs/core.md` "Recorded duels of the human", "Divergence" scenario 1.
 - The shadow is a `ReplayCore` with `{divergence: false}` (B2/B3 only).
 
 ## The golden master (CI gate)
@@ -301,6 +305,15 @@ tested (no WebKit here).
 
 ## History
 
+- G5 (recorded duels of the human): every golden fixture is byte-identical (no-human `72b58704`, cart-idle
+  `9a995ab4`, cart-takeover `a3163f9d`; walk oracles too; `npm run fixtures:update` reports "nothing changed"): nobody
+  is ever in a recorded duel in them (no human; cart standing in Back Alley; cart standing in the Apartments from 15 s,
+  where Lokier never sees him at the window), and the engine reports blocked bullets (`blocked_hit`) only for the
+  human's, whose pairs only a duel blocks. The follow script is regenerated (3,980 → 3,962 entries; every entry before
+  18.52 s, tick 1185, is the same): from 18.50 s Lokier's hit lands on cart and Lokier lives until 18.80 s, so the shadow's inputs differ
+  (its aim follows the live Lokier, and the observed state it re-expresses the stick in differs); its run is now the
+  tape (`0c4f0fa7`, was `5a558c44`). No new fixture: a duel fixture (the follow run to 20 s, about 0.3 MB gzipped)
+  would break the 3 MB cap of `tests/fixtures.test.ts`.
 - G4 (takeover): every existing digest is unchanged (G3's `72b58704` and `9a995ab4`; walk oracles too; before G3,
   `e9a228d9` and `2923a71d` were unchanged by G4 as well): nobody takes over in them, and a human from the start is set
   up exactly as before. The manifest gains `takeover` on every entry (null for both), so their entries were refreshed

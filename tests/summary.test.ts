@@ -103,18 +103,15 @@ describe('summary of the follow run (cart plays his recording, F)', () => {
   const run = playScript(data, readFileSync(resolve(ROOT, FOLLOW_SCRIPT), 'utf8'));
   const s = summarize(model, run.log);
 
-  it('same result as the tape, nobody LIVE; two kills differ: the 2D window kill 0.30 s early, and cart survives the post-round shot', () => {
-    expect(s.headline).toBe('Same result, different round: CT defuse, 0.72 s left; 2 kills changed');
-    expect(s.verdict).toBe('same_result');
+  it('played it like the tape (G5): every kill the same, on its recorded tick, nobody LIVE', () => {
+    // Before G5: "Same result, different round: …; 2 kills changed" (cart's real AK headshot killed Lokier 0.30 s early,
+    // before Lokier's hit, so cart survived the post-round shot). Now his recorded duels resolve like the tape.
+    expect(s.headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
+    expect(s.verdict).toBe('tape');
     expect(s.result).toEqual({ winner: 'CT', reason: 'bomb_defused', endTick: 4275, score: { ct: 12, t: 15 } });
     expect(s.switches).toEqual([]);
-    const changed = s.kills.filter((k) => k.status !== 'same').map((k) => [k.killer, k.victim, k.status, k.text]);
-    expect(changed).toEqual([
-      ['cart', 'lokier', 'shifted', '-0.30 s'],
-      // sp4rtan's single implied post-round shot takes cart only to 73 HP (the tape: killed).
-      ['sp4rtan', 'cart', 'missed', "didn't happen: cart survived"],
-    ]);
-    expect(s.player).toMatchObject({ id: 'cart', human: true, kills: 1, damageTaken: 27, deathTick: null });
+    for (const k of s.kills) expect(k).toMatchObject({ status: 'same', deltaTicks: 0, text: 'same' });
+    expect(s.player).toMatchObject({ id: 'cart', human: true, kills: 1, damageDealt: 100, damageTaken: 100, deathTick: 4442 });
   });
 });
 
@@ -127,7 +124,7 @@ describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
     expect(s.headline).toBe('You changed history: Ts win by elimination (recorded: CT defuse)');
     expect(s.verdict).toBe('changed');
     expect(s.result).toEqual({ winner: 'T', reason: 'elimination', endTick: 2856, score: { ct: 11, t: 16 } });
-    // Nobody defused: the bomb exploded at 67.52 s. The two LIVE guards had left its blast (F), so it killed nobody.
+    // Nobody defused: the bomb exploded at 67.52 s. The two LIVE guards had left its blast (F); it killed cart (G5, below).
     expect(s.bomb).toEqual({ plantTick: 1761, defuseTick: null, explodeTick: 4321, marginSec: null });
   });
 
@@ -135,11 +132,15 @@ describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
     const row = (killer: string | null, victim: string) => s.kills.find((k) => k.killer === killer && k.victim === victim);
     expect(row('cart', 'sp4rtan')).toMatchObject({ status: 'new', runTick: 2856, recordedTick: null, headshot: true });
     expect(secText(row('cart', 'sp4rtan')?.runTick ?? 0)).toBe('44.63');
-    for (const victim of ['donk', 'barely', 'cart']) {
+    for (const victim of ['donk', 'barely']) {
       expect(row('sp4rtan', victim)).toMatchObject({ status: 'missed', runTick: null, text: "didn't happen: sp4rtan was dead (44.63 s)" });
     }
-    expect(row('cart', 'lokier')).toMatchObject({ status: 'shifted', deltaTicks: -19, text: '-0.30 s' });
-    // F: the LIVE guards leave the bomb's blast after the round, so the explosion kills nobody (it killed both before).
+    // G5: cart plays his recording up to 44.6 s, so Lokier's hit lands (27 HP) and the duel lands the kill on its tick
+    // (before: shifted −0.30 s, cart on 100 HP). On 27 HP the explosion's 43 HP through armor in Back Alley kills him.
+    expect(row('cart', 'lokier')).toMatchObject({ status: 'same', deltaTicks: 0, text: 'same' });
+    expect(row(null, 'cart')).toMatchObject({ status: 'new', runTick: 4321 });
+    expect(row('sp4rtan', 'cart')).toMatchObject({ status: 'missed', runTick: null, text: "didn't happen: cart died to the bomb at 67.52 s" });
+    // F: the LIVE guards leave the bomb's blast after the round, so the explosion kills neither (it killed both before).
     for (const victim of ['donk', 'barely']) expect(row(null, victim)).toBeUndefined();
     for (const [killer, victim] of [['snarlbot', 'incredibad'], ['snarlbot', 'snakelore'], ['lokier', 'eradicate'], ['sp4rtan', 'snarlbot'], ['barely', 'zwomp']] as const) {
       expect(row(killer, victim)?.status).toBe('same');
@@ -156,9 +157,10 @@ describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
   });
 
   it("reports cart's stats (the human)", () => {
-    expect(s.player).toMatchObject({ id: 'cart', human: true, kills: 2, deathTick: null });
+    // G5: killed by the bomb at 67.52 s (27 HP after Lokier's recorded hit; before G5 he survived it on 100).
+    expect(s.player).toMatchObject({ id: 'cart', human: true, kills: 2, deathTick: 4321 });
     expect(s.player.damageDealt).toBe(200);
-    expect(s.player.aliveSec).toBeCloseTo(4516 / 64, 9);
+    expect(s.player.aliveSec).toBeCloseTo(4320 / 64, 9);
     console.log(`[summary flank-sp4rtan] ${s.headline}; cart ${s.player.kills} kills, ${s.player.damageDealt} dealt, ${s.player.damageTaken} taken, RMS ${s.player.rmsFromRecording?.toFixed(1)} u from his recording (teleported to Back Alley at 44.6 s)`);
   });
 });

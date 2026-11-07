@@ -99,9 +99,13 @@ export function damageTrigger(o: Observe, modes: readonly PawnMode[], id: Player
  * each other is not).
  */
 export function humanOnCourse(model: RoundModel, o: Observe, tuning: Tuning): boolean {
-  if (o.human === null) return false;
-  const h = pawnOf(o, o.human);
-  const rec = model.trackAtTick(o.human, o.tick);
+  return o.human !== null && onCourse(model, o, o.human, tuning);
+}
+
+/** `id` is alive and within `offCourseUnits` (2D) of its recorded track at this tick (G5: also for a puppet). */
+export function onCourse(model: RoundModel, o: Observe, id: PlayerId, tuning: Tuning): boolean {
+  const h = pawnOf(o, id);
+  const rec = model.trackAtTick(id, o.tick);
   return h !== undefined && h.alive && rec !== null && dist2(h.pos, rec.pos) <= tuning.replay.offCourseUnits;
 }
 
@@ -367,6 +371,20 @@ export interface EncounterState {
    * the hit starts the encounter as seen from this tick (`Divergence.takeover`).
    */
   puppetSightTick: number | null;
+  /** G5: the puppet was on course (`onCourse`) at `puppetSightTick`, so a takeover gets the hit on its recorded tick. */
+  puppetSightOnCourse: boolean;
+}
+
+/**
+ * G5: the observe tick an encounter's hit is due when the shooter first sees the human at the spot on `seenTick`. On
+ * course then (where his recording has him: he is the recording, as for trigger 2), the recorded tick, if it is at least
+ * one latency (`lead`) ahead: tape-like play gets the hit of the tape (18.50 s), whatever tick the engine's sight
+ * catches him on. Otherwise (early, late, or somewhere else at the spot) `encounterDelaySec` after the sighting (B4).
+ */
+export function encounterShotTick(p: EncounterPlan, seenTick: number, onCourseThen: boolean, lead: number, tuning: Tuning): number {
+  if (onCourseThen && p.damage.tick >= seenTick + lead) return p.damage.tick;
+  const delay = secTicks(tuning.replay.encounterDelaySec);
+  return seenTick + (delay > lead ? delay : lead);
 }
 
 function bandOf(hitgroup: string): AimBand {
@@ -595,7 +613,7 @@ export interface DivergenceState {
 }
 
 function initialDivergenceState(encounters: readonly EncounterPlan[]): DivergenceState {
-  return { encounters: encounters.map((e) => ({ key: e.key, phase: 'waiting', seenTick: null, shotTick: null, blocked: false, puppetSightTick: null })), contacts: [] };
+  return { encounters: encounters.map((e) => ({ key: e.key, phase: 'waiting', seenTick: null, shotTick: null, blocked: false, puppetSightTick: null, puppetSightOnCourse: false })), contacts: [] };
 }
 
 /**
@@ -630,8 +648,8 @@ export class Divergence {
       encounters: this.encounters.map((e) => {
         const q = s.encounters.find((x) => x.key === e.key);
         if (q === undefined) throw new Error(`Divergence.restore: no state for ${e.key}`);
-        // Snapshots from before G4 have no puppet sight.
-        return { key: q.key, phase: q.phase, seenTick: q.seenTick, shotTick: q.shotTick, blocked: q.blocked, puppetSightTick: q.puppetSightTick ?? null };
+        // Snapshots from before G4 have no puppet sight (and before G5 no on-course flag: the B4 delay then).
+        return { key: q.key, phase: q.phase, seenTick: q.seenTick, shotTick: q.shotTick, blocked: q.blocked, puppetSightTick: q.puppetSightTick ?? null, puppetSightOnCourse: q.puppetSightOnCourse ?? false };
       }),
       contacts: s.contacts.map((c) => ({ id: c.id, sinceTick: c.sinceTick, behind: c.behind, stalledSince: c.stalledSince })),
     };
@@ -748,8 +766,8 @@ export class Divergence {
     if (s.phase === 'waiting') {
       if (!sh.sees.includes(p.victim) || dist2(vi.pos, p.spot) > tol) return null;
       const lead = li > la ? li : la;
-      const delay = secTicks(r.encounterDelaySec);
-      const shotTick = tick + (delay > lead ? delay : lead);
+      // G5: on course he is the recording, so the hit lands on the recorded tick (encounterShotTick).
+      const shotTick = encounterShotTick(p, tick, humanOnCourse(this.model, o, this.tuning), lead, this.tuning);
       s.phase = 'seen';
       s.seenTick = tick;
       s.shotTick = shotTick;
@@ -757,7 +775,7 @@ export class Divergence {
       out.push({
         type: 'log',
         level: 'info',
-        text: `${what}: ${p.victim} in sight at the spot at tick ${tick} (${tenthsText(tick - p.recordedSightTick, true)} s against the recording), scripted hit due at tick ${shotTick}`,
+        text: `${what}: ${p.victim} in sight at the spot at tick ${tick} (${tenthsText(tick - p.recordedSightTick, true)} s against the recording), scripted hit due at tick ${shotTick}${shotTick === p.damage.tick ? ' (on course: the recorded tick)' : ''}`,
       });
       return null;
     }
@@ -807,7 +825,10 @@ export class Divergence {
     const sh = pawnOf(o, p.shooter);
     const vi = pawnOf(o, p.victim);
     if (sh === undefined || vi === undefined || !sh.alive || !vi.alive || modeOf(modes, p.shooter) !== 'REPLAY') return;
-    if (sh.sees.includes(p.victim) && dist2(vi.pos, p.spot) <= this.tuning.replay.humanSpotToleranceUnits) s.puppetSightTick = o.tick;
+    if (sh.sees.includes(p.victim) && dist2(vi.pos, p.spot) <= this.tuning.replay.humanSpotToleranceUnits) {
+      s.puppetSightTick = o.tick;
+      s.puppetSightOnCourse = onCourse(this.model, o, p.victim, this.tuning);
+    }
   }
 
   /**
@@ -856,8 +877,8 @@ export class Divergence {
         out.push({ type: 'log', level: 'info', text: `${what}: active from the takeover at tick ${tick}, waiting for ${p.shooter} to see ${p.victim} at the spot` });
         continue;
       }
-      const delay = secTicks(r.encounterDelaySec);
-      const due = sight + (delay > lead ? delay : lead);
+      // G5: the puppet was on course at its sighting (it is the recording): the hit on its recorded tick.
+      const due = encounterShotTick(p, sight, s.puppetSightOnCourse, lead, this.tuning);
       const shotTick = due > tick + lead ? due : tick + lead;
       s.phase = 'seen';
       s.seenTick = sight;
@@ -866,7 +887,7 @@ export class Divergence {
       out.push({
         type: 'log',
         level: 'info',
-        text: `${what}: ${p.victim} in sight at the spot since tick ${sight} (${tenthsText(sight - p.recordedSightTick, true)} s against the recording), before the takeover at tick ${tick}; scripted hit due at tick ${shotTick}`,
+        text: `${what}: ${p.victim} in sight at the spot since tick ${sight} (${tenthsText(sight - p.recordedSightTick, true)} s against the recording), before the takeover at tick ${tick}; scripted hit due at tick ${shotTick}${shotTick === p.damage.tick ? ' (on course: the recorded tick)' : ''}`,
       });
     }
   }
