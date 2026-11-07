@@ -73,6 +73,7 @@ import {
   type Sim2DVision,
 } from '../sim2d/index';
 import { weaponForSlot, type WeaponSlot } from './input';
+import type { SightQuery } from './scene';
 
 /** The pawn a human plays unless told otherwise. */
 export const DEFAULT_HUMAN: PlayerId = 'cart';
@@ -744,6 +745,30 @@ export class Session {
     this.humanTrack = this.humanTrack.filter((e) => e.tick < tick);
     this.slotTrack = this.slotTrack.filter((e) => e.tick < tick);
     this.dropTape();
+  }
+
+  /**
+   * G6: what the 2D view's tracers stop at: the nav's 2D line of sight, and with the CS2 mesh the first wall along the
+   * shooter's view from its eye (the same sight triangles as bullets), so a tracer never crosses a wall.
+   */
+  tracerSight(): SightQuery {
+    const nav = this.nav;
+    const g = this.geometry;
+    if (g === null) return nav;
+    const d = this.tuning.damage;
+    return {
+      lineOfSight: (a, b) => nav.lineOfSight(a, b),
+      wallAlong: (p, range) => {
+        const yaw = (p.yaw * Math.PI) / 180;
+        const pitch = (p.pitch * Math.PI) / 180;
+        const dx = Math.cos(pitch) * Math.cos(yaw);
+        const dy = Math.cos(pitch) * Math.sin(yaw);
+        const dz = -Math.sin(pitch);
+        const ez = p.pos.z + (p.crouching ? d.crouchEyeHeight : d.eyeHeight);
+        const f = g.traceSight(p.pos.x, p.pos.y, ez, p.pos.x + dx * range, p.pos.y + dy * range, ez + dz * range);
+        return f >= 1 ? null : { x: p.pos.x + dx * range * f, y: p.pos.y + dy * range * f };
+      },
+    };
   }
 
   /** The current state as the next step will see it (already canonical). After a resync rewind: the checkpoint's. */

@@ -266,6 +266,8 @@ load per scenario):
   - `watch-1x-loop`: the page's own uncapped driver.
   - `watch-{1,4}x-uncapped` and `fp-1x-uncapped`: frames back to back from the bench, with a mouse sweep in first
     person.
+  - `watch-1x-480hz`: a synthetic 480 Hz clock, so many frames per tick, which is what an uncapped loop does on a
+    fast machine.
   - `inround-5s-120hz` and `postend-5s-120hz`: 5 s of round time at a synthetic 120 Hz before and after
     `round_end`, the round-end regression.
 - **Opening it in Chrome or Safari** on a Mac (`…/sim3d/?bench=1`) runs it there and shows the table over the view.

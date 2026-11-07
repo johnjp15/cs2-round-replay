@@ -60,6 +60,7 @@ import {
 import { PuppetTrack, ReplayCore, startYaw, summarize as summarizeRound, tOf, tickOf, type RoundModel } from '../src/core/index';
 import { SLOT_WEAPONS, Session, defaultCore, parseSessionData, walkQueryOf, weaponForSlot, type CoreFactory, type HostFactory, type SessionData, type SessionHost, type WeaponSlot, type World3dFiles } from '../src/app/index';
 import { HumanBot, formatTimeline, loadScenario, timeline } from './human-bot';
+import { DEFAULT_MAP, mapPackagePaths, parseMapId, type MapId } from '../src/contracts/maps';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -78,18 +79,19 @@ export interface HarnessData extends SessionData {
   readonly sources: { readonly round: string; readonly nav: string; readonly tuning: string; readonly vision: string; readonly tracks: string; readonly geometry: Uint8Array; readonly clips: Uint8Array };
 }
 
-/** G3: the 3D world's files as the app loads them (docs/geometry.md). */
-export function readWorld3d(root: string = ROOT): World3dFiles {
+/** G3: the 3D world's files as the app loads them (docs/geometry.md); X1: of a map package (docs/maps.md). */
+export function readWorld3d(root: string = ROOT, map: MapId = DEFAULT_MAP): World3dFiles {
+  const p = mapPackagePaths(map);
   return {
-    geometry: new Uint8Array(readFileSync(resolve(root, 'data/geometry/mirage-geometry.bin'))),
-    clips: new Uint8Array(readFileSync(resolve(root, 'data/geometry/mirage-clips.bin'))),
-    tracks: readFileSync(resolve(root, 'data/geometry/mirage-tracks.json'), 'utf8'),
+    geometry: new Uint8Array(readFileSync(resolve(root, p.geometry))),
+    clips: new Uint8Array(readFileSync(resolve(root, p.clips))),
+    tracks: readFileSync(resolve(root, p.tracks), 'utf8'),
   };
 }
 
-export function loadHarnessData(root: string = ROOT): HarnessData {
+export function loadHarnessData(root: string = ROOT, map: MapId = DEFAULT_MAP): HarnessData {
   const read = (rel: string): string => readFileSync(resolve(root, rel), 'utf8');
-  const world3d = readWorld3d(root);
+  const world3d = readWorld3d(root, map);
   const sources = {
     round: read('data/round.json'),
     nav: read('data/mirage-nav.json'),
@@ -973,6 +975,8 @@ export interface CliArgs {
   readonly scenario: string | null;
   /** Whether --until was given (a scenario has its own length otherwise). */
   readonly untilGiven: boolean;
+  /** X1: `--map` (docs/maps.md), or null: the scenario's, else the default. */
+  readonly map: MapId | null;
 }
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
@@ -985,6 +989,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
   let until: number | 'end' = 'end';
   let seed = DEFAULT_SEED;
   let out: string | null = null;
+  let map: MapId | null = null;
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i] as string;
     const value = (): string => {
@@ -1030,8 +1035,11 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
       case '--out':
         out = value();
         break;
+      case '--map':
+        map = parseMapId(value());
+        break;
       default:
-        throw new Error(`unknown option ${flag} (options: --human none|cart, --takeover <t>, --script <path>, --scenario <path>, --until <t|end>, --seed <n>, --out <dir>)`);
+        throw new Error(`unknown option ${flag} (options: --human none|cart, --takeover <t>, --script <path>, --scenario <path>, --until <t|end>, --seed <n>, --out <dir>, --map <package>)`);
     }
   }
   // G4: a takeover is of the human pawn, cart unless --human names another.
@@ -1041,7 +1049,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
   }
   if (scenario !== null && script !== null) throw new Error('--scenario and --script exclude each other');
   if (script !== null && human === null) throw new Error('--script needs --human (e.g. --human cart)');
-  return { human, takeover, script, until, seed, out, scenario, untilGiven };
+  return { human, takeover, script, until, seed, out, scenario, untilGiven, map };
 }
 
 /** Harness options for parsed CLI arguments (reads the script file). */
@@ -1052,10 +1060,11 @@ export function optionsFromArgs(args: CliArgs): HarnessOptions {
 
 function main(): void {
   const args = parseCliArgs(process.argv.slice(2));
-  const t0 = performance.now();
-  const data = loadHarnessData();
-  const t1 = performance.now();
   const scenario = args.scenario === null ? null : loadScenario(args.scenario);
+  const map = args.map ?? scenario?.map ?? DEFAULT_MAP;
+  const t0 = performance.now();
+  const data = loadHarnessData(ROOT, map);
+  const t1 = performance.now();
   const bot = scenario === null ? null : HumanBot.fromScenario(data, scenario);
   const options: HarnessOptions =
     scenario === null || bot === null

@@ -35,10 +35,14 @@ export {
   sightOptionsFromTuning,
   angleOff,
   computeSees,
+  SEES_AB,
+  SEES_BA,
   encodeRow,
   decodeVisMaskJson,
 } from './vision';
-export type { VisMaskGrid, VisOptions, SightTrace, VisMaskJson, SightNav, SightOptions, SeePawn, SeesOptions, SmokeQuery } from './vision';
+export type { VisMaskGrid, VisOptions, SightTrace, VisMaskJson, SightNav, SightOptions, SeePawn, SeesOptions, SmokeQuery, PairSight, GuardSight } from './vision';
+export { MeshSight, AIM_POINTS, meshSightOptionsFromTuning } from './mesh-sight';
+export type { MeshSightOptions, SightBody, AimPoint } from './mesh-sight';
 export { AI_ROLES, freshAiState, roleOf, stepAi, snapToNav, placeCentre, nearestBombsitePoint, holdFacing, guardSpot } from './ai';
 export type { AiRole, AiBehaviour, AiState, AiSelf, AiOther, AiContext, AiStep } from './ai';
 export {

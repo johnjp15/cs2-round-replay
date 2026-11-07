@@ -54,8 +54,9 @@ import { freshAiState, roleOf, stepAi, type AiBehaviour, type AiOther, type AiSt
 import { applyBombAction, bombFromObs, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
 import { collideMove, type CollisionNav, type Obstacle } from './collision';
 import type { MapGeometry } from './geometry';
-import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeOutcome } from './grenades';
-import { traceShot, type ScanPawn } from './hitscan';
+import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeNav, type GrenadeOutcome } from './grenades';
+import { traceShot, type LosQuery, type ScanPawn } from './hitscan';
+import { MeshGrenadeNav, MeshShotSight, MeshSight, meshSightOptionsFromTuning, scriptedHitThroughGeometry } from './mesh-sight';
 import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove, stepMove3d, type MoveState, type MoveStep } from './movement';
 import type { NavMesh, NavPoint } from './nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from './round';
@@ -157,7 +158,11 @@ export interface Sim2DOptions {
 
 /** Vision and LIVE AI setup (C4). */
 export interface Sim2DVision {
-  /** The sight-blocking mask (data/mirage-vismask.json) for `sees`, bullets and grenades; null = the nav mesh's line of sight. */
+  /**
+   * The radar sight mask (data/mirage-vismask.json). With the 3D geometry (G6) it only clamps grenade throws (their 2D
+   * flight); `sees`, bullets and grenade effects trace the CS2 mesh. Without geometry it is the 2D sight for all of
+   * them. null = the nav mesh's line of sight.
+   */
   readonly mask: VisMask | null;
   /** Seed of the LIVE AI's randomness (each pawn draws from rng.fork('ai:' + id)). */
   readonly seed: number;
@@ -223,9 +228,15 @@ export class Sim2DHost implements IHost {
   /** G3: the collision mesh (world + player clips) for 3D movement, or null for the nav's 2D movement. */
   private readonly geometry: MapGeometry | null;
   private readonly tuning: Tuning;
-  /** Sight for `sees` and bullets (mask + level check), and its flat form for grenades. */
+  /** The 2D sight (mask + level check): `sees` and bullets without geometry; its flat form clamps grenade throws. */
   private readonly sight: Sight;
   private readonly grenadeSight: GrenadeSight;
+  /** G6: sight on the CS2 mesh (`sees`, bullets, the guard spot, grenade effects), or null without geometry. */
+  private readonly meshSight: MeshSight | null;
+  /** What bullets ask (traceShot): the mesh (G6) or the 2D sight. */
+  private readonly shotSight: LosQuery;
+  /** What grenades ask: the 2D throw clamp, plus (G6) effects on the mesh. */
+  private readonly grenadeNav: GrenadeNav;
   private aiSeed: number;
   /** `sees` of the current state (pawn order), or null when it must be recomputed. */
   private seesCache: PlayerId[][] | null = null;
@@ -270,6 +281,9 @@ export class Sim2DHost implements IHost {
     this.tuning = tuning;
     this.sight = new Sight(vision?.mask ?? null, nav, sightOptionsFromTuning(tuning));
     this.grenadeSight = new GrenadeSight(this.sight, nav);
+    this.meshSight = geometry === null ? null : new MeshSight(geometry, meshSightOptionsFromTuning(tuning));
+    this.shotSight = this.meshSight === null ? this.sight : new MeshShotSight(this.sight, this.meshSight);
+    this.grenadeNav = this.meshSight === null ? this.grenadeSight : new MeshGrenadeNav(this.grenadeSight, this.meshSight);
     this.aiSeed = vision?.seed ?? 0;
     if (!Number.isInteger(this.aiSeed)) throw new Error(`Sim2DHost: AI seed must be an integer, got ${this.aiSeed}`);
     this.pawns = [...roster].sort((a, b) => compareOrdinal(a.id, b.id)).map((r) => spawnPawn(r));
@@ -503,7 +517,7 @@ export class Sim2DHost implements IHost {
     return i < 0 ? [] : [...(this.currentSees()[i] ?? [])];
   }
 
-  /** The host's sight query: the mask (or nav) in 2D plus the level check (tests, tools). */
+  /** The host's 2D sight query: the mask (or nav) plus the level check (tests, tools; `sees` without geometry). */
   sightQuery(): Sight {
     return this.sight;
   }
@@ -551,7 +565,7 @@ export class Sim2DHost implements IHost {
       const d = this.tuning.damage;
       this.seesCache = computeSees(
         this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick, busy: this.busyAtBomb(p.id) })),
-        this.sight,
+        this.meshSight ?? this.sight,
         this,
         { fovDeg: this.tuning.ai.fovDeg, eyeHeight: d.eyeHeight, crouchEyeHeight: d.crouchEyeHeight },
       );
@@ -603,7 +617,7 @@ export class Sim2DHost implements IHost {
         bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick },
         round: { phase: roundPhase(this.round, isTicking(this.bomb)) },
         nav: this.nav,
-        sight: this.sight,
+        sight: this.meshSight ?? this.sight,
         tuning: this.tuning,
         rng: root.fork('ai:' + p.id),
       });
@@ -694,7 +708,7 @@ export class Sim2DHost implements IHost {
     if (step.fired && gun !== null) {
       this.outbox.push({ type: 'shot', shooter: p.id, weapon: p.weapon });
       this.sound(p, 'shot');
-      const hit = traceShot(scanPawn(p, this.busyAtBomb(p.id)), this.pawns.map((q) => scanPawn(q, this.busyAtBomb(q.id))), this.sight, this.tuning.damage);
+      const hit = traceShot(scanPawn(p, this.busyAtBomb(p.id)), this.pawns.map((q) => scanPawn(q, this.busyAtBomb(q.id))), this.shotSight, this.tuning.damage);
       if (hit !== null) {
         const victim = this.pawn(hit.victim) as PawnState;
         const dmg = bulletDamage(gun, hit.distance, hit.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
@@ -723,8 +737,8 @@ export class Sim2DHost implements IHost {
   private stepGrenades(t: number): void {
     if (this.grenades.length === 0) return;
     const r = stepGrenades(this.grenades, t, {
-      nav: this.grenadeSight,
-      pawns: this.pawns.map((p) => ({ id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, alive: p.alive })),
+      nav: this.grenadeNav,
+      pawns: this.pawns.map((p) => ({ id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, alive: p.alive, crouching: p.move.crouching })),
       grenades: this.tuning.grenades,
       damage: this.tuning.damage,
       ai: this.tuning.ai,
@@ -770,7 +784,17 @@ export class Sim2DHost implements IHost {
     const victim = this.pawn(a.victim);
     if (victim === null) return this.note('action', 'damage', 'unknown pawn', a);
     if (!victim.alive) return this.note('action', 'damage', 'victim is dead', a);
+    this.auditScriptedHit(a, victim);
     this.hurt(a.attacker, victim, a.weapon, a.hitgroup, Math.max(0, a.amount), Math.max(0, a.armor), true, a.lethal);
+  }
+
+  /** G6: a scripted gun hit whose eye-to-victim line crosses a wall of the mesh goes to the combat log (docs/vision.md). */
+  private auditScriptedHit(a: DamageAction, victim: PawnState): void {
+    const shooter = a.attacker === null ? null : this.pawn(a.attacker);
+    if (this.meshSight === null || shooter === null || !shooter.alive || a.weapon === null || gunStats(a.weapon, this.tuning) === null) return;
+    const body = (p: PawnState) => ({ id: p.id, pos: p.move.pos, crouching: p.move.crouching });
+    const line = scriptedHitThroughGeometry(this.meshSight, body(shooter), body(victim), a.weapon, a.hitgroup, this.tuning.damage.bandHeights, this.tickNo + 1, TICKS_PER_SEC);
+    if (line !== null) this.combat.push({ tick: this.tickNo + 1, text: line });
   }
 
   /**
