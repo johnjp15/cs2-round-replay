@@ -4,6 +4,11 @@ The orchestrator (Fable 5.1) adds every request here the moment it arrives, befo
 
 Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.github.io/cs2/sim3d/` (same password). Both tokens that publish them expire **2027-02-04**.
 
+## Overnight log (PT)
+- 05:27 check-in #1: four agents (V0 parity, X1 map, Ctrl+W, audio) and later two more (weapons integration, barely's stairs) turned out to have been stopped by the client-side interrupts around 04:27–04:38; all six relaunched on their branches/worktrees (nothing lost; everything committed was pushed).
+- 05:59 merged **#31** (radar CS2 rules + toggle, first-person spectating with HUD and crosshair, SPECTATING panel; radar timings from the CS:GO source) and **#30** (movement fixes vs CS2: sub-1 u/s zeroing, 1.1× take-off clamp, 0.25 air accel while rising slowly, MoveOptions for scoped speed/tagging, sub-tick split helper; every golden digest moved, kills/plant/defuse unchanged). Both **live** (Pages f7323b9).
+- Agents told to merge main and regenerate fixtures: G6 sight, G7 bots, V2 view fit. Next check-in 06:13.
+
 ## Operating rules John set
 - Merge PRs without asking (2026-11-05). Fable orchestrates; Opus 5.5 agents do the expensive work (2026-11-07 02:02). Permission to read anything on any website (04:26). John's messages are not stop requests; agents stopped by client-side interrupts get resumed.
 - **Fidelity bar (03:23):** "good enough for a seasoned CS2 player to not be able to tell the difference in movement and shooting mechanics — 95 % of the way there." Competitive CS2 values only, never KZ values.
@@ -20,7 +25,7 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 6 | 11-07 00:47 | An Opus 5.5 max-effort audit agent, very familiar with CS2 and Mirage: find issues, fix them | queued (relaunch) | stopped by a client interrupt before it produced anything; relaunch after the current wave (#9, #30, #33) merges so it audits the fixed build |
 | 7 | 11-07 00:49/00:56 | barely kills Lokier way too early, through the wall, when cart just follows the team | in progress | G6 (restarted 04:36) sight/bullets on the CS2 mesh; G7 time-aware rules |
 | 8 | 11-07 02:02 | New 3D web app: CS2 physics as exact as possible, low-fi right colours, generic CS2 simulator for any scenario, load the round, full 3D controls and aiming; keep the 2D app | live (first cut) | H1 #29; plan `docs/sim3d-plan.md`; H3 (generic maps/scenarios/free play) and H4 (parity/polish) queued |
-| 9 | 11-07 02:47 | Movement and aiming true to Source 2: counter-strafing with CS2 accel/velocity; mouse sensitivity and FOV match CS2 | in review / live | M1 tests #28 merged (counter-strafe, accel, jump already match); M1 fixes PR #30 open; sens/FOV in H1 (live) |
+| 9 | 11-07 02:47 | Movement and aiming true to Source 2: counter-strafing with CS2 accel/velocity; mouse sensitivity and FOV match CS2 | live | M1 tests #28 + fixes #30 merged (counter-strafe, accel, jump, air control match; sub-tick helper not wired yet → H4); sens/FOV in H1 |
 | 10 | 11-07 03:02 | Air strafing and advanced movement; shooting with CS2 recoil control and spread; AK spray must follow the pattern with CS2's uncertainty; grenades (smoke, flash, molotov, HE, decoy); deep research; end-to-end testing agents | in progress | M1 (#30); H2 weapons #27 merged (1,000 AK sprays match per bullet); H2b integration in progress; H5 grenades in progress; V1 end-to-end tester queued after H2b + #30 + H5 |
 | 11 | 11-07 03:23 | No KZ-only mechanics; stock competitive CS2; 95 % bar | done (rule) | `docs/sim3d-plan.md` |
 | 12 | 11-07 03:26 | Frame-by-frame comparison with the original video as a milestone gate; run it on the 2D game and fix | in progress | V0 (first 2D baseline done; findings → fix agents) |
@@ -30,8 +35,8 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 16 | 11-07 04:18 | Aim for 500+ fps | in progress | P1 (restarted 04:29): ≤ 2 ms frames, input at render time |
 | 17 | 11-07 04:20 | Sound with real CS2 sounds; basic gun models; reloading | in progress + **needs John** | A1: Web Audio engine + placeholders + viewmodels now; real sounds need John's CS2 extraction (recipe in `docs/cs2-sounds.md`) |
 | 18 | 11-07 04:20 | Fix the bomb plant position: "planted for catwalk", behind the cylinder stack | in progress | V0 data fix from the video's radar bomb icon |
-| 19 | 11-07 04:20 | No enemy positions on the radar by default; toggleable | in progress | U1 (restarted 04:38) |
-| 20 | 11-07 04:20 | Spectate from first person; make it clear you're spectating | in progress | U1 |
+| 19 | 11-07 04:20 | No enemy positions on the radar by default; toggleable | live | U1 #31 (spotted-only, '?' fades 6 s, toggle) |
+| 20 | 11-07 04:20 | Spectate from first person; make it clear you're spectating | live | U1 #31 (1st person default, mouse 1/2 switch, V modes, panel, vignette) |
 | 21 | 11-07 04:21 | cart's smoke should block the Market window, not land deep inside Market; check the video | in progress | V0 data fix: measured landing spots for every grenade |
 | 22 | 11-07 04:24 | Recoil: the 0–1 ratio for crosshair/screen movement (view_recoil_tracking 0.45) as a setting | in progress | H2b |
 | 23 | 11-07 04:25 | barely's position: no jump from underpass to catwalk; a radar level overlap | in progress | T1 |
@@ -40,7 +45,7 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 26 | 11-07 04:34 | View angles from the video: e.g. cart staring at the ceiling when barely dies | in progress | V2 (yaw+pitch fit per frame) |
 | 27 | 11-07 04:35 | Without takeover, cart aim-locks and shoots Lokier through the wall; audit positions; maybe the 2020 map fixes it | in progress | G6 (aim only on visible targets + through-geometry audit list), V2 (position refinement at engagements), X1 |
 | 28 | 11-07 04:37 | Don't cap fps at 500: a limit setting plus uncapped | in progress | P1 |
-| 29 | 11-07 04:37 | Crosshair visible while spectating | in progress | U1 |
+| 29 | 11-07 04:37 | Crosshair visible while spectating | live | U1 #31 (recoil-tracked crosshair arrives with H2b) |
 | 30 | 11-07 04:38 | Persist all requests to a queue; audit the conversation; nothing lost | done | this file (+ project doc copy) |
 
 ## Queued (not started)
