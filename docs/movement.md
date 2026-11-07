@@ -86,7 +86,7 @@ on open ground (T Spawn, heading south), no wall contact, `accelScaleFloor` = 1:
 
 AK-47 from rest covers 180.9 units in the first second. Speed rises monotonically and never exceeds the
 cap with straight input. With friction applied before acceleration, the speed after a tick at cap is exactly
-the cap. Source ground strafing can gain at most ≈ 0.4 % above the cap at the optimal wish angle.
+the cap. Source ground strafing (turning while running) settles 2.7 % above the cap at the optimal wish angle (M1-13).
 
 ## Can the recorded tracks be followed? (`tests/follow-track.test.ts`)
 
@@ -405,6 +405,25 @@ these by a fraction of a tick, not more.
 | M1-10 | Eye heights | 64.093811 / 46.076218 (W1, CS:GO; CS2 not published) | `damage.eyeHeight` 64 / `crouchEyeHeight` 46 | low (0.09 units; not in the movement block, left to the damage owner) |
 | M1-11 | WALK + DUCK | not verifiable from public sources | stacks (215 × 0.52 × 0.34 = 38.0) | low; unverified, unchanged |
 | M1-12 | Doc citation | `GAMEMOVEMENT_JUMP_HEIGHT` is 21 in Source SDK 2013 (`gamemovement.h` l. 24, HL2); CS2's 57 comes from the `sv_jump_impulse` description | G3's table cited "Source's 57" | doc only |
+
+### KZ (Kreedz climbing) mechanics in vanilla CS2
+
+Jump-stat definitions from CS2KZ (K1): a jump's distance is 32 + the 2D distance from the take-off to the landing
+origin (`src/kz/jumpstats/kz_jumpstats.cpp` l. 676–697); the vanilla-mode LJ tiers are 215 / 230 / 235 / 240 / 245 / 248
+(`kz_mode_vnl.h` l. 9). Expected numbers are from the Source formulas with CS2's convars; "TAS" = tool-assisted (the
+wish perpendicular to the velocity every tick).
+
+| # | Mechanic | CS2 value (derivation, source) | Model | Status |
+| --- | --- | --- | --- | --- |
+| M1-13 | Ground pre-strafe (W + turning) | best wish 14.40° ahead of the velocity; knife settles at **256.79** u/s (+2.7 %), AK-47 220.84 (Friction + Accelerate, S1; CS2KZ's VNL mode has "Prestrafe: None", i.e. only this Source gain) | identical | ✓ (the "≈ 0.4 %" in "Measured model values" above was wrong) |
+| M1-14 | Long jump, knife, 250 u/s take-off | no strafes: 48 ticks, 250 × 48 / 64 + 32 = **219.5** (tier 1); TAS strafes with full air acceleration: 247.72 (landing 323.7 u/s), which drops with M1-3 (fixes PR) | identical given the air rules | ✓ / M1-3 |
+| M1-16 | Bunnyhop chain | fresh press needed (`sv_autobunnyhopping 0`); a hop on the first ground tick skips friction (S1 `CheckJumpButton` l. 2084 runs before `Friction`); take-off clamp 1.1 × max speed (M1-2); `sv_bhop_time_window` 0.0078 s (half a tick) and `sv_jump_spam_penalty_time` 0.015625 s (one tick) only matter with sub-tick input | fresh press ✓, no friction on a perfect hop ✓, no clamp (M1-2) | M1-2 |
+| M1-17 | Stamina on chained jumps | 2026: no stamina on jump or landing; the landing slowdown depends on landing time and vertical velocity (R1), function not public | a perfect hop takes off before the landing slowdown applies; one tick late loses a tick of friction and × (100 − 0.05 × land speed) / 100 (≈ 15 % after a flat jump) | unverified (M1-8) |
+| — | Crouch jump | feet reach 57.0 + 9 = **66.0** (W1: jump-then-crouch +9; W2: 66-unit boxes are just reachable in CS2) | 66.0 | ✓ |
+| — | Air acceleration vs angle | 12 × wishspeed / 64 per tick (knife 46.875, AK 40.3125), add capped at 30 − v·wishdir; best at 90° (S1 l. 1705–1745) | identical (falling); M1-3 while rising | ✓ / M1-3 |
+| — | Edges | box hull: 1 unit of the 32-wide hull over a ledge still stands (2-unit ground trace, S1 `CategorizePosition`); fully past the edge it falls | identical | ✓ |
+| — | Surf (normal z < 0.7) | never ground; `ClipVelocity` slides; down a 60° ramp at g · sin 60° = 692.8 u/s² | within 5 % over 32 ticks | ✓ |
+| M1-15 | Ladders and ladder jumps (LAJ) | S1 `LadderMove` (l. 2853–3046): climb speed `ClimbSpeed()` (Source `MAX_CLIMB_SPEED` 200, shareddefs.h l. 103; CS2 scales by `sv_ladder_scale_speed` 0.78, presumably of the item speed: 195 with a knife, unverified), lateral damping `sv_ladder_dampen` 0.2, `sv_ladder_angle` −0.707, JUMP pushes off along the ladder normal at 270 u/s (l. 2938) | **not modelled**: the CS2 mesh (G2) has no ladder volumes, the nav no ladder links, so Mirage's two ladders are walls | not fixed: needs the ladder volumes from the map (entity lump or the nav's ladder list), a `MOVETYPE_LADDER` state and the AI to use them. Plan for H4: extract the two ladder volumes, add `onLadder` to `MoveState` (snapshot field), port `LadderMove` with the constants above, measure the climb speed in CS2 (the probe) |
 
 Verified and unchanged (tested in `tests/movement-cs2.test.ts`): every convar above marked ✓, every item run speed, the
 ground acceleration curve, counter-strafing and friction-only stops, walk and crouch caps and their acceleration, the
