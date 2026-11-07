@@ -23,6 +23,7 @@ import {
   modeOf,
   movementScale,
   parseWeaponTable,
+  recoilKick,
   recoilTable,
   recoveryTime,
   shotDirection,
@@ -190,17 +191,66 @@ describe('recoil tables and spray patterns', () => {
     }
   });
 
-  it('AK-47 spray: bullet 1 dead centre, bullets 2–5 straight up (|yaw| < 0.25°), climbing to ~10° by bullet 9, then drifting left, then back right', () => {
+  // CS:GO's WeaponRecoilData::GenerateRecoilTable (cs_weapon_parse.cpp, 2020 source, SwagSoftware/Kisak-Strike) for
+  // weapon_ak47 (CS2 weapons.vdata: angle 0, variance 70, magnitude 30, variance 0, seed 223; full auto) with
+  // weapon_recoil_variance 0.55, suppression 4 shots from 0.75: the first ten (angle °, magnitude) entries. The
+  // magnitudes follow from the cvars alone (magnitude variance 0): 22.5, lerp(22.5, 30) × 0.8125, … — the damping
+  // multiplies the running value, so bullets 5–10 are below 30 too.
+  const AK_TABLE_10: [number, number][] = [
+    [27.330322, 22.5],
+    [-17.830391, 21.632813],
+    [5.800777, 22.95542],
+    [1.6354, 25.153069],
+    [-15.538623, 27.81888],
+    [-9.262066, 29.018496],
+    [-18.047684, 29.558323],
+    [12.5035, 29.801245],
+    [43.999619, 29.910561],
+    [22.431967, 29.959753],
+  ];
+
+  it('AK-47 recoil table: the first 10 entries are Valve GenerateRecoilTable output (angle, magnitude)', () => {
+    const t = recoilTable(W('ak47'), 0, model);
+    AK_TABLE_10.forEach(([a, m], i) => {
+      expect(t[i]?.angle, `angle ${i}`).toBeCloseTo(a, 5);
+      expect(t[i]?.magnitude, `magnitude ${i}`).toBeCloseTo(m, 5);
+    });
+    // The magnitudes by hand from the cvars (float32 like the game).
+    let r = 0;
+    for (let j = 0; j < 10; j++) {
+      r = j === 0 ? 30 : Math.fround(r + Math.fround((30 - r) * 0.55));
+      if (j < 4) r = Math.fround(r * Math.fround(0.75 + 0.25 * (j / 4)));
+      expect(t[j]?.magnitude).toBeCloseTo(r, 5);
+    }
+  });
+
+  it('a kick turns a positive recoil angle to the right (−yaw), as CCSPlayer::KickBack (yaw velocity −sin a × m)', () => {
+    const t = [recoilTable(W('ak47'), 0, model), recoilTable(W('ak47'), 1, model)] as const;
+    const k = recoilKick(t, 0, 8, model); // entry 8: angle +44°
+    expect(k.yaw).toBeCloseTo(-Math.sin((44 * Math.PI) / 180) * 29.910561, 3);
+    expect(k.pitch).toBeLessThan(0); // up
+    // the index wraps at 64 (GetRecoilOffsets: iIndex % 64), it doesn't stick on the last entry
+    expect(recoilKick(t, 0, 64 + 8, model)).toEqual(k);
+  });
+
+  it('AK-47 spray as the player sees it: up, a slight lean left (6–9), then right (10–17), left (19–27), right (28–30)', () => {
     const p = table.sprays['ak47'] ?? [];
     expect(p.length).toBe(30);
     expect(p[0]).toEqual([0, 0]);
-    for (let i = 1; i <= 4; i++) expect(Math.abs((p[i] as [number, number])[1])).toBeLessThan(0.25);
-    for (let i = 1; i <= 7; i++) expect((p[i] as [number, number])[0]).toBeLessThan((p[i - 1] as [number, number])[0]); // pitch − = up
-    expect((p[8] as [number, number])[0]).toBeLessThan(-9.5);
-    const yaw = p.map((b) => b[1]);
-    const leftPeak = Math.max(...yaw.slice(9, 16));
-    expect(leftPeak).toBeGreaterThan(3); // bullets 10–16 swing left (+yaw)
-    expect(Math.min(...yaw.slice(16, 24))).toBeLessThan(-1); // then right
+    const yaw = p.map((b) => b[1]); // + = the player's left
+    const pitch = p.map((b) => b[0]); // − = up
+    for (let i = 1; i <= 4; i++) expect(Math.abs(yaw[i] as number)).toBeLessThan(0.25);
+    for (let i = 1; i <= 8; i++) expect(pitch[i] as number).toBeLessThan(pitch[i - 1] as number);
+    for (let i = 5; i <= 8; i++) expect(yaw[i] as number, `bullet ${i + 1} leans left`).toBeGreaterThan(0.4);
+    for (let i = 9; i <= 16; i++) expect(yaw[i] as number, `bullet ${i + 1} right`).toBeLessThan(-1);
+    expect(yaw[9] as number).toBeLessThan((yaw[0] as number) - 1); // shot 10 is right of shot 1 on screen
+    expect(Math.min(...yaw.slice(9, 17))).toBeLessThan(-4); // the right swing peaks past 4° (bullets 14–15)
+    for (let i = 18; i <= 26; i++) expect(yaw[i] as number, `bullet ${i + 1} left`).toBeGreaterThan(0.9);
+    for (let i = 28; i <= 29; i++) expect(yaw[i] as number, `bullet ${i + 1} right`).toBeLessThan(-2.5);
+    // 30-shot height at a wall 500 u away vs csstats.gg's CS2 AK-47 height (11.06°): within 5 % (it is 0.3 %).
+    const h = 500 * Math.tan((-Math.min(...pitch) * Math.PI) / 180);
+    const ref = 500 * Math.tan((11.06 * Math.PI) / 180);
+    expect(Math.abs(h / ref - 1)).toBeLessThan(0.05);
   });
 
   // csstats.gg/spray-patterns (updated 22 Aug 2023): CS2 height / width in degrees, and the CS:GO values (CS2 + delta).
@@ -249,7 +299,8 @@ describe('recoil tables and spray patterns', () => {
     expect(glock[0]).toEqual({ angle: a0, magnitude: m0 });
     const ak = recoilTable(W('ak47'), 0, model);
     expect(ak[0]?.magnitude).toBeCloseTo(30 * 0.75, 4); // magnitude variance 0: 30 × suppression 0.75
-    expect(ak[4]?.magnitude).toBeCloseTo(30, 4);
+    expect(ak[4]?.magnitude).toBeCloseTo(27.81888, 4); // the damping carries through the smoothing
+    expect(ak[20]?.magnitude).toBeCloseTo(30, 4);
   });
 });
 
