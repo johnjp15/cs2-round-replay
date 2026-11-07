@@ -3,10 +3,15 @@
  * (fixtures/scripts/cart-follows-recording.json) into Apartments and to the window over B; then he stops, aims at
  * Lokier's head hitbox (yaw and pitch from his eye to the head's centre) and fires one AK-47 bullet.
  *
- * - Aimed at the head where the line is open: the bullet enters the head hitbox and does the AK-47's headshot damage
- *   for the distance and Lokier's armor (the CS damage math, src/sim2d/weapons.ts bulletDamage).
+ * - Aimed at the head where the line is open: the bullet enters the head hitbox (an AK-47 headshot that kills, by the
+ *   CS damage math, src/sim2d/weapons.ts bulletDamage); G6: the window opens inside cart's recorded duel with Lokier
+ *   (G5), so the engine reports it as a blocked hit and the duel lands the tape's kill.
+ *   H2b: the bullet has CS2's spread, so cart first stops (16 ticks standing still, as a player stops before a tap):
+ *   running, the AK's cone is too wide for a head at 500 u.
  * - The same shot 10° off in yaw misses everyone.
- * - Aimed at Lokier's head while the window wall is between them: the wall stops the bullet; no damage.
+ * - Aimed at Lokier's head while the window wall is between them: H2b's penetration takes the AK bullet through the
+ *   wall (one surface, less damage than in the open); inside the recorded duel it is reported as a blocked hit and
+ *   does no damage. (A wall a bullet can't pass: tests/sim3d-spray.test.ts.)
  *
  * Aiming is exact: the step that fires moves the pawns first, so the test steps once without firing from a snapshot
  * (the human stands still, so his view doesn't change where anyone goes), reads where both are, restores and fires
@@ -66,6 +71,15 @@ function fireAtHead(s: Session, h: Sim3DHost, yawOff = 0): { shot: Shot3; events
   return { shot: shots[0] as Shot3, events: s.observe().events, aim, snap };
 }
 
+/** H2b: stand still `ticks` ticks (the AK back to its standing cone before the shot). */
+function settle(s: Session, ticks: number): void {
+  for (let k = 0; k < ticks; k++) {
+    const c = pawn(s, 'cart');
+    s.setHumanInput(still(c.yaw, c.pitch, false));
+    s.step();
+  }
+}
+
 /** First tick at or after `from` where cart's eye sees Lokier's head centre through the mesh (or the last one before `to`). */
 function lineToHead(from: number, to: number, open: boolean): number {
   const { s, h } = playTo(from);
@@ -83,8 +97,9 @@ function lineToHead(from: number, to: number, open: boolean): number {
 }
 
 describe('3D aim (H1)', () => {
-  const OPEN = lineToHead(1180, 1400, true);
+  const OPEN = lineToHead(1150, 1400, true);
   const run = playTo(OPEN);
+  settle(run.s, 16);
 
   it('aimed at Lokier’s head through the window: the head hitbox, AK-47 headshot damage', () => {
     const { s, h } = run;
@@ -98,11 +113,12 @@ describe('3D aim (H1)', () => {
     const gun = gunStats('ak47', data.tuning);
     if (gun === null || lokier === null) throw new Error('no ak47 / lokier');
     const want = bulletDamage(gun, shot.distance, 'head', lokier.armor, lokier.helmet, data.tuning.damage);
-    const dmg = events.find((e) => e.type === 'damage' && e.attacker === 'cart');
-    expect(dmg).toEqual({ type: 'damage', attacker: 'cart', victim: 'lokier', amount: Math.min(lokier.hp, want.health), armor: Math.min(lokier.armor, want.armor), weapon: 'ak47', hitgroup: 'head', scripted: false });
     // An AK-47 headshot kills from full HP (36 × 4, with or without a helmet).
     expect(want.health).toBeGreaterThanOrEqual(100);
-    expect(events.some((e) => e.type === 'death' && e.victim === 'lokier' && e.headshot)).toBe(true);
+    // G6: on the CS2 mesh the window opens at 17.97 s, inside cart's recorded duel with Lokier (G5, docs/core.md): the
+    // engine blocks the bullet's damage and reports where it would have hit (the duel's outcome is the tape's kill).
+    expect(events.filter((e) => e.type === 'damage' && e.attacker === 'cart')).toEqual([]);
+    expect(events.filter((e) => e.type === 'blocked_hit')).toEqual([{ type: 'blocked_hit', attacker: 'cart', victim: 'lokier', weapon: 'ak47', hitgroup: 'head' }]);
   });
 
   it('the same shot 10° off misses', () => {
@@ -114,14 +130,19 @@ describe('3D aim (H1)', () => {
     expect(s.pawnState('lokier')?.hp).toBe(before?.hp);
   });
 
-  it('a shot at Lokier’s head through the wall does not hit', () => {
+  it('a shot at Lokier’s head through the wall goes through it (H2b penetration) but, inside the duel, does no damage', () => {
     const BLOCKED = lineToHead(1140, 1260, false);
     const { s, h } = playTo(BLOCKED);
     const before = s.pawnState('lokier');
     const { shot, events } = fireAtHead(s, h);
-    console.log(`tick ${BLOCKED}: wall at ${shot.distance.toFixed(1)} u, Lokier's head ${Math.hypot(head(pawn(s, 'lokier')).x - shot.from.x, head(pawn(s, 'lokier')).y - shot.from.y).toFixed(1)} u`);
-    expect(shot.wall).toBe(true);
-    expect(shot.victim).toBeNull();
+    console.log(`tick ${BLOCKED}: through ${shot.surfaces ?? 0} surface(s) to ${shot.victim} at ${shot.distance.toFixed(1)} u (${shot.penDamage?.toFixed(1)} damage left), Lokier's head ${Math.hypot(head(pawn(s, 'lokier')).x - shot.from.x, head(pawn(s, 'lokier')).y - shot.from.y).toFixed(1)} u`);
+    expect(shot.wall).toBe(false);
+    expect(shot.victim).toBe('lokier');
+    expect(shot.surfaces).toBeGreaterThanOrEqual(1);
+    const gun = gunStats('ak47', data.tuning);
+    if (gun === null || before === null) throw new Error('no ak47 / lokier');
+    expect(shot.penDamage).toBeLessThan(gun.damage);
+    expect(events.filter((e) => e.type === 'blocked_hit').map((e) => (e.type === 'blocked_hit' ? e.victim : ''))).toEqual(['lokier']);
     expect(events.some((e) => e.type === 'damage' && e.attacker === 'cart')).toBe(false);
     expect(s.pawnState('lokier')?.hp).toBe(before?.hp);
   });
