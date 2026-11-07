@@ -81,6 +81,9 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 47 | 11-07 11:05 | An agent compares the video frame by frame with our game spectating cart, flags every issue, puts them into the backlog | queued | V3: cart first-person POV, video vs game, every 0.5 s + key moments; findings ranked into this file |
 | 48 | 11-07 11:05 | Take control of any player you're spectating (E on them), plus a hotkey that always takes control of cart | queued | U2: takeover of the spectated pawn (core takeover generalized beyond cart: duel rules, "only my own shots", rejoin for that pawn); a dedicated key (e.g. C) for cart |
 | 49 | 11-07 11:06 | Hotkeys to start, pause and restart the round; not accidentally pressable | queued | W1: e.g. Start = Home/Enter, Pause = P or Pause/Break, Restart = Shift+R twice / Backspace held — no bare WASD-adjacent keys; rebindable under Keys |
+| 50 | 11-07 11:09 | Fix the bullet tracers, especially first person — badly drawn | queued | W3: CS2-style tracers (thin, fast, from the muzzle, only some shots — CS2 `weapon_tracers` 1 in N per weapon), impacts |
+| 51 | 11-07 11:09 | Is moving inaccuracy implemented (counter-strafe to be accurate)? Can't tell — add bullet impacts | queued | W3: bullet impact decals/particles on world geometry and on players; moving inaccuracy is in `src/engine/weapons` (#35) — W3 verifies in the 3D app and makes it visible |
+| 52 | 11-07 11:09 | Friendly fire, with CS2's reduced team damage | queued | W3/B1: `mp_friendlyfire 1`, `ff_damage_reduction_bullets 0.33`, `ff_damage_reduction_grenade 0.85`, `ff_damage_reduction_other 0.4` (competitive defaults; verify), team-kill penalties out of scope |
 
 ## Queued (not started)
 - **H3** generic maps + scenarios + free play + LIVE AI on the CS2 nav (plan card).
