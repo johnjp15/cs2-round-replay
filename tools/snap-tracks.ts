@@ -35,8 +35,10 @@ import { TRACKS3D_FORMAT, type Tracks3d, type Tracks3dJump } from '../src/contra
 import { EventSchedule, RoundModel, recordedWeapons, runSpeedOf, weaponAt } from '../src/core/index';
 import { MapGeometry, TRACE_SKIN, combineMeshes, decodeGeometry } from '../src/sim2d/geometry';
 import { restingState, settle, stepMove3d, type MoveState } from '../src/sim2d/movement';
+import { MeshSight, meshSightOptionsFromTuning } from '../src/sim2d/mesh-sight';
 import { hullLineClear } from '../src/sim2d/walk-query';
 import { CLIPS_PATH, NavCover, Pieces } from './extract-clips';
+import { sightPass } from './sight-snap';
 import { BIN_PATH, CS2_NAV_PATH, readCs2Nav, standLevels } from './extract-geometry';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -639,7 +641,8 @@ export function buildTracks(): SnapProducts {
   const clipsBytes = read(CLIPS_PATH);
   const navBytes = read(CS2_NAV_PATH);
   const round: RoundData = parseRound(new TextDecoder().decode(roundBytes));
-  const m = parseTuning(JSON.parse(readFileSync(resolve(ROOT, 'data/tuning.json'), 'utf8')) as unknown).movement;
+  const tuning = parseTuning(JSON.parse(readFileSync(resolve(ROOT, 'data/tuning.json'), 'utf8')) as unknown);
+  const m = tuning.movement;
   const worldMesh = decodeGeometry(worldBytes);
   const world = new MapGeometry(worldMesh);
   const g = new MapGeometry(combineMeshes(worldMesh, decodeGeometry(clipsBytes)));
@@ -661,6 +664,8 @@ export function buildTracks(): SnapProducts {
   let repaired = 0;
   let detoured = 0;
   const gaps: string[] = [];
+  const snappedBy = new Map<PlayerId, SnappedSample[]>();
+  const unconnectedBefore = new Map<PlayerId, number>();
   for (const id of PLAYER_IDS) {
     const tr = round.tracks[id];
     if (tr === undefined) continue;
@@ -733,6 +738,27 @@ export function buildTracks(): SnapProducts {
     }
     snapped = rt.out;
     retimed.push(...rt.notes.map((x) => `${id} ${x}`));
+    snappedBy.set(id, snapped);
+    unconnectedBefore.set(id, before);
+  }
+  // Pass 5 (G6, tools/sight-snap.ts): every recorded duel in sight on the CS2 mesh (docs/vision.md "Recorded duels").
+  const sp = sightPass({
+    round,
+    tracks: snappedBy,
+    g,
+    sight: new MeshSight(world, meshSightOptionsFromTuning(tuning)),
+    snapper,
+    step: m.stepSize,
+    runSpeed: (id, i) => runSpeedOf(weaponAt(weapons(id), (round.tracks[id]?.samples[i] as { tick: number }).tick), m),
+    frozen: (id, i) => frozenTick(round, id, (round.tracks[id]?.samples[i] as { tick: number }).tick),
+    raw: (id) => round.tracks[id]?.samples ?? [],
+    standSpeed: tuning.replay.standSpeedThreshold,
+  });
+  for (const id of PLAYER_IDS) {
+    const tr = round.tracks[id];
+    const snapped = sp.tracks.get(id);
+    if (tr === undefined || snapped === undefined) continue;
+    const before = unconnectedBefore.get(id) ?? 0;
     const unconnected = countUnconnected(g, snapped, m.stepSize);
     repaired += before - unconnected;
     for (let i = 1; i < snapped.length; i++) {
@@ -828,6 +854,9 @@ export function buildTracks(): SnapProducts {
     ...climbs.map((c) => `  ${c}`),
     '',
     `jumps: ${jumps.length === 0 ? 'none' : jumps.map((j) => `${j.id} @ ${j.t} s${j.crouch ? ' (crouch)' : ''}`).join(', ')}`,
+    '',
+    `recorded duels in sight on the CS2 mesh (pass 5, tools/sight-snap.ts):`,
+    ...sp.notes.map((x) => `  ${x}`),
   ].join('\n');
   return { text, data, report };
 }
