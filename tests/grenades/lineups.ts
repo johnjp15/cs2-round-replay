@@ -174,6 +174,9 @@ export function recordedUtility(): RecordedThrow[] {
   return round.utility;
 }
 
+/** The B-site floor 64 units in front of the Market window (window centre (−1921, −264, −90) on the mesh). */
+export const MARKET_WINDOW_FRONT: Vec3 = { x: -1921, y: -200, z: -166 };
+
 /**
  * Plausible aim for each recorded throw (the recording has only the thrower's spot): a target point; the pitch is
  * the one in −45…+10 (5° steps) whose detonation lands nearest the target. Assumptions, not data:
@@ -186,7 +189,9 @@ export const RECORDED_AIM: readonly { target: Vec3; why: string }[] = [
   { target: { x: -900, y: 640, z: -80 }, why: 'donk, Back Alley: flash ahead into the Apartments corridor' },
   { target: { x: -1800, y: 600, z: -100 }, why: 'barely, Apartments: HE toward the B balcony / truck' },
   { target: { x: -1700, y: 800, z: -60 }, why: 'donk, Apartments: molotov down the corridor to the exit' },
-  { target: { x: -1500, y: 150, z: -160 }, why: 'cart (CT), B site: smoke toward B short / Catwalk' },
+  // John (backlog 21): cart's smoke blocks the Market window. The window on the mesh: wall face y = −264, open over
+  // x −1948…−1894, z −126 (sill) up; the target is the B-site floor 64 in front of it.
+  { target: MARKET_WINDOW_FRONT, why: 'cart, B site: smoke onto the Market window' },
   { target: { x: -2250, y: 0, z: -160 }, why: 'barely, B site: smoke toward the CT / Market side' },
 ];
 

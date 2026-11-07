@@ -223,11 +223,18 @@ not data.
 | 4.8 | cart | smoke | (−468, 924, −80) → (−464, 888, −72) | west down the Apartments approach | 10°, −176° | (−75, 864, −134) | Back Alley / House | 2.53 s | 1225 |
 | 5.6 | snarlbot | smoke | (718, −1274, −264) | the A ramp | 10°, −142° | (634, −1359, −260) | Palace Alley | 1.72 s | 412 |
 | 7.8 | snarlbot | flash | (700, −1300, −262) | over the ramp | −45°, −143° | (623, −1355, −104) | Palace Alley | 1.52 s | 405 |
-| 8.8 | donk | flash | (−180, 623, −77) → (−180, 623, −72) | the Apartments corridor | −40°, 179° | (−907, 640, 366), in the air over Back Alley | – | 1.52 s | 7 |
+| 8.8 | donk | flash | (−180, 623, −77) → (−180, 623, −72) | the Apartments corridor | −40°, 179° | (−907, 640, 366), in the air 86 above the roof at z 280 (not in the corridor; the miss is xy only) | – | 1.52 s | 7 |
 | 17.8 | barely | HE | (−1403, 847, −80) → (−1403, 807, −70) | B balcony / Truck | −15°, −152° | (−1772, 717, −25) | Apartments | 1.52 s | 121 |
 | 19.2 | donk | molotov | (−1297, 776, −80) | the corridor exit | −40°, 177° | (−1478, 788, −46) | Apartments | 0.70 s | 222 |
-| 25.8 | cart | smoke | (−2059, 88, −160) | B short / Catwalk | −45°, 6° | (−1907, 109, −38), on a ledge | – | 1.52 s | 409 |
+| 25.8 | cart | smoke | (−2059, 88, −160) | the Market window (John, backlog 21) | 10°, −64° | (−1911, −224, −166), 40 in front of the window | Bombsite B | 1.52 s | 26 |
 | 29.8 | barely | smoke | (−1729, 410, −168) | CT / Market side | −40°, −142° | (−2202, −10, −166) | Bombsite B | 6.19 s | 49 |
+
+**Market window** (measured on the mesh): the wall between Bombsite B and Shop (Market) has its face at y = −264,
+the window open over x −1948…−1894 from the sill at z −126 (40 above the B floor at −166) up; the door is the full-
+height gap at x −2356…−2292. cart's B-site smoke is aimed at the floor 64 in front of the window and lands 26 from it;
+the test asserts that it blocks the clear line from a CT in Market (−1921, −330, −104) out through the window to
+(−1921, −100, −104) 3 s after the pop and not after 21 s. V0 is measuring the real landing spots from the video
+(backlog 21); once `data/round.json` has them, the hosts aim at those and these assumed targets go.
 
 Throws from Back Alley and Palace Alley (cramped, roofed or overhung spots) come back off nearby geometry for every
 pitch tried; the open-site throws reach their targets. The real landing spots are unknown (not visible in the

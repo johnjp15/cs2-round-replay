@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGrenadeState, smokeBlocks, smokeDensityAt, stepGrenades, throwGrenade } from '../../src/engine/grenades/index';
 import { cs2Tuning, MirageWorld } from './mirage-world';
-import { LINEUPS, placesNear, RECORDED_AIM, recordedUtility, REPORTED, runLineup, runRecorded } from './lineups';
+import { LINEUPS, MARKET_WINDOW_FRONT, placesNear, RECORDED_AIM, recordedUtility, REPORTED, runLineup, runRecorded } from './lineups';
 
 const t = cs2Tuning();
 const world = new MirageWorld();
@@ -70,5 +70,24 @@ describe("the recorded round's 8 throws (plausible aim)", () => {
       expect(r.sec).toBeGreaterThan(0.5);
       expect(r.sec).toBeLessThan(12);
     });
+  });
+  it("cart's B-site smoke lands at the Market window and blocks the sight line through it (backlog 21)", () => {
+    const u = recordedUtility()[6];
+    const aim = RECORDED_AIM[6];
+    if (u === undefined || aim === undefined) throw new Error('no throw');
+    expect(u.thrower).toBe('cart');
+    const r = runRecorded(u, aim, world, t);
+    expect(Math.hypot(r.pos.x - MARKET_WINDOW_FRONT.x, r.pos.y - MARKET_WINDOW_FRONT.y)).toBeLessThanOrEqual(48);
+    const s = createGrenadeState(1);
+    throwGrenade(s, { type: 'smoke', thrower: 'cart', team: 'T', eye: { x: r.stand.x, y: r.stand.y, z: r.stand.z + t.eyeHeight }, pitch: r.pitch, yaw: r.yaw, strength: 1, velocity: { x: 0, y: 0, z: 0 } }, world, { tuning: t });
+    let pop = -1;
+    for (let k = 0; k < 64 * 12 && pop < 0; k++) for (const e of stepGrenades(s, world, { pawns: [], friendlyFire: false }, { tuning: t })) if (e.type === 'smoke_start') pop = e.tick;
+    expect(pop).toBeGreaterThan(0);
+    // A CT in Market behind the window looking straight out onto B site: a clear line through the opening.
+    const inMarket = { x: -1921, y: -330, z: -104 };
+    const onSite = { x: -1921, y: -100, z: -104 };
+    expect(world.traceLine(inMarket.x, inMarket.y, inMarket.z, onSite.x, onSite.y, onSite.z)).toBe(1);
+    expect(smokeBlocks(s, inMarket, onSite, pop + 64 * 3, t)).toBe(true);
+    expect(smokeBlocks(s, inMarket, onSite, pop + 64 * 21, t)).toBe(false);
   });
 });
