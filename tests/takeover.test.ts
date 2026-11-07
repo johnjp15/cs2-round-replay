@@ -134,18 +134,20 @@ describe('a takeover at T (G4)', () => {
       for (const e of r.entries) for (const ev of e.observe.events) if (ev.type === 'damage' && ev.victim === 'cart' && ev.attacker === 'lokier') out.push({ tick: e.observe.tick, amount: ev.amount, scripted: ev.scripted });
       return out;
     };
-    // 5 s: waiting (Lokier hasn't seen cart at the window yet). 17.6 s (tick 1126) is the very tick Lokier first sees
-    // him within the spot tolerance (17.59 s): waiting, then seen on that tick; the hit 1 s later, 18.59 s (tick 1190).
+    // 5 s: waiting (Lokier hasn't seen cart at the window yet). G6: on the CS2 mesh Lokier first sees the puppet within
+    // the spot tolerance at tick 1138 (17.78 s, through the window, on the duel track). 17.6 s (tick 1126) is before
+    // that: waiting; the idle cart stays where the puppet was, and Lokier's view finds him there at tick 1202
+    // (+1.3 s); the hit 1 s later (tick 1266).
     expect(logsAt(run(5), 320)).toContain('encounter lokier -> cart: active from the takeover at tick 320, waiting for lokier to see cart at the spot');
     expect(logsAt(run(17.6), 1126)).toEqual([
       'takeover: cart is the human from tick 1126 (100 hp, ak47); 11 damage blocks lifted',
       'encounter lokier -> cart: active from the takeover at tick 1126, waiting for lokier to see cart at the spot',
-      'encounter lokier -> cart: cart in sight at the spot at tick 1126 (+0.1 s against the recording), scripted hit due at tick 1190',
     ]);
-    expect(hitOnCart(run(17.6))).toEqual([{ tick: 1190, amount: 73, scripted: true }]);
-    // 18.0 s: Lokier had the puppet in sight at the spot since 1126, so the same hit, as for a human from the start.
-    expect(logsAt(run(18), 1152)).toContain('encounter lokier -> cart: cart in sight at the spot since tick 1126 (+0.1 s against the recording), before the takeover at tick 1152; scripted hit due at tick 1190');
-    expect(hitOnCart(run(18))).toEqual([{ tick: 1190, amount: 73, scripted: true }]);
+    expect(logsAt(run(17.6), 1202)).toContain('encounter lokier -> cart: cart in sight at the spot at tick 1202 (+1.3 s against the recording), scripted hit due at tick 1266');
+    expect(hitOnCart(run(17.6))).toEqual([{ tick: 1266, amount: 73, scripted: true }]);
+    // 18.0 s: Lokier had the puppet in sight at the spot since 1138, so the same hit, as for a human from the start.
+    expect(logsAt(run(18), 1152)).toContain('encounter lokier -> cart: cart in sight at the spot since tick 1138 (+0.3 s against the recording), before the takeover at tick 1152; scripted hit due at tick 1202');
+    expect(hitOnCart(run(18))).toEqual([{ tick: 1202, amount: 73, scripted: true }]);
     // B3's recorded hit (1184) is skipped once he is the human; it is the encounter's.
     for (const t of [0, 5, 17.6, 18]) expect(coreLogs(run(t).entries).some((l) => l.text.startsWith('script: no scripted damage lokier -> cart (73 hp at tick 1184)'))).toBe(true);
     // 18.6 s: the recorded hit landed on the puppet at 18.50 s; cart is on 27 HP and must kill Lokier himself (idle: he doesn't).
@@ -181,11 +183,12 @@ describe('a takeover at T (G4)', () => {
     expect(got).toEqual({
       '0': { end: defuse, events: late },
       '5': { end: defuse, events: late },
-      // Cart idle at the Apartments window with 27 HP: sp4rtan's recorded flank passes there; he sees cart (off
-      // course), goes LIVE and kills him, and the gunfire makes donk and barely LIVE; the toy AI's fight kills donk.
-      '17.6': { end: defuse, events: [1768, 2829, 3053, 3766, 4275] },
-      '18': { end: defuse, events: [1768, 2829, 3046, 3766, 4275] },
-      '18.6': { end: defuse, events: [1768, 2829, 3044, 3766, 4275] },
+      // Cart idle at the Apartments window with 27 HP: sp4rtan's recorded flank comes through the Apartments; he sees
+      // cart (off course; G6: on the CS2 mesh at 49.2–49.6 s, from the corridor), goes LIVE, kills donk (LIVE when hit)
+      // a little before the tape's 50.34 s, then cart, and rejoins.
+      '17.6': { end: defuse, events: [1768, 2829, 3190, 3766, 4275] },
+      '18': { end: defuse, events: [1768, 2829, 3193, 3766, 4275] },
+      '18.6': { end: defuse, events: [1768, 2829, 3214, 3766, 4275] },
       '30': { end: defuse, events: tape },
       '45': { end: defuse, events: tape },
       '60': { end: defuse, events: tape },

@@ -202,10 +202,11 @@ describe('scenario takeover-duel (G4)', () => {
     expect(tl.filter((x) => x.kind === 'takeover').map((x) => x.tick)).toEqual([1152]);
     const ds = deaths(run.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}${d.headshot ? ' HS' : ''}`);
     const gd = deaths(goldenEntries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}${d.headshot ? ' HS' : ''}`);
-    // Cart kills Lokier for real (0.08 s before the tape), after the time-shifted hit; everything else on the tape's ticks.
+    // Cart kills Lokier for real (a tick after the tape's 18.80 s), after the time-shifted hit (G6: due at 18.78 s, Lokier
+    // sees him through the window from 17.78 s on the CS2 mesh); everything else on the tape's ticks.
     expect(ds.filter((d) => !d.includes('lokier'))).toEqual(gd.filter((d) => !d.includes('lokier')));
-    expect(ds.find((d) => d.includes('>lokier'))).toBe('1198 cart>lokier HS');
+    expect(ds.find((d) => d.includes('>lokier'))).toBe('1204 cart>lokier HS');
     expect(tl.some((x) => x.kind === 'live')).toBe(false);
-    expect(summarize(run.model, run.entries).headline).toBe('Same result, different round: CT defuse, 0.72 s left; 1 kill changed');
+    expect(summarize(run.model, run.entries).headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
   }, 120_000);
 });

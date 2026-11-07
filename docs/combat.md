@@ -101,19 +101,27 @@ A bullet is a 2D ray from the shooter's `pos` along `yaw`, up to `damage.maxRang
 1. **Candidates** are alive pawns other than the shooter whose circle of radius `damage.pawnRadius` (16) the ray
    crosses ahead of the shooter. A pawn the shooter overlaps counts at distance 0. With `friendlyFire: false`,
    teammates are skipped: shots pass through them. They are taken in ray order, then by id.
-2. **Walls:** if the host's sight (`Sight.lineOfSight(shooter, impact)`: the radar sight mask plus the level check, C4,
-   `docs/vision.md`; the nav mesh's line of sight on a host without a mask) fails for a candidate (impact = where the
-   ray enters its circle, at the target's floor z), the bullet hit a wall first. No pawn further along is hit.
-   Bullets go through what the mask calls open: windows (the Apartments window over B) and railings.
-3. **Hitgroup from pitch:** for each band, the aim pitch is −atan2(band z − eye z, horizontal distance), using
+2. **Hitgroup from pitch:** for each band, the aim pitch is −atan2(band z − eye z, horizontal distance), using
    the target's centre. The closest band to the shooter's pitch is the hitgroup if it is within
    `damage.hitToleranceDeg` (3°). Otherwise the bullet passes over or under this pawn and the next candidate is
    tried. `aimPitch(from, to, band, tuning.damage)` gives Core the pitch to aim with.
-4. **Cover (F):** the line from the shooter's eye to that band's point on the target must pass the sight's cover rule
-   (`docs/vision.md`, "Cover": boxes block unless an upright end is within 48 units of the box or the line passes
-   over it; crouched, planting and defusing pawns are low), else the box stops the bullet and no pawn further along
-   is hit.
+3. **Walls (G6, the CS2 mesh):** the straight segment from the shooter's eye (pos.z + 64, 46 crouched, at his real z)
+   to the **impact point on that band** (where the ray enters the target's circle, at the band's height) must cross no
+   world triangle of the CS2 collision mesh (`MeshSight.clear`, `MapGeometry.traceSight`; `docs/vision.md`). If it
+   does, the bullet hit a wall first: it hits neither this pawn nor anyone further along. Glass, windows and
+   bullet-pass railings aren't in the mesh (`docs/geometry.md`), so bullets go through windows (the Apartments
+   window over B) and over railings; G3's player clips aren't walls for bullets either (CS2's `playerclip` stops only
+   players). Boxes, crates and the Truck are in the mesh, so they stop bullets by their real shape: there is no
+   separate cover rule any more.
+4. **No wall penetration (wallbangs).** Any triangle stops a bullet. CS2 lets bullets through thin walls and props
+   by material (penetration power, surface density); the awpy mesh has no materials, so modelling it credibly needs a
+   material map first. Follow-up; no recorded kill or hit of this round is a wallbang (`docs/vision.md`).
 5. Bullets ignore smoke.
+
+**Without 3D geometry** (the 2D movement mode, synthetic test meshes) step 3 is C4's 2D sight instead: the radar mask
+plus the level check from the shooter to the impact point at the target's floor (checked before the band), then F's
+cover rule from the eye to the band's point (boxes block unless an upright end is within 48 units of the box or the
+line passes over it; crouched, planting and defusing pawns are low).
 
 The 2D engine produces `head`, `chest`, `stomach` and `leg`, never `arm` or `neck`.
 
@@ -219,7 +227,9 @@ is left, it is drawn (deploy); otherwise the first primary, else secondary, else
    0.4 × sv_gravity 800).
 3. **Flight time:** from eye height until the grenade falls back to the thrower's floor (flat ground).
 4. **Landing:** horizontal range capped at `throwRange` (1500); then the grenade stops at the first wall along the
-   path (bisection on the 2D sight mask, C4; the nav line of sight without a mask), pulled back `wallBackoff` (16).
+   path (bisection on the 2D radar sight mask, C4; the nav line of sight without a mask), pulled back `wallBackoff`
+   (16). The flight stays 2D on the radar mask after G6 (the mask's only job now): a 3D arc on the mesh (ceilings,
+   boxes, windows, bounces) is a follow-up, and it would move the recorded smokes.
 5. A level throw lands 729 units away after 1.1 s (70 ticks). No bounces and no inherited player velocity.
 
 **Fuse and effects.**
@@ -227,8 +237,8 @@ is left, it is drawn (deploy); otherwise the first primary, else secondary, else
 | kind | pops | effect |
 | --- | --- | --- |
 | smoke | 1.5 s after the throw, or on landing if later | 144-radius circle for `smokeSec` (18 s). Puts out any fire whose centre it covers. |
-| flash | 1.5 s after the throw (mid-air if still flying) | blinds each alive pawn (both teams, thrower included) that has 2D line of sight to it (the sight mask, C4), has no active smoke in between (`smokeBlocksFlash`), and sees it within `ai.fovDeg` (106°) of its yaw. Blind time = `flashSec` (3 s) × (1 − distance / `flashRange` 1500) × (1 − (1 − `flashEdgeFactor` 0.5) × angle / 53°). |
-| he | 1.5 s after the throw | radial damage to pawns in 2D line of sight (the sight mask, C4): 98 × (1 − d / 350), with d the 3D distance to the pawn's stomach height. Armor applies with `heArmorPen` 0.575 (98 point blank → 56 HP / 21 armor). Hitgroup `generic`. |
+| flash | 1.5 s after the throw (mid-air if still flying) | blinds each alive pawn (both teams, thrower included) whose eye it reaches through no wall (G6: the segment from the flash to the eye on the CS2 mesh; a flash lying on the ground traces from the CS2 floor under it + 2; the 2D sight mask without geometry), has no active smoke in between (`smokeBlocksFlash`), and sees it within `ai.fovDeg` (106°) of its yaw. Blind time = `flashSec` (3 s) × (1 − distance / `flashRange` 1500) × (1 − (1 − `flashEdgeFactor` 0.5) × angle / 53°). |
+| he | 1.5 s after the throw | radial damage to pawns whose body (stomach height) it reaches through no wall (G6: the CS2 mesh, as for the flash; the 2D sight mask without geometry): 98 × (1 − d / 350), with d the 3D distance to the pawn's stomach height. Armor applies with `heArmorPen` 0.575 (98 point blank → 56 HP / 21 armor). Hitgroup `generic`. |
 | molotov | on landing or 2 s after the throw, whichever is first | 120-radius fire on the floor for `molotovSec` (7 s): 8 HP (40 HP/s × 0.2 s) at burst + ⌈k × 12.8⌉ ticks, 35 steps, to pawns inside with a floor within `fireHeight` (64). Armor does not reduce fire. Hitgroup `generic`. A molotov that bursts inside an active smoke makes no fire. |
 
 Grenade damage goes to enemies of the thrower and the thrower; teammates only with `friendlyFire`. It respects
