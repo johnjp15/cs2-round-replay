@@ -47,7 +47,10 @@
     "test:e2e:movement": "tsx tools/e2e/movement.ts",
     "test:e2e:grenades": "tsx tools/e2e/grenades.ts",
     "test:e2e:round": "tsx tools/e2e/round.ts",
-    "test:e2e": "npm run test:e2e:round && npm run test:e2e:movement && npm run test:e2e:weapons && npm run test:e2e:grenades && npm run test:e2e:spray"
+    "test:e2e": "npm run test:e2e:round && npm run test:e2e:movement && npm run test:e2e:weapons && npm run test:e2e:ttk && npm run test:e2e:grenades && npm run test:e2e:spray",
+    "test:e2e:ttk": "tsx tools/e2e/ak-ttk.ts",
+    "test:e2e:ak-browser": "tsx tools/e2e/ak-browser.ts",
+    "test:e2e:mobile": "tsx tools/e2e/mobile3d.ts"
   },
   "repository": {
     "type": "git",
