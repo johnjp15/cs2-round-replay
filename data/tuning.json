@@ -33,6 +33,7 @@
       "famas": 220,
       "galil": 215,
       "glock": 240,
+      "usps": 240,
       "c4": 250,
       "smoke": 245,
       "flash": 245,
@@ -138,7 +139,8 @@
     "ssg08": { "damage": 88, "rpm": 48, "headshotMult": 4, "armorPen": 0.85, "rangeModifier": 0.98, "clip": 10, "reserve": 90, "reloadSec": 3.67, "deploySec": 1.25, "automatic": false },
     "deagle": { "damage": 53, "rpm": 267, "headshotMult": 3.9, "armorPen": 0.932, "rangeModifier": 0.85, "clip": 7, "reserve": 35, "reloadSec": 2.17, "deploySec": 1, "automatic": false },
     "m4a4": { "damage": 33, "rpm": 666.667, "headshotMult": 4, "armorPen": 0.7, "rangeModifier": 0.97, "clip": 30, "reserve": 90, "reloadSec": 3.07, "deploySec": 1, "automatic": true },
-    "glock": { "damage": 30, "rpm": 400, "headshotMult": 4, "armorPen": 0.47, "rangeModifier": 0.85, "clip": 20, "reserve": 120, "reloadSec": 2.17, "deploySec": 1, "automatic": false }
+    "glock": { "damage": 30, "rpm": 400, "headshotMult": 4, "armorPen": 0.47, "rangeModifier": 0.85, "clip": 20, "reserve": 120, "reloadSec": 2.17, "deploySec": 1, "automatic": false },
+    "usps": { "damage": 35, "rpm": 352.941, "headshotMult": 4, "armorPen": 0.505, "rangeModifier": 0.91, "clip": 12, "reserve": 24, "reloadSec": 2.2, "deploySec": 1, "automatic": false }
   },
   "bomb": {
     "plantSec": 3.2,

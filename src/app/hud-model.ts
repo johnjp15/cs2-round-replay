@@ -39,6 +39,7 @@ const WEAPON_NAMES: Readonly<Record<string, string>> = {
   deagle: 'Desert Eagle',
   m4a4: 'M4A4',
   glock: 'Glock-18',
+  usps: 'USP-S',
   knife: 'Knife',
   c4: 'C4',
   smoke: 'Smoke',

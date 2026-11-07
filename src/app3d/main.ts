@@ -904,6 +904,7 @@ class App3D {
       tracers,
       effects: this.scene.effects,
       bomb,
+      items: this.host(s).worldItems(),
       viewmodel: weapon === null || scoped ? null : { weapon, sinceShot, anim: !firstPerson ? null : exact && vmAnim !== null ? { ...vmAnim, sinceShot: 1e6 } : vmAnim, team: (firstPerson ? humanPawn?.team : vo?.team) ?? 'CT' },
       nowMs: now,
     });
@@ -956,6 +957,7 @@ class App3D {
       summary: over ? summary : null,
       tick: o.tick,
       nowMs: now,
+      items: this.host(s).pawnState(viewId)?.inventory.map((q) => q.item) ?? null,
     });
     const r2 = performance.now();
     if (this.probing) this.probe.mark('hud', r2);

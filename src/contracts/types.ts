@@ -36,6 +36,7 @@ export const WEAPON_IDS = [
   'deagle',
   'm4a4',
   'glock',
+  'usps',
   'knife',
   'c4',
   'smoke',
@@ -49,7 +50,11 @@ export type WeaponId = (typeof WEAPON_IDS)[number];
 export const ITEM_IDS = [...WEAPON_IDS, 'defuser'] as const;
 export type ItemId = (typeof ITEM_IDS)[number];
 
-export const BUTTONS = ['ATTACK', 'ATTACK2', 'USE', 'DUCK', 'WALK', 'JUMP', 'RELOAD'] as const;
+/**
+ * Held buttons. `DROP` (W2) is CS2's `drop` command (default key G) as a held flag: the engine drops the active
+ * weapon on the tick it is first held. Only the human sends it (the Core's inputs never do).
+ */
+export const BUTTONS = ['ATTACK', 'ATTACK2', 'USE', 'DUCK', 'WALK', 'JUMP', 'RELOAD', 'DROP'] as const;
 export type Button = (typeof BUTTONS)[number];
 
 /**

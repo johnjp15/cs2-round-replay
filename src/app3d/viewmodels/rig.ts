@@ -221,9 +221,77 @@ export class WorldWeapons {
       const small = kind === 'pistol' || kind === 'knife' || kind === 'grenade';
       mesh.position.set(7, (small ? 46 : 44) * k, small ? -14 : -10);
       mesh.rotation.set((-pitchDeg * Math.PI) / 180, 0, 0);
-    } else {
-      mesh.position.set(16, 1.5, -8);
-      mesh.rotation.set(0, 0.6, Math.PI / 2);
+    }
+    // W2: a dead pawn's gun is a world item (WorldItemMeshes); the rest of its kit stays with the body, unseen.
+    mesh.visible = alive;
+  }
+}
+
+/** W2: one gun lying in (or flying through) the world, as the renderer draws it. */
+export interface DrawItem {
+  readonly seq: number;
+  readonly item: string;
+  /** Centre (Source units). */
+  readonly pos: { readonly x: number; readonly y: number; readonly z: number };
+  /** Degrees CCW from +x. */
+  readonly yaw: number;
+}
+
+/**
+ * W2: the guns lying in the world: the viewmodel geometry at world scale (1 model unit = 1 Source unit, as on the
+ * players), on its side, centred on the item, along its yaw. Meshes pooled by seq; geometry shared per weapon.
+ */
+export class WorldItemMeshes {
+  readonly root = new Group();
+  private readonly mat = new MeshBasicMaterial({ vertexColors: true, side: DoubleSide });
+  private readonly geoms = new Map<string, BufferGeometry>();
+  private readonly live = new Map<number, Group>();
+  private readonly spare: Group[] = [];
+
+  private geom(weapon: string): BufferGeometry {
+    let g = this.geoms.get(weapon);
+    if (g === undefined) {
+      const m = modelOf(weapon);
+      g = mergeParts([...m.body, ...(m.mag ?? []), ...(m.bolt ?? []), ...(m.pin ?? [])]);
+      g.computeBoundingBox();
+      const b = g.boundingBox;
+      // Centre it (the model origin is the grip), so it lies around the item's position.
+      if (b !== null) g.translate(-(b.min.x + b.max.x) / 2, -(b.min.y + b.max.y) / 2, -(b.min.z + b.max.z) / 2);
+      this.geoms.set(weapon, g);
+    }
+    return g;
+  }
+
+  /** Number of items drawn (tests). */
+  get count(): number {
+    return this.live.size;
+  }
+
+  update(items: readonly DrawItem[]): void {
+    const seen = new Set<number>();
+    for (const it of items) {
+      seen.add(it.seq);
+      let g = this.live.get(it.seq);
+      if (g === undefined) {
+        g = this.spare.pop() ?? new Group();
+        if (g.children.length === 0) g.add(new Mesh(this.geom(it.item), this.mat));
+        else (g.children[0] as Mesh).geometry = this.geom(it.item);
+        // On its side: the gun's up (+y) turned to lie along the floor.
+        (g.children[0] as Mesh).rotation.set(0, 0, Math.PI / 2);
+        g.visible = true;
+        this.root.add(g);
+        this.live.set(it.seq, g);
+      }
+      g.position.set(it.pos.x, it.pos.z, -it.pos.y);
+      // The model's barrel is −z; −z along the Source yaw (the pawn groups' convention).
+      g.rotation.set(0, ((it.yaw - 90) * Math.PI) / 180, 0);
+    }
+    for (const [seq, g] of this.live) {
+      if (seen.has(seq)) continue;
+      g.visible = false;
+      this.root.remove(g);
+      this.live.delete(seq);
+      this.spare.push(g);
     }
   }
 }

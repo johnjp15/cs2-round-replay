@@ -85,7 +85,8 @@ import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, t
 import { MeshGrenadeNav, MeshSight, meshSightOptionsFromTuning, scriptedHitThroughGeometry } from '../sim2d/mesh-sight';
 import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning } from '../sim2d/vision';
 import type { AiDebug, BlockedPair, CombatLogLine, HostNote, InventoryItem, PawnState, RosterEntry, Sim2DOptions, Sim2DVision } from '../sim2d/host';
-import { meshSolidQuery, traceShot3, type Shot3, type ShotPawn } from './hitscan';
+import { eyeOf, meshSolidQuery, traceShot3, type Shot3, type ShotPawn } from './hitscan';
+import { DROP_SPEED, PRIMARY_GUNS, TOUCH_DELAY_TICKS, deathDropGun, gunSlot, spawnItem, stepItems, takeNearest, touched, useTarget, viewDir, type WorldItem } from './items';
 import {
   armorDamage,
   bulletDamage,
@@ -121,6 +122,8 @@ const ENGINE = 'sim3d';
 /** CS2 spawn state for a pawn before Core sets it up (game rules, not calibration). */
 const SPAWN_HP = 100;
 const SPAWN_WEAPON: WeaponId = 'knife';
+/** W2: how far (2D units) a puppet's recorded gun pickup reaches for the gun on the floor (the tape's positions are rough). */
+const SCRIPTED_PICKUP_RANGE = 256;
 /** Items that can be carried but not held. */
 const NON_WIELDABLE: readonly string[] = ['defuser'];
 
@@ -149,6 +152,12 @@ interface HostState {
   readonly aiSeed: number;
   /** H2: per pawn (pawn order) the weapon mechanics state (accuracy, recoil, punch, scope, tagging); absent in older snapshots. */
   readonly arms?: readonly ArmsState[];
+  /** W2: guns lying in the world, by seq, and the next seq; absent in older snapshots (none). */
+  readonly items?: readonly WorldItem[];
+  readonly nextItemSeq?: number;
+  /** W2: the human's USE and DROP on the last tick (their presses act once). */
+  readonly humanUse?: boolean;
+  readonly humanDrop?: boolean;
 }
 
 export class Sim3DHost implements IHost {
@@ -196,6 +205,12 @@ export class Sim3DHost implements IHost {
   private arms: ArmsState[] = [];
   /** H2b: the solids along a bullet on the world mesh, for wall penetration (built on first use). */
   private solids: SolidQuery | null = null;
+  /** W2: guns lying in the world (src/sim3d/items.ts), by seq. */
+  private items: WorldItem[] = [];
+  private nextItemSeq = 1;
+  /** W2: the human's USE / DROP held on the last tick (pickup and drop act on the press). */
+  private humanUse = false;
+  private humanDrop = false;
 
   /**
    * @param options score before the round and the round clock at tick 0; default 0 – 0 and `tuning.round.timeSec`.
@@ -301,6 +316,10 @@ export class Sim3DHost implements IHost {
       events: this.events,
       aiSeed: this.aiSeed,
       arms: this.arms,
+      items: this.items,
+      nextItemSeq: this.nextItemSeq,
+      humanUse: this.humanUse,
+      humanDrop: this.humanDrop,
     };
     return { kind: 'host', data: toJsonValue(state) };
   }
@@ -349,6 +368,10 @@ export class Sim3DHost implements IHost {
     this.events = [...copy.events];
     this.aiSeed = copy.aiSeed;
     this.arms = copy.arms !== undefined && copy.arms.length === this.pawns.length ? [...copy.arms] : this.freshArmsAll();
+    this.items = copy.items !== undefined ? [...copy.items] : [];
+    this.nextItemSeq = copy.nextItemSeq ?? 1;
+    this.humanUse = copy.humanUse ?? false;
+    this.humanDrop = copy.humanDrop ?? false;
     this.seesCache = null;
     this.aiInputs = [];
     this.lastShots = [];
@@ -371,6 +394,8 @@ export class Sim3DHost implements IHost {
     this.stepLiveAi(t);
     const locked = lockedPawns(this.bomb, t, this.bombPawns(), this.tuning.bomb);
     this.moveAll(t, locked);
+    this.stepHumanItems(t);
+    if (this.items.length > 0) this.items = stepItems(this.items, this.meshSight.geometry(), t, TICK_DT);
     for (const p of this.pawns) if (p.alive) this.stepPawnWeapon(p, t);
     this.stepGrenades(t);
     const queued = this.pendingDamage;
@@ -395,6 +420,11 @@ export class Sim3DHost implements IHost {
   /** H1: the bullets fired on the last tick (eye, impact, victim, hitgroup), in firing order. Not part of observe(). */
   shots(): readonly Shot3[] {
     return this.lastShots.map((x) => ({ ...x, from: copyVec(x.from), to: copyVec(x.to) }));
+  }
+
+  /** W2: the guns lying in the world (copies), by seq. Not part of observe() (CS2's observe has no world items). */
+  worldItems(): readonly WorldItem[] {
+    return this.items.map((it) => ({ ...it, pos: copyVec(it.pos), vel: copyVec(it.vel) }));
   }
 
   /** H1: the sight and bullet mesh (the world, no player clips). */
@@ -788,6 +818,117 @@ export class Sim3DHost implements IHost {
     p.wpn = deployState(p.wpn, t, deploySec(p.weapon, this.tuning));
   }
 
+  // ---- W2: world items (drop on death, G, E / touch pickup) -----------------------------------------------------------
+
+  /** The weapon table's price of a gun (the death drop's "most valuable"); without a table, primaries first. */
+  private priceOf(item: WeaponId): number {
+    const w = this.armsCtx?.table.weapons[item];
+    if (w !== undefined) return w.price;
+    return PRIMARY_GUNS.includes(item) ? 1000 : 100;
+  }
+
+  private eye(p: PawnState): Vec3 {
+    return eyeOf({ pos: p.move.pos, crouching: p.move.crouching }, this.tuning.damage);
+  }
+
+  /** `mp_death_drop_gun 1`: the dead pawn's most valuable gun falls from its eye with its velocity. Its inventory stays as it was (observe reports a dead pawn's last weapon and ammo). */
+  private deathDrop(p: PawnState): void {
+    const g = deathDropGun(
+      p.inventory.map((q) => q.item),
+      (w) => this.priceOf(w),
+    );
+    if (g === null) return;
+    const q = p.inventory.find((x) => x.item === g);
+    if (q === undefined) return;
+    this.addItem(spawnItem(this.nextItemSeq++, g, q.clip, q.reserve, this.eye(p), p.move.vel, p.move.yaw, p.id, this.tickNo));
+  }
+
+  private addItem(it: WorldItem): void {
+    this.items = [...this.items, it];
+  }
+
+  /** Remove a gun from a live pawn and throw it along its view (G, or the swap of a pickup). True if it had it. */
+  private throwGun(p: PawnState, item: WeaponId, t: number): boolean {
+    const i = p.inventory.findIndex((q) => q.item === item);
+    if (i < 0) return false;
+    const q = p.inventory[i] as InventoryItem;
+    p.inventory = [...p.inventory.slice(0, i), ...p.inventory.slice(i + 1)];
+    const d = viewDir(p.move.yaw, p.move.pitch);
+    const vel = { x: d.x * DROP_SPEED, y: d.y * DROP_SPEED, z: d.z * DROP_SPEED };
+    this.addItem(spawnItem(this.nextItemSeq++, item, q.clip, q.reserve, this.eye(p), vel, p.move.yaw, p.id, t));
+    return true;
+  }
+
+  /** Hold `item` (in the inventory) with its deploy time. */
+  private draw(p: PawnState, item: WeaponId, t: number): void {
+    if (p.weapon === item) return;
+    p.weapon = item;
+    p.wpn = deployState({ ...p.wpn, reloadEndTick: null }, t, deploySec(item, this.tuning));
+  }
+
+  /**
+   * The human's G (DROP pressed: the active gun is thrown, the best weapon left is drawn), E (USE pressed: the gun
+   * looked at is picked up and drawn, a full slot swaps) and touch pickup (a gun walked over whose slot is empty).
+   */
+  private stepHumanItems(t: number): void {
+    const p = this.human === null ? null : this.pawn(this.human);
+    const input = p === null || this.humanInput === null ? null : this.humanInput;
+    const useNow = input !== null && input.buttons.includes('USE');
+    const dropNow = input !== null && input.buttons.includes('DROP');
+    const usePress = useNow && !this.humanUse;
+    const dropPress = dropNow && !this.humanDrop;
+    this.humanUse = useNow;
+    this.humanDrop = dropNow;
+    if (p === null || input === null || !p.alive) return;
+    if (dropPress && gunSlot(p.weapon) !== null && this.throwGun(p, p.weapon, t)) {
+      this.draw(p, fallbackWeapon(p.inventory.map((q) => q.item)), t);
+    }
+    if (usePress && this.items.length > 0 && !this.couldDefuse(p)) {
+      const i = useTarget(this.items, this.eye(p), viewDir(p.move.yaw, p.move.pitch), this.meshSight.geometry());
+      if (i >= 0) this.pickUp(p, i, true, t);
+    }
+    if (this.items.length > 0) {
+      for (const i of touched(this.items, p.move.pos).reverse()) {
+        const it = this.items[i] as WorldItem;
+        const slot = gunSlot(it.item);
+        if (slot === null || this.slotGun(p, slot) !== null) continue;
+        if (it.dropper === p.id && t - it.dropTick < TOUCH_DELAY_TICKS) continue;
+        this.pickUp(p, i, false, t);
+      }
+    }
+  }
+
+  /** A CT the bomb rules would let defuse (planted bomb within reach): E is the defuse, not a pickup. */
+  private couldDefuse(p: PawnState): boolean {
+    const b = this.bomb;
+    if (p.team !== 'CT' || b.state !== 'planted' || b.pos === null) return false;
+    return Math.hypot(p.move.pos.x - b.pos.x, p.move.pos.y - b.pos.y) <= this.tuning.bomb.defuseRange;
+  }
+
+  /** The gun a pawn carries in slot 1 or 2, or null. */
+  private slotGun(p: PawnState, slot: 1 | 2): WeaponId | null {
+    const q = p.inventory.find((x) => gunSlot(x.item) === slot);
+    return q === undefined ? null : (q.item as WeaponId);
+  }
+
+  /** Take item `i` off the floor into `p`'s inventory; `use`: a full slot's gun is thrown (swap) and the new one drawn. */
+  private pickUp(p: PawnState, i: number, use: boolean, t: number): void {
+    const it = this.items[i] as WorldItem;
+    const slot = gunSlot(it.item);
+    if (slot === null) return;
+    this.items = [...this.items.slice(0, i), ...this.items.slice(i + 1)];
+    const old = this.slotGun(p, slot);
+    if (old !== null) this.throwGun(p, old, t);
+    p.inventory = [...p.inventory.filter((q) => q.item !== it.item), { item: it.item, clip: it.clip, reserve: it.reserve }].sort((x, y) => compareOrdinal(x.item, y.item));
+    if (use || (old !== null && old === p.weapon)) this.forceDraw(p, it.item, t);
+  }
+
+  /** Draw even when the id is the same (a swapped-in gun of the same kind is a new weapon). */
+  private forceDraw(p: PawnState, item: WeaponId, t: number): void {
+    p.weapon = item;
+    p.wpn = deployState({ ...p.wpn, reloadEndTick: null }, t, deploySec(item, this.tuning));
+  }
+
   private stepGrenades(t: number): void {
     if (this.grenades.length === 0) return;
     const r = stepGrenades(this.grenades, t, {
@@ -864,6 +1005,7 @@ export class Sim3DHost implements IHost {
     if (victim.hp <= 0) {
       victim.hp = 0;
       victim.alive = false;
+      this.deathDrop(victim);
       victim.move = { ...victim.move, vel: { x: 0, y: 0, z: 0 } };
       victim.wpn = { ...victim.wpn, reloadEndTick: null, grenadePrimed: false };
       this.outbox.push({ type: 'death', victim: victim.id, attacker, weapon, headshot: hitgroup === 'head' });
@@ -1085,6 +1227,11 @@ export class Sim3DHost implements IHost {
         const entry: InventoryItem = { item, clip: action.clip, reserve: action.reserve };
         const kept = isGrenade(item) ? p.inventory : p.inventory.filter((q) => q.item !== item);
         p.inventory = [...kept, entry].sort((x, y) => compareOrdinal(x.item, y.item));
+        // W2: a puppet's recorded pickup (Sp4rtaN's AK-47) takes that gun off the floor if it lies near him.
+        if (p.alive && gunSlot(item) !== null && this.items.length > 0) {
+          const i = takeNearest(this.items, item, p.move.pos, SCRIPTED_PICKUP_RANGE);
+          if (i >= 0) this.items = [...this.items.slice(0, i), ...this.items.slice(i + 1)];
+        }
         return;
       }
       case 'set_weapon': {

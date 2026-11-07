@@ -36,13 +36,19 @@ Without the `walk` argument (or with `null`) the puppets are off and every REPLA
 
 1. `teleport {pos, yaw}`
 2. `set_hp {hp, armor, helmet}`
-3. One `give` per item: primary, secondary, each grenade (a duplicate grenade gets its own `give`), `c4`, `defuser`.
-4. `set_weapon` to the primary, else the secondary, else `knife`.
+3. One `give` per item: primary, pistol, each grenade (a duplicate grenade gets its own `give`), `c4`, `defuser`.
+4. `set_weapon` to the primary, else the recorded secondary, else `knife`.
+
+W2, the pistol (`pistolOf`): the recorded `kit.secondary` (donk's Glock-18, Sp4rtaN's Desert Eagle), else the team's
+default (`DEFAULT_PISTOL`): Glock-18 for T, USP-S for CT. CS2 spawns every player with one
+(`mp_t_default_secondary weapon_glock`, `mp_ct_default_secondary weapon_hkp2000`, which nearly everyone sets to the
+USP-S in the loadout). The 2020 ESEA match page isn't reachable, and the video never shows the others' pistols
+(docs/round-data.md). The drawn weapon is unchanged, so every puppet holds what the tape says.
 
 Ammo:
 
 - The weapon drawn at t = 0 gets the round's `kit.clip/reserve`.
-- Any other gun gets `tuning.weapons[id].clip/reserve`. In this round that is only donk's glock, 20/120. A missing entry throws.
+- Any other gun gets `tuning.weapons[id].clip/reserve`: donk's glock 20/120, the default Glock-18s 20/120 and USP-Ss 12/24. A missing entry throws.
 - Grenades, `c4` and `defuser` are given with 0/0.
 
 Start yaw (`startYaw(model, id)` returns `{yaw, source}`). The first rule that applies wins:
