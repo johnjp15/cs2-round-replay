@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#05080c" />
+    <link rel="icon" href="data:," />
+    <title>CS2 sim 3D — Mirage</title>
+    <style>
+      /* The 2D page's palette ("Mirage after dusk": index.html, src/app/style.ts) for the HUD; the world is in daylight. */
+      :root {
+        --night: #05080c;
+        --slab: rgba(10, 14, 19, 0.72);
+        --rule: #263342;
+        --sand: #ece2cc;
+        --sand-dim: #b5ad9c;
+        --t: #ebc75e;
+        --ct: #8bbcf3;
+        --bomb: #ff5450;
+        --defuse: #4cc982;
+        --live: #ff4fd8;
+        --display: "Avenir Next Condensed", "DIN Condensed", "Saira Condensed", "Roboto Condensed", "Arial Narrow", "TeX Gyre Heros Cn", "DejaVu Sans Condensed", sans-serif;
+        --text: system-ui, -apple-system, "Segoe UI", Inter, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night); color: var(--sand); }
+      body { font: 14px/1.3 var(--text); -webkit-text-size-adjust: 100%; }
+      #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+      #stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+      #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+      #status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; pointer-events: none; }
+      #status[hidden] { display: none; }
+      #hud { position: absolute; inset: 0; pointer-events: none; font-family: var(--display); font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+      .slab { background: var(--slab); border-radius: 4px; }
+      /* Crosshair: CS2's default-ish static cross with a gap; the hit marker is an X. */
+      #crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+      #crosshair i { position: absolute; background: #6cff6c; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); }
+      #crosshair i:nth-child(1) { left: -1px; top: -12px; width: 2px; height: 8px; }
+      #crosshair i:nth-child(2) { left: -1px; top: 4px; width: 2px; height: 8px; }
+      #crosshair i:nth-child(3) { top: -1px; left: -12px; height: 2px; width: 8px; }
+      #crosshair i:nth-child(4) { top: -1px; left: 4px; height: 2px; width: 8px; }
+      #crosshair[hidden], #hitmarker[hidden] { display: none; }
+      #hitmarker { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+      #hitmarker i { position: absolute; width: 2px; height: 9px; background: #fff; left: -1px; top: -4.5px; box-shadow: 0 0 0 1px rgba(0,0,0,0.5); }
+      #hitmarker i:nth-child(1) { transform: rotate(45deg) translateY(-11px); }
+      #hitmarker i:nth-child(2) { transform: rotate(135deg) translateY(-11px); }
+      #hitmarker i:nth-child(3) { transform: rotate(225deg) translateY(-11px); }
+      #hitmarker i:nth-child(4) { transform: rotate(315deg) translateY(-11px); }
+      #hitmarker.head i { background: #ff5a4f; }
+      #top { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 4px 12px; font-size: 22px; }
+      #top .t { color: var(--t); } #top .ct { color: var(--ct); }
+      #clock { min-width: 64px; text-align: center; font-size: 26px; }
+      #clock.bomb { color: var(--bomb); } #clock.defusing, #clock.defused { color: var(--defuse); }
+      #bombline { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); font-size: 15px; padding: 2px 10px; }
+      #bombline:empty { display: none; }
+      #killfeed { position: absolute; top: 8px; right: 10px; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 15px; }
+      #killfeed div { padding: 2px 8px; }
+      #killfeed .t { color: var(--t); } #killfeed .ct { color: var(--ct); } #killfeed .w { color: var(--sand-dim); margin: 0 6px; }
+      #killfeed .you { outline: 1px solid #d33; }
+      #minimap { position: absolute; top: 8px; left: 8px; width: 208px; height: 208px; border-radius: 4px; background: rgba(0,0,0,0.55); }
+      #teams { position: absolute; top: 224px; left: 8px; width: 208px; font-size: 14px; padding: 4px 6px; }
+      #teams .row { display: grid; grid-template-columns: 1fr 50px 34px; gap: 4px; align-items: center; height: 19px; }
+      #teams .row.dead { opacity: 0.4; }
+      #teams .row.t .n { color: var(--t); } #teams .row.ct .n { color: var(--ct); }
+      #teams .bar { height: 5px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden; }
+      #teams .bar i { display: block; height: 100%; background: var(--sand); }
+      #teams .m { font-size: 11px; color: var(--sand-dim); text-align: right; }
+      #teams .m.live { color: var(--live); } #teams .m.human { color: #fff; }
+      #vitals { position: absolute; bottom: 10px; left: 10px; display: flex; gap: 18px; padding: 6px 14px; font-size: 30px; }
+      #vitals small, #ammo small { font-size: 13px; color: var(--sand-dim); margin-right: 4px; }
+      #ammo { position: absolute; bottom: 10px; right: 10px; padding: 6px 14px; font-size: 30px; text-align: right; }
+      #ammo .w { font-size: 15px; color: var(--sand-dim); display: block; text-align: right; }
+      #mode { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 4px 12px; font-size: 16px; white-space: nowrap; }
+      #perf { position: absolute; bottom: 70px; left: 10px; font: 11px var(--text); color: var(--sand-dim); }
+      #summary { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); padding: 14px 22px; font-size: 22px; text-align: center; }
+      #summary[hidden] { display: none; }
+      #summary small { display: block; font: 13px var(--text); color: var(--sand-dim); margin-top: 6px; }
+      #bar { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: #0e141b; border-top: 1px solid var(--rule); }
+      #bar button { font: 13px var(--text); color: var(--sand); background: #18222d; border: 1px solid var(--rule); border-radius: 4px; padding: 5px 10px; cursor: pointer; }
+      #bar button[aria-pressed="true"] { background: #2b3b4c; border-color: #4a6178; }
+      #bar button:disabled { opacity: 0.45; cursor: default; }
+      #bar kbd { font: 11px var(--text); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
+      #bar .sep { width: 1px; height: 22px; background: var(--rule); }
+      #bar .help { color: var(--sand-dim); font-size: 12px; margin-left: auto; }
+      @media (max-width: 700px) { #teams, #perf, #bar .help { display: none; } #minimap { width: 140px; height: 140px; } }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="stage">
+        <canvas id="view"></canvas>
+        <div id="hud" hidden>
+          <div id="crosshair" hidden><i></i><i></i><i></i><i></i></div>
+          <div id="hitmarker" hidden><i></i><i></i><i></i><i></i></div>
+          <div id="top" class="slab"><span class="t" id="score-t">15</span><span id="clock">1:39</span><span class="ct" id="score-ct">11</span></div>
+          <div id="bombline" class="slab"></div>
+          <div id="killfeed"></div>
+          <canvas id="minimap" width="416" height="416"></canvas>
+          <div id="teams" class="slab"></div>
+          <div id="vitals" class="slab"><span><small>HP</small><b id="hp">100</b></span><span><small>ARMOR</small><b id="armor">0</b></span></div>
+          <div id="ammo" class="slab"><span class="w" id="weapon">Knife</span><b id="clip">–</b> <small id="reserve"></small></div>
+          <div id="mode" class="slab"></div>
+          <div id="perf"></div>
+          <div id="summary" class="slab" hidden></div>
+        </div>
+        <p id="status">Loading the 3D world…</p>
+      </div>
+      <div id="bar">
+        <button id="start" type="button">Start</button>
+        <button id="pause" type="button">Pause</button>
+        <button id="restart" type="button">Restart</button>
+        <span class="sep"></span>
+        <button id="takeover" type="button"><span>Take control of cart</span><kbd>E</kbd></button>
+        <button id="camera" type="button"><span>Camera: follow</span><kbd>V</kbd></button>
+        <span class="sep"></span>
+        <button type="button" data-speed="0.25">0.25×</button>
+        <button type="button" data-speed="0.5">0.5×</button>
+        <button type="button" data-speed="1">1×</button>
+        <button type="button" data-speed="2">2×</button>
+        <button type="button" data-speed="4">4×</button>
+        <span class="help">Click to look · WASD move · Space jump · Ctrl duck · Shift walk · Mouse 1 fire · R reload · 1–5 weapons · E use · Z / X other player · Esc frees the mouse</span>
+      </div>
+    </div>
+    <script type="module" src="../src/app3d/main.ts"></script>
+  </body>
+</html>
