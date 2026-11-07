@@ -320,6 +320,11 @@ export interface AiTuning {
   losCoverNearUnits: number;
   /** Cover: a line at least this high (units) above the lower end's floor all across a box passes over it. */
   losCoverHeightUnits: number;
+  /**
+   * G6, 3D sight on the CS2 mesh (docs/vision.md "Aim points"): the left and right aim points sit this far (units) to
+   * either side of a target's body axis at chest height, perpendicular to the line of sight (CS2 bots check the elbows).
+   */
+  sightSideUnits: number;
   /** LIVE AI (2D engine only; CS2 uses the native bot). The reaction time varies by ± this fraction (seeded). */
   reactionJitter: number;
   /** Share of acquisitions aimed at the head band; the rest aim at the chest. */
@@ -539,6 +544,7 @@ const AI_KEYS = [
   'losCoverTolerancePx',
   'losCoverNearUnits',
   'losCoverHeightUnits',
+  'sightSideUnits',
   'reactionJitter',
   'headshotAimRatio',
   'turnRateDegPerTick',

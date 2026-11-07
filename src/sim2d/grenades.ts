@@ -14,8 +14,16 @@ const WALL_STEPS = 24;
 
 /** The nav queries grenades use (NavMesh fits). */
 export interface GrenadeNav {
+  /** 2D: the throw clamp (and, without `effectClear`, the flash and HE line of sight). */
   lineOfSight(a: NavPoint, b: NavPoint): boolean;
   zAt(p: NavPoint): number;
+  /**
+   * G6 (3D, MeshSight): a flash or HE whose effect starts at `from` reaches the point `to` (a pawn's eye for a flash,
+   * its body for an HE) through no wall of the CS2 mesh. Replaces `lineOfSight` for effects when present.
+   */
+  effectClear?(from: Vec3, to: Vec3): boolean;
+  /** G6: where the effect traces of a grenade at `p` start (`landed`: it lies on the floor). Default: `p`. */
+  effectOrigin?(p: Vec3, landed: boolean): Vec3;
 }
 
 /** A thrown grenade: flying, then (smoke, molotov) an active area until `untilTick`. Plain data. */
@@ -61,6 +69,8 @@ export interface EffectPawn {
   readonly pos: Vec3;
   readonly yaw: number;
   readonly alive: boolean;
+  /** G6: for the eye a flash traces to (crouchEyeHeight); absent = standing. */
+  readonly crouching?: boolean;
 }
 
 /** Things the host must apply, in order. */
@@ -252,7 +262,7 @@ export interface GrenadeWorld {
   /** All pawns, sorted by id. */
   readonly pawns: readonly EffectPawn[];
   readonly grenades: GrenadeTuning;
-  readonly damage: Pick<DamageTuning, 'friendlyFire' | 'bandHeights'>;
+  readonly damage: Pick<DamageTuning, 'friendlyFire' | 'bandHeights' | 'eyeHeight' | 'crouchEyeHeight'>;
   readonly ai: Pick<AiTuning, 'fovDeg'>;
 }
 
@@ -267,10 +277,13 @@ export function stepGrenades(list: readonly Grenade[], tick: number, w: GrenadeW
   const outcomes: GrenadeOutcome[] = [];
   let cur: Grenade[] = [...list].sort((a, b) => a.seq - b.seq);
 
+  const nav = w.nav;
   for (const gr0 of [...cur]) {
     if (gr0.phase !== 'flying' || tick < gr0.popTick) continue;
     const air = flightPos(gr0, gr0.popTick, g);
     const center = gr0.kind === 'molotov' || gr0.kind === 'smoke' ? roundVec({ x: air.x, y: air.y, z: w.nav.zAt(air) }) : air;
+    // G6: flash and HE effects trace on the CS2 mesh from here (on the floor if it landed before it popped).
+    const origin = nav.effectOrigin === undefined ? center : nav.effectOrigin(center, gr0.popTick >= gr0.landTick);
     outcomes.push({ type: 'pop', seq: gr0.seq, kind: gr0.kind, thrower: gr0.thrower, pos: center });
     cur = cur.filter((q) => q.seq !== gr0.seq);
     if (gr0.kind === 'smoke') {
@@ -286,13 +299,20 @@ export function stepGrenades(list: readonly Grenade[], tick: number, w: GrenadeW
         if (!p.alive || !canHurt(gr0, p, w.damage.friendlyFire)) continue;
         const body = { x: p.pos.x, y: p.pos.y, z: p.pos.z + (w.damage.bandHeights['stomach'] ?? 0) };
         const dist = Math.hypot(body.x - center.x, body.y - center.y, body.z - center.z);
-        if (dist >= g.heRadius || !w.nav.lineOfSight(center, p.pos)) continue;
+        if (dist >= g.heRadius) continue;
+        if (nav.effectClear === undefined ? !nav.lineOfSight(center, p.pos) : !nav.effectClear(origin, body)) continue;
         const damage = roundNumber(g.heDamage * (1 - dist / g.heRadius));
         outcomes.push({ type: 'hurt', seq: gr0.seq, kind: 'he', thrower: gr0.thrower, victim: p.id, damage, armorPen: g.heArmorPen });
       }
     } else {
       for (const p of w.pawns) {
-        if (!p.alive || !w.nav.lineOfSight(p.pos, center)) continue;
+        if (!p.alive) continue;
+        if (nav.effectClear === undefined) {
+          if (!nav.lineOfSight(p.pos, center)) continue;
+        } else {
+          const eye = { x: p.pos.x, y: p.pos.y, z: p.pos.z + (p.crouching === true ? w.damage.crouchEyeHeight : w.damage.eyeHeight) };
+          if (!nav.effectClear(origin, eye)) continue;
+        }
         if (g.smokeBlocksFlash && smokeBlocks(cur, tick, p.pos, center, g)) continue;
         const sec = flashSeconds(Math.hypot(p.pos.x - center.x, p.pos.y - center.y), angleOff(p.yaw, p.pos, center), g, w.ai);
         if (sec <= 0) continue;

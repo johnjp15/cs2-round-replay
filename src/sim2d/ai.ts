@@ -13,7 +13,7 @@ import { Rng, compareOrdinal, roundNumber, type Button, type Goal, type ObsEvent
 import { aimPitch } from './hitscan';
 import { TICKS_PER_SEC } from './movement';
 import type { NavMesh, NavPoint } from './nav';
-import type { Sight } from './vision';
+import type { GuardSight } from './vision';
 import { fallbackWeapon, gunStats, isGrenade } from './weapons';
 
 /** The roles `goal.role` may name (any other string behaves as `hold`). docs/ai.md. G1 added `rejoin`. */
@@ -122,7 +122,8 @@ export interface AiContext {
   /** The round as observe() reports it (`observe.round.phase`). */
   readonly round: { readonly phase: RoundPhase };
   readonly nav: NavMesh;
-  readonly sight: Sight;
+  /** The guard-spot sight test: the CS2 mesh (MeshSight, G6), or the 2D Sight without 3D geometry. */
+  readonly sight: GuardSight;
   readonly tuning: Tuning;
   /** rng.fork('ai:' + id) of the host's AI seed. */
   readonly rng: Rng;
@@ -316,15 +317,15 @@ export function holdFacing(ctx: AiContext, s: AiState, spot: Vec3): number {
 
 /**
  * A spot from which a T guards the planted bomb: on rings of 300–guardMaxUnits around it (every 15°), walkable, with
- * eye-to-bomb sight (`sight.clear`, cover included), nearest to the pawn (ties: ring then angle order). The goal's
- * `hold` wins when it qualifies. null if none qualifies.
+ * eye-to-bomb sight (`sight.pointClear`: the CS2 mesh, G6; in 2D the mask with cover), nearest to the pawn (ties: ring
+ * then angle order). The goal's `hold` wins when it qualifies. null if none qualifies.
  */
 export function guardSpot(ctx: AiContext, bomb: Vec3): Vec3 | null {
   const { nav, sight, tuning } = ctx;
   const eye = tuning.damage.eyeHeight;
   const max = tuning.ai.guardMaxUnits;
-  // The bomb is a point on the ground: low for the cover rule (a box between hides it unless the guard stands at the box).
-  const ok = (p: Vec3): boolean => dist2d(p, bomb) <= max && nav.isWalkable(p) && sight.clear(p, eye, bomb, tuning.damage.bandHeights['leg'] ?? 16, false, true);
+  // The bomb is a point on the ground (leg height above it): a box between hides it unless the line passes over it.
+  const ok = (p: Vec3): boolean => dist2d(p, bomb) <= max && nav.isWalkable(p) && sight.pointClear(p, eye, bomb, tuning.damage.bandHeights['leg'] ?? 16);
   const hold = ctx.goal.hold;
   if (hold !== null && ok(hold)) return copy(hold);
   let best: Vec3 | null = null;

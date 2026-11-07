@@ -63,6 +63,7 @@ export function visOptionsFromTuning(ai: Pick<AiTuning, 'losWallTolerancePx' | '
 export function sightOptionsFromTuning(t: Pick<Tuning, 'ai' | 'damage' | 'nav'>): SightOptions {
   return {
     eyeHeight: t.damage.eyeHeight,
+    crouchEyeHeight: t.damage.crouchEyeHeight,
     levelStepUnits: t.ai.losLevelStepUnits,
     levelSlackUnits: t.ai.losLevelSlackUnits,
     stepHeight: t.nav.stepHeight,
@@ -356,6 +357,8 @@ export interface SightNav {
 export interface SightOptions {
   /** Eye height above the floor for `lineOfSight` (`damage.eyeHeight`). */
   readonly eyeHeight: number;
+  /** Crouched eye height (`damage.crouchEyeHeight`), for `pairSight`. */
+  readonly crouchEyeHeight: number;
   /** Sample spacing along the line (units; `ai.losLevelStepUnits`). */
   readonly levelStepUnits: number;
   /** A sample is inside a floor only when this far below it (units; `ai.losLevelSlackUnits`), for the nav's height-model error. */
@@ -382,8 +385,10 @@ export interface SightEnd {
 }
 
 /**
- * What `sees`, bullets and grenades ask (C4). `flat(a, b)` is the 2D test: the sight mask if there is one, else
- * the nav mesh's lineOfSight (synthetic test meshes). `clear(a, eyeA, b, eyeB)` adds a level check on the
+ * The 2D sight (C4): what `sees`, bullets and grenades ask when the host has no 3D geometry (the 2D movement mode, the
+ * synthetic test meshes). With the CS2 mesh (G6) `sees`, bullets, the guard spot and grenade effects use MeshSight
+ * (mesh-sight.ts) and this class only clamps grenade throws (`flat`). `flat(a, b)` is the 2D test: the sight mask if
+ * there is one, else the nav mesh's lineOfSight (synthetic test meshes). `clear(a, eyeA, b, eyeB)` adds a level check on the
  * straight 3D line between the two eyes (eye = floor z + eye height), sampled every `levelStepUnits` against the
  * nav floors under it: the line is blocked where it is more than `levelSlackUnits` below every floor under a
  * sample (inside the ground: a ledge face seen from below), or where, over one floor surface, it is both more than
@@ -412,6 +417,24 @@ export class Sight {
    */
   clear(a: Vec3, eyeA: number, b: Vec3, eyeB: number, lowA = false, lowB = false): boolean {
     return this.flat(a, b) && this.levelsClear(a, a.z + eyeA, b, b.z + eyeB) && this.coverClear({ pos: a, height: eyeA, low: lowA }, { pos: b, height: eyeB, low: lowB });
+  }
+
+  /**
+   * `sees` for one pair (PairSight): eye to eye (crouchEyeHeight when crouched), symmetric, so both asked directions
+   * get the same answer. Crouched, planting and defusing (`busy`) pawns are low for the cover rule.
+   */
+  pairSight(a: SeePawn, b: SeePawn, ab: boolean, ba: boolean): number {
+    if (!ab && !ba) return 0;
+    const o = this.options;
+    const eyeA = a.crouching ? o.crouchEyeHeight : o.eyeHeight;
+    const eyeB = b.crouching ? o.crouchEyeHeight : o.eyeHeight;
+    if (!this.clear(a.pos, eyeA, b.pos, eyeB, a.crouching || a.busy === true, b.crouching || b.busy === true)) return 0;
+    return (ab ? SEES_AB : 0) | (ba ? SEES_BA : 0);
+  }
+
+  /** GuardSight: a pawn at `spot` (eye `eye` above it) sees the ground point `height` above `target` (low for cover). */
+  pointClear(spot: Vec3, eye: number, target: Vec3, height: number): boolean {
+    return this.clear(spot, eye, target, height, false, true);
   }
 
   /** `clear` with the standing eye height at both ends, both upright; 2D only when either end has no z. Fits hitscan's LosQuery. */
@@ -529,11 +552,29 @@ export interface SeePawn {
   readonly busy?: boolean;
 }
 
-/** Eye heights and FOV for `sees`. */
+/** Eye heights and FOV for `sees` (the eye heights are the sight model's own since G6; kept for callers). */
 export interface SeesOptions {
   readonly fovDeg: number;
   readonly eyeHeight: number;
   readonly crouchEyeHeight: number;
+}
+
+/** `PairSight.pairSight` result bits: a sees b, b sees a. */
+export const SEES_AB = 1;
+export const SEES_BA = 2;
+
+/**
+ * The sight half of `sees` for one pair (no FOV, smoke or flash): SEES_AB if `ab` is asked and a sees b, SEES_BA if
+ * `ba` is asked and b sees a. `Sight` (2D: symmetric eye to eye) and `MeshSight` (G6: eye to the target's aim points on
+ * the CS2 mesh) implement it.
+ */
+export interface PairSight {
+  pairSight(a: SeePawn, b: SeePawn, ab: boolean, ba: boolean): number;
+}
+
+/** The LIVE AI's guard-spot test (ai.ts guardSpot): a pawn standing at `spot` sees the point `height` above `target`. */
+export interface GuardSight {
+  pointClear(spot: Vec3, eye: number, target: Vec3, height: number): boolean;
 }
 
 /** Smoke between two points (Sim2DHost.smokeBlocks fits). */
@@ -555,12 +596,12 @@ export function angleOff(yaw: number, from: NavPoint, to: NavPoint): number {
 /**
  * `sees` for every pawn (contract F5; docs/contracts.md): `pawns` in id order, result in the same order, each list
  * sorted by id. Viewer V sees target T (another pawn, either team) when both are alive, V is not blind, T is within
- * fovDeg / 2 of V's yaw, the eye-to-eye line is clear (`sight.clear`: the 2D mask, the level check and the cover
- * rule; eyes at eyeHeight, crouchEyeHeight when crouched; crouched, planting and defusing pawns are low for cover),
- * and no active smoke crosses the 2D segment. Sight and smoke are
- * symmetric, so each unordered pair is traced once and only if one side looks at the other.
+ * fovDeg / 2 of V's yaw, no active smoke crosses the 2D segment V–T, and `sight.pairSight` has V seeing T: with the CS2
+ * mesh (G6, MeshSight) V's eye sees one of T's aim points; in 2D (Sight) the eye-to-eye line passes the mask, the
+ * level check and the cover rule. Each unordered pair is visited once (i < j, id order), only if one side looks at the
+ * other, and smoke is tested before any trace.
  */
-export function computeSees(pawns: readonly SeePawn[], sight: Sight, smoke: SmokeQuery, o: SeesOptions): PlayerId[][] {
+export function computeSees(pawns: readonly SeePawn[], sight: PairSight, smoke: SmokeQuery, o: SeesOptions): PlayerId[][] {
   const half = o.fovDeg / 2;
   const out: PlayerId[][] = pawns.map(() => []);
   for (let i = 0; i < pawns.length; i++) {
@@ -572,13 +613,10 @@ export function computeSees(pawns: readonly SeePawn[], sight: Sight, smoke: Smok
       const ab = !a.blind && angleOff(a.yaw, a.pos, b.pos) <= half;
       const ba = !b.blind && angleOff(b.yaw, b.pos, a.pos) <= half;
       if (!ab && !ba) continue;
-      const eyeA = a.crouching ? o.crouchEyeHeight : o.eyeHeight;
-      const eyeB = b.crouching ? o.crouchEyeHeight : o.eyeHeight;
-      const lowA = a.crouching || a.busy === true;
-      const lowB = b.crouching || b.busy === true;
-      if (!sight.clear(a.pos, eyeA, b.pos, eyeB, lowA, lowB) || smoke.smokeBlocks(a.pos, b.pos)) continue;
-      if (ab) (out[i] as PlayerId[]).push(b.id);
-      if (ba) (out[j] as PlayerId[]).push(a.id);
+      if (smoke.smokeBlocks(a.pos, b.pos)) continue;
+      const seen = sight.pairSight(a, b, ab, ba);
+      if ((seen & SEES_AB) !== 0) (out[i] as PlayerId[]).push(b.id);
+      if ((seen & SEES_BA) !== 0) (out[j] as PlayerId[]).push(a.id);
     }
   }
   // Pairs are visited in id order, so each list is already sorted (j > i appended in order; earlier i first).
