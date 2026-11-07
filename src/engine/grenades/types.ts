@@ -141,6 +141,8 @@ export interface Inferno {
   flames: Flame[];
   /** Spawn attempts so far, the next attempt's tick and interval (seconds). */
   attempts: number;
+  /** Failed attempts since the last new flame (rotates the parent choice). */
+  misses: number;
   nextSpawnTick: number;
   spawnInterval: number;
   /** Damage steps dealt so far. */

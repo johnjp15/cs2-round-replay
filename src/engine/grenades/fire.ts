@@ -71,6 +71,7 @@ export function createInferno(
       biasY: vel.y * t.infernoVelocityFactor,
       flames: [first],
       attempts: 0,
+      misses: 0,
       nextSpawnTick: tick + Math.max(1, Math.round(interval * TICK_RATE)),
       spawnInterval: interval,
       damageSteps: 0,
@@ -88,11 +89,14 @@ function trySpawn(inf: Inferno, world: GrenadeWorld, state: GrenadeState, tick: 
     .map((f, k) => ({ f, k }))
     .filter((e) => alive(e.f, tick) && e.f.depth < t.infernoMaxDepth)
     .sort((a, b) => a.f.children - b.f.children || a.f.depth - b.f.depth || a.k - b.k);
-  const pick = parents[0];
+  // After failed attempts, move on to the next candidate parent (a surrounded flame must not stall the spread).
+  const pick = parents[inf.misses % Math.max(1, parents.length)];
   if (pick === undefined) return null;
   const parent = pick.f;
   const ang = 2 * Math.PI * hashRandom(state.seed, inf.seq, inf.attempts, 1);
-  const decay = Math.pow(t.infernoVelocityDecay, parent.depth);
+  // Velocity bias: |v| × inferno_velocity_factor, capped at the random unit vector's length, × decay per generation.
+  const bl = Math.sqrt(inf.biasX * inf.biasX + inf.biasY * inf.biasY);
+  const decay = Math.pow(t.infernoVelocityDecay, parent.depth) / Math.max(1, bl);
   let dx = Math.cos(ang) + inf.biasX * decay;
   let dy = Math.sin(ang) + inf.biasY * decay;
   const dl = Math.sqrt(dx * dx + dy * dy);
@@ -149,11 +153,13 @@ export function stepInferno(
     const got = trySpawn(inf, world, state, tick, t);
     inf.attempts++;
     if (got !== null) {
+      inf.misses = 0;
       got.parent.children++;
       inf.flames.push(got.flame);
       inf.spawnInterval = Math.min(t.infernoMaxSpawnInterval, inf.spawnInterval * t.infernoSpawnGrowth);
       inf.nextSpawnTick = tick + Math.max(1, Math.round(inf.spawnInterval * TICK_RATE));
     } else {
+      inf.misses++;
       inf.nextSpawnTick = tick + 1;
     }
   }
