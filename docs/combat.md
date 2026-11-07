@@ -521,7 +521,8 @@ mid-grenade-flight, mid-plant, mid-defuse and post-round snapshots, into the sam
 
 - **No spread, recoil or movement inaccuracy:** every bullet goes exactly along yaw and pitch, so shots are
   deterministic. In CS2, running and spraying are inaccurate. A Core tuned here must still stop or counter-strafe
-  in CS2.
+  in CS2. (G5: in the human's recorded duels his bullets on the target are blocked and the Core applies the tape's
+  outcome from the `blocked_hit` reports, so there the result doesn't hang on spread: `docs/core.md`.)
 - No wall penetration (wallbangs), no tagging (slowdown when hit), no aim punch, no scoped AWP state, no knife
   attacks, no Glock burst mode. Bullets and grenades don't hit the bomb.
 - Bomb: see "Bomb and round rules", "Differences from CS2".

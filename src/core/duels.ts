@@ -9,10 +9,10 @@
  * so different input still changes history; if he never fires on the target, nothing is forced (Lokier lives).
  * docs/core.md "Recorded duels of the human".
  *
- * Portable style (docs/port-notes.md "Duels"): plain data, integer ticks, duels in plan order, log texts from integer
- * arithmetic only.
+ * Portable style (docs/port-notes.md "Recorded duels of the human"): plain data, integer ticks, duels in plan order,
+ * log texts from integer arithmetic only.
  */
-import { type Action, type Observe, type PawnObs, type PlayerId, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
+import { roundNumber, type Action, type Observe, type PawnObs, type PlayerId, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
 import type { EncounterPlan, EncounterState } from './divergence';
 import { tenthsText, trackPosAt } from './divergence';
 import { dist2 } from './puppet';
@@ -123,13 +123,18 @@ export function buildDuels(model: RoundModel, plan: ScriptPlan, encounters: read
       toTick: e.toTick,
       firstShotTick: shots[0] as number,
       lastShotTick: shots[shots.length - 1] as number,
-      spot: enc === null ? trackPosAt(model, human, Math.floor(((shots[0] as number) + (shots[shots.length - 1] as number)) / 2)) : { x: enc.spot.x, y: enc.spot.y, z: enc.spot.z },
+      spot: enc === null ? canonicalPos(trackPosAt(model, human, Math.floor(((shots[0] as number) + (shots[shots.length - 1] as number)) / 2))) : { x: enc.spot.x, y: enc.spot.y, z: enc.spot.z },
       hits,
       encounter: enc === null ? null : enc.key,
       cycleTicks: gun === undefined ? 2 : tapSpacing(cycleTicksOf(gun)),
     });
   }
   return out;
+}
+
+/** A position with its coordinates rounded to 6 decimals (an interpolated track point; plain data for the port). */
+function canonicalPos(p: Vec3): Vec3 {
+  return { x: roundNumber(p.x), y: roundNumber(p.y), z: roundNumber(p.z) };
 }
 
 function initialDuelStates(duels: readonly DuelPlan[]): DuelState[] {
