@@ -19,6 +19,7 @@ import { walkQueryOf } from '../src/app/index';
 import { FOLLOW_SCRIPT, playScript } from '../tools/follow-script';
 import { NO_HUMAN, ROOT, coreLogs, deaths, loadHarnessData, runHarness, type HarnessRun } from '../tools/harness';
 import { HumanBot, ScenarioError, formatTimeline, liveSwitches, loadScenario, parseScenario, rejoins, timeline, type TimelineEvent } from '../tools/human-bot';
+import { formatViolations, reactViolations } from '../tools/react-check';
 
 const data = loadHarnessData();
 const tuning = data.tuning;
@@ -31,12 +32,16 @@ interface ScenarioRun {
   readonly tl: readonly TimelineEvent[];
 }
 
+/** G7: every scenario run of this file (and the follow run), for the react invariant at the end. */
+const reactRuns: { name: string; run: HarnessRun }[] = [];
+
 function play(name: string): ScenarioRun {
   const s = loadScenario(`${ROOT}/fixtures/scenarios/${name}.json`);
   const bot = HumanBot.fromScenario(data, s);
   const run = runHarness(data, { human: s.human, driver: bot, lastTick: s.until === 'end' ? 'end' : tickOf(s.until), seed: s.seed, takeover: s.takeover === null ? null : tickOf(s.takeover) });
   const tl = timeline(run.entries);
   console.log(`[scenario ${name}] ${s.description}\n${formatTimeline(tl)}\n`);
+  reactRuns.push({ name, run });
   return { run, bot, tl };
 }
 
@@ -164,7 +169,7 @@ function tapeAfterLokier(run: HarnessRun): (string | number)[][] {
 
 describe('scenario files', () => {
   it('parse, and bad ones are refused with the path', () => {
-    for (const n of ['lokier-late', 'never-peeks', 'mid-zwomp', 'flank-sp4rtan', 'cart-dies', 'block-barely', 'block-sp4rtan', 'smoke-window', 'cart-goes-a', 'miss-lokier-shop', 'takeover-duel', 'duel-perfect-aim', 'early-peek-lokier', 'takeover-mid-duel']) {
+    for (const n of ['lokier-late', 'never-peeks', 'mid-zwomp', 'flank-sp4rtan', 'cart-dies', 'block-barely', 'block-sp4rtan', 'smoke-window', 'cart-goes-a', 'miss-lokier-shop', 'takeover-duel', 'duel-perfect-aim', 'early-peek-lokier', 'takeover-mid-duel', 'peek-before-eradicate', 'window-2s-early', 'window-6s-early', 'kill-lokier-early']) {
       expect(loadScenario(`${ROOT}/fixtures/scenarios/${n}.json`).name).toBe(n);
     }
     expect(() => parseScenario({ steps: [{ do: 'dance' }] })).toThrow(ScenarioError);
@@ -185,6 +190,7 @@ describe('1. no-op guard', () => {
 
   it('cart follows his recording: nobody goes LIVE, and the round is the tape (G5: every kill on its recorded tick)', () => {
     const run = playScript(data, readFileSync(`${ROOT}/${FOLLOW_SCRIPT}`, 'utf8'));
+    reactRuns.push({ name: 'cart-follows-recording', run });
     const sw = switches(run);
     console.log(`[no-op guard, cart-follows-recording] switches:\n${sw.map((s) => `  ${s.tick} (${(s.tick / 64).toFixed(2)} s) ${s.text}`).join('\n')}\n${formatTimeline(timeline(run.entries))}\n`);
     expect(sw).toEqual([]);
@@ -553,5 +559,16 @@ describe('10. cart misses Lokier at the window and hides in Shop (G1)', () => {
     expect(dist(pawnAt(last, 'cart').pos, { x: -2360, y: -642 })).toBeLessThan(48);
     expectRoundEndByRules(run);
     expectUntouchedReplay(run);
+  });
+});
+
+describe('G7: if they can attack, they do (tools/react-check.ts), over the golden master and every scenario of this file', () => {
+  it('no alive REPLAY bot has an off-script enemy in sight for more than a reaction time unless the recording covers it', () => {
+    expect(reactRuns.length).toBeGreaterThanOrEqual(11);
+    for (const { name, run } of [{ name: 'golden', run: golden }, ...reactRuns]) {
+      const v = reactViolations(run, tuning);
+      console.log(`[react ${name}] ${v.length} violations${v.length > 0 ? `\n${formatViolations(v)}` : ''}`);
+      expect([name, v]).toEqual([name, []]);
+    }
   });
 });
