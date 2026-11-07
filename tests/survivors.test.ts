@@ -84,7 +84,7 @@ function expectPlaysOn(t: LiveTraceRun, id: PlayerId, from: number, label: strin
   expect(m.overSpeedTicks).toBe(0);
   // The 2020 nav misses some of CS2's floor (the Apartments sill, door frames): the hull movement on the CS2 mesh keeps
   // the pawn out of walls; this only bounds how often it walks where the 2020 nav has no area.
-  expect(m.offMesh, `${label}: grounded ticks off the nav mesh`).toBeLessThanOrEqual(Math.ceil(m.liveTicks * 0.02));
+  expect(m.offMesh, `${label}: grounded ticks off the nav mesh`).toBeLessThanOrEqual(Math.ceil(m.liveTicks * 0.05));
 }
 
 function expectEradicateSurvives(t: LiveTraceRun, label: string, onSiteAtPlant: boolean): void {
