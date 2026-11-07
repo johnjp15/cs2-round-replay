@@ -232,8 +232,9 @@ As in CS, neither shows for fire damage. Team-kill penalties are out of scope. T
 - **`blocked_hit {attacker, victim, weapon, hitgroup}`** (G5): a *bullet of the human's pawn* that a block stopped is
   reported in the observe, right after its `shot` and `sound`: whom it would have hit and the band the hitscan picked
   (the same trace as an unblocked bullet; walls, cover and the pitch bands decide as usual). A miss reports nothing,
-  and neither do the puppets' blocked bullets or anyone's grenades. The Core uses it to resolve the human's shots in
-  his recorded duels like the tape (`docs/core.md` "Recorded duels of the human").
+  and neither do the puppets' blocked bullets or anyone's grenades. G5's Core used it to resolve the human's shots in
+  his recorded duels like the tape; since D1 (2026-11-07) those shots are real and the Core blocks none of his pairs
+  (`docs/core.md` "Recorded duels of the human").
 - **`damage {attacker, victim, amount, armor, hitgroup, weapon, lethal}`** (scripted) is queued by `apply()` and
   applied in the next `tick()`, after shots and grenades, in Core order. It removes `amount` HP and `armor` armor,
   each capped at what the victim has, and emits `damage` with `scripted: true` and the amounts actually removed.
