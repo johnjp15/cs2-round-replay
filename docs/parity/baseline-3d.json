@@ -3,84 +3,84 @@
  "view": {
   "shots": 181,
   "edgeF": {
-   "mean": 0.533,
-   "median": 0.545,
-   "min": 0.166
+   "mean": 0.553,
+   "median": 0.568,
+   "min": 0.189
   },
   "ssim": {
-   "mean": 0.69,
-   "median": 0.694,
-   "min": 0.578
+   "mean": 0.694,
+   "median": 0.696,
+   "min": 0.58
   },
   "byCamera": {
    "barely": {
     "shots": 20,
-    "edgeF": 0.529,
-    "ssim": 0.695
+    "edgeF": 0.555,
+    "ssim": 0.698
    },
    "cart": {
     "shots": 112,
-    "edgeF": 0.543,
-    "ssim": 0.694
+    "edgeF": 0.569,
+    "ssim": 0.698
    },
    "donk": {
     "shots": 19,
-    "edgeF": 0.351,
-    "ssim": 0.642
+    "edgeF": 0.365,
+    "ssim": 0.644
    },
    "eradicate": {
     "shots": 30,
-    "edgeF": 0.613,
-    "ssim": 0.705
+    "edgeF": 0.61,
+    "ssim": 0.708
    }
   },
   "worst": [
    {
-    "t": 33.5,
-    "edgeF": 0.1733,
-    "ssim": 0.5877,
-    "watched": "donk"
-   },
-   {
     "t": 35.5,
-    "edgeF": 0.1661,
-    "ssim": 0.5961,
+    "edgeF": 0.1893,
+    "ssim": 0.5969,
     "watched": "donk"
    },
    {
     "t": 36,
-    "edgeF": 0.1667,
-    "ssim": 0.6007,
+    "edgeF": 0.1974,
+    "ssim": 0.602,
+    "watched": "donk"
+   },
+   {
+    "t": 33.5,
+    "edgeF": 0.2134,
+    "ssim": 0.5932,
     "watched": "donk"
    },
    {
     "t": 37,
-    "edgeF": 0.2004,
-    "ssim": 0.6068,
+    "edgeF": 0.2276,
+    "ssim": 0.6087,
     "watched": "donk"
    },
    {
     "t": 34.5,
-    "edgeF": 0.2199,
-    "ssim": 0.5995,
+    "edgeF": 0.2454,
+    "ssim": 0.599,
     "watched": "donk"
    },
    {
     "t": 36.5,
-    "edgeF": 0.2176,
-    "ssim": 0.6062,
+    "edgeF": 0.2432,
+    "ssim": 0.6079,
     "watched": "donk"
    },
    {
     "t": 34,
-    "edgeF": 0.2357,
-    "ssim": 0.5919,
+    "edgeF": 0.2607,
+    "ssim": 0.5944,
     "watched": "donk"
    },
    {
     "t": 35,
-    "edgeF": 0.2236,
-    "ssim": 0.6057,
+    "edgeF": 0.2522,
+    "ssim": 0.6061,
     "watched": "donk"
    }
   ]
@@ -90,13 +90,13 @@
    "summary": {
     "run": "watch",
     "timestamps": 181,
-    "pass": 59,
-    "fail": 122,
+    "pass": 57,
+    "fail": 124,
     "radar": {
      "checks": 438,
-     "fail": 129,
-     "rms": 40.2,
-     "p95": 74.7,
+     "fail": 139,
+     "rms": 42.3,
+     "p95": 86.2,
      "max": 163,
      "maxAt": "barely @ 23s"
     },
@@ -114,8 +114,8 @@
      "fail": 8
     },
     "causes": {
-     "snap": 105,
-     "recording": 14,
+     "snap": 116,
+     "recording": 13,
      "puppet": 10
     },
     "status": {
@@ -162,15 +162,15 @@
      },
      "cart": {
       "n": 165,
-      "rms": 38.5,
-      "max": 105.5,
-      "fail": 53
+      "rms": 44.1,
+      "max": 110.1,
+      "fail": 64
      },
      "donk": {
       "n": 109,
-      "rms": 33.8,
-      "max": 134.2,
-      "fail": 24
+      "rms": 33.6,
+      "max": 134,
+      "fail": 23
      },
      "lokier": {
       "n": 10,
@@ -576,7 +576,7 @@
     "17|hud|clip": "pass",
     "17|hud|clock": "pass",
     "17.5|pos|barely": "pass",
-    "17.5|pos|cart": "pass",
+    "17.5|pos|cart": "fail",
     "17.5|pos|donk": "pass",
     "17.5|pos|lokier": "pass",
     "17.5|pos|snarlbot": "pass",
@@ -587,7 +587,7 @@
     "17.5|hud|clip": "pass",
     "17.5|hud|clock": "pass",
     "17.85|pos|barely": "fail",
-    "17.85|pos|cart": "pass",
+    "17.85|pos|cart": "fail",
     "17.85|pos|donk": "pass",
     "17.85|pos|lokier": "fail",
     "17.85|pos|sp4rtan": "pass",
@@ -597,7 +597,7 @@
     "17.85|hud|clip": "pass",
     "17.85|hud|clock": "pass",
     "18|pos|barely": "fail",
-    "18|pos|cart": "pass",
+    "18|pos|cart": "fail",
     "18|pos|donk": "pass",
     "18|pos|lokier": "pass",
     "18|pos|sp4rtan": "pass",
@@ -607,7 +607,7 @@
     "18|hud|clip": "pass",
     "18|hud|clock": "pass",
     "18.5|pos|barely": "fail",
-    "18.5|pos|cart": "pass",
+    "18.5|pos|cart": "fail",
     "18.5|pos|donk": "pass",
     "18.5|pos|lokier": "pass",
     "18.5|pos|sp4rtan": "pass",
@@ -617,7 +617,7 @@
     "18.5|hud|clip": "fail",
     "18.5|hud|clock": "pass",
     "18.517|pos|barely": "fail",
-    "18.517|pos|cart": "pass",
+    "18.517|pos|cart": "fail",
     "18.517|pos|donk": "pass",
     "18.517|pos|lokier": "pass",
     "18.517|pos|sp4rtan": "pass",
@@ -627,7 +627,7 @@
     "18.517|hud|clip": "pass",
     "18.517|hud|clock": "pass",
     "18.617|pos|barely": "fail",
-    "18.617|pos|cart": "pass",
+    "18.617|pos|cart": "fail",
     "18.617|pos|donk": "pass",
     "18.617|pos|lokier": "pass",
     "18.617|pos|sp4rtan": "pass",
@@ -637,7 +637,7 @@
     "18.617|hud|clip": "pass",
     "18.617|hud|clock": "pass",
     "18.7|pos|barely": "fail",
-    "18.7|pos|cart": "pass",
+    "18.7|pos|cart": "fail",
     "18.7|pos|donk": "pass",
     "18.7|pos|lokier": "pass",
     "18.7|pos|sp4rtan": "pass",
@@ -647,7 +647,7 @@
     "18.7|hud|clip": "pass",
     "18.7|hud|clock": "pass",
     "18.8|pos|barely": "fail",
-    "18.8|pos|cart": "pass",
+    "18.8|pos|cart": "fail",
     "18.8|pos|donk": "pass",
     "18.8|pos|sp4rtan": "pass",
     "18.8|pos|zwomp": "pass",
@@ -656,7 +656,7 @@
     "18.8|hud|clip": "pass",
     "18.8|hud|clock": "pass",
     "18.9|pos|barely": "pass",
-    "18.9|pos|cart": "pass",
+    "18.9|pos|cart": "fail",
     "18.9|pos|donk": "pass",
     "18.9|pos|sp4rtan": "fail",
     "18.9|pos|zwomp": "pass",
@@ -665,7 +665,7 @@
     "18.9|hud|clip": "pass",
     "18.9|hud|clock": "pass",
     "19|pos|barely": "pass",
-    "19|pos|cart": "pass",
+    "19|pos|cart": "fail",
     "19|pos|donk": "pass",
     "19|pos|sp4rtan": "fail",
     "19|pos|zwomp": "pass",
@@ -674,7 +674,7 @@
     "19|hud|clip": "pass",
     "19|hud|clock": "pass",
     "19.5|pos|barely": "pass",
-    "19.5|pos|cart": "pass",
+    "19.5|pos|cart": "fail",
     "19.5|pos|donk": "pass",
     "19.5|pos|sp4rtan": "pass",
     "19.5|pos|zwomp": "pass",
@@ -1252,7 +1252,7 @@
     "49.93|hud|bomb": "pass",
     "50|pos|barely": "pass",
     "50|pos|cart": "pass",
-    "50|pos|donk": "fail",
+    "50|pos|donk": "pass",
     "50|pos|sp4rtan": "pass",
     "50|hud|hp": "pass",
     "50|hud|armor": "fail",
