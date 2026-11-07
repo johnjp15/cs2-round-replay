@@ -23,6 +23,11 @@
  *   turned into `set_weapon` actions for the human pawn, appended after Core's actions when the act
  *   is applied to the host. Neither is in the logged Act: in CS2 the human moves and switches weapons
  *   natively, and the Replayer diffs Core's own output. The next observe shows the result.
+ * - G4 takeover: a session built with `human: null` starts watching (every pawn replays, the run is the no-human
+ *   round). takeControl() hands the playable pawn (cart) to the human from the next step on (the engine's
+ *   `setHuman`, CS2's bot takeover); the Core sees `observe.human` change on that tick (docs/core.md "Takeover"). The
+ *   takeover is part of the run like the human's inputs: a rewind to a checkpoint before it returns to watching (the
+ *   tape keeps it, so a forward seek replays it on its tick), and restart() returns to the start, watching.
  */
 import {
   ALL_CAPABILITIES,
@@ -97,8 +102,16 @@ export interface SessionConfig {
   readonly seed: number;
   /** The sight mask (C4); without it (or null) the engine uses the nav mesh's line of sight. */
   readonly vision?: VisMask | null;
-  /** The pawn the human plays: `cart` by default, or null to spectate (all ten pawns replay). */
+  /**
+   * The pawn the human plays from the start: `cart` by default, or null to watch (all ten pawns replay until the
+   * player takes control of `playable`, G4).
+   */
   readonly human?: PlayerId | null;
+  /**
+   * G4: the pawn a watching player may take control of mid-round (takeControl). Default: `human`, else DEFAULT_HUMAN
+   * (cart); null = none (spectate only). The Core's scheduled encounters exist for the default human only.
+   */
+  readonly playable?: PlayerId | null;
   /** Builds the Core (default: defaultCore). For tests, benchmarks and Core variants. */
   readonly core?: CoreFactory;
   /**
@@ -128,6 +141,9 @@ interface CheckpointExtra {
   readonly slotRequests: WeaponSlot[];
   readonly paused: boolean;
   readonly speed: number;
+  /** G4: the human at the checkpoint (the engine's), and the tick he took control from (0: from the start), or null. */
+  readonly human: PlayerId | null;
+  readonly takeoverTick: number | null;
 }
 
 /** One entry of the human's input history: what was set before the step of `tick` (null = no input). */
@@ -141,14 +157,18 @@ interface SlotAt {
   readonly slot: WeaponSlot;
 }
 
-const SNAPSHOT_VERSION = 1;
+/** 2 (G4): the human can change mid-round (`human` is the snapshot's, `takeoverTick` added). */
+const SNAPSHOT_VERSION = 2;
 
 /** Everything needed to put a Session back exactly where it was (plain JSON data). */
 export interface SessionSnapshot {
   readonly kind: 'session';
   readonly version: number;
   readonly seed: number;
+  /** The pawn the human controls at the snapshot, or null (watching). */
   readonly human: PlayerId | null;
+  /** G4: the tick he took control from (0: from the start), or null. */
+  readonly takeoverTick: number | null;
   readonly host: HostSnapshot;
   readonly core: CoreSnapshot;
   /** Controls delivered to Core but not yet logged. */
@@ -167,7 +187,8 @@ export class Session {
   readonly nav: NavMesh;
   readonly tuning: Tuning;
   readonly seed: number;
-  readonly human: PlayerId | null;
+  /** G4: the pawn takeControl() may hand to the player (SessionConfig.playable), or null. */
+  readonly playable: PlayerId | null;
   readonly model: RoundModel;
   readonly schedule: EventSchedule;
   /** For inspection (renderer, tests); drive the session through its own methods. */
@@ -203,18 +224,29 @@ export class Session {
   private replaying = false;
   /** B5: the seek in progress. */
   private seekState: { from: number; start: number; target: number; rewound: string | null } | null = null;
+  /** G4: the pawn the human controls now (the engine's `human`), or null while watching. */
+  private humanNow: PlayerId | null;
+  /** G4: SessionConfig.human (the human from the start), or null. */
+  private readonly startHuman: PlayerId | null;
+  /** G4: the tick the human took control from in this run (0: from the start), or null while watching. */
+  private takeoverAt: number | null;
+  /** G4: a takeover the tape holds (a rewind took the run back before it): a forward seek replays it on this tick. */
+  private tapeTakeover: number | null = null;
 
   constructor(config: SessionConfig) {
     this.round = config.round;
     this.nav = config.nav;
     this.tuning = config.tuning;
     this.seed = config.seed;
-    this.human = config.human === undefined ? DEFAULT_HUMAN : config.human;
+    this.humanNow = config.human === undefined ? DEFAULT_HUMAN : config.human;
+    this.startHuman = this.humanNow;
+    this.playable = config.playable !== undefined ? config.playable : (this.humanNow ?? DEFAULT_HUMAN);
+    this.takeoverAt = this.humanNow === null ? null : 0;
     this.model = new RoundModel(config.round);
     this.schedule = new EventSchedule(config.round);
     const roster: RosterEntry[] = this.model.players.map((p) => ({ id: p.id, team: p.team }));
     this.host = new Sim2DHost(config.nav, config.tuning, roster, { score: config.round.meta.score, roundTimeSec: config.round.meta.clock0 }, { mask: config.vision ?? null, seed: config.seed });
-    this.host.setHuman(this.human);
+    this.host.setHuman(this.humanNow);
     const makeCore = config.core ?? defaultCore;
     this.core = makeCore({ model: this.model, schedule: this.schedule, tuning: config.tuning, seed: config.seed, nav: config.nav });
     const hc = this.host.capabilities();
@@ -253,6 +285,8 @@ export class Session {
    *   the speed capability.
    * - `checkpoint {id}`, `rewind {id}`, `seek {t}` (B5): checkpoint(), rewind(), seek(); driver work, not logged
    *   (a resync rewind logs the `rewind` it sends the Core).
+   * - `take_control {id}` (G4): takeControl(id); engine work, not logged and not sent to Core (it sees the takeover in
+   *   the next observe's `human`).
    * Every control that reaches Core is logged with the next step.
    */
   control(c: Control): void {
@@ -269,6 +303,9 @@ export class Session {
       case 'seek':
         this.seek(c.t);
         return;
+      case 'take_control':
+        this.takeControl(c.id);
+        return;
       case 'start':
         this.core.control(c);
         break;
@@ -283,6 +320,59 @@ export class Session {
         break;
     }
     this.pending.push(canonicalize(c));
+  }
+
+  // ---- G4: takeover ------------------------------------------------------------------------------
+
+  /** The pawn the human controls now, or null while watching (G4: it changes on a takeover and on rewinds). */
+  get human(): PlayerId | null {
+    return this.humanNow;
+  }
+
+  /** G4: the tick the human took control from in this run (0: a human from the start), or null while watching. */
+  get takeoverTick(): number | null {
+    return this.takeoverAt;
+  }
+
+  /**
+   * G4: the watching player takes control of `id` (the playable pawn, cart) from the next step on. The engine hands
+   * him the pawn before the next observe (Sim2DHost.setHuman; CS2: the native bot takeover), so that observe names him
+   * as `human` and the Core treats the pawn as the human from that tick (docs/core.md "Takeover"); everything before
+   * is the no-human run. The pawn keeps its position, velocity, view, weapon, HP and items; until setHumanInput it gets
+   * no input (it stands still). Not logged: the log shows it as `observe.human` changing. Part of the run like his
+   * inputs: a rewind to a checkpoint before it returns to watching and keeps it on the tape, so a forward seek
+   * replays it on its tick. Throws when takeControlBlocked says why not.
+   */
+  takeControl(id: PlayerId | null = this.playable): void {
+    const why = this.takeControlBlocked(id);
+    if (why !== null) throw new Error(`takeControl: ${why}`);
+    this.applyTakeover(id as PlayerId);
+  }
+
+  /**
+   * G4: why takeControl(id) would refuse now, or null: someone already plays, `id` is not the playable pawn, it is
+   * dead, a seek is running, or a resync is pending (step first). After the round end it is allowed while he lives
+   * (the post-round kill is then real).
+   */
+  takeControlBlocked(id: PlayerId | null = this.playable): string | null {
+    if (this.humanNow !== null) return `${this.humanNow} is already controlled`;
+    if (id === null || id !== this.playable) return `${String(id)} is not the playable pawn (${String(this.playable)})`;
+    if (this.seekState !== null) return 'a seek is in progress';
+    if (this.resyncObserve !== null) return 'a resync is pending; step first';
+    const p = this.host.pawnState(id);
+    if (p === null || !p.alive) return `${id} is dead`;
+    return null;
+  }
+
+  /** G4: takeControl() would succeed now (the app's "Take control" button and E key). */
+  get canTakeControl(): boolean {
+    return this.takeControlBlocked() === null;
+  }
+
+  private applyTakeover(id: PlayerId): void {
+    this.host.setHuman(id);
+    this.humanNow = id;
+    this.takeoverAt = this.tick;
   }
 
   // ---- B5: checkpoints, rewind, seek ------------------------------------------------------------
@@ -303,14 +393,17 @@ export class Session {
     const cp = this.checkpoints.get(id);
     if (cp === null) throw new Error(`rewind: no checkpoint ${id}`);
     this.seekState = null;
+    const takenAt = this.takeoverAt;
     const lastInput = this.humanTrack.length === 0 ? -1 : (this.humanTrack[this.humanTrack.length - 1] as HumanInputAt).tick;
     const lastSlot = this.slotTrack.length === 0 ? -1 : (this.slotTrack[this.slotTrack.length - 1] as SlotAt).tick;
     this.tapeInputs = [...this.humanTrack.filter((e) => e.tick >= cp.tick), ...this.tapeInputs.filter((e) => e.tick > lastInput)];
     this.tapeSlots = [...this.slotTrack.filter((e) => e.tick >= cp.tick), ...this.tapeSlots.filter((e) => e.tick > lastSlot)];
     this.humanTrack = this.humanTrack.filter((e) => e.tick < cp.tick);
     this.slotTrack = this.slotTrack.filter((e) => e.tick < cp.tick);
-    if (this.human !== null) this.tapeUntil = Math.max(this.tick, this.tapeUntil ?? 0);
+    if (this.humanNow !== null) this.tapeUntil = Math.max(this.tick, this.tapeUntil ?? 0);
     this.rewindTo(cp);
+    // G4: back before the takeover: watching again, and the takeover goes on the tape (a forward seek replays it).
+    if (takenAt !== null && this.takeoverAt === null) this.tapeTakeover = takenAt;
     return cp;
   }
 
@@ -353,6 +446,11 @@ export class Session {
         const slots = this.tapeSlots.filter((e) => e.tick === k);
         if (inputs.length > 0) this.tapeInputs = this.tapeInputs.filter((e) => e.tick !== k);
         if (slots.length > 0) this.tapeSlots = this.tapeSlots.filter((e) => e.tick !== k);
+        // G4: the takeover first (his inputs need a human pawn).
+        if (this.tapeTakeover === k && this.humanNow === null && this.playable !== null) {
+          this.tapeTakeover = null;
+          this.applyTakeover(this.playable);
+        }
         for (const e of inputs) this.setHumanInput(e.input);
         for (const e of slots) this.requestWeaponSlot(e.slot);
         this.step();
@@ -398,6 +496,7 @@ export class Session {
     this.tapeInputs = [];
     this.tapeSlots = [];
     this.tapeUntil = null;
+    this.tapeTakeover = null;
   }
 
   private seekProgress(): SeekProgress {
@@ -409,7 +508,14 @@ export class Session {
 
   private takeCheckpoint(id: string, auto: boolean): Checkpoint {
     const o = canonicalize(this.host.observe());
-    const extra: CheckpointExtra = { pending: [...this.pending], slotRequests: [...this.slotRequests], paused: this.pausedValue, speed: this.speedValue };
+    const extra: CheckpointExtra = {
+      pending: [...this.pending],
+      slotRequests: [...this.slotRequests],
+      paused: this.pausedValue,
+      speed: this.speedValue,
+      human: this.humanNow,
+      takeoverTick: this.takeoverAt,
+    };
     const cp: Checkpoint = {
       id,
       tick: o.tick,
@@ -436,10 +542,16 @@ export class Session {
     if (cp.logLength < this.sessionLog.length) this.sessionLog = this.sessionLog.head(cp.logLength);
     this.lastActValue = cp.logLength === 0 ? null : (this.sessionLog.at(cp.logLength - 1)?.act ?? null);
     this.checkpoints.dropAfter(cp.tick);
+    // G4: who controls what at the checkpoint (watching again if it predates the takeover).
+    this.humanNow = x.human;
+    this.takeoverAt = x.takeoverTick;
     if (this.capabilities.snapshot && cp.host !== null) {
       this.host.restore(cp.host);
       this.resyncObserve = null;
     } else {
+      // The engine gives the pawn back to the bot (CS2: the player stops controlling it) before the resync step.
+      if (cp.observe.human !== x.human) throw new Error(`rewind: checkpoint ${cp.id} has inconsistent human state`);
+      this.host.setHuman(x.human);
       const c: Control = { type: 'rewind', id: cp.id };
       this.core.control(c);
       this.pending.push(c);
@@ -466,9 +578,9 @@ export class Session {
    * `input.id` must be the human pawn. Throws while spectating.
    */
   setHumanInput(input: PawnInput | null): void {
-    if (input !== null && this.human === null) throw new Error('Session.setHumanInput: spectating (no human pawn)');
+    if (input !== null && this.humanNow === null) throw new Error('Session.setHumanInput: spectating (no human pawn)');
     this.host.setHumanInput(input);
-    if (this.human === null) return;
+    if (this.humanNow === null) return;
     // B5 history: the last input set before each step (a seek replays it).
     const tick = this.tick;
     const last = this.humanTrack[this.humanTrack.length - 1];
@@ -483,7 +595,7 @@ export class Session {
    * if the slot is empty. Returns false (and queues nothing) while spectating.
    */
   requestWeaponSlot(slot: WeaponSlot): boolean {
-    if (this.human === null) return false;
+    if (this.humanNow === null) return false;
     this.slotRequests.push(slot);
     this.slotTrack.push({ tick: this.tick, slot });
     return true;
@@ -494,7 +606,8 @@ export class Session {
       kind: 'session',
       version: SNAPSHOT_VERSION,
       seed: this.seed,
-      human: this.human,
+      human: this.humanNow,
+      takeoverTick: this.takeoverAt,
       host: this.host.snapshot(),
       core: this.core.snapshot(),
       pending: [...this.pending],
@@ -507,16 +620,21 @@ export class Session {
   }
 
   /**
-   * Return to a snapshot of this session (same seed and human). The log is cut back to the
-   * snapshot's lines, so stepping on reproduces what followed the snapshot the first time.
+   * Return to a snapshot of this session (same seed; its human, if any, one this session can have: the start's or the
+   * playable pawn). The log is cut back to the snapshot's lines, so stepping on reproduces what followed the snapshot
+   * the first time.
    * Rebuilding a long log re-parses it (roughly 0.1 s per 1,000 ticks); restoring to the current
    * length or to an empty log is free.
    */
   restore(s: SessionSnapshot): void {
     if (s.kind !== 'session' || s.version !== SNAPSHOT_VERSION) throw new Error('Session.restore: not a session snapshot of this version');
     if (s.seed !== this.seed) throw new Error(`Session.restore: snapshot seed ${s.seed} != session seed ${this.seed}`);
-    if (s.human !== this.human) throw new Error(`Session.restore: snapshot human ${String(s.human)} != session human ${String(this.human)}`);
+    if (s.human !== null && s.human !== this.startHuman && s.human !== this.playable) {
+      throw new Error(`Session.restore: snapshot human ${String(s.human)} is not this session's (playable: ${String(this.playable)})`);
+    }
     this.host.restore(s.host);
+    this.humanNow = s.human;
+    this.takeoverAt = s.takeoverTick;
     this.core.restore(s.core);
     this.pending = [...s.pending];
     this.slotRequests = [...s.slotRequests];
@@ -587,7 +705,7 @@ export class Session {
     if (this.slotRequests.length === 0) return act;
     const requests = this.slotRequests;
     this.slotRequests = [];
-    const pawn = this.human === null ? null : this.host.pawnState(this.human);
+    const pawn = this.humanNow === null ? null : this.host.pawnState(this.humanNow);
     if (pawn === null || !pawn.alive) return act;
     const carried = pawn.inventory.map((q) => q.item);
     let current: string = pawn.weapon;

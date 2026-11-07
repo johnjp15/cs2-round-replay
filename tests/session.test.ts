@@ -154,10 +154,15 @@ describe('Session', () => {
     expect(t.log().toText()).toBe(straight.log().toText());
   });
 
-  it('restore rejects snapshots of another seed or human', () => {
+  it('restore rejects snapshots of another seed or of a human this session can’t have', () => {
     const snap = newSession().snapshot();
     expect(() => new Session({ round, nav, tuning, seed: SEED + 1 }).restore(snap)).toThrow(/seed/);
-    expect(() => newSession(null).restore(snap)).toThrow(/human/);
+    // G4: a watching session may restore one where cart is controlled (its playable pawn), not one with another human.
+    expect(() => new Session({ round, nav, tuning, seed: SEED, human: null, playable: null }).restore(snap)).toThrow(/human/);
+    expect(() => new Session({ round, nav, tuning, seed: SEED, human: null, playable: 'donk' }).restore(snap)).toThrow(/human/);
+    const watching = newSession(null);
+    watching.restore(snap);
+    expect(watching.human).toBe('cart');
   });
 
   it('spectate mode: human null in every observe, Core drives all ten pawns', () => {

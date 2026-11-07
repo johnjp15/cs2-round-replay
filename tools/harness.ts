@@ -4,12 +4,16 @@
  * Sim2DHost, the same per-tick contract and the same SessionLog. Optionally a human plays one pawn from an input
  * script ("chaos cart"). docs/golden.md describes it, and the golden master and the C# port fixtures are built on it.
  *
- *   npm run harness -- [--human none|cart] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
- *   npm run harness -- --scenario fixtures/scenarios/<name>.json [--until <t|end>] [--out <dir>]
+ *   npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
+ *   npm run harness -- --scenario fixtures/scenarios/<name>.json [--takeover <t>] [--until <t|end>] [--out <dir>]
  *
  * - `--human none` (default): nobody plays, the Core drives all ten pawns (the golden master). `--human cart`: cart
  *   is the human pawn (the Core sends him nothing); without `--script` he gets no input and stands where the setup
  *   put him.
+ * - `--takeover <t>` (G4): nobody plays until observe tick round(t × 64), where the human (`--human`, default cart)
+ *   takes control (`Session.takeControl`, before that tick's observe); from then on as `--human`. Without `--script`
+ *   he gets no input from then on and stands still. `--takeover 0` is `--human cart`, byte for byte. A scenario's own
+ *   `takeover` is used unless this is given.
  * - `--script <path>`: JSON `[{t, forward, side, yaw, pitch, buttons, weapon?}]`, each entry held until the next
  *   (see `parseHumanScript`). `yaw` / `pitch` are degrees or `"track"`: the human pawn's recorded yaw (pitch: 0, the
  *   recording has none).
@@ -329,6 +333,12 @@ export interface HarnessOptions {
   readonly controls?: readonly { readonly tick: number; readonly control: Control }[];
   /** The Core to run (default: the app's `defaultCore`), e.g. a variant with G1's rejoin off. Not with `recordWalk`. */
   readonly core?: CoreFactory;
+  /**
+   * G4: the tick `human` takes control (`Session.takeControl` just before that tick's step; nobody plays before it,
+   * so the run is the no-human one up to there), or null / absent: the human plays from the start. The driver is asked
+   * every tick (a human-bot's shadow puppet needs them all), but its commands apply only once someone plays.
+   */
+  readonly takeover?: number | null;
 }
 
 export const NO_HUMAN: HarnessOptions = { human: null, driver: null, lastTick: 'end', seed: DEFAULT_SEED };
@@ -434,13 +444,15 @@ function positionsAfter(e: LogEntry): Vec3[] {
  */
 export function runHarness(data: SessionData, options: HarnessOptions): HarnessRun {
   const { human, driver, seed } = options;
+  const takeover = options.takeover ?? null;
   if (driver !== null && human === null) throw new Error('runHarness: a driver needs a human pawn');
+  if (takeover !== null && (human === null || !Number.isInteger(takeover) || takeover < 0)) throw new Error(`runHarness: bad takeover ${String(takeover)} (needs a human pawn and a tick >= 0)`);
   const t0 = performance.now();
   // The app's Core (defaultCore), or the same Core with the walk query wrapped by a recorder.
   const recorder = options.recordWalk === true ? new RecordingWalk(new NavWalkQuery(data.nav)) : null;
   if (recorder !== null && options.core !== undefined) throw new Error('runHarness: core and recordWalk do not mix');
   const core: CoreFactory = recorder === null ? (options.core ?? defaultCore) : (p) => new ReplayCore(p.model, p.schedule, p.tuning, p.seed, recorder);
-  const session = new Session({ round: data.round, nav: data.nav, tuning: data.tuning, vision: data.vision, seed, human, core });
+  const session = new Session({ round: data.round, nav: data.nav, tuning: data.tuning, vision: data.vision, seed, human: takeover === null ? human : null, playable: human, core });
   const ticks = roundTicks(session.model, data.tuning.replay.holdLastPositionSec);
   const last = options.lastTick === 'end' ? ticks - 1 : options.lastTick;
   if (!Number.isInteger(last) || last < 0) throw new Error(`runHarness: bad last tick ${String(options.lastTick)}`);
@@ -453,8 +465,10 @@ export function runHarness(data: SessionData, options: HarnessOptions): HarnessR
   const warnings: string[] = [];
   let lastInput: string | null = null;
   for (let k = 0; k <= last; k++) {
-    if (driver !== null && human !== null) {
-      const cmd = driver.command(k, session);
+    if (takeover === k && human !== null) session.takeControl(human);
+    // G4: the driver's commands apply once someone plays (nothing to apply while watching, before the takeover).
+    const cmd = driver === null || human === null ? null : driver.command(k, session);
+    if (cmd !== null && human !== null && session.human !== null) {
       if (cmd.input !== null) {
         // setHumanInput canonicalizes; skip it when nothing changed (the input is held anyway).
         const text = stableStringify(cmd.input);
@@ -781,6 +795,8 @@ export function driftTable(rows: readonly DriftRow[]): string {
 
 export interface HarnessSummary {
   readonly human: PlayerId | null;
+  /** G4: the tick the human took control (nobody played before it), or null: from the start (or nobody plays). */
+  readonly takeoverTick: number | null;
   readonly script: string | null;
   readonly seed: number;
   readonly ticks: number;
@@ -840,6 +856,7 @@ export function summarize(run: HarnessRun, scriptName: string | null = null): Ha
     .sort((a, b) => a.tick - b.tick);
   return {
     human: run.options.human,
+    takeoverTick: run.options.takeover ?? null,
     script: scriptName,
     seed: run.options.seed,
     ticks: run.ticks,
@@ -895,7 +912,7 @@ export function writeOutputs(dir: string, run: HarnessRun, summary: HarnessSumma
 export function describeSummary(s: HarnessSummary): string {
   const sec = (k: number): string => (k / 64).toFixed(2);
   const lines = [
-    `human ${s.human ?? 'none'}${s.script === null ? '' : ` (script ${s.script})`}, seed ${s.seed}: ${s.ticks} ticks (${s.firstTick}–${s.lastTick}), digest ${s.digest}`,
+    `human ${s.human ?? 'none'}${s.takeoverTick === null ? '' : ` from tick ${s.takeoverTick} (${sec(s.takeoverTick)} s, takeover)`}${s.script === null ? '' : ` (script ${s.script})`}, seed ${s.seed}: ${s.ticks} ticks (${s.firstTick}–${s.lastTick}), digest ${s.digest}`,
   ];
   for (const d of s.deaths) lines.push(`  death  ${String(d.tick).padStart(5)} (${sec(d.tick)} s) ${d.attacker ?? 'world'} -> ${d.victim} ${d.weapon ?? ''}${d.headshot ? ' HS' : ''}`);
   for (const b of s.bomb) lines.push(`  bomb   ${String(b.tick).padStart(5)} (${sec(b.tick)} s) ${b.phase} ${b.id ?? ''}`);
@@ -913,6 +930,8 @@ export function describeSummary(s: HarnessSummary): string {
 
 export interface CliArgs {
   readonly human: PlayerId | null;
+  /** G4: `--takeover` seconds, or null. */
+  readonly takeover: number | null;
   readonly script: string | null;
   /** Seconds or 'end'. */
   readonly until: number | 'end';
@@ -926,6 +945,8 @@ export interface CliArgs {
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
   let human: PlayerId | null = null;
+  let humanGiven = false;
+  let takeover: number | null = null;
   let script: string | null = null;
   let scenario: string | null = null;
   let untilGiven = false;
@@ -941,6 +962,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     };
     switch (flag) {
       case '--human': {
+        humanGiven = true;
         const v = value();
         if (v === 'none') human = null;
         else if (isPlayerId(v)) human = v;
@@ -950,6 +972,12 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
       case '--script':
         script = value();
         break;
+      case '--takeover': {
+        const v = value();
+        if (!Number.isFinite(Number(v)) || Number(v) < 0) throw new Error(`--takeover: expected seconds >= 0, got ${v}`);
+        takeover = Number(v);
+        break;
+      }
       case '--scenario':
         scenario = value();
         break;
@@ -971,18 +999,23 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
         out = value();
         break;
       default:
-        throw new Error(`unknown option ${flag} (options: --human none|cart, --script <path>, --scenario <path>, --until <t|end>, --seed <n>, --out <dir>)`);
+        throw new Error(`unknown option ${flag} (options: --human none|cart, --takeover <t>, --script <path>, --scenario <path>, --until <t|end>, --seed <n>, --out <dir>)`);
     }
+  }
+  // G4: a takeover is of the human pawn, cart unless --human names another.
+  if (takeover !== null && human === null) {
+    if (humanGiven) throw new Error('--takeover needs a human pawn (not --human none)');
+    human = 'cart';
   }
   if (scenario !== null && script !== null) throw new Error('--scenario and --script exclude each other');
   if (script !== null && human === null) throw new Error('--script needs --human (e.g. --human cart)');
-  return { human, script, until, seed, out, scenario, untilGiven };
+  return { human, takeover, script, until, seed, out, scenario, untilGiven };
 }
 
 /** Harness options for parsed CLI arguments (reads the script file). */
 export function optionsFromArgs(args: CliArgs): HarnessOptions {
   const driver = args.script === null || args.human === null ? null : new ScriptDriver(parseHumanScript(readFileSync(resolve(args.script), 'utf8')), args.human);
-  return { human: args.human, driver, lastTick: args.until === 'end' ? 'end' : tickOf(args.until), seed: args.seed };
+  return { human: args.human, driver, lastTick: args.until === 'end' ? 'end' : tickOf(args.until), seed: args.seed, takeover: args.takeover === null ? null : tickOf(args.takeover) };
 }
 
 function main(): void {
@@ -995,7 +1028,13 @@ function main(): void {
   const options: HarnessOptions =
     scenario === null || bot === null
       ? optionsFromArgs(args)
-      : { human: scenario.human, driver: bot, seed: scenario.seed, lastTick: args.untilGiven ? (args.until === 'end' ? 'end' : tickOf(args.until)) : scenario.until === 'end' ? 'end' : tickOf(scenario.until) };
+      : {
+          human: scenario.human,
+          driver: bot,
+          seed: scenario.seed,
+          lastTick: args.untilGiven ? (args.until === 'end' ? 'end' : tickOf(args.until)) : scenario.until === 'end' ? 'end' : tickOf(scenario.until),
+          takeover: args.takeover !== null ? tickOf(args.takeover) : scenario.takeover === null ? null : tickOf(scenario.takeover),
+        };
   const run = runHarness(data, options);
   const t2 = performance.now();
   const summary = summarize(run, args.script ?? args.scenario);

@@ -234,7 +234,12 @@ export interface Observe {
   /** All ten pawns, sorted by id. */
   readonly pawns: readonly PawnObs[];
   readonly events: readonly ObsEvent[];
-  /** The pawn the human controls, or null (spectating / bot-only run). */
+  /**
+   * The pawn the human controls, or null (spectating / bot-only run). G4: it may change mid-round: from null to a pawn
+   * on the tick the player takes control of it (`take_control`; CS2: the native bot takeover), and back to null only
+   * through a rewind to before that tick (or, CS2, the player leaving: the Core then makes the pawn LIVE, trigger
+   * `released`). docs/core.md "Takeover".
+   */
   readonly human: PlayerId | null;
   /** Round phase, score, clock and the bomb (C3). */
   readonly round: RoundObs;
@@ -444,6 +449,17 @@ export interface SpeedControl {
   /** Playback multiplier (1 = real time). */
   readonly x: number;
 }
+/**
+ * G4: the watching player takes control of pawn `id` (cart) from the next tick on. Engine and driver work, like a
+ * checkpoint: the engine hands the pawn to the human before the next observe (2D: the Session's `takeControl`, i.e.
+ * `Sim2DHost.setHuman`; CS2: the player's own E press on the spectated bot, which the plugin only allows for cart), and
+ * the Core learns of it from `observe.human`. Not sent to the Core and not logged; the log shows it as `human`
+ * changing in that tick's observe. docs/core.md "Takeover".
+ */
+export interface TakeControlControl {
+  readonly type: 'take_control';
+  readonly id: PlayerId;
+}
 
 export type Control =
   | StartControl
@@ -452,7 +468,8 @@ export type Control =
   | CheckpointControl
   | RewindControl
   | PauseControl
-  | SpeedControl;
+  | SpeedControl
+  | TakeControlControl;
 
 export type ControlType = Control['type'];
 

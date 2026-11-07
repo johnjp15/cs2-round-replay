@@ -22,7 +22,7 @@ export type {
   RadioEntry,
   ChatEntry,
 } from './schedule';
-export { ReplayCore } from './replay-core';
+export { RELEASED_TRIGGER, ReplayCore } from './replay-core';
 export type { ReplayCoreOptions } from './replay-core';
 export {
   PuppetTrack,

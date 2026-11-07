@@ -93,6 +93,7 @@ export type {
   RewindControl,
   PauseControl,
   SpeedControl,
+  TakeControlControl,
   Control,
   ControlType,
 } from './types';
