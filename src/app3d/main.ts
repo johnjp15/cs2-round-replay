@@ -4,9 +4,10 @@
  * loop (src/app/loop.ts) from requestAnimationFrame and draws the Three.js view (renderer3d.ts) and the HUD
  * (hud3d.ts).
  *
- * The page starts **watching** (nobody controls cart; the round plays as recorded) with a spectator camera: third
- * person behind the followed pawn (cart), first person through its eyes, or free fly (V cycles; Z / X pick another
- * player). E or "Take control of cart" hands him to the player from that tick on (a speed other than 1× drops to 1×):
+ * The page starts **watching** (nobody controls cart; the round plays as recorded) with CS2's spectator camera
+ * (U1, spectate.ts): first person through the followed pawn's eyes (cart) with its viewmodel, HUD and crosshair,
+ * third person, or free fly (V cycles; mouse 1 / Space next player, mouse 2 previous; Z / X too), the spectator
+ * panel, and the radar under CS2's spotting rules (radar3d.ts; the panel toggle shows everyone). E or "Take control of cart" hands him to the player from that tick on (a speed other than 1× drops to 1×):
  * first-person camera at his eye (64 standing, 46 crouched), pointer-lock mouse look, WASD, Space, Ctrl, Shift,
  * mouse 1, R, 1–5, E (input3d.ts). Dead, the camera goes back to spectating. Restart watches again.
  *

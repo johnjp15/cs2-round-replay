@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PawnObs } from '../src/contracts/index';
+import type { PawnObs, PlayerId } from '../src/contracts/index';
 import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from '../src/app3d/spectate';
 
 const pawn = (id: string, team: 'T' | 'CT', alive = true): PawnObs => ({ id, team, alive, hp: alive ? 76.4 : 0, armor: 100, pos: { x: 0, y: 0, z: 0 }, sees: [] }) as unknown as PawnObs;
@@ -12,19 +12,19 @@ describe('spectating', () => {
   });
 
   it('cycles players both ways, wrapping', () => {
-    const ids = ['a', 'b', 'c'];
-    expect(cycleTarget(ids, 'a', 1)).toBe('b');
-    expect(cycleTarget(ids, 'c', 1)).toBe('a');
-    expect(cycleTarget(ids, 'a', -1)).toBe('c');
-    expect(cycleTarget(ids, 'dead', 1)).toBe('a');
-    expect(cycleTarget(ids, 'dead', -1)).toBe('c');
-    expect(cycleTarget([], 'x', 1)).toBe('x');
+    const ids: PlayerId[] = ['cart', 'barely', 'donk'];
+    expect(cycleTarget(ids, 'cart', 1)).toBe('barely');
+    expect(cycleTarget(ids, 'donk', 1)).toBe('cart');
+    expect(cycleTarget(ids, 'cart', -1)).toBe('donk');
+    expect(cycleTarget(ids, 'zwomp', 1)).toBe('cart');
+    expect(cycleTarget(ids, 'zwomp', -1)).toBe('donk');
+    expect(cycleTarget([], 'lokier', 1)).toBe('lokier');
   });
 
   it('a dead human spectates living teammates only while there are any', () => {
-    const ps = [pawn('cart', 'T', false), pawn('mate', 'T'), pawn('donk', 'CT')];
-    expect(spectatable(ps, 'T')).toEqual(['mate']);
-    expect(spectatable(ps, null)).toEqual(['mate', 'donk']);
+    const ps = [pawn('cart', 'T', false), pawn('barely', 'T'), pawn('donk', 'CT')];
+    expect(spectatable(ps, 'T')).toEqual(['barely']);
+    expect(spectatable(ps, null)).toEqual(['barely', 'donk']);
     expect(spectatable([pawn('cart', 'T', false), pawn('donk', 'CT')], 'T')).toEqual(['donk']);
   });
 
@@ -41,7 +41,7 @@ describe('spectating', () => {
   it('writes the spectator panel', () => {
     const p = spectatePanel(pawn('donk', 'CT'), 2, 'pov', 'AK-47', true);
     expect(p).toEqual({ name: 'donk', team: 'CT', stats: '76 HP · 100 armor · AK-47 · 2 kills', mode: '1st person', hints: 'Mouse 1 / 2 switch player · V mode · E take control of cart' });
-    expect(spectatePanel(pawn('a', 'T'), 1, 'follow', 'Knife', false)?.stats).toContain('1 kill');
+    expect(spectatePanel(pawn('cart', 'T'), 1, 'follow', 'Knife', false)?.stats).toContain('1 kill');
     expect(spectatePanel(null, 0, 'pov', '', false)).toBeNull();
   });
 });

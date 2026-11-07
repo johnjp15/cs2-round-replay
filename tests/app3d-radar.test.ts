@@ -18,12 +18,12 @@ function obs(tick: number, ps: readonly P[], bomb: BombObs = NO_BOMB): Observe {
 }
 
 /** cart (T) and a teammate; donk (CT). */
-function world(tick: number, cartSees: PlayerId[], opts: { donkX?: number; donkAlive?: boolean; mateSees?: PlayerId[]; bomb?: BombObs } = {}): Observe {
+function world(tick: number, cartSees: PlayerId[], opts: { donkX?: number; donkAlive?: boolean; barelySees?: PlayerId[]; bomb?: BombObs } = {}): Observe {
   return obs(
     tick,
     [
       { id: 'cart', team: 'T', sees: cartSees },
-      { id: 'mate', team: 'T', sees: opts.mateSees ?? [] },
+      { id: 'barely', team: 'T', sees: opts.barelySees ?? [] },
       { id: 'donk', team: 'CT', x: opts.donkX ?? 100, alive: opts.donkAlive ?? true },
     ],
     opts.bomb,
@@ -37,7 +37,7 @@ describe('radar: CS2 rules', () => {
     const r = new RadarTracker();
     r.reset(world(0, []));
     const m = r.marks(world(0, []), 'T', 'cs2');
-    expect(m.map((x) => x.id).sort()).toEqual(['cart', 'mate']);
+    expect(m.map((x) => x.id).sort()).toEqual(['barely', 'cart']);
     // The CT side sees its own player but not the Ts.
     expect(r.marks(world(0, []), 'CT', 'cs2').map((x) => x.id)).toEqual(['donk']);
   });
@@ -45,16 +45,16 @@ describe('radar: CS2 rules', () => {
   it('shows everyone with the toggle', () => {
     const r = new RadarTracker();
     r.reset(world(0, []));
-    expect(r.marks(world(0, []), 'T', 'all').map((x) => x.id).sort()).toEqual(['cart', 'donk', 'mate']);
+    expect(r.marks(world(0, []), 'T', 'all').map((x) => x.id).sort()).toEqual(['barely', 'cart', 'donk']);
   });
 
   it('spots an enemy a teammate sees, on the 0.5 s spotting cadence, then leaves a fading ? at the last spot', () => {
     const r = new RadarTracker();
     r.reset(world(0, []));
     // Seen from tick 1: not yet on the radar (the next evaluation is at tick 32).
-    for (let k = 1; k < SPOT; k++) r.ingest(world(k, [], { mateSees: ['donk'] }));
+    for (let k = 1; k < SPOT; k++) r.ingest(world(k, [], { barelySees: ['donk'] }));
     expect(r.marks(world(SPOT - 1, []), 'T', 'cs2').some((x) => x.id === 'donk')).toBe(false);
-    r.ingest(world(SPOT, [], { mateSees: ['donk'], donkX: 150 }));
+    r.ingest(world(SPOT, [], { barelySees: ['donk'], donkX: 150 }));
     const dot = r.marks(world(SPOT, [], { donkX: 150 }), 'T', 'cs2').find((x) => x.id === 'donk');
     expect(dot).toMatchObject({ kind: 'dot', x: 150, alpha: 1 });
     // Out of sight from the next tick: the dot lingers (and follows) until the next evaluation.
@@ -86,9 +86,9 @@ describe('radar: CS2 rules', () => {
 
   it('puts the bomb icon on a teammate carrier; the planted bomb for everyone, a dropped one for Ts only', () => {
     const r = new RadarTracker();
-    const carried: BombObs = { ...NO_BOMB, carrier: 'mate', pos: { x: 0, y: 0, z: 0 } };
+    const carried: BombObs = { ...NO_BOMB, carrier: 'barely', pos: { x: 0, y: 0, z: 0 } };
     r.reset(world(0, [], { bomb: carried }));
-    expect(r.marks(world(0, [], { bomb: carried }), 'T', 'cs2').find((x) => x.id === 'mate')?.bomb).toBe(true);
+    expect(r.marks(world(0, [], { bomb: carried }), 'T', 'cs2').find((x) => x.id === 'barely')?.bomb).toBe(true);
     const planted: BombObs = { ...NO_BOMB, state: 'planted', pos: { x: 5, y: 6, z: 0 }, plantTick: 10 };
     expect(r.bomb(world(0, [], { bomb: planted }), 'CT', 'cs2')).toMatchObject({ x: 5, y: 6, state: 'planted' });
     const dropped: BombObs = { ...NO_BOMB, state: 'dropped', pos: { x: 5, y: 6, z: 0 } };

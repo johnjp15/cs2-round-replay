@@ -198,7 +198,11 @@ export class Hud3D {
         ctx.fillText('×', x, y);
       } else if (m.kind === 'ghost') {
         // CS2's last-seen marker: a "?" in the enemy's colour where it was last spotted.
-        ctx.font = 'bold 22px sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.beginPath();
+        ctx.arc(x, y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 24px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.lineWidth = 3;
