@@ -1,0 +1,14 @@
+{
+  "name": "early-peek-lokier",
+  "description": "G5: cart plays his recording into the Apartments corridor and at 16.4 s, a second before the recorded sighting and before Lokier has seen him at the window, shoots Lokier through the window from the corridor: another place and time than the recorded duel, so his bullets are real. Lokier dies then, his recorded hit on cart never comes, and cart plays his recording again to the end.",
+  "human": "cart",
+  "seed": 1,
+  "until": "end",
+  "steps": [
+    {"do": "followRecording", "until": 16.4},
+    {"do": "aimAt", "id": "lokier"},
+    {"do": "fire", "untilDead": true, "maxSec": 1},
+    {"do": "aimAt", "id": null},
+    {"do": "followRecording", "until": 70.6}
+  ]
+}

@@ -14,7 +14,9 @@ npm run dev        # then open http://localhost:5173
 Press **Start** and the round plays exactly as recorded. **Take control of cart** (or E) at any moment and you
 play him from there: WASD moves relative to the screen (W = up on the map), the mouse aims, click fires,
 Shift walks, Ctrl or C crouches, Space jumps, R reloads, E uses, and 1–5 switch weapons; Restart (or a rewind to
-before it) is watching again. The bar under the map has Pause, Restart, speed 0.25–4×, the view toggles, Take
+before it) is watching again. Cart never fires by himself once you play him, but his recorded duels resolve like the
+tape when you shoot in them: fire at Lokier from the Apartments window and he dies on the tape's 18.80 s, while
+anywhere else your bullets are real ([`docs/core.md`](docs/core.md) "Recorded duels of the human"). The bar under the map has Pause, Restart, speed 0.25–4×, the view toggles, Take
 control of cart and the log/trace downloads (`?human=cart` plays him from the start).
 F follows cart, G shows his recorded position (the ghost), T everyone's recorded path, Tab the status
 panel; the wheel zooms, dragging pans and a double-click shows the whole map.

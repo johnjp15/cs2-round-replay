@@ -115,8 +115,11 @@ describe('a takeover at T (G4)', () => {
       expect(lifted).toEqual(['cart>cart', ...cts.flatMap((c) => [`cart>${c}`, `${c}>cart`])]);
       const cart = g.observe.pawns.find((p) => p.id === 'cart');
       expect(logsAt(r, k)[0]).toBe(`takeover: cart is the human from tick ${k} (${cart?.hp ?? 0} hp, ${cart?.weapon ?? ''}); 11 damage blocks lifted`);
-      // Nothing moves or re-blocks him (a puppet's own snap on that tick, barely's at 45 s, is the golden master's too).
-      expect(e.act.actions.some((a) => (a.type === 'block_damage' && (a.attacker === 'cart' || a.victim === 'cart')) || ((a.type === 'teleport' || a.type === 'set_mode') && a.id === 'cart'))).toBe(false);
+      // Nothing moves him (a puppet's own snap on that tick, barely's at 45 s, is the golden master's too), and nothing
+      // re-blocks him but the recorded duel he is in (G5: taken over at the window, 17.6–18.6 s, his bullets on Lokier).
+      const reblocked = e.act.actions.flatMap((a) => (a.type === 'block_damage' && (a.attacker === 'cart' || a.victim === 'cart') ? [`${a.attacker}>${a.victim}`] : []));
+      expect(reblocked, `T = ${t}`).toEqual(t >= 17.6 && t <= 18.6 ? ['cart>lokier'] : []);
+      expect(e.act.actions.some((a) => (a.type === 'teleport' || a.type === 'set_mode') && a.id === 'cart')).toBe(false);
       // From the takeover on: HUMAN since T while alive, never in the Core's inputs, no scripted damage to or from him.
       for (let i = k; i < r.entries.length; i++) {
         const q = line(r, i);
@@ -135,17 +138,20 @@ describe('a takeover at T (G4)', () => {
       return out;
     };
     // 5 s: waiting (Lokier hasn't seen cart at the window yet). 17.6 s (tick 1126) is the very tick Lokier first sees
-    // him within the spot tolerance (17.59 s): waiting, then seen on that tick; the hit 1 s later, 18.59 s (tick 1190).
+    // him within the spot tolerance (17.59 s): waiting, then seen on that tick. G5: cart is on course then (where his
+    // recording has him), so the hit lands on its recorded tick, 18.50 s (1184; before G5 1 s after the sighting, 1190),
+    // and he is in the recorded duel with Lokier from that tick.
     expect(logsAt(run(5), 320)).toContain('encounter lokier -> cart: active from the takeover at tick 320, waiting for lokier to see cart at the spot');
     expect(logsAt(run(17.6), 1126)).toEqual([
       'takeover: cart is the human from tick 1126 (100 hp, ak47); 11 damage blocks lifted',
       'encounter lokier -> cart: active from the takeover at tick 1126, waiting for lokier to see cart at the spot',
-      'encounter lokier -> cart: cart in sight at the spot at tick 1126 (+0.1 s against the recording), scripted hit due at tick 1190',
+      'encounter lokier -> cart: cart in sight at the spot at tick 1126 (+0.1 s against the recording), scripted hit due at tick 1184 (on course: the recorded tick)',
+      'duel cart -> lokier: in the recorded duel from tick 1126 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203',
     ]);
-    expect(hitOnCart(run(17.6))).toEqual([{ tick: 1190, amount: 73, scripted: true }]);
-    // 18.0 s: Lokier had the puppet in sight at the spot since 1126, so the same hit, as for a human from the start.
-    expect(logsAt(run(18), 1152)).toContain('encounter lokier -> cart: cart in sight at the spot since tick 1126 (+0.1 s against the recording), before the takeover at tick 1152; scripted hit due at tick 1190');
-    expect(hitOnCart(run(18))).toEqual([{ tick: 1190, amount: 73, scripted: true }]);
+    expect(hitOnCart(run(17.6))).toEqual([{ tick: 1184, amount: 73, scripted: true }]);
+    // 18.0 s: Lokier had the puppet in sight at the spot since 1126, on course, so the same hit, as for a human from the start.
+    expect(logsAt(run(18), 1152)).toContain('encounter lokier -> cart: cart in sight at the spot since tick 1126 (+0.1 s against the recording), before the takeover at tick 1152; scripted hit due at tick 1184 (on course: the recorded tick)');
+    expect(hitOnCart(run(18))).toEqual([{ tick: 1184, amount: 73, scripted: true }]);
     // B3's recorded hit (1184) is skipped once he is the human; it is the encounter's.
     for (const t of [0, 5, 17.6, 18]) expect(coreLogs(run(t).entries).some((l) => l.text.startsWith('script: no scripted damage lokier -> cart (73 hp at tick 1184)'))).toBe(true);
     // 18.6 s: the recorded hit landed on the puppet at 18.50 s; cart is on 27 HP and must kill Lokier himself (idle: he doesn't).

@@ -40,7 +40,7 @@ const script = new ScriptedEvents(model, schedule, tuning);
 const div = new Divergence(model, schedule, script.plan, tuning);
 const index = div.index;
 const encs = div.encounters;
-const waiting: EncounterState[] = encs.map((e) => ({ key: e.key, phase: 'waiting', seenTick: null, shotTick: null, blocked: false, puppetSightTick: null }));
+const waiting: EncounterState[] = encs.map((e) => ({ key: e.key, phase: 'waiting', seenTick: null, shotTick: null, blocked: false, puppetSightTick: null, puppetSightOnCourse: false }));
 
 function pawn(id: PlayerId, x: number, y: number, extra: Partial<PawnObs> = {}): PawnObs {
   return {
@@ -116,7 +116,7 @@ describe('trigger 2: unscripted sighting', () => {
     expect(sightingTrigger(atSpot, modes(), 'lokier', model, index, encs, waiting, tuning)).toBeNull();
     const away = obs(2000, [pawn('lokier', -2139, 439, { sees: ['cart'] }), pawn('cart', -1764 + 300, 800)]);
     expect(sightingTrigger(away, modes(), 'lokier', model, index, encs, waiting, tuning)?.trigger).toBe('sighting');
-    const seen: EncounterState[] = [{ key: 'enc:0', phase: 'seen', seenTick: 1990, shotTick: 2054, blocked: false, puppetSightTick: null }];
+    const seen: EncounterState[] = [{ key: 'enc:0', phase: 'seen', seenTick: 1990, shotTick: 2054, blocked: false, puppetSightTick: null, puppetSightOnCourse: false }];
     expect(sightingTrigger(away, modes(), 'lokier', model, index, encs, seen, tuning)).toBeNull();
   });
 });
@@ -137,7 +137,7 @@ describe('trigger 3: unscripted gunfire nearby', () => {
     expect(gunfireTrigger(obs(1216 + 128, [me], [shot('cart', 800)]), modes(), 'zwomp', model, index, encs, waiting, tuning)).toBeNull();
     expect(gunfireTrigger(obs(1216 + 129, [me], [shot('cart', 800)]), modes(), 'zwomp', model, index, encs, waiting, tuning)?.trigger).toBe('gunfire');
     // Seen 3 s late: cart's fire at Lokier is expected 3 s late too.
-    const late: EncounterState[] = [{ key: 'enc:0', phase: 'fired', seenTick: 1117 + 192, shotTick: 1117 + 256, blocked: false, puppetSightTick: null }];
+    const late: EncounterState[] = [{ key: 'enc:0', phase: 'fired', seenTick: 1117 + 192, shotTick: 1117 + 256, blocked: false, puppetSightTick: null, puppetSightOnCourse: false }];
     expect(gunfireTrigger(obs(1216 + 192 + 64, [me], [shot('cart', 800)]), modes(), 'zwomp', model, index, encs, late, tuning)).toBeNull();
   });
 });

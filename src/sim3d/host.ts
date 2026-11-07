@@ -627,6 +627,8 @@ export class Sim3DHost implements IHost {
       if (shot.victim !== null && shot.hitgroup !== null) {
         const victim = this.pawn(shot.victim) as PawnState;
         const dmg = bulletDamage(gun, shot.distance, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
+        // G5: the human's bullet on a blocked pair (a recorded duel, docs/core.md): report where it would have hit.
+        if (p.id === this.human && this.isBlocked(p.id, victim.id)) this.outbox.push({ type: 'blocked_hit', attacker: p.id, victim: victim.id, weapon: p.weapon, hitgroup: shot.hitgroup });
         this.engineDamage(p.id, victim, p.weapon, shot.hitgroup, dmg);
       }
     }

@@ -1,0 +1,14 @@
+{
+  "name": "takeover-mid-duel",
+  "description": "G5: nobody plays cart until 18.6 s, in the middle of the recorded duel: Lokier's recorded hit has landed on the puppet (18.50 s, 27 HP) and the puppet's spray has fired its first shot. The player takes control at the window and keeps playing the recording: he keeps spraying (the puppet's shot before the takeover starts his spray), so the duel lands the recorded kill on its tick, 18.80 s, and the round plays like the tape.",
+  "human": "cart",
+  "seed": 1,
+  "until": "end",
+  "takeover": 18.6,
+  "steps": [
+    {
+      "do": "followRecording",
+      "until": 70.6
+    }
+  ]
+}
