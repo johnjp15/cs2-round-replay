@@ -534,8 +534,12 @@ describe('8. smoke on Lokier’s angle', () => {
     const atSpot = run.entries.filter((e) => e.observe.tick >= 1150 && e.observe.tick <= 1250 && dist(pawnAt(e, 'cart').pos, spot) <= tol);
     expect(atSpot.length).toBeGreaterThan(50);
     for (const e of atSpot) expect(pawnAt(e, 'lokier').sees).not.toContain('cart');
-    // G6: it is the smoke that hides him: at the window, on the CS2 mesh, the two would see each other.
-    for (const e of atSpot.filter((x) => x.observe.tick % 16 === 0 && dist(pawnAt(x, 'cart').pos, { x: -1712, y: 700 }) <= 24)) expect(clearAimPoints(data.geometry as MapGeometry, tuning, pawnAt(e, 'lokier'), pawnAt(e, 'cart')).length).toBeGreaterThan(0);
+    // G6: it is the smoke that hides him: at the window, on the CS2 mesh, the two would see each other (V2: at the
+    // video-fitted spot, docs/viewfit.md; the scenario's smoke and step-out were re-aimed for it).
+    // (Checked on the ticks he stands at the spot: at the window's west edge some of his aim points are behind the wall.)
+    const near = atSpot.filter((x) => x.observe.tick % 8 === 0 && dist(pawnAt(x, 'cart').pos, { x: -1777, y: 679 }) <= 24);
+    expect(near.length).toBeGreaterThan(0);
+    expect(near.some((e) => clearAimPoints(data.geometry as MapGeometry, tuning, pawnAt(e, 'lokier'), pawnAt(e, 'cart')).length > 0)).toBe(true);
     // The encounter starts on the first tick Lokier sees cart at the spot, the hit lands encounterDelaySec later.
     const seen = seenTick(run) as number;
     const firstSeen = run.entries.find((e) => e.observe.tick > 1100 && pawnAt(e, 'lokier').sees.includes('cart') && dist(pawnAt(e, 'cart').pos, spot) <= tol)?.observe.tick;
