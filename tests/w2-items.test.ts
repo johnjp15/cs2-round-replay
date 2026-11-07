@@ -186,11 +186,11 @@ describe('W2 knife model', () => {
     expect(b === null ? 0 : b.max.z - b.min.z).toBeLessThan(12.6);
   });
 
-  it('has the stab and inspect pose hooks for W1', async () => {
+  it('plays W1\'s stab and inspect on the W2 knife', async () => {
     const { vmPose, freshPose, INSPECT_SEC } = await import('../src/app3d/viewmodels/pose');
     const { modelOf } = await import('../src/app3d/viewmodels/models');
     const a = { weapon: 'knife', sinceShot: 1e6, cycle: 0.4, reload: null, deploy: null, swing: null, plant: null, primed: false, thrown: null, speed: 0, time: 1 };
-    expect(vmPose({ ...a, stab: 0.3 }, modelOf('knife'), freshPose()).phase).toBe('stab');
+    expect(vmPose({ ...a, swing: 0.3, swingKind: 'stab' }, modelOf('knife'), freshPose()).phase).toBe('stab');
     expect(vmPose({ ...a, inspect: INSPECT_SEC / 2 }, modelOf('knife'), freshPose()).phase).toBe('inspect');
     expect(vmPose(a, modelOf('knife'), freshPose()).phase).toBe('idle');
   });

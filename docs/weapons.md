@@ -536,6 +536,36 @@ passed beside that frame: it is a position error of the recording, not a wallban
 | penDamageLostFraction / penPowerConst / penPowerFactor / penModFactor / penThicknessDivisor | 0.16 / 3 / 1.25 / 3 / 24 | M | unverified |
 | penDefaultModifier / penMinDamage | 1 / 1 | M | unverified |
 
+## Knife (W1, `knife.ts`; `Sim3DHost.stepKnife`, `hitscan.ts traceMelee3`)
+
+CS2's `weapon_knife` entry in weapons.vdata (GameTracking-CS2 @ cce7bf1f, the file data/weapons.json is extracted
+from) is a bullet-weapon template the knife's code ignores: `m_nDamage 50`, `m_flCycleTime [0.15, 0.3]`,
+`m_flRange 4096`. What it does use: `m_flMaxSpeed [250, 250]` (the knife's run speed, maxSpeedOf; the human runs 250
+u/s with it and 215 with the AK-47, tests/w1-knife.test.ts), `m_flDeployDuration 1.0` and `m_flArmorRatio 1.7` (85 %
+of the damage reaches HP through armor). The melee rules are CS:GO's `CKnife::SwingOrStab`
+(game/shared/cstrike15/weapon_knife.cpp of the CS:GO source, mirrored in github.com/SwagSoftware/Kisak-Strike), which
+CS2 kept (counterstrikewiki.com/Knife: slash 40, stab 65, backstab 180 "instant kill", 250 u/s; its armored values
+34 / 55 / 76 are 40 / 65 / 90 × 0.85):
+
+| | Slash (mouse 1, PrimaryAttack) | Stab (mouse 2, SecondaryAttack) |
+| --- | --- | --- |
+| Reach | `KNIFE_RANGE_LONG` 48 u line, then the ±16 × ±16 × ±18 `head_hull` sweep (a box face up to 64 u) | `KNIFE_RANGE_SHORT` 32 u, then the hull (up to 48 u) |
+| Damage (front) | 40 if the slash timer was ready more than 0.4 s ago (`bFirstSwing`), else 25 | 65 |
+| Damage (back: dot > 0.475) | 90 | 180 |
+| Next attack | slash 0.4 s after a miss, 0.5 s after a hit; stab 0.5 s | both 1.0 s after a miss, 1.1 s after a hit |
+
+- The trace is MASK_SOLID: the world mesh and the pawns' collision boxes (32 × 32 × 72, 54 crouched), not hitboxes,
+  so the hitgroup is `generic` (×1, armored). Teammates are skipped as for bullets.
+- Mouse 1 is checked first (CWeaponCSBase::ItemPostFrame); held, it keeps slashing (40, then 25s). The deploy sets
+  both timers (DefaultDeploy: `m_flNextPrimaryAttack = curtime + duration`), so a slash right after drawing the knife
+  is not a first swing (25), as in CS.
+- Who: mechanical pawns only (the human while controlled, LIVE bots if their AI attacks with a knife; puppets keep
+  their recorded outcomes), so the no-human run is unchanged. Damage, kills (`weapon: 'knife'`), blocked recorded
+  duels and tagging go as a bullet's. State: per pawn the next slash / stab tick in snapshots (`melee`, only once
+  someone has swung). `Sim3DHost.swings()` reports each attack (slash / stab, victim or wall) for the viewmodel and
+  the sounds (`Weapon_Knife.Slash`, `.Hit` on the damage event, `.HitWall`).
+- Not modelled: CS2's sub-tick timing, the shield (+0.7 s), glass.
+
 ## Known gaps
 
 - **Formulas are unverified against Valve code** (S3 has no CS code): the inaccuracy structure, the jump / land /
@@ -550,7 +580,7 @@ passed beside that frame: it is a position error of the recording, not a wallban
 - **Reload times** are `m_flDisallowAttackAfterReloadStartDuration`; the moment CS2 refills the magazine may differ.
   Per-shell shotgun timing unknown.
 - **Revolver** hammer delay (primary fire) and silencer attach / detach times are not modelled (silencer toggles
-  instantly). Knife, Zeus and grenades are in the table but the state machine does not attack with them (the Zeus
-  fires as a gun with range 120).
+  instantly). Zeus and grenades are in the table but the state machine does not attack with them (the Zeus fires as a
+  gun with range 120). The knife attacks by its own rules (below), not by its table entry.
 - **M4A1-S and MP9** sprays disagree with S5 (probably parameter changes since August 2023).
 - Ladder state and the stack-boost rule (`weapon_accuracy_stack_boost_limit`) are inputs only (`onLadder`).

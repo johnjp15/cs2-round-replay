@@ -25,6 +25,17 @@ export interface ControlsHooks {
   playing?(): boolean;
   /** True while fullscreen Keyboard Lock is on (Ctrl+W / S / T / N are then blocked even when watching). */
   keyboardLocked?(): boolean;
+  /** W1 (#40): a wheel notch over the game while playing or under pointer lock (deltaY > 0 = down). */
+  onWheel?(deltaY: number): void;
+}
+
+/**
+ * W1 (#35, #53): zooming the page by Ctrl / ⌘ + wheel or a trackpad pinch never happens on the game page: Chromium
+ * and Firefox send a pinch as a `wheel` with ctrlKey, Safari as `gesture*` events. Both are cancelled (listeners
+ * must be non-passive: a window wheel listener is passive by default in Chromium).
+ */
+export function blocksWheelZoom(e: { readonly ctrlKey: boolean; readonly metaKey: boolean }): boolean {
+  return e.ctrlKey || e.metaKey;
 }
 
 export class ControlsDom {
@@ -75,6 +86,30 @@ export class ControlsDom {
       if (b !== null && b.kind === 'hold') this.held[b.control] = false;
     });
     element.addEventListener('contextmenu', (e) => e.preventDefault());
+    // W1 (#35, #53): no page zoom from Ctrl / ⌘ + wheel or a pinch, anywhere on the page; under pointer lock (or over
+    // the view while playing) the wheel is the game's: no scrolling, and a notch may jump (onWheel).
+    window.addEventListener(
+      'wheel',
+      (e) => {
+        if (blocksWheelZoom(e)) e.preventDefault();
+        const mine = document.pointerLockElement === element || (e.target === element && (hooks.playing?.() ?? false));
+        if (!mine) return;
+        e.preventDefault();
+        if (e.deltaY !== 0) hooks.onWheel?.(e.deltaY);
+      },
+      { passive: false, capture: true },
+    );
+    for (const g of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(g, (e) => e.preventDefault(), { passive: false });
+    // W1 (#53): Ctrl+W (crouch forward) never closes the tab where a page can stop it: cancelled in the capture phase
+    // before anything else sees it (Chromium honours this only under fullscreen Keyboard Lock, play-guard.ts). Not
+    // stopped: the movement listener below still needs the W.
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (e.ctrlKey && !e.metaKey && (e.code === 'KeyW' || e.code === 'KeyS')) e.preventDefault();
+      },
+      { capture: true },
+    );
     // P1: mouse movement at the device's event rate: `pointerrawupdate` (Chromium, secure pages) isn't coalesced to
     // the display's frames like mousemove, so an uncapped frame loop turns the view with the newest counts. Only one of
     // the two is listened to (they report the same movement).

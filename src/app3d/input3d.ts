@@ -10,7 +10,7 @@
  *   mouse 2 ATTACK2, R RELOAD, E USE (plant, defuse; while watching E takes control), 1–5 weapon slots.
  */
 import { roundNumber, type PawnInput, type PlayerId } from '../contracts/index';
-import { buttonsFor, type HeldControls } from '../app/input';
+import { SLOT_WEAPONS, buttonsFor, weaponForSlot, type HeldControls, type WeaponSlot } from '../app/input';
 
 import { DEFAULT_SENSITIVITY, applyMouse } from './view-cs2';
 
@@ -62,6 +62,8 @@ export function flyStep(pos: { x: number; y: number; z: number }, look: Look, c:
   return { x: pos.x + (fx * m.forward + rx * m.side) * k, y: pos.y + (fy * m.forward + ry * m.side) * k, z: pos.z + (fz * m.forward + up) * k };
 }
 
+// ---- W1: crosshair, wheel jump, lastinv ---------------------------------------------------------------------------
+
 /**
  * W1 (#32, #77): the crosshair's offset from the screen centre in pixels. CS2's default `cl_crosshair_recoil 0`: the
  * crosshair stays at the centre while the view kicks (by `view_recoil_tracking`); the bullet still leaves along
@@ -71,4 +73,101 @@ export function flyStep(pos: { x: number; y: number; z: number }, look: Look, c:
 export function crosshairOffsetPx(follow: boolean, camera: Look, aim: Look, offset: (camera: Look, aim: Look) => { x: number; y: number }): { x: number; y: number } {
   if (!follow || (camera.yaw === aim.yaw && camera.pitch === aim.pitch)) return { x: 0, y: 0 };
   return offset(camera, aim);
+}
+
+/**
+ * W1 (#40): `+jump` on the mouse wheel. In CS2 a wheel notch bound to +jump is a press and a release in the same
+ * frame; the server sees it as JUMP down on the next usercmd. The page samples the input once per frame and runs the
+ * 64 Hz ticks that frame owes (often none at high fps), so a notch is latched until a tick has run with JUMP held
+ * ('press'), then JUMP is let go for at least one tick ('release') so the next notch is a fresh press (the movement
+ * jumps on a new press only, sv_autobunnyhopping 0). Notches while a press is pending don't queue up (at most one
+ * waits).
+ */
+export class WheelJump {
+  private state: 'idle' | 'press' | 'release' = 'idle';
+  private pending = false;
+
+  /** A wheel notch the jump is bound to. */
+  notch(): void {
+    if (this.state === 'idle') this.state = 'press';
+    else this.pending = true;
+  }
+
+  /** Whether this frame's input holds JUMP for the wheel. */
+  held(): boolean {
+    return this.state === 'press';
+  }
+
+  /** After the frame's ticks: `ticks` ran with the input of held(). */
+  ticksRan(ticks: number): void {
+    if (ticks <= 0) return;
+    if (this.state === 'press') this.state = 'release';
+    else if (this.state === 'release') {
+      this.state = this.pending ? 'press' : 'idle';
+      this.pending = false;
+    }
+  }
+
+  reset(): void {
+    this.state = 'idle';
+    this.pending = false;
+  }
+}
+
+/** Which wheel directions jump (the Keys group's checkboxes; CS2 players bind `+jump` to mwheeldown or mwheelup). */
+export interface WheelJumpBinds {
+  readonly down: boolean;
+  readonly up: boolean;
+}
+
+/** Whether a wheel event of `deltaY` jumps (deltaY > 0 = wheel down / towards the user). */
+export function wheelJumps(binds: WheelJumpBinds, deltaY: number): boolean {
+  return (deltaY > 0 && binds.down) || (deltaY < 0 && binds.up);
+}
+
+/**
+ * W1 (#41): CS2's `lastinv` (Q): the slot presses (input.ts weaponForSlot, the Session's taped slot requests) that
+ * take the pawn from `current` to `previous`, or [] when it can't (no previous item, not carried any more, already
+ * out). A slot whose weapons cycle (grenades) takes as many presses as it needs to reach the item.
+ */
+export function lastInvSlots(previous: string | null, current: string, carried: readonly string[]): WeaponSlot[] {
+  if (previous === null || previous === current || !carried.includes(previous)) return [];
+  const slot = slotOfWeapon(previous);
+  if (slot === null) return [];
+  const presses: WeaponSlot[] = [];
+  let w = current;
+  for (let i = 0; i < 6; i++) {
+    const next = weaponForSlot(slot, carried, w);
+    if (next === null) return [];
+    presses.push(slot);
+    if (next === previous) return presses;
+    w = next;
+  }
+  return [];
+}
+
+/** The CS2 slot of a weapon (input.ts SLOT_WEAPONS), or null. */
+export function slotOfWeapon(w: string): WeaponSlot | null {
+  for (const s of [1, 2, 3, 4, 5] as const) if ((SLOT_WEAPONS[s] as readonly string[]).includes(w)) return s;
+  return null;
+}
+
+/**
+ * The previous item for lastinv: follows the human's held weapon tick by tick; a change makes the old one the
+ * previous (CS2 keeps the last weapon on every switch, including the automatic one after a grenade throw).
+ */
+export class LastInv {
+  private current: string | null = null;
+  previous: string | null = null;
+
+  observe(weapon: string | null): void {
+    if (weapon === null) return;
+    if (this.current !== null && weapon !== this.current) this.previous = this.current;
+    this.current = weapon;
+  }
+
+  reset(): void {
+    this.current = null;
+    this.previous = null;
+  }
 }
