@@ -1,7 +1,7 @@
 /**
  * H1: the Three.js view (docs/app3d.md "Rendering"). Low fidelity in the right colours, no lighting at run time:
  * every colour is baked per triangle (world-mesh.ts), so the materials are unlit (MeshBasicMaterial) and the GPU
- * cost is one pass over ~73k triangles, culled per 512-unit tile.
+ * cost is one pass over ~73k triangles in two draw calls (P1: the tiles joined).
  *
  * - World: per tile a radar-textured floor mesh (the CS2 radar image as the texture, UVs from the radar transform,
  *   multiplied by a baked shade) and a vertex-coloured mesh for walls and undersides. Sky colour and distance fog.
@@ -194,22 +194,37 @@ export class Renderer3D {
     tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
     const floorMat = new MeshBasicMaterial({ map: tex, vertexColors: true, side: DoubleSide });
     const plainMat = new MeshBasicMaterial({ vertexColors: true, side: DoubleSide });
-    for (const t of tiles) {
-      if (t.floor.triangles > 0) {
-        const g = new BufferGeometry();
-        g.setAttribute('position', new BufferAttribute(t.floor.positions, 3));
-        g.setAttribute('uv', new BufferAttribute(t.floor.uvs, 2));
-        g.setAttribute('color', new BufferAttribute(t.floor.colors, 3));
-        g.computeBoundingSphere();
-        this.scene.add(new Mesh(g, floorMat));
+    // P1: the static world in two draw calls (radar-textured floors, vertex-coloured rest): the tiles' arrays joined
+    // once here. ~73k triangles are nothing for a GPU; 40 culled draw calls cost more CPU than they save.
+    const join = (parts: readonly Float32Array[]): Float32Array => {
+      const out = new Float32Array(parts.reduce((n, a) => n + a.length, 0));
+      let o = 0;
+      for (const a of parts) {
+        out.set(a, o);
+        o += a.length;
       }
-      if (t.plain.triangles > 0) {
-        const g = new BufferGeometry();
-        g.setAttribute('position', new BufferAttribute(t.plain.positions, 3));
-        g.setAttribute('color', new BufferAttribute(t.plain.colors, 3));
-        g.computeBoundingSphere();
-        this.scene.add(new Mesh(g, plainMat));
-      }
+      return out;
+    };
+    const floors = tiles.filter((t) => t.floor.triangles > 0);
+    const plains = tiles.filter((t) => t.plain.triangles > 0);
+    if (floors.length > 0) {
+      const g = new BufferGeometry();
+      g.setAttribute('position', new BufferAttribute(join(floors.map((t) => t.floor.positions)), 3));
+      g.setAttribute('uv', new BufferAttribute(join(floors.map((t) => t.floor.uvs)), 2));
+      g.setAttribute('color', new BufferAttribute(join(floors.map((t) => t.floor.colors)), 3));
+      g.computeBoundingSphere();
+      const m = new Mesh(g, floorMat);
+      m.matrixAutoUpdate = false;
+      this.scene.add(m);
+    }
+    if (plains.length > 0) {
+      const g = new BufferGeometry();
+      g.setAttribute('position', new BufferAttribute(join(plains.map((t) => t.plain.positions)), 3));
+      g.setAttribute('color', new BufferAttribute(join(plains.map((t) => t.plain.colors)), 3));
+      g.computeBoundingSphere();
+      const m = new Mesh(g, plainMat);
+      m.matrixAutoUpdate = false;
+      this.scene.add(m);
     }
     // Players.
     const capsule = new CapsuleGeometry(13, 72 - 26, 4, 10);
