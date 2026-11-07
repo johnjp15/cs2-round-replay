@@ -53,6 +53,92 @@ const MEASURED_LANDINGS: Readonly<Record<string, GrenadeLanding>> = {
   '25.8 cart smoke': { x: -1885, y: -320, z: -166, uncertainty: 45 },
 };
 
+/**
+ * G7c: guessed (inferred) stretches of a CT's track re-guessed where the page's guess is known to be wrong. Each entry
+ * replaces the grid samples strictly between `from` and `to` (both kept as they are; `to` is the first observed sample)
+ * with a walk along `legs[0]` to its last point, a wait there, and `legs[1]` arriving at `to` on time, both at `speed`
+ * (u/s, at most the player's run speed). Confidence stays `inferred`, the uncertainty the page's. The waypoints are the
+ * corners of an A* way on the CS2 movement mesh (`Snapper.astar`, tools/snap-tracks.ts); docs/round-data.md
+ * "Re-guessed stretches", docs/geometry.md "Which positions are evidence".
+ */
+interface Reguess {
+  readonly id: PlayerId;
+  readonly from: number;
+  readonly to: number;
+  readonly speed: number;
+  readonly legs: readonly [readonly Arr3[], readonly Arr3[]];
+}
+const REGUESSED: readonly Reguess[] = [
+  // Zwomp, observed from 43.9 s on Catwalk (killed by barely at 44.2 s). The page walks him from Mid straight up the
+  // Catwalk corridor from 40.5 s: in full view of Catwalk north, where barely (LIVE when cart idles, since T1 on his
+  // corrected Catwalk spot) killed him 2.8 s early. Nothing in the video shows him before 43.9 s. Re-guessed: from Mid
+  // (34.0 s) into the side pocket west of the corridor (no sight line to Catwalk north) by 39.7 s, wait there, and
+  // come up the corridor in the last 1.7 s at m4a4 run speed (225). Leg 1 keeps to the page's own line through Mid
+  // (A*'s shorter way over the raised walk at y −512 has a ledge the puppet can't step up).
+  {
+    id: 'zwomp',
+    from: 34.0,
+    to: 43.9,
+    speed: 225,
+    legs: [
+      [
+        // The page's own Mid line (36.9–40.5 s: y −459 … −350, floor −168), without its detour east to x 232.
+        [-5, -562, -202], [20, -530, -190], [10, -490, -180], [-6, -459, -176], [-197, -435, -168], [-388, -421, -167], [-571, -364, -168], [-662, -350, -160],
+        [-733, -293, -160], [-800, -240, -160], [-808, -176, -167], [-816, -112, -168],
+        [-824, -96, -168], [-856, -96, -168], [-900, -84, -168],
+      ],
+      [[-888, -64, -168], [-824, -56, -168], [-816, -24, -169], [-792, 8, -167], [-784, 72, -166], [-784, 168, -174], [-776, 200, -173], [-760, 232, -172]],
+    ],
+  },
+];
+
+/** The point `d` along the polyline `pts` (2D arc length; z interpolated), clamped to its ends. */
+function alongPolyline(pts: readonly Arr3[], d: number): Arr3 {
+  let left = d;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1] as Arr3;
+    const b = pts[i] as Arr3;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (left <= len || i === pts.length - 1) {
+      const f = len > 0 ? Math.min(1, Math.max(0, left / len)) : 1;
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+    }
+    left -= len;
+  }
+  return pts[pts.length - 1] as Arr3;
+}
+
+function polylineLength(pts: readonly Arr3[]): number {
+  let n = 0;
+  for (let i = 1; i < pts.length; i++) n += Math.hypot((pts[i] as Arr3)[0] - (pts[i - 1] as Arr3)[0], (pts[i] as Arr3)[1] - (pts[i - 1] as Arr3)[1]);
+  return n;
+}
+
+/** Apply a re-guess to a built track (grid samples and off-grid ones; see `REGUESSED`). */
+function reguessTrack(track: Track, r: Reguess): Track {
+  const at = (t: number): TrackSample => {
+    const q = track.samples.find((s) => Math.abs(s.t - t) < 1e-6);
+    if (q === undefined) throw new Error(`reguess ${r.id}: no grid sample at ${t}`);
+    return q;
+  };
+  const a = at(r.from);
+  const b = at(r.to);
+  const leg1: Arr3[] = [[a.x, a.y, a.z], ...r.legs[0]];
+  const wait = leg1[leg1.length - 1] as Arr3;
+  const leg2: Arr3[] = [wait, ...r.legs[1], [b.x, b.y, b.z]];
+  const arrive = r.from + polylineLength(leg1) / r.speed;
+  const leave = r.to - polylineLength(leg2) / r.speed;
+  if (leave < arrive) throw new Error(`reguess ${r.id}: the way is too long for ${r.from}–${r.to} s at ${r.speed} u/s`);
+  const samples = track.samples.map((s): TrackSample => {
+    if (s.t <= r.from + 1e-6 || s.t >= r.to - 1e-6) return s;
+    if (s.confidence === 'observed') throw new Error(`reguess ${r.id}: ${s.t} s is observed`);
+    const p = s.t <= arrive ? alongPolyline(leg1, (s.t - r.from) * r.speed) : s.t < leave ? wait : alongPolyline(leg2, (s.t - leave) * r.speed);
+    const out: TrackSample = { t: s.t, tick: s.tick, x: Math.round(p[0]), y: Math.round(p[1]), z: Math.round(p[2]), confidence: 'inferred' };
+    return s.uncertainty === undefined ? out : { ...out, uncertainty: s.uncertainty };
+  });
+  return { ...track, samples, offGridSamples: track.offGridSamples.filter((s) => s.t <= r.from + 1e-6 || s.t >= r.to - 1e-6) };
+}
+
 // ---------- source shapes (the web-apps page's embedded JSON) ----------
 
 type Arr3 = [number, number, number];
@@ -506,7 +592,13 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
   }
   for (const list of yawBy.values()) list.sort((a, b) => a.t - b.t);
 
-  const tracks = sortedRecord(byId(src.tracks).map(([id, rows]): [PlayerId, Track] => [id, buildTrack(rows, yawBy.get(id) ?? [])]));
+  const tracks = sortedRecord(
+    byId(src.tracks).map(([id, rows]): [PlayerId, Track] => {
+      let tr = buildTrack(rows, yawBy.get(id) ?? []);
+      for (const r of REGUESSED) if (r.id === id) tr = reguessTrack(tr, r);
+      return [id, tr];
+    }),
+  );
 
   const players = src.players
     .map((p): Player => {
