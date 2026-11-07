@@ -39773,6 +39773,7 @@
         "y": 924,
         "z": -80
       },
+      "landing": null,
       "radio": "Smoke Out!"
     },
     {
@@ -39786,6 +39787,7 @@
         "y": -1274,
         "z": -264
       },
+      "landing": null,
       "radio": "Smoke Out!"
     },
     {
@@ -39799,6 +39801,7 @@
         "y": -1300,
         "z": -262
       },
+      "landing": null,
       "radio": "Flashbang Out!"
     },
     {
@@ -39812,6 +39815,7 @@
         "y": 623,
         "z": -77
       },
+      "landing": null,
       "radio": "Flashbang Out!"
     },
     {
@@ -39825,6 +39829,7 @@
         "y": 847,
         "z": -80
       },
+      "landing": null,
       "radio": "Fire in the hole!"
     },
     {
@@ -39838,6 +39843,7 @@
         "y": 776,
         "z": -80
       },
+      "landing": null,
       "radio": "FireBomb on the way!"
     },
     {
@@ -39850,6 +39856,12 @@
         "x": -2059,
         "y": 88,
         "z": -160
+      },
+      "landing": {
+        "x": -2035,
+        "y": -305,
+        "z": -94,
+        "uncertainty": 35
       },
       "radio": "Smoke Out!"
     },
@@ -39864,6 +39876,7 @@
         "y": 410,
         "z": -168
       },
+      "landing": null,
       "radio": "Smoke Out!"
     }
   ],
