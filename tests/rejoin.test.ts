@@ -10,7 +10,7 @@
  * faster than its weapon allows around a rejoin; the minimum LIVE time and the calm window hold; a pawn without tape
  * (outlived) stays LIVE; a rejoined pawn's scripted events after the rejoin run; cycles; snapshots mid-approach;
  * determinism; the switch off reproduces B4 byte for byte; nobody leaves the tape in the golden round, so nothing of
- * this runs there (no path query, digest NOHUMAN since G6's sight and aim on the CS2 mesh; 63bd3d86 after M1's movement fixes, 72b58704 at G3, e9a228d9 before G3's 3D movement).
+ * this runs there (no path query, digest 150f77b4 since G6's sight and aim on the CS2 mesh; 63bd3d86 after M1's movement fixes, 72b58704 at G3, e9a228d9 before G3's 3D movement).
  */
 import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, SessionLog, canonicalize, parseTuning, replay, stableStringify, type LogEntry, type Observe, type PlayerId } from '../src/contracts/index';
@@ -237,9 +237,9 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
 });
 
 describe('nobody leaves the tape: rejoin never runs', () => {
-  it('golden no-human round: no rejoin line, no path query, digest NOHUMAN (G6; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
+  it('golden no-human round: no rejoin line, no path query, digest 150f77b4 (G6; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
     const g = runHarness(data, { ...NO_HUMAN, recordWalk: true });
-    expect(logDigest(g.log)).toBe('NOHUMAN');
+    expect(logDigest(g.log)).toBe('150f77b4');
     expect(g.paths).toEqual([]);
     expect(coreLogs(g.entries).some((l) => / (rejoin|REPLAY): /.test(l.text))).toBe(false);
   });
