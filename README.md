@@ -11,12 +11,14 @@ npm ci
 npm run dev        # then open http://localhost:5173
 ```
 
-You play cart: WASD moves relative to the screen (W = up on the map), the mouse aims, click fires,
-Shift walks, Ctrl or C crouches, R reloads, E uses, and 1–5 switch weapons. Press **Start**; the bar
-under the map has Pause, Restart, speed 0.25–4×, the view toggles, Spectate and the log/trace downloads.
+Press **Start** and the round plays exactly as recorded. **Take control of cart** (or E) at any moment and you
+play him from there: WASD moves relative to the screen (W = up on the map), the mouse aims, click fires,
+Shift walks, Ctrl or C crouches, Space jumps, R reloads, E uses, and 1–5 switch weapons; Restart (or a rewind to
+before it) is watching again. The bar under the map has Pause, Restart, speed 0.25–4×, the view toggles, Take
+control of cart and the log/trace downloads (`?human=cart` plays him from the start).
 F follows cart, G shows his recorded position (the ghost), T everyone's recorded path, Tab the status
 panel; the wheel zooms, dragging pans and a double-click shows the whole map.
-On a phone it starts in spectate mode. To serve the static build, run `npm run build && npm run preview`
+On a phone you watch (there are no touch controls for playing). To serve the static build, run `npm run build && npm run preview`
 (http://localhost:4173). To try it on a phone on the same network, run `npm run dev -- --host` and open
 the Network URL it prints. Details: [`docs/app.md`](docs/app.md).
 

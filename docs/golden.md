@@ -14,7 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest e9a228d9
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 72b58704 (G3's 3D)
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
@@ -156,15 +156,15 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 966,125 | (see manifest) | `e9a228d9` |
-| `round-nohuman.walk.jsonl.gz` | Its walk oracle: 27,859 calls | 413,961 | | `9517e48f` |
-| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 605,544 | (see manifest) | `2923a71d` |
-| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 20,464 calls, and 1 rejoin path query (tick 1484) | 269,421 | | `25917ddf` |
-| `round-cart-takeover.jsonl.gz` | G4: watching until 15 s, then cart is the human and stands still (`--takeover 15 --until 24`), ticks 0–1536 (1,537 lines): lines 0–959 are the golden master's; line 960 has `human: cart`, the 11 `unblock_damage` and the takeover log; Lokier outlives (21.80 s), barely kills him and rejoins (23.19 s) | 381,204 | (see manifest) | `2ad2eb5c` |
-| `round-cart-takeover.walk.jsonl.gz` | Its walk oracle: 15,927 calls, and barely's rejoin path query | 176,654 | | (see manifest) |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `72b58704` |
+| `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `e5b887cf` |
+| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `9a995ab4` |
+| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `b1b09042` |
+| `round-cart-takeover.jsonl.gz` | G4: watching until 15 s, then cart is the human and stands still (`--takeover 15 --until 24`), ticks 0–1536 (1,537 lines): lines 0–959 are the golden master's; line 960 has `human: cart`, the 11 `unblock_damage` and the takeover log; Lokier outlives (21.80 s), barely kills him and rejoins (23.17 s) | 376,829 | (see manifest) | `a3163f9d` |
+| `round-cart-takeover.walk.jsonl.gz` | Its walk oracle: 15,042 calls, and barely's rejoin path queries | 173,793 | | `2eea8a21` |
 | `manifest.json` | One entry per fixture | 2,111 | | |
 
-The golden files total 2.81 MB gzipped (G4's fixture added 0.56 MB); `tests/fixtures.test.ts` keeps them under 3 MB. **Nothing is strided**: every line is a complete SessionLog line (`{act, controls, observe}`) for
+The golden files total 2.83 MB gzipped (G4's fixture added 0.55 MB); `tests/fixtures.test.ts` keeps them under 3 MB. **Nothing is strided**: every line is a complete SessionLog line (`{act, controls, observe}`) for
 every tick. A trimmed "observe + act only" variant would save nothing (`controls` is `[]` on every line but the
 first), so there is none.
 
@@ -301,10 +301,12 @@ tested (no WebKit here).
 
 ## History
 
-- G4 (takeover): every existing digest is unchanged (`e9a228d9`, `2923a71d`; walk oracles too): nobody takes over in
-  them, and a human from the start is set up exactly as before. The manifest gains `takeover` on every entry (null for
-  both), so their entries were refreshed (`commit`); the new fixture `round-cart-takeover` (`2ad2eb5c`) is the takeover
-  at 15 s above. The follow script is unchanged.
+- G4 (takeover): every existing digest is unchanged (G3's `72b58704` and `9a995ab4`; walk oracles too; before G3,
+  `e9a228d9` and `2923a71d` were unchanged by G4 as well): nobody takes over in them, and a human from the start is set
+  up exactly as before. The manifest gains `takeover` on every entry (null for both), so their entries were refreshed
+  (`commit`, and `sourceDirty` false: G3's were made from a dirty tree); the new fixture `round-cart-takeover`
+  (`a3163f9d` in 3D; `2ad2eb5c` on the 2D movement before G3) is the takeover at 15 s above. The follow script is
+  unchanged.
 
 - G1 (rejoin, LIVE → REPLAY): no-human `e9a228d9` unchanged (nobody leaves the tape, so no rejoin, no path query; the
   manifest entry changed only for the new `tuningHash`). cart-idle was unchanged too at 20 s (`4f8bc45c`: the first

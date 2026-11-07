@@ -789,24 +789,25 @@ damage) start at T: before it there is no off-script pawn. The puppets' snap rul
 **His state at T** is the puppet's, untouched: position, velocity (with no input he coasts to a stop under friction),
 view, weapon (a grenade the script drew for a throw stays drawn), ammo, HP, armor and items. Nothing is teleported.
 `ExpectedEncounters` already describes the recording, so a human on course right after T is the recording: he is
-within the puppet's drift of his track (13.5 u RMS; up to 93 u at the 13.0 s jump, ~100 u just before the snaps at
-14.41 s and 21.09 s, where he starts off course). Idle, he leaves his course as his track moves on.
+within the puppet's drift of his track (15.1 u RMS; up to 93 u at the 13.0 s jump, ~100 u just before the puppet's
+snaps at 14.38, 21.77, 29.38 and 64.28 s, where he starts off course). Idle, he leaves his course as his track moves on.
 
 ### Lokier's encounter by takeover time
 
 The scheduled encounter is active while cart is the human, i.e. from T. While nobody plays the Core only notes the
 first tick Lokier (REPLAY) sees the puppet cart within `humanSpotToleranceUnits` of the spot (`puppetSightTick`, 2D:
-17.63 s, tick 1128; the recording's sighting is 17.45 s): state, nothing sent. At T (`Divergence.takeover`):
+17.59 s, tick 1126; the recording's sighting is 17.45 s): state, nothing sent. At T (`Divergence.takeover`):
 
 | T | encounter | what happens |
 | --- | --- | --- |
-| before Lokier saw the puppet at the window (T < 17.63 s) | `waiting` | as at the setup: the recorded tap and aim are suppressed and Lokier holds the angle on the spot from the recorded aim's start (18.14 s). The hit comes `encounterDelaySec` after he sees cart at the spot: 18.63 s if cart is there (as a human from the start gets it). Logged `active from the takeover at tick T, waiting …` |
-| after that sighting, before the recorded hit was sent (17.63 s ≤ T ≤ tick 1183) | `seen` from the puppet's sighting | the hit due 1 s after it (tick 1192, 18.63 s), and at least one latency after T; the run-time aim from T (the recorded aim, if it began at 18.14 s, runs to its end at the same target). The gate applies on the hit's tick: Lokier still REPLAY and cart in his sight within 192 u of the spot, else Lokier goes LIVE (`encounter`). Logged `cart in sight at the spot since tick 1128 (+0.2 s …), before the takeover at tick T; scripted hit due at tick 1192` |
+| before Lokier saw the puppet at the window (T ≤ 17.59 s) | `waiting` | as at the setup: the recorded tap and aim are suppressed and Lokier holds the angle on the spot from the recorded aim's start (18.14 s). The hit comes `encounterDelaySec` after he sees cart at the spot: 18.59 s if cart is there (as a human from the start gets it). Logged `active from the takeover at tick T, waiting …`; a takeover on tick 1126 itself (17.6 s) is seen on that same tick |
+| after that sighting, before the recorded hit was sent (17.59 s < T ≤ tick 1183) | `seen` from the puppet's sighting | the hit due 1 s after it (tick 1190, 18.59 s), and at least one latency after T; the run-time aim from T (the recorded aim, if it began at 18.14 s, runs to its end at the same target). The gate applies on the hit's tick: Lokier still REPLAY and cart in his sight within 192 u of the spot, else Lokier goes LIVE (`encounter`). Logged `cart in sight at the spot since tick 1126 (+0.1 s …), before the takeover at tick T; scripted hit due at tick 1190` |
 | after the recorded hit (B3 sent it to the puppet on tick 1183; it landed at 18.50 s), Lokier alive (T ≤ 18.80 s) | `fired` on the recorded ticks (no shift) | cart has 27 HP / 93 armor. Lokier's view of him at the spot is still the recorded duel and cart's fire at Lokier recorded fire. Cart's recorded kill of Lokier (18.80 s) is no longer scripted (the human isn't): he must kill Lokier himself, else Lokier outlives his recording at 21.80 s (LIVE, `hold` on B) and barely kills him at 22.17 s (as in never-peeks). Logged `the recorded hit (73 hp) landed on tick 1184, before the takeover at tick T` |
 | after Lokier's death | none | `none after the takeover at tick T, lokier is dead` |
 
-So a takeover any time before the hit gives an on-course cart the hit a human from the start gets (18.63 s, the
-recording's 18.50 s plus the 2D sight's 0.18 s), and a takeover after it keeps what the puppet got.
+So a takeover any time before the hit gives an on-course cart the hit a human from the start gets (18.59 s: the 2D
+sight sees him 0.14 s after the recorded sighting, and the delay is a round 1 s against the recorded 1.05 s), and a
+takeover after it keeps what the puppet got (18.50 s).
 
 **Recorded damage on cart after T**: Lokier's 73 is the encounter above, never B3's recorded tick. sp4rtan's
 post-round kill (69.40 s) is real: B3's implied tap goes ahead (a puppet shooting at the human), the engine decides,
@@ -846,23 +847,25 @@ plant 27.52, barely → Zwomp 44.20, sp4rtan → donk 50.34 (kill feed 50.35), s
 
 | T | outcome | plant | Zwomp | donk | barely | defuse | why |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 0 | CT defuse 12 – 15 | **27.52** | **44.20** | **50.34** | **58.84** | **66.80** | cart stands on his start spot all round: Lokier outlives (21.80), barely kills him and rejoins; sp4rtan meets cart on his flank (40.06), kills him and rejoins; barely hears it, goes LIVE and rejoins |
-| 5 | CT defuse 12 – 15 | **27.52** | **44.20** | **50.34** | **58.84** | **66.80** | as T = 0 (he has hardly left his start: 60 u) |
-| 17.6 | CT defuse 12 – 15 | **27.52** | **44.20** | 47.59 | **58.84** | **66.80** | **flagged**: hit at 18.63; cart stays at the Apartments window on 27 HP. sp4rtan's recorded flank passes there at 46.7 s: he sees cart (off course), goes LIVE and kills him; the gunfire makes donk (910 u, dwelling in the Apartments) and barely LIVE; LIVE sp4rtan kills LIVE donk at 47.59 (the toy AI's fight). Both rejoin; the rest is the tape |
-| 18.0 | **T elimination 11 – 16** (47.69) | **27.52** | **44.20** | – | – | – | **flagged**: as 17.6, but in that LIVE fight donk kills sp4rtan (AWP, 47.69): no CT left |
-| 18.6 | CT defuse 12 – 15 | **27.52** | **44.20** | 47.67 | **58.84** | **66.80** | **flagged**: the recorded hit already landed (27 HP); then as 17.6 |
-| 30 | CT defuse 12 – 15 | – | **44.20** | **50.34** | **58.84** | **66.80** | Lokier already dead; cart stands where his track had him on the B side, nobody's recorded way passes in sight; sp4rtan's post-round shot (69.41) misses: cart ends on 27 HP |
-| 45 | CT defuse 12 – 15 | – | – | **50.34** | **58.84** | **66.80** | as 30 |
-| 60 | CT defuse 12 – 15 | – | – | – | – | **66.80** | as 30 |
-| 68 | CT defuse 12 – 15 | – | – | – | – | – | after the round; the post-round kill lands on the tape's tick: "Played it like the tape" |
+| 0 | CT defuse 12 – 15, 0.83 s left | 27.63 (+7) | **44.20** | **50.34** | **58.84** | **66.80** | cart stands on his start spot all round: Lokier outlives (21.80), barely goes LIVE, kills him (22.16) and rejoins (23.17) 0.6 s behind his tape, so his plant runs 7 ticks late (G1's late planter, as in never-peeks since G3); sp4rtan meets cart on his flank (40.09), kills him and rejoins; barely hears it, goes LIVE and rejoins |
+| 5 | CT defuse, 0.83 s left | 27.63 (+7) | **44.20** | **50.34** | **58.84** | **66.80** | as T = 0 (he has hardly left his start: 64 u) |
+| 17.6 | CT defuse, 0.83 s left | 27.63 (+7) | **44.20** | **flagged** 47.70 | **58.84** | **66.80** | hit at 18.59; cart stays at the Apartments window on 27 HP; the plant as T = 0. sp4rtan's recorded flank passes the window at 46.7 s: he sees cart (off course), goes LIVE and kills him; the gunfire makes donk (904 u away, dwelling in the Apartments) and barely LIVE; LIVE sp4rtan kills LIVE donk at 47.70 (the toy AI's fight). Both rejoin; the rest is the tape |
+| 18.0 | CT defuse, 0.83 s left | 27.63 (+7) | **44.20** | **flagged** 47.59 | **58.84** | **66.80** | as 17.6 (the same hit, from the puppet's sighting) |
+| 18.6 | CT defuse, 0.83 s left | 27.63 (+7) | **44.20** | **flagged** 47.56 | **58.84** | **66.80** | the recorded hit already landed (27 HP); then as 17.6 |
+| 30 | CT defuse 12 – 15, 0.72 s left | – | **44.20** | **50.34** | **58.84** | **66.80** | Lokier already dead; cart stands where his track had him on the B side, nobody's recorded way passes in sight; sp4rtan's post-round shot (69.41) misses: cart ends on 27 HP |
+| 45 | CT defuse 12 – 15, 0.72 s left | – | – | **50.34** | **58.84** | **66.80** | as 30 |
+| 60 | CT defuse 12 – 15, 0.72 s left | – | – | – | – | **66.80** | as 30 |
+| 68 | CT defuse 12 – 15, 0.72 s left | – | – | – | – | – | after the round; the post-round kill lands on the tape's tick: "Played it like the tape" |
 
-(– after T: before the takeover, so the golden master's by construction.) The flagged runs are not the takeover's
-doing: an idle cart left at the window is in the path of sp4rtan's recorded flank half a minute later, and from there
-it is B4/G1 divergence and the 2D toy AI (`docs/ai.md`); a cart that follows his recording after the takeover (or
-just leaves the window) doesn't meet him.
+(– after T: before the takeover, so the golden master's by construction.) Every run ends in the recorded CT defuse.
+What moves is not the takeover's doing: with cart idle before 18.8 s Lokier outlives his recording and the LIVE barely
+who kills him rejoins too late for his plant tick (+7 ticks, as in never-peeks); and an idle cart left at the window
+is in the path of sp4rtan's recorded flank half a minute later, where B4/G1 divergence and the 2D toy AI
+(`docs/ai.md`) cost donk 2.6 s. A cart that follows his recording after the takeover (`takeover-duel` below), or just
+leaves the window, meets neither.
 
 **Scenario `takeover-duel`** (`fixtures/scenarios/takeover-duel.json`, `tests/takeover-rewind.test.ts`): watch to
-18.0 s, take control at the window, aim at Lokier, take the time-shifted hit (18.63 s, 27 HP), kill him for real
+18.0 s, take control at the window, aim at Lokier, take the time-shifted hit (18.59 s, 27 HP), kill him for real
 (18.72 s, HS; the tape 18.80 s), then play the recording to the end. No pawn goes LIVE; every other event is on the
 golden master's tick, CT defuse 12 – 15 with 0.72 s left, and sp4rtan's post-round shot kills cart at 69.41 s as
 recorded ("Same result, different round: … 1 kill changed").
@@ -874,6 +877,6 @@ watches to t and has cart taken over there (`docs/golden.md`); `--takeover 0` is
 ### Known limits
 
 - Encounters exist for the default human only (cart); the Session offers only cart (`SessionConfig.playable`).
-- Taken over just before one of cart's puppet snaps (14.2–14.41 s, 21.0–21.09 s), he is up to ~100 u behind his
+- Taken over just before one of cart's puppet snaps (14.38, 21.77, 29.38, 64.28 s), he is up to ~100 u behind his
   track: off course at once, so an enemy that sees him then goes LIVE.
 - The release path exists for CS2 (a player leaving); the 2D app has no "give control back" (rewind instead).
