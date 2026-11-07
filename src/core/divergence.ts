@@ -110,9 +110,71 @@ export function onCourse(model: RoundModel, o: Observe, id: PlayerId, tuning: Tu
 }
 
 /**
+ * G7: the smallest 2D distance from `pos` to `id`'s recorded track between ticks `tick − drift` and `tick + drift`
+ * (clamped to the track; the track between its samples is the straight segment, as `trackAtTick` interpolates it).
+ * With `drift` 0 it is the distance to the recorded position at `tick`.
+ */
+export function distanceToRecording(model: RoundModel, id: PlayerId, pos: Vec3, tick: number, drift: number): number {
+  const lo = tick - drift;
+  const hi = tick + drift;
+  let prev = trackPosAt(model, id, lo);
+  let best = dist2(pos, prev);
+  for (const s of model.track(id)) {
+    if (s.tick <= lo) continue;
+    if (s.tick >= hi) break;
+    const d = segmentDistance(pos, prev, s);
+    if (d < best) best = d;
+    prev = { x: s.x, y: s.y, z: s.z };
+  }
+  const end = trackPosAt(model, id, hi);
+  const d = segmentDistance(pos, prev, end);
+  return d < best ? d : best;
+}
+
+/**
+ * G7: `id` (alive) is where its recording has it, give or take `driftSec`: within `units` (2D) of its recorded track
+ * at some tick within `driftSec` of now.
+ */
+export function nearRecording(model: RoundModel, o: Observe, id: PlayerId, units: number, driftSec: number): boolean {
+  const h = pawnOf(o, id);
+  return h !== undefined && h.alive && distanceToRecording(model, id, h.pos, o.tick, secTicks(driftSec)) <= units;
+}
+
+/**
+ * G7: the human is "the recording" (on script) at this tick: within `offCourseUnits` (2D) of where his recording has
+ * him at some tick within `onCourseDriftSec` of now (earlier or later: a human never plays the tape's timing exactly).
+ * A puppet's view of him is then the recording's view of him, so it is not divergence (exactly as two puppets seeing
+ * each other is not). Beyond that he is off script for every bot that sees him: cart in the Apartments corridor at
+ * 10 s, where his recording is 7 s later, is a T in Lokier's scope, not the recording. Replaces `humanOnCourse` (the
+ * exact tick, still used for "the hit on its recorded tick") in triggers 2 and in the rejoin's calm.
+ */
+export function humanOnScript(model: RoundModel, o: Observe, tuning: Tuning): boolean {
+  return o.human !== null && nearRecording(model, o, o.human, tuning.replay.offCourseUnits, tuning.replay.onCourseDriftSec);
+}
+
+/**
+ * G7: a recorded pair explains `viewer` seeing `target` now: the recording has them engaging or sighted around now
+ * (`ExpectedEncounters.saw`), and either the target is about where its recording has it (within
+ * `humanSpotToleranceUnits`, 2D, of its recorded track within the sighting window of now) or it is beyond
+ * `closeRangeUnits` (a long look across the map, where the engine's sight and the 2020 map differ most). Face to face
+ * with an enemy who is somewhere else than the tape has him, a recorded pair is not enough: cart walking up to sp4rtan
+ * on B in the window the tape has them see each other from the Shop door is not that sighting.
+ */
+export function recordedPairInSight(model: RoundModel, o: Observe, index: ExpectedEncounters, viewer: PlayerId, target: PlayerId, tuning: Tuning): boolean {
+  if (!index.saw(viewer, target, o.tick)) return false;
+  const v = pawnOf(o, viewer);
+  const t = pawnOf(o, target);
+  if (v === undefined || t === undefined) return false;
+  if (dist2(v.pos, t.pos) > tuning.replay.closeRangeUnits) return true;
+  return nearRecording(model, o, target, tuning.replay.humanSpotToleranceUnits, tuning.replay.expectedSightingWindowSec);
+}
+
+/**
  * Trigger 2, unscripted sighting: `id` sees (its `sees`) an enemy that is off script (the human or a LIVE pawn) and the
- * recording doesn't have the pair engaging or sighted around this tick (`ExpectedEncounters.saw`). Not counted: the
- * human while he is on course (`humanOnCourse`), and a pair a scheduled encounter owns (`encounterOwnsSighting`).
+ * recording doesn't have the pair engaging or sighted around this tick with the enemy about where the tape has it
+ * (`recordedPairInSight`, G7). Not counted: the human while he is on script (`humanOnScript`, G7: within the drift of
+ * his recorded track), and a pair a scheduled encounter owns (`encounterOwnsSighting`). G7: so a bot that can see an
+ * enemy the recording doesn't have it seeing goes LIVE at once and the engine's AI fights (after its reaction time).
  */
 export function sightingTrigger(
   o: Observe,
@@ -130,9 +192,9 @@ export function sightingTrigger(
     if (!enemies(model, id, t) || !isOffScript(o, modes, t)) continue;
     const tp = pawnOf(o, t);
     if (tp === undefined || !tp.alive) continue;
-    if (t === o.human && humanOnCourse(model, o, tuning)) continue;
+    if (t === o.human && humanOnScript(model, o, tuning)) continue;
     if (encounterOwnsSighting(o, encounters, states, id, t, tuning)) continue;
-    if (index.saw(id, t, o.tick)) continue;
+    if (recordedPairInSight(model, o, index, id, t, tuning)) continue;
     return { id, trigger: 'sighting', reason: `sees ${t} (${t === o.human ? 'the human' : 'LIVE'}), not in the recording` };
   }
   return null;
@@ -160,7 +222,7 @@ export function gunfireTrigger(
     if (!enemies(model, id, e.source) || !isOffScript(o, modes, e.source)) continue;
     const d = dist2(me.pos, e.pos);
     if (d > tuning.replay.hearingRangeUnits) continue;
-    if (recordedFire(o, index, encounters, states, e.source)) continue;
+    if (recordedFire(o, index, encounters, states, e.source, model, tuning, e.pos)) continue;
     return { id, trigger: 'gunfire', reason: `heard ${e.source} fire ${intText(d)} u away` };
   }
   return null;
@@ -168,16 +230,28 @@ export function gunfireTrigger(
 
 /**
  * Whether a shot by `shooter` this tick is recorded fire: the recording has `shooter` firing within
- * `expectedGunfireWindowSec`, or (the human in a scheduled encounter that has started) firing at the encounter's
- * shooter within that window of the encounter's time shift.
+ * `expectedGunfireWindowSec`, from about where the tape has it then (G7: `from`, the shot's position, within
+ * `humanSpotToleranceUnits` (2D) of its recorded track within that window: the same gun going off somewhere else is
+ * not the recording), or (the human in a scheduled encounter that has started) firing at the encounter's shooter
+ * within that window of the encounter's time shift, from within `humanSpotToleranceUnits` of its spot.
  */
-export function recordedFire(o: Observe, index: ExpectedEncounters, encounters: readonly EncounterPlan[], states: readonly EncounterState[], shooter: PlayerId): boolean {
-  if (index.fired(shooter, null, o.tick, 0)) return true;
+export function recordedFire(
+  o: Observe,
+  index: ExpectedEncounters,
+  encounters: readonly EncounterPlan[],
+  states: readonly EncounterState[],
+  shooter: PlayerId,
+  model: RoundModel,
+  tuning: Tuning,
+  from: Vec3,
+): boolean {
+  const tol = tuning.replay.humanSpotToleranceUnits;
+  if (index.fired(shooter, null, o.tick, 0) && distanceToRecording(model, shooter, from, o.tick, index.fireWindow) <= tol) return true;
   for (let i = 0; i < encounters.length; i++) {
     const p = encounters[i] as EncounterPlan;
     const s = states[i];
     if (s === undefined || p.victim !== shooter || o.human !== p.victim || s.seenTick === null) continue;
-    if (index.fired(shooter, p.shooter, o.tick, s.seenTick - p.recordedSightTick)) return true;
+    if (index.fired(shooter, p.shooter, o.tick, s.seenTick - p.recordedSightTick) && dist2(from, p.spot) <= tol) return true;
   }
   return false;
 }
@@ -444,8 +518,18 @@ export function buildEncounters(model: RoundModel, schedule: EventSchedule, plan
  * (its victim is the human), `viewer` is its shooter and `target` its victim, and either it is in its `seen` second
  * (the gate decides), or it is waiting or fired with the victim at the recorded spot (`humanSpotToleranceUnits`): the
  * sighting that starts it, and the recorded duel at the window after the hit. Seen anywhere else, the human is
- * judged by the normal sighting rule (on course, recorded pair, else LIVE).
+ * judged by the normal sighting rule (on script, recorded pair, else LIVE). G7: while waiting, only within the
+ * encounter window (`inEncounterWindow`): at the spot 6 s early he is a T in the window, not the recording.
  */
+/**
+ * G7: `tick` is within `encounterWindowSec` of the encounter's recorded sighting (the time shift's origin), earlier or
+ * later: a sighting at the spot then starts the time-shifted hit; outside it the encounter is cancelled (a real fight).
+ */
+export function inEncounterWindow(p: EncounterPlan, tick: number, tuning: Tuning): boolean {
+  const w = secTicks(tuning.replay.encounterWindowSec);
+  return tick >= p.recordedSightTick - w && tick <= p.recordedSightTick + w;
+}
+
 export function encounterOwnsSighting(o: Observe, encounters: readonly EncounterPlan[], states: readonly EncounterState[], viewer: PlayerId, target: PlayerId, tuning: Tuning): boolean {
   const tp = pawnOf(o, target);
   for (let i = 0; i < encounters.length; i++) {
@@ -453,6 +537,7 @@ export function encounterOwnsSighting(o: Observe, encounters: readonly Encounter
     const s = states[i];
     if (s === undefined || p.shooter !== viewer || p.victim !== target || o.human !== p.victim) continue;
     if (s.phase === 'seen') return true;
+    if (s.phase === 'waiting' && !inEncounterWindow(p, o.tick, tuning)) continue;
     if ((s.phase === 'waiting' || s.phase === 'fired') && tp !== undefined && dist2(tp.pos, p.spot) <= tuning.replay.humanSpotToleranceUnits) return true;
   }
   return false;
@@ -743,6 +828,28 @@ export class Divergence {
     const vi = pawnOf(o, p.victim);
     const what = `encounter ${p.shooter} -> ${p.victim}`;
     const switching = hits.some((h) => h.id === p.shooter);
+    if (
+      s.phase === 'waiting' &&
+      sh !== undefined &&
+      vi !== undefined &&
+      sh.alive &&
+      vi.alive &&
+      modeOf(modes, p.shooter) === 'REPLAY' &&
+      sh.sees.includes(p.victim) &&
+      dist2(vi.pos, p.spot) <= this.tuning.replay.humanSpotToleranceUnits &&
+      !inEncounterWindow(p, tick, this.tuning)
+    ) {
+      // G7: too early or too late for the recorded hit to make sense: no time shift, a real fight (the encounter doesn't
+      // own the sighting outside its window, so trigger 2 makes the shooter LIVE this tick unless the human is on script).
+      s.phase = 'done';
+      script.endHold(`hold:${p.key}`, tick);
+      out.push({
+        type: 'log',
+        level: 'info',
+        text: `${what}: cancelled at tick ${tick}, ${p.victim} in sight at the spot ${tenthsText(tick - p.recordedSightTick, true)} s against the recording, beyond the encounter window (${tenthsText(secTicks(this.tuning.replay.encounterWindowSec), false)} s): a real fight`,
+      });
+      return null;
+    }
     const why =
       sh === undefined || !sh.alive ? `${p.shooter} is dead` : vi === undefined || !vi.alive ? `${p.victim} is dead` : switching || modeOf(modes, p.shooter) !== 'REPLAY' ? `${p.shooter} is LIVE` : null;
     if (why !== null || sh === undefined || vi === undefined) {

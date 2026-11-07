@@ -34,7 +34,7 @@
  */
 import { PLAYER_IDS, roundNumber, type Action, type Goal, type Observe, type PawnObs, type PlayerId, type Tuning, type TrackSample, type Vec3, type WalkQuery, type WeaponId } from '../contracts/index';
 import { TICK_RATE } from './clock';
-import { encounterOwnsSighting, gunfireTrigger, humanOnCourse, intText, isOffScript, liveGoal, tenthsText, trackPosAt, type Divergence } from './divergence';
+import { encounterOwnsSighting, gunfireTrigger, humanOnScript, intText, isOffScript, liveGoal, tenthsText, trackPosAt, type Divergence } from './divergence';
 import { loadoutOf, type PawnLoadout } from './loadout';
 import { dist2, runSpeedOf, type PuppetTrack } from './puppet';
 import type { RoundModel } from './round-model';
@@ -103,7 +103,7 @@ function copyVec(v: Vec3): Vec3 {
 /**
  * Why `id` (a LIVE pawn) is not calm this tick, or null: hit by anyone (world and self damage don't count), a shot of
  * its own, an alive enemy in its `sees` that isn't the recording (off script, or a REPLAY enemy the recording doesn't
- * have it engaging or seeing around now; the human on course and a pair a scheduled encounter owns are the recording,
+ * have it engaging or seeing around now; the human on script (G7: within the drift) and a pair a scheduled encounter owns are the recording,
  * as for trigger 2), or unexpected off-script gunfire within hearing range (trigger 3's rule).
  */
 export function unrestReason(o: Observe, modes: readonly PawnMode[], id: PlayerId, model: RoundModel, d: Divergence, tuning: Tuning): string | null {
@@ -120,7 +120,7 @@ export function unrestReason(o: Observe, modes: readonly PawnMode[], id: PlayerI
     const tp = pawnOf(o, t);
     if (tp === undefined || !tp.alive) continue;
     if (encounterOwnsSighting(o, encs, states, id, t, tuning)) continue;
-    if (t === o.human && humanOnCourse(model, o, tuning)) continue;
+    if (t === o.human && humanOnScript(model, o, tuning)) continue;
     if (!isOffScript(o, modes, t) && d.index.saw(id, t, o.tick)) continue;
     return `sees ${t}`;
   }
