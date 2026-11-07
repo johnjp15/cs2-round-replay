@@ -14,7 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 04121ba7 (T1's level flips)
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 7168c0a5 (T1's level flips)
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
@@ -160,7 +160,7 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `04121ba7` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `7168c0a5` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `72d1547f` |
 | `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `fb19a2fa` |
 | `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `6cd197f2` |
@@ -305,9 +305,9 @@ tested (no WebKit here).
 
 ## History
 
-- T1 (`tools/snap-tracks.ts` pass 0, barely back on Catwalk 35.1–44.7 s): no-human `63bd3d86` → `04121ba7`, cart-idle
-  `fb19a2fa` → `0e6c83fa` (walk oracles `72d1547f` → `a4e079c6` and cart-idle's), cart-takeover unchanged
-  (`e1131654`, it ends at tick 1536). `tools/fixture-diff.ts`, no-human: only barely's pawn fields differ (pos from tick
+- T1 (`tools/snap-tracks.ts` pass 0, barely back on Catwalk 35.1–44.7 s): on G6's base no-human `150f77b4` → `7168c0a5`
+  (walk oracle `8d41dc25` → `29adfc6e`), cart-idle `8f471b88` → `5770cd34` (`f9a434ca` → `7fae11b5`), cart-takeover
+  unchanged (`cae23207`, it ends at tick 1536). `tools/fixture-diff.ts`, no-human: only barely's pawn fields differ (pos from tick
   2072; ≤ 28 u before 35 s, ≤ 220 u 35–45 s, ≤ 12 u 46–49.9 s while his puppet catches up, identical from 50.3 s; yaw,
   pitch, sees and crouching follow) and footstep `sound` events; every shot, damage, death, plant and defuse event is
   on the same tick (Zwomp 2829). cart-idle: barely, LIVE there from 40.30 s, now sees Zwomp up Catwalk and kills him at
@@ -345,5 +345,6 @@ tested (no WebKit here).
 
 - C4 (#16) made `sees` real (radar sight mask) and clamps grenade throws at the mask's walls: the no-human digest went `0fb55e23` → `e6c2be70` and cart-idle `6505c774` → `76ee296f`. Core acts, positions, kills, HP, shots, plant and defuse are unchanged. The harness must pass `vision` to `Session` (as the app does): `parseSessionData` defaults the mask to null, which silently falls back to nav line of sight.
 - F (fidelity and polish) adds **cover** to the sight mask (`docs/vision.md`): no-human `e6c2be70` → `e9a228d9`, cart-idle `868f56db` → `4f8bc45c`; both walk oracles unchanged. `tools/fixture-diff.ts` against B4's fixtures: **0 Core acts differ**, no controls, positions, HP, events (kills, damage, shots, the plant, the defuse) or round state differ; only `sees`, on 123 of 4,517 lines (from tick 940) and 17 of 1,281. Every change is a pair that no longer sees the other across a box: donk → barely (teammates in the Apartments) 14.69–14.94 s, 17 ticks, in both fixtures; barely → cart (teammates) on 48 ticks between 23.1 and 50.9 s; cart ↔ sp4rtan on 58 ticks between 63.3 and 65.1 s (the B-site stack between cart at the Shop door and the defusing sp4rtan, low for cover). The follow script changes from 65.55 s (tick 4195, the first missed engagement, `tools/follow-aim.ts`) and runs to the end (4,321 → 4,460 entries): cart no longer dies in the explosion. Merged after B5 (whose checkpoints change no digest) the digests are the same; the manifest changed only for the merged `tuningHash` (B5's `replay.checkpoint*` and F's `ai` keys), and `tools/fixture-diff.ts` against B5's main gives the same result (0 acts, `sees` only).
+- G6 (sight and bullets on the CS2 mesh, `docs/vision.md`): no-human `72b58704` → `7339dbf2`, cart-idle `9a995ab4` → `f0ba1a27`, cart-takeover `a3163f9d` → `fb303936`. In two steps: the sight change alone changes **only `sees`** in the no-human round (`tools/fixture-diff.ts`: 0 acts, 1,525 lines differ only in `sees`). Then the snapped tracks' pass 5 (recorded duels in sight) moves cart 17.0–19.3 s (up to 106 u), eradicate 12.5–12.7 s and donk 49.9–50.1 s: 927 acts (the puppets' inputs on the new tracks and aim at the moved targets), positions of those three (cart until his 29.4 s snap; the two bodies), footstep sounds on 99 lines; no kill, damage, plant, defuse or round state changes and the round still plays like the tape. cart-idle also moves sp4rtan's LIVE kill of cart 2 ticks (40.58 s). Third, puppets aim only at what they see (pre-aim on the recorded spot otherwise, `docs/core.md` "Aim"): no-human `7339dbf2` → `00fa463b`, cart-idle `f0ba1a27` → `5805058c`, cart-takeover `fb303936` → `aa5aee88`; `tools/fixture-diff.ts` against the step before: 414 / 215 / 136 acts (the look: yaw, pitch and the stick re-expressed in it), observed yaw and pitch, positions by at most 4e-5 units (the rotated stick's rounding; sound positions with them), and **no** `sees`, damage, death, shot, bomb or round difference. The 3D host (same MeshSight) now matches the no-human fixture in every line.
 - B4 (divergence) adds the `HUMAN` status mode and plays Lokier's hit on cart as a scheduled encounter: cart-idle `76ee296f` → `868f56db` (walk oracle `cfcdde41` → `84734d9c`). Every line's status shows cart `HUMAN` instead of `REPLAY`; from tick 1161 Lokier holds the angle on the Apartments window instead of the recorded aim at cart, so his input (yaw, and the stick re-expressed in it) and from 1162 his observed yaw and position differ, and his recorded tap at 1183 is gone (no `shot` at 1184; the encounter never starts, cart stays in Back Alley). The no-human golden master is byte-identical (`e6c2be70`); its manifest entry changed only for the new `tuningHash`. The follow script is the same through 66.0 s (sp4rtan goes LIVE at 65.91 s, so cart's aim at him differs from 66.03 s on).
 - B5 (checkpoints, rewind, summary): the app's Session (so the harness) takes an automatic checkpoint every `replay.checkpointSec` before the step; checkpoints are not logged and change no state, so both digests are unchanged (`e6c2be70`, `868f56db`; `tests/rewind.test.ts` re-checks the golden digest with checkpoints on and after an exact rewind). The manifest changed only for the new `tuningHash` (`replay.checkpointSec`, `replay.checkpointMax`). A rewind cuts the log back, so every log stays one straight run (each line's tick is its index) and replays; a resync rewind adds one line with `controls: [{type: rewind, id}]` and an Act starting with `set_round` (`docs/core.md` "Checkpoints, rewind, summary").

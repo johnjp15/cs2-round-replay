@@ -7,10 +7,10 @@
   "steps": [
     {"do": "followRecording", "until": 15.0},
     {"do": "throw", "kind": "smoke", "at": [-1700, 790]},
-    {"do": "walkTo", "pos": [-1764, 800]},
+    {"do": "walkTo", "pos": [-1712, 700]},
     {"do": "holdStill", "until": 19.3},
     {"do": "aimAt", "id": "lokier"},
-    {"do": "walkTo", "pos": [-1945, 745]},
+    {"do": "walkTo", "pos": [-1900, 740]},
     {"do": "holdStill", "sec": 1.1},
     {"do": "fire", "untilDead": true, "maxSec": 1.5},
     {"do": "holdStill", "until": 30}

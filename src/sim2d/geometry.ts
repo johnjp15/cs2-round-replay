@@ -52,6 +52,8 @@ export const TRACE_SKIN = 0.03125;
 export const OVERLAP_EPS = 1e-4;
 /** Broad-phase cell size (units). 16, 32 and 64 measured the same within noise (docs/geometry.md, Costs). */
 export const GEOMETRY_CELL = 32;
+/** G6: segment traces pad the segment's box in a cell by this (units) before the bounding-box filters, so rounding never drops a crossing. */
+const SEGMENT_PAD = 1e-6;
 
 /** An axis-aligned player hull: half width in x and y, height above the feet. */
 export interface Hull {
@@ -71,6 +73,11 @@ export interface GeometryMesh {
   readonly verts: Int32Array;
   /** Three vertex indices per triangle. */
   readonly tris: Int32Array;
+  /**
+   * G6: triangles [0, sightTriangles) block sight and bullets; the rest only block movement (G3's player clips, which
+   * CS2's bullets and sight traces pass through). Absent: every triangle blocks sight. Set by `combineMeshes`.
+   */
+  readonly sightTriangles?: number;
 }
 
 /** Result of `traceBox` (all fields always set). */
@@ -250,7 +257,9 @@ export function decodeGeometry(bytes: Uint8Array): GeometryMesh {
 /**
  * One mesh made of two with the same `quant`: `a`'s vertices and triangles, then `b`'s (indices shifted). G3 merges
  * the player clips (data/geometry/mirage-clips.bin, docs/geometry.md "Player clips") into the world mesh this way, so
- * movement traces see them like any other surface. The result is not canonical G2GM (it is never encoded).
+ * movement traces see them like any other surface. `b`'s triangles block movement only (G6): the result's
+ * `sightTriangles` is `a`'s (all of `a` when unset), so sight and bullet traces (`traceSight`) skip the clips, as CS2's
+ * do. The result is not canonical G2GM (it is never encoded).
  */
 export function combineMeshes(a: GeometryMesh, b: GeometryMesh): GeometryMesh {
   if (a.quant !== b.quant) throw new GeometryError(`combineMeshes: quant ${a.quant} vs ${b.quant}`);
@@ -261,7 +270,7 @@ export function combineMeshes(a: GeometryMesh, b: GeometryMesh): GeometryMesh {
   tris.set(a.tris, 0);
   const shift = a.verts.length / 3;
   for (let i = 0; i < b.tris.length; i++) tris[a.tris.length + i] = (b.tris[i] as number) + shift;
-  return { quant: a.quant, verts, tris };
+  return { quant: a.quant, verts, tris, sightTriangles: a.sightTriangles ?? a.tris.length / 3 };
 }
 
 // ---- queries -----------------------------------------------------------------------------------------------------
@@ -273,6 +282,8 @@ export class MapGeometry {
   readonly quant: number;
   readonly vertexCount: number;
   readonly triangleCount: number;
+  /** G6: triangles [0, sightTriangleCount) block sight and bullets (`traceSight`); the rest (player clips) only movement. */
+  readonly sightTriangleCount: number;
   /** World bounds of all vertices. */
   readonly minX: number;
   readonly minY: number;
@@ -296,6 +307,10 @@ export class MapGeometry {
   private readonly gridNY: number;
   private readonly cellStart: Int32Array;
   private readonly cellTris: Int32Array;
+  /** G6: per cell, the end (in cellTris) of its sight triangles, which come first in its list, and their z extent (±Infinity if none). */
+  private readonly cellSightEnd: Int32Array;
+  private readonly cellSightZMin: Float64Array;
+  private readonly cellSightZMax: Float64Array;
   // Scratch for the separating-axis sweep (not re-entrant).
   private readonly ax = new Float64Array(AXES * 3);
   private sIn = 0;
@@ -313,6 +328,8 @@ export class MapGeometry {
   private readonly polyB = new Float64Array(24);
   private clipMinZ = 0;
   private clipMaxZ = 0;
+  /** The triangle behind the last segment trace's answer (−1: clear), for `sightBlocker`. */
+  private hitTri = -1;
 
   constructor(mesh: GeometryMesh) {
     const nv = mesh.verts.length / 3;
@@ -320,6 +337,9 @@ export class MapGeometry {
     this.quant = mesh.quant;
     this.vertexCount = nv;
     this.triangleCount = nt;
+    const sightTris = mesh.sightTriangles ?? nt;
+    if (!Number.isInteger(sightTris) || sightTris < 0 || sightTris > nt) throw new GeometryError(`geometry: bad sightTriangles ${sightTris} (of ${nt})`);
+    this.sightTriangleCount = sightTris;
     this.vx = new Float64Array(nv);
     this.vy = new Float64Array(nv);
     this.vz = new Float64Array(nv);
@@ -420,6 +440,28 @@ export class MapGeometry {
           fill[k] = (fill[k] as number) + 1;
         }
       }
+    }
+    // G6: per cell, where its sight triangles end in its list (they come first: lists ascend by index) and their z
+    // extent, so a sight trace skips a cell its segment passes above or below (open floors) without visiting it.
+    this.cellSightEnd = new Int32Array(ncell);
+    this.cellSightZMin = new Float64Array(ncell);
+    this.cellSightZMax = new Float64Array(ncell);
+    for (let k = 0; k < ncell; k++) {
+      let q = counts[k] as number;
+      const end = counts[k + 1] as number;
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (; q < end; q++) {
+        const t = this.cellTris[q] as number;
+        if (t >= sightTris) break;
+        const zl = this.bbox[t * 6 + 2] as number;
+        const zh = this.bbox[t * 6 + 5] as number;
+        if (zl < lo) lo = zl;
+        if (zh > hi) hi = zh;
+      }
+      this.cellSightEnd[k] = q;
+      this.cellSightZMin[k] = lo;
+      this.cellSightZMax[k] = hi;
     }
   }
 
@@ -895,9 +937,54 @@ export class MapGeometry {
   /**
    * First crossing of the segment a → b with any triangle, as a fraction in (0, 1); 1 if it is clear. Two-sided;
    * touching at an end or running inside a triangle's plane doesn't count. Walks the broad-phase cells along the
-   * segment (a 2D DDA), so long sight lines cost in proportion to their length.
+   * segment (a 2D DDA), so long sight lines cost in proportion to their length. `firstOnly`: return the first
+   * crossing found (some crossing, not necessarily the nearest), for yes/no tests.
    */
   traceLine(ax: number, ay: number, az: number, bx: number, by: number, bz: number, firstOnly = false): number {
+    return this.segmentTrace(ax, ay, az, bx, by, bz, firstOnly, false);
+  }
+
+  /** True if the segment a → b crosses a triangle (any triangle, player clips included). */
+  lineBlocked(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): boolean {
+    return this.segmentTrace(a.x, a.y, a.z, b.x, b.y, b.z, true, false) < 1;
+  }
+
+  /**
+   * G6: `traceLine` against the sight triangles only ([0, sightTriangleCount): the world; G3's player clips don't
+   * stop sight or bullets). What `sees`, bullets and grenade effects use (src/sim2d/mesh-sight.ts).
+   */
+  traceSight(ax: number, ay: number, az: number, bx: number, by: number, bz: number, firstOnly = false): number {
+    return this.segmentTrace(ax, ay, az, bx, by, bz, firstOnly, true);
+  }
+
+  /** G6: true if the segment a → b crosses a sight triangle (eye to aim point; scalar arguments, no allocation). */
+  sightBlocked(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+    return this.segmentTrace(ax, ay, az, bx, by, bz, true, true) < 1;
+  }
+
+  /**
+   * G6: a sight triangle the segment a → b crosses (the first one `sightBlocked` finds), or −1 if it is clear. Sight
+   * keeps it as a hint: the next query of the same pair tests it first (`crossesTriangle`).
+   */
+  sightBlocker(ax: number, ay: number, az: number, bx: number, by: number, bz: number): number {
+    this.hitTri = -1;
+    this.segmentTrace(ax, ay, az, bx, by, bz, true, true);
+    return this.hitTri;
+  }
+
+  /** G6: true if the segment a → b crosses triangle t (closed triangle, open segment, as the traces count it). */
+  crossesTriangle(t: number, ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+    if (t < 0 || t >= this.triangleCount) return false;
+    return this.segmentTri(t, ax, ay, az, bx - ax, by - ay, bz - az) < 1;
+  }
+
+  /**
+   * The segment DDA behind traceLine and traceSight. Per cell it tests the triangles listed there (`sight`: only the
+   * sight triangles, a prefix of the list), skipping a sight cell whose triangles' z extent misses the segment's z range
+   * in the cell, and any triangle whose bounding box misses the segment's box in the cell (padded by SEGMENT_PAD). A
+   * triangle the segment crosses is listed in the cell that holds the crossing point and passes both filters there.
+   */
+  private segmentTrace(ax: number, ay: number, az: number, bx: number, by: number, bz: number, firstOnly: boolean, sight: boolean): number {
     const dx = bx - ax;
     const dy = by - ay;
     const dz = bz - az;
@@ -915,24 +1002,38 @@ export class MapGeometry {
     let tMaxX = dx > 0 ? (this.gridX0 + (i + 1) * g - ax) / dx : dx < 0 ? (this.gridX0 + i * g - ax) / dx : Infinity;
     let tMaxY = dy > 0 ? (this.gridY0 + (j + 1) * g - ay) / dy : dy < 0 ? (this.gridY0 + j * g - ay) / dy : Infinity;
     let tCell = 0;
+    const bbox = this.bbox;
     for (let guard = 0; guard < 1_000_000; guard++) {
       const tNext = Math.min(tMaxX, tMaxY, 1);
       if (i >= 0 && j >= 0 && i < this.gridNX && j < this.gridNY) {
-        // z range of the segment inside this cell, for the bounding-box filter.
+        // The segment's box inside this cell, for the bounding-box filters.
         const za = az + dz * tCell;
         const zb = az + dz * tNext;
-        const zLo = Math.min(za, zb);
-        const zHi = Math.max(za, zb);
+        const zLo = Math.min(za, zb) - SEGMENT_PAD;
+        const zHi = Math.max(za, zb) + SEGMENT_PAD;
         const k = j * this.gridNX + i;
-        const end = this.cellStart[k + 1] as number;
-        for (let q = this.cellStart[k] as number; q < end; q++) {
-          const t = this.cellTris[q] as number;
-          const bb = t * 6;
-          if ((this.bbox[bb + 5] as number) < zLo || (this.bbox[bb + 2] as number) > zHi) continue;
-          const f = this.segmentTri(t, ax, ay, az, dx, dy, dz);
-          if (f < best) {
-            best = f;
-            if (firstOnly) return best;
+        const start = this.cellStart[k] as number;
+        const end = sight ? (this.cellSightEnd[k] as number) : (this.cellStart[k + 1] as number);
+        if (start < end && (!sight || ((this.cellSightZMax[k] as number) >= zLo && (this.cellSightZMin[k] as number) <= zHi))) {
+          const xa = ax + dx * tCell;
+          const xb = ax + dx * tNext;
+          const ya = ay + dy * tCell;
+          const yb = ay + dy * tNext;
+          const xLo = Math.min(xa, xb) - SEGMENT_PAD;
+          const xHi = Math.max(xa, xb) + SEGMENT_PAD;
+          const yLo = Math.min(ya, yb) - SEGMENT_PAD;
+          const yHi = Math.max(ya, yb) + SEGMENT_PAD;
+          for (let q = start; q < end; q++) {
+            const t = this.cellTris[q] as number;
+            const bb = t * 6;
+            if ((bbox[bb + 5] as number) < zLo || (bbox[bb + 2] as number) > zHi) continue;
+            if ((bbox[bb + 3] as number) < xLo || (bbox[bb] as number) > xHi || (bbox[bb + 4] as number) < yLo || (bbox[bb + 1] as number) > yHi) continue;
+            const f = this.segmentTri(t, ax, ay, az, dx, dy, dz);
+            if (f < best) {
+              best = f;
+              this.hitTri = t;
+              if (firstOnly) return best;
+            }
           }
         }
       }
@@ -948,11 +1049,6 @@ export class MapGeometry {
       }
     }
     return best;
-  }
-
-  /** True if the segment a → b crosses a triangle (eye-height line of sight: pass eye positions). */
-  lineBlocked(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): boolean {
-    return this.traceLine(a.x, a.y, a.z, b.x, b.y, b.z, true) < 1;
   }
 
   /** Fraction in (0, 1) where the segment p + s·d crosses triangle t (closed triangle, open segment), else Infinity. */

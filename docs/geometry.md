@@ -105,6 +105,8 @@ Positions are **feet** positions in the Mirage world frame (z up). A hull is Sou
 | `floorBelow(x, y, z, halfWidth = 16, up = 18, down = 8192) → FloorHit \| null` | the highest surface top under the footprint (open square) at or below z + up and at or above z − down: where a hull would rest (Source boxes rest on the highest point beneath them, the uphill edge on a slope). Triangles that rise above z + up inside the footprint are obstacles and are skipped. `FloorHit` = `z`, the triangle's normal oriented up, `walkable` (nz ≥ `WALKABLE_NZ` 0.7), `tri`. |
 | `ceilingAbove(x, y, z, halfWidth = 16, up = 8192)` | the lowest surface bottom strictly above z under the footprint; +Infinity if none (headroom for jumps and standing up) |
 | `traceLine(ax, ay, az, bx, by, bz)`, `lineBlocked(a, b)` | the first crossing of a segment with a triangle (open segment, closed triangle); eye-to-eye sight. Glass, windows and bullet-pass railings aren't in the mesh, so they don't block. |
+| `traceSight(…)`, `sightBlocked(…)` (G6) | `traceLine` against the **sight triangles** only: `[0, sightTriangleCount)`. `combineMeshes(world, clips)` sets `sightTriangles` to the world's count, so player clips stop movement but not sight or bullets. Skips cells whose sight triangles' z extent misses the segment (open floors) and triangles whose box misses it; 1.53 µs per eye-to-eye trace on recorded pairs (G2's `traceLine`: 1.86) |
+| `sightBlocker(…)`, `crossesTriangle(t, …)` (G6) | the sight triangle a segment crosses (−1 if clear), and the single-triangle test: MeshSight's per-pair hint (`docs/vision.md`) |
 | `footprintSpans`, `surfacesAt`, `triangle`, `triangleNormal` | tools and tests (they allocate) |
 
 Implementation notes:
@@ -448,6 +450,10 @@ at. Deterministic, offline (36 s). Passes:
    snapped one when it is shorter, the samples placed by the recording's progress (3 stretches: barely 17.7–23.9 s
    through the Apartments and off the Balcony's west end, 1,427 → 1,072 units; cart 19.5–21.1 s and 46.9–48.6 s).
    Plant and defuse samples never move.
+5. **Sight (G6, `tools/sight-snap.ts`)**: every recorded duel (a trusted sighting with a hit or kill in its window) in
+   sight on the mesh at every sample; where not, one side's samples move as little as they can (Viterbi, run-speed
+   steps in clear hull lines): cart 17.0–19.3 s up to 106 u (the Apartments window over B), eradicate 12.5–12.7 s
+   33 u, donk 49.9–50.1 s 6 u. Details in `docs/vision.md` "Recorded duels". The tool now takes ≈ 60–85 s.
 
 Result: 3,562 samples; 2,248 unmoved, 136 moved ≤ 16 units, 1,094 moved 16–64, 84 further (horizontal moves ≤ 4: 67,
 ≤ 8: 60, ≤ 16: 103, ≤ 32: 271, ≤ 48: 335, more: 214; most of the 64+ are barely's 35–45 s on Catwalk, 40–110 north of
