@@ -389,6 +389,22 @@ these by a fraction of a tick, not more.
   branch); W1's 64-tick "damage starts at 223 units" running off matches the G3 test (222 → 0, 223 → 3 HP).
 - **Steps**: an 18-unit step is climbed, 19 is not; 0.7 = 45.573° (W1).
 
+### What a seasoned player feels (the acceptance bar)
+
+| Feel | Stock CS2 | Model | Within a few %? |
+| --- | --- | --- | --- |
+| Run speeds | C2 `m_flMaxSpeed` (AK 215, M4 225, AWP 200, knife 250, …) | same table | ✓ exact |
+| Acceleration | 0 → 250 in 35 ticks (W3 measured; formula) | 35 ticks | ✓ exact |
+| Counter-strafe (AK) | accurate after 5 ticks (78 ms), stopped after 7–9 ticks, 10.1 units (formula, S1 + C1) | identical | ✓ exact (per-tick input; sub-tick adds ≤ 1 tick, M1-7) |
+| Releasing only | accurate after 13 ticks, stopped after 24 (375 ms), 30.9 units | identical | ✓ exact |
+| Walk / crouch speed | 0.52 / 0.34 of the item speed (CS convention, not in C1) | same | ✓ (unverified constants) |
+| Jump height / airtime | ≈ 57 apex (C1 `sv_jump_impulse`, W3), 0.75 s | 56.9975, 48 ticks | ✓ |
+| Crouch jump | 66-unit boxes just reachable (W2) | 66.0 | ✓ |
+| Air control | 30 u/s wish cap, 12 × wishspeed / 64 per tick (S1, C1) | same; × 0.25 while rising slowly after the fixes (M1-3) | ✓ after M1-3 |
+| Landing slowdown | 2026 code, function not public (R1) | legacy-style ≈ 15 % after a flat jump, recovering at 60 %/s | ? unverified (M1-8) |
+| Crouch timing | gradual (K1 `m_flDuckSpeed`), rate not public | instant | **✗ the main remaining gap (M1-6)** |
+| Tagging | flinch × `mp_tagging_scale` (C1, C2) | movement takes it (fixes PR); hosts must pass it | ✓ once wired |
+
 ### Findings
 
 | # | Behaviour | CS2 (source) | Model before M1 | Severity |
@@ -406,23 +422,23 @@ these by a fraction of a tick, not more.
 | M1-11 | WALK + DUCK | not verifiable from public sources | stacks (215 × 0.52 × 0.34 = 38.0) | low; unverified, unchanged |
 | M1-12 | Doc citation | `GAMEMOVEMENT_JUMP_HEIGHT` is 21 in Source SDK 2013 (`gamemovement.h` l. 24, HL2); CS2's 57 comes from the `sv_jump_impulse` description | G3's table cited "Source's 57" | doc only |
 
-### KZ (Kreedz climbing) mechanics in vanilla CS2
+### Jumps and strafing at stock competitive values
 
-Jump-stat definitions from CS2KZ (K1): a jump's distance is 32 + the 2D distance from the take-off to the landing
-origin (`src/kz/jumpstats/kz_jumpstats.cpp` l. 676–697); the vanilla-mode LJ tiers are 215 / 230 / 235 / 240 / 245 / 248
-(`kz_mode_vnl.h` l. 9). Expected numbers are from the Source formulas with CS2's convars; "TAS" = tool-assisted (the
-wish perpendicular to the velocity every tick).
+Only CS2's competitive defaults (the convars above): no KZ or movement-server settings. The KZ community (K1) is used
+only for how jumps are measured: a jump's distance is 32 + the 2D distance from the take-off to the landing origin
+(`src/kz/jumpstats/kz_jumpstats.cpp` l. 676–697). "TAS" = tool-assisted: the wish perpendicular to the velocity on every
+tick, which no player sustains; it is the ceiling, not what a player feels.
 
 | # | Mechanic | CS2 value (derivation, source) | Model | Status |
 | --- | --- | --- | --- | --- |
-| M1-13 | Ground pre-strafe (W + turning) | best wish 14.40° ahead of the velocity; knife settles at **256.79** u/s (+2.7 %), AK-47 220.84 (Friction + Accelerate, S1; CS2KZ's VNL mode has "Prestrafe: None", i.e. only this Source gain) | identical | ✓ (the "≈ 0.4 %" in "Measured model values" above was wrong) |
-| M1-14 | Long jump, knife, 250 u/s take-off | no strafes: 48 ticks, 250 × 48 / 64 + 32 = **219.5** (tier 1); TAS strafes with full air acceleration: 247.72 (landing 323.7 u/s), which drops with M1-3 (fixes PR) | identical given the air rules | ✓ / M1-3 |
-| M1-16 | Bunnyhop chain | fresh press needed (`sv_autobunnyhopping 0`); a hop on the first ground tick skips friction (S1 `CheckJumpButton` l. 2084 runs before `Friction`); take-off clamp 1.1 × max speed (M1-2); `sv_bhop_time_window` 0.0078 s (half a tick) and `sv_jump_spam_penalty_time` 0.015625 s (one tick) only matter with sub-tick input | fresh press ✓, no friction on a perfect hop ✓, no clamp (M1-2) | M1-2 |
+| M1-13 | Turning while running (no pre-strafe feature in stock CS2) | the stock Friction + Accelerate ceiling: a perfect 14.40° wish lead every tick (≈ 76°/s of turning) settles a knife at 256.79 u/s (+2.7 %), an AK at 220.84; any real turn gives less. In-game not measured | identical (the formula) | ✓ formula; no pre-strafe mechanic is added (the "≈ 0.4 %" in "Measured model values" above was wrong) |
+| M1-14 | One long jump, knife, 250 u/s take-off | no strafes: 48 ticks, 250 × 48 / 64 + 32 = **219.5**; the TAS ceiling with full air acceleration 247.72 (landing 323.7 u/s), lower with M1-3 (fixes PR). A real player's air strafes gain a few u/s, not this | identical given the air rules | ✓ / M1-3 |
+| M1-16 | Bunnyhop chain (why it is hard at stock values) | fresh press needed (`sv_autobunnyhopping 0`); a hop on the first ground tick skips friction (S1 `CheckJumpButton` l. 2084 runs before `Friction`); take-off clamp 1.1 × max speed (M1-2); `sv_bhop_time_window` 0.0078 s (half a tick) and `sv_jump_spam_penalty_time` 0.015625 s (one tick) only matter with sub-tick input. So a hop keeps its speed only if the press lands in the first ground tick (15.6 ms at 64 Hz; CS2's sub-tick window is ±7.8 ms around the landing); a press one tick later loses a tick of friction (× 0.919) and the landing slowdown, and any gain above 1.1 × max speed is cropped on take-off | fresh press ✓, no friction on a perfect hop ✓, no clamp (M1-2) | M1-2 |
 | M1-17 | Stamina on chained jumps | 2026: no stamina on jump or landing; the landing slowdown depends on landing time and vertical velocity (R1), function not public | a perfect hop takes off before the landing slowdown applies; one tick late loses a tick of friction and × (100 − 0.05 × land speed) / 100 (≈ 15 % after a flat jump) | unverified (M1-8) |
 | — | Crouch jump | feet reach 57.0 + 9 = **66.0** (W1: jump-then-crouch +9; W2: 66-unit boxes are just reachable in CS2) | 66.0 | ✓ |
 | — | Air acceleration vs angle | 12 × wishspeed / 64 per tick (knife 46.875, AK 40.3125), add capped at 30 − v·wishdir; best at 90° (S1 l. 1705–1745) | identical (falling); M1-3 while rising | ✓ / M1-3 |
 | — | Edges | box hull: 1 unit of the 32-wide hull over a ledge still stands (2-unit ground trace, S1 `CategorizePosition`); fully past the edge it falls | identical | ✓ |
-| — | Surf (normal z < 0.7) | never ground; `ClipVelocity` slides; down a 60° ramp at g · sin 60° = 692.8 u/s² | within 5 % over 32 ticks | ✓ |
+| — | Steep slopes (normal z < 0.7) | not ground; `ClipVelocity` slides the pawn down at g · sin 60° = 692.8 u/s² on a 60° slope (stock Source; no surf settings) | within 5 % over 32 ticks | ✓ |
 | M1-15 | Ladders and ladder jumps (LAJ) | S1 `LadderMove` (l. 2853–3046): climb speed `ClimbSpeed()` (Source `MAX_CLIMB_SPEED` 200, shareddefs.h l. 103; CS2 scales by `sv_ladder_scale_speed` 0.78, presumably of the item speed: 195 with a knife, unverified), lateral damping `sv_ladder_dampen` 0.2, `sv_ladder_angle` −0.707, JUMP pushes off along the ladder normal at 270 u/s (l. 2938) | **not modelled**: the CS2 mesh (G2) has no ladder volumes, the nav no ladder links, so Mirage's two ladders are walls | not fixed: needs the ladder volumes from the map (entity lump or the nav's ladder list), a `MOVETYPE_LADDER` state and the AI to use them. Plan for H4: extract the two ladder volumes, add `onLadder` to `MoveState` (snapshot field), port `LadderMove` with the constants above, measure the climb speed in CS2 (the probe) |
 
 Verified and unchanged (tested in `tests/movement-cs2.test.ts`): every convar above marked ✓, every item run speed, the
