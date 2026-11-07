@@ -49,6 +49,7 @@ requestAnimationFrame(now)
 ```ts
 const data = parseSessionData(roundJson, navJson, tuningJson, visJson);   // values or text; visJson (the sight mask) may be null
 const s = new Session({ ...data, seed: 1 });                       // human: 'cart' (default) or null; the seed also seeds the LIVE AI
+const w = new Session({ ...data, seed: 1, human: null });          // G4: watching; w.takeControl() hands cart over at any tick
 s.step();                                                          // tick 0: Core sets the round up
 s.setHumanInput(humanInput('cart', held, yaw));                    // used every tick until replaced
 s.requestWeaponSlot(3);                                            // knife, on the next step
@@ -69,10 +70,25 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
     for them.
   - `checkpoint {id}`, `rewind {id}`, `seek {t}` (B5): `checkpoint()`, `rewind()`, `seek()` below. Driver work,
     not logged (a resync rewind logs the `rewind` it sends the Core).
+  - `take_control {id}` (G4): `takeControl(id)` below. Engine work, not logged, not sent to the Core.
   - `restart`: `Session.restart()`.
   - A control Core rejects (speed ≤ 0) throws and is not logged; so does `speed` without the speed capability.
 - **Human input.** `setHumanInput(input | null)` forwards to `Sim2DHost.setHumanInput`; the input
-  persists until replaced. `null` hands cart back to Core. It throws while spectating.
+  persists until replaced. `null` means no input: the pawn stands still (the Core sends the human's pawn nothing). It
+  throws while spectating or watching.
+- **G4: takeover** (`docs/core.md` "Takeover"). `SessionConfig.human` is who plays from the start (`cart` by default,
+  null = watching) and `playable` the pawn a watching player may take over (default `cart`). `human` is a getter: the
+  pawn controlled now, null while watching. `takeControl(id = playable)` hands the pawn to the human from the next
+  step on: `Sim2DHost.setHuman` before the next observe, which therefore names him; the pawn keeps everything the
+  puppet had (position, velocity, view, weapon, HP, items) and stands still until `setHumanInput`. Not logged (the log
+  shows it as `observe.human` changing). `takeControlBlocked(id)` says why not (already controlled, not the playable
+  pawn, `cart is dead`, a seek running, a resync pending) and `canTakeControl` is its boolean; after the round end it
+  is allowed while cart lives. `takeoverTick` is the tick he took control from (0 from the start). The takeover is
+  part of the run: checkpoints store who controlled cart and since when, a rewind to one before the takeover is
+  watching again (exact: the host snapshot has `human`; resync: the Session calls `setHuman(null)` before the resync
+  step) and keeps the takeover on the tape, so a forward seek replays it on its tick, before his inputs; the first
+  live step drops it. `restart()` returns to the start (watching, if built so). A session snapshot (version 2) has
+  `human` and `takeoverTick`; `restore` accepts one whose human is null, the start's or the playable pawn.
 - **Weapon slots (app-side action queue).** Keys 1–5 call `requestWeaponSlot(slot)`. On the next step
   each queued press becomes `set_weapon {id: human, weapon}` (`weaponForSlot`, against the host's
   inventory). It is appended after Core's actions in the Act given to the host.
@@ -108,7 +124,8 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
 - **Core factory.** `SessionConfig.core` (default `defaultCore`) builds the Core from
   `{model, schedule, tuning, seed, nav}`. If B2 adds a nav-based `WalkQuery` parameter to
   `ReplayCore`, `defaultCore` is the one line to change.
-- `human: null` (spectate) puts `human: null` in every observe, and Core drives all ten pawns.
+- `human: null` (spectate / watch) puts `human: null` in every observe until a takeover, and Core drives all ten
+  pawns: never taking control is the golden master byte for byte (`tests/takeover.test.ts`).
 
 ## Game loop (`loop.ts`)
 

@@ -12,10 +12,11 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ## Headless harness (C5)
 
 ```sh
-npm run harness -- [--human none|cart] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
+npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
 npm run harness -- --until end                     # the golden master: 4,517 ticks, digest e9a228d9
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
+npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
 
 It builds a `Session` (src/app/session.ts) with the app's `defaultCore` and steps it, so it runs exactly what the
@@ -26,14 +27,15 @@ the same log (see "Browser parity").
 | --- | --- |
 | `--human none` (default) | Nobody plays; the Core drives all ten pawns. |
 | `--human cart` | cart is the human pawn: the Core sends him no input and no scripted damage (B3). Without `--script` he gets no input and stands where the setup put him. Other player ids work too; the app only offers cart. |
-| `--script <path>` | The human's input script (below). Needs `--human`. |
+| `--takeover <t>` | G4: nobody plays until observe tick round(t × 64); there the human (`--human`, default cart) takes control (`Session.takeControl`, before that tick's observe) and from then on it is as `--human`: the first lines are the no-human run's, byte for byte. Without `--script` he gets no input after it (stands still). `--takeover 0` is `--human cart`, byte for byte. Overrides a scenario's `takeover`. Not with `--human none`. |
+| `--script <path>` | The human's input script (below). Needs `--human` (or `--takeover`). With `--takeover`, entries apply from the takeover tick (the one in force then, and those after). |
 | `--until <t\|end>` | Run through observe tick round(t × 64), inclusive (`--until 20` logs ticks 0–1280, 1,281 lines). `end` (default) is the golden length, 4,517 ticks: one past the latest track end plus the 0.25 s hold. |
 | `--seed <n>` | Core seed, default 1 (the page's default). Nothing draws from the Core's PRNG yet, so the log doesn't depend on it today. |
 | `--out <dir>` | Writes `log.jsonl` (the SessionLog), `trace.json` (`toReplayTrace`, opens in the existing replay page) and `summary.json`. |
-| `--scenario <path>` | B4: a human-bot scenario (`fixtures/scenarios/*.json`, `tools/human-bot.ts`): its human, seed, length (unless `--until`) and steps. Prints the bot's steps and the divergence timeline (switches to LIVE with their triggers, encounters, deaths, the round end). Excludes `--script`. |
+| `--scenario <path>` | B4: a human-bot scenario (`fixtures/scenarios/*.json`, `tools/human-bot.ts`): its human, seed, length (unless `--until`), (G4) `takeover` (seconds; the steps start on that tick, the view where the puppet left it) and steps. Prints the bot's steps and the divergence timeline (switches to LIVE with their triggers, encounters, deaths, the round end). Excludes `--script`. |
 
 `summary.json` is deterministic (canonical numbers, sorted keys), so two summaries can be diffed: digest and tick
-range; every `death` (tick, attacker, weapon, headshot); `bomb` and `round_end` events; the final `observe.round`;
+range; (G4) `takeoverTick`; every `death` (tick, attacker, weapon, headshot); `bomb` and `round_end` events; the final `observe.round`;
 per pawn its Core mode changes and whether it ever went LIVE; snaps (teleports after the setup, with their log
 line); body blocks (`host.blockedBy`); `plant` / `defuse_start` fallbacks; Core `log` actions; host notes (actions
 not applied); per-player drift against the recording (observed, other and inferred samples: count and RMS; the
@@ -44,6 +46,8 @@ positions after its actions, snaps, body blocks and, with `recordWalk`, every wa
 `deaths`, `hpChanges`, `shots`, `buttonSpans`, `roundEvents`, `actionsOfType`, `coreLogs` and `modeChanges` read a
 run. `npm run ghost` and `npm run scripted` are now thin wrappers over it (same outputs and digest as before).
 `HarnessOptions.controls` sends controls on given ticks (the browser check uses it to replay a page's `speed`).
+G4: `HarnessOptions.takeover` (a tick) has `human` take control there; the driver is asked every tick (a human-bot's
+shadow puppet needs them all) but its commands apply only once someone plays.
 `logDigest(log)` is `SessionLog.digest()` computed on a Buffer (about 6× faster on 17 MB; tested equal).
 
 **Timing** (Node 22, the 2-vCPU 2.1 GHz cloud VM of `docs/app.md`, measured while another agent's test runs kept
@@ -156,10 +160,11 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 27,859 calls | 413,961 | | `9517e48f` |
 | `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 605,544 | (see manifest) | `2923a71d` |
 | `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 20,464 calls, and 1 rejoin path query (tick 1484) | 269,421 | | `25917ddf` |
+| `round-cart-takeover.jsonl.gz` | G4: watching until 15 s, then cart is the human and stands still (`--takeover 15 --until 24`), ticks 0–1536 (1,537 lines): lines 0–959 are the golden master's; line 960 has `human: cart`, the 11 `unblock_damage` and the takeover log; Lokier outlives (21.80 s), barely kills him and rejoins (23.19 s) | 381,204 | (see manifest) | `2ad2eb5c` |
+| `round-cart-takeover.walk.jsonl.gz` | Its walk oracle: 15,927 calls, and barely's rejoin path query | 176,654 | | (see manifest) |
 | `manifest.json` | One entry per fixture | 2,111 | | |
 
-With the two scripts (402 KB) everything under `fixtures/` is 2.66 MB; `tests/fixtures.test.ts` keeps the golden
-files under 3 MB. **Nothing is strided**: every line is a complete SessionLog line (`{act, controls, observe}`) for
+The golden files total 2.81 MB gzipped (G4's fixture added 0.56 MB); `tests/fixtures.test.ts` keeps them under 3 MB. **Nothing is strided**: every line is a complete SessionLog line (`{act, controls, observe}`) for
 every tick. A trimmed "observe + act only" variant would save nothing (`controls` is `[]` on every line but the
 first), so there is none.
 
@@ -179,7 +184,7 @@ first), so there is none.
   code paths by CPU features); therefore `fixtures:update` keeps a committed file whose *uncompressed* content is
   unchanged, and the tests compare content, not compressed bytes.
 - **`manifest.json`**: per fixture `name`, `description`, `file`, `walkFile`, `human`, `script` (+ `scriptHash`),
-  `seed`, `until`, `ticks`, `firstTick`, `lastTick`, `digest`, `rawBytes`, `bytes`, `walkCalls`, `walkDigest`,
+  `seed`, `until`, (G4) `takeover` (seconds, or null: the human plays from the start), `ticks`, `firstTick`, `lastTick`, `digest`, `rawBytes`, `bytes`, `walkCalls`, `walkDigest`,
   `walkBytes`, `tuningHash` / `roundHash` / `navHash` (FNV-1a 32-bit of the canonical JSON of `data/tuning.json`,
   `data/round.json`, `data/mirage-nav.json`: `fnv1a32Hex(stableStringify(JSON.parse(text)))`), `commit`
   (`git rev-parse HEAD` when the content last changed) and `sourceDirty` (src/, data/ or tools/ had uncommitted
@@ -255,7 +260,9 @@ What a port must reproduce, for every fixture in `manifest.json`:
 
 The human's own input and app-side weapon switches are engine-side and not in the log; the Core doesn't need them
 (it sends the human nothing). `round-cart-idle` covers the human path (no input, no block pairs or scripted damage
-for him, 40 + 9 `block_damage` instead of 50 + 10, the `debug` logs).
+for him, 40 + 9 `block_damage` instead of 50 + 10, the `debug` logs). `round-cart-takeover` (G4) covers a takeover:
+the port's Core must notice `observe.human` changing on line 960 by itself (no control announces it) and answer with
+the 11 `unblock_damage`, the takeover log and the encounter's log, then treat cart as the human.
 
 ## Cross-engine determinism
 
@@ -293,6 +300,11 @@ D1's spectate check (phone viewport, 1×) still compares a whole page log with a
 tested (no WebKit here).
 
 ## History
+
+- G4 (takeover): every existing digest is unchanged (`e9a228d9`, `2923a71d`; walk oracles too): nobody takes over in
+  them, and a human from the start is set up exactly as before. The manifest gains `takeover` on every entry (null for
+  both), so their entries were refreshed (`commit`); the new fixture `round-cart-takeover` (`2ad2eb5c`) is the takeover
+  at 15 s above. The follow script is unchanged.
 
 - G1 (rejoin, LIVE → REPLAY): no-human `e9a228d9` unchanged (nobody leaves the tape, so no rejoin, no path query; the
   manifest entry changed only for the new `tuningHash`). cart-idle was unchanged too at 20 s (`4f8bc45c`: the first

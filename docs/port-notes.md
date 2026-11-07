@@ -149,3 +149,45 @@ for tests would need:
 - **Not restorable in CS2** (and not in 2D's resync either): velocity, grenades in flight and active smokes / fires, a plant or defuse in progress, weapon timers, flashes, the bots' memory. `CheckpointHazards` marks checkpoints taken mid-plant / mid-defuse so the driver skips them.
 - **Loadout ledger** (`loadout.ts`, in the Core snapshot): items sorted ordinally (stable for duplicate grenades), a gun `give` replaces its entry, a grenade / c4 / defuser `give` adds one. `releaseWindowTicks` = `Math.Ceiling((max(fuseSec, molotovFuseSec, throwRange / throwSpeed) + 1) * 64 − 1e-9)`; releases are a list (oldest first) filtered by `tick − release.tick <= window` at each pop.
 - **Summary** (`summary.ts`): a pure function of `RoundModel` and the log lines. Times are formatted by `fixed2` (`c = Math.Floor(Math.Abs(x) * 100 + 0.5)`, sign only if `c > 0`, then `c / 100` and two digits of `c % 100`), never `ToString("F2")`. Kill matching: for each recorded kill in file order, the first unused run death of that victim; rows sorted by (recorded tick, else run tick), then recorded order, then death order. `aliveSec` and the RMS skip tick 0 (its observe predates the setup). The RMS uses `RoundModel.TrackAtTick` and `Math.Sqrt` (exact).
+
+## Takeover (G4: take control of cart at any time)
+
+- **Detect it from the observe, never from a control.** The Core keeps the last step's `observe.human`
+  (`ReplayCoreState.human`, in the snapshot) and treats a different one on a later step (not the setup step) as a
+  takeover (`humanChanged`). The CS2 plugin sends the Core nothing when the player takes over: the `take_control`
+  control exists for the 2D app (its Session hands the pawn over itself) and `ICore.Control` accepts and ignores it.
+  A log replays because the change is in the observe stream.
+- **CS2: the native bot takeover.** Run the human as a sixth T who is dead or spectating at round start (no pawn of
+  his own), with `bot_controllable 1`. While watching, the adapter reports `human: null` and drives cart's bot like
+  any puppet. The player presses E (`+use`) while spectating cart's bot: CS2 hands him the bot's pawn (game event
+  `bot_takeover` with `Userid` and `Botid`; the human's `CCSPlayerController.ControllingBot` turns true and the pawn's
+  `OriginalControllerOfCurrentPawn` is cart's bot controller). From the next `OnTick` the adapter's observe names
+  `cart` as `human`, and it **stops injecting usercmds for cart's bot** (the Core's Act has no input for him anyway;
+  drop any movement token, button and view route of that slot, and release Bot-Controller's lock on it so the
+  player's own usercmds drive the pawn). Position, velocity, view, weapon and HP stay the engine's: nothing to do.
+  Only cart may be taken over: the plugin refuses the others (clear `CanControlObservedBot` while the player observes
+  another bot, or cancel in a `bot_takeover` Pre hook if CSS allows it; probe P8).
+- **Release.** A resync rewind to a checkpoint before the takeover (`checkpoint.observe.human == null`) must first
+  give cart's pawn back to his bot and the player back to spectating (CS:GO's `CCSPlayer::ReleaseControlOfBot`; in CS2
+  the route is unknown: P8 tries the player switching to spectator and back, which returns the pawn to its bot in
+  CS:GO), then apply the resync prefix (which makes cart REPLAY and re-blocks his pairs). If the player leaves on his
+  own mid-round, the Core sees `human` go null and makes the pawn LIVE (trigger `released`, regular goal): the
+  adapter unlocks the bot for the native AI as for any LIVE switch. Engine rules: the player must be dead or spectating and
+  the bot a living teammate (a dead cart can't be taken: the 2D Session refuses it too); CS2 probably allows one
+  takeover per player per round (the controller schema has `HasControlledBotThisRound` and `BotsControlledThisRound`),
+  so a second takeover after a rewind may need that flag cleared (P8).
+- **The takeover tick's Act** has, before the triggers: `unblock_damage` cart → cart, then cart → each CT and back,
+  in `PLAYER_IDS` order (only enemies without `blocksLifted`), then the log line, then one log per encounter of his.
+  Integers and ids only in the texts (`tenthsText` for the encounter's shift).
+- **Encounters** (`Divergence.Takeover`): `EncounterState` gained `puppetSightTick` (nullable int; absent in old
+  snapshots = null), set while `observe.human` is null on the first tick the shooter (REPLAY) has the victim in `sees`
+  within `humanSpotToleranceUnits` of the spot. At the takeover tick k: shooter dead / not REPLAY → `done`; `k >
+  hitTick − actionLatencyTicks` → `fired` with `seenTick = recordedSightTick`, `shotTick = hitTick`; else suppress the
+  recorded fire and aim keys (`Suppress` only pre-decides undecided ones), add the hold, and if `puppetSightTick` is set:
+  `seen`, `seenTick = puppetSightTick`, `shotTick = max(seenTick + max(secTicks(encounterDelaySec), lead), k + lead)`
+  with `lead = max(inputLatencyTicks, actionLatencyTicks)`, and the run-time engagement from k to `shotTick −
+  inputLatencyTicks`; otherwise `waiting`.
+- **Driver (the plugin's Session)**: record the takeover tick with the run (a checkpoint stores the human and the
+  takeover tick next to the Core snapshot). A rewind to a checkpoint whose human is null undoes it (release, above);
+  the takeover stays on the tape for a forward seek (2D only: CS2 can't seek ahead). The automatic checkpoint on the
+  takeover tick is taken after it (before the step), so it keeps the human.

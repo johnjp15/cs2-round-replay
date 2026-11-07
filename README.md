@@ -56,6 +56,7 @@ npm run ghost          # whole round with no human: logs/ghost-round.jsonl + log
 npm run scripted       # the same round with B3's checks: logs/scripted-round.jsonl + logs/scripted-trace.json, prints kills, HP, shot ticks, latency
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
                        # headless harness (the app's Session in Node): log.jsonl, trace.json, summary.json (docs/golden.md)
+npm run harness -- --takeover 18.6   # watch the round, take control of cart at 18.6 s (G4; he then stands still)
 npm run fixtures:update  # regenerate the golden fixtures for the C# port after an intended behaviour change (docs/golden.md)
 npm run extract:vismask  # rebuild data/mirage-vismask.json (the sight mask: walls and cover) from the radar; logs/vismask-debug*.png
 npm run vision         # the labelled vision set against the sight mask (docs/vision.md); logs/vision-labels.png
