@@ -52,6 +52,7 @@ export {
   cadenceOffsets,
   ceilTicks,
   cycleTicksOf,
+  aimSpotAt,
   deployTicksOf,
   fitSpray,
   initialScriptState,
@@ -61,6 +62,7 @@ export {
   tapSpacing,
 } from './scripted';
 export type {
+  AimSpot,
   AttackSpan,
   DamageItem,
   DefuseItem,

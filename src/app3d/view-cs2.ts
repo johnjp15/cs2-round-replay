@@ -109,7 +109,8 @@ export function applyMouse(view: Angles, dx: number, dy: number, sensitivity: nu
  * Aim punch (recoil) hook. CS:GO's rules, kept by CS2 as far as is known: bullets leave along view + aimPunch ×
  * weapon_recoil_scale (2.0) and the camera shows view + aimPunch × weapon_recoil_scale × view_recoil_tracking (0.45).
  * Both cvars are hidden in CS2 (not in the dump): CS:GO values, unverified for CS2. The punch itself (per shot, decay)
- * is H2's module (src/engine/weapons); until it is wired in (H4) the punch is zero, so firing = view.
+ * is H2's module (src/engine/weapons), wired in by H2b: the 3D app now takes the camera and crosshair from the host's
+ * `aimView` (with the player's recoil-tracking setting); these helpers are kept for the view tests.
  */
 export const WEAPON_RECOIL_SCALE = 2;
 export const VIEW_RECOIL_TRACKING = 0.45;

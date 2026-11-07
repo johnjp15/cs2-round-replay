@@ -2,14 +2,17 @@
  * DOM listeners behind input.ts: tracks which bound keys and mouse buttons are held and where the
  * cursor is over the canvas. All mapping lives in input.ts; this file only records events.
  *
- * - Keys by `KeyboardEvent.code`. Bound keys have their default action blocked while `active()`
- *   (a human is playing), except with ⌘ held, so browser shortcuts on the Mac keep working.
- *   Some Ctrl shortcuts (Ctrl+W, Ctrl+T, Ctrl+N on Windows/Linux) cannot be blocked: use C to crouch there.
+ * - Keys by `KeyboardEvent.code`, through `keyMap` (input.ts keyMapFor: the key-binding setting). While `active()`
+ *   (a human is playing) bound keys and every Ctrl combination have their default action blocked (input.ts
+ *   blocksShortcut: Ctrl is duck, Ctrl+W is crouch forward; Ctrl+W / Ctrl+S always, and Ctrl+T / Ctrl+N too while the
+ *   keyboard is locked), except with ⌘ held, so browser shortcuts on the Mac keep
+ *   working. Chromium and Firefox still close the tab on Ctrl+W / Ctrl+T / Ctrl+N outside fullscreen Keyboard Lock:
+ *   play-guard.ts (the fullscreen lock, and the leave-site guard), or move Duck to C.
  * - Mouse/pen pointers only; touch is ignored (no touch controls for the human yet).
  * - Everything is released when the window loses focus, so keys never stick.
  * - A Space tap shorter than a frame still jumps: a press is latched until the next `controls()` reads it.
  */
-import { NO_CONTROLS, bindingForKey, bindingForMouseButton, type Binding, type HeldControl, type HeldControls, type WeaponSlot } from './input';
+import { DEFAULT_KEY_MAP, NO_CONTROLS, blocksShortcut, bindingForKey, bindingForMouseButton, type Binding, type HeldControl, type HeldControls, type WeaponSlot } from './input';
 import type { Point2 } from './radar';
 
 export interface InputDomOptions {
@@ -17,6 +20,8 @@ export interface InputDomOptions {
   readonly active: () => boolean;
   /** A weapon-slot key was pressed (not repeats). */
   readonly onSlot: (slot: WeaponSlot) => void;
+  /** True while fullscreen Keyboard Lock is on (play-guard.ts): Ctrl+W / S / T / N are then blocked even when watching. */
+  readonly keyboardLocked?: () => boolean;
 }
 
 export class InputDom {
@@ -27,6 +32,8 @@ export class InputDom {
   /** Space went down since the last `controls()` (a tap between two frames would otherwise be lost). */
   private jumpTapped = false;
   private readonly off: (() => void)[] = [];
+  /** Key → control (the key-binding setting; set it to rebind, held keys are let go). */
+  private map: ReadonlyMap<string, Binding> = DEFAULT_KEY_MAP;
 
   constructor(target: HTMLElement, options: InputDomOptions) {
     this.target = target;
@@ -56,6 +63,15 @@ export class InputDom {
     return this.cursorCss;
   }
 
+  get keyMap(): ReadonlyMap<string, Binding> {
+    return this.map;
+  }
+
+  set keyMap(m: ReadonlyMap<string, Binding>) {
+    this.map = m;
+    this.release();
+  }
+
   release(): void {
     this.held = { ...NO_CONTROLS };
     this.jumpTapped = false;
@@ -77,10 +93,10 @@ export class InputDom {
       this.release();
       return;
     }
-    const b = bindingForKey(e.code);
-    if (b === null) return;
-    if (this.options.active()) e.preventDefault();
-    this.apply(b, down, e.repeat);
+    const b = bindingForKey(e.code, this.map);
+    if (down && blocksShortcut(e, b !== null, this.options.active(), this.options.keyboardLocked?.() ?? false)) e.preventDefault();
+    else if (!down && b !== null && this.options.active()) e.preventDefault();
+    if (b !== null) this.apply(b, down, e.repeat);
   }
 
   private onMove(e: PointerEvent): void {

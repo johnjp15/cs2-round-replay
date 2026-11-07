@@ -204,6 +204,7 @@
     "losCoverTolerancePx": 1,
     "losCoverNearUnits": 48,
     "losCoverHeightUnits": 72,
+    "sightSideUnits": 12,
     "reactionJitter": 0.3,
     "headshotAimRatio": 0.35,
     "turnRateDegPerTick": 12,

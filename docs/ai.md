@@ -135,7 +135,8 @@ round shows it).
 | `blastMarginUnits` | 64 | leave the blast to at least `bomb.radius` + this (3D) |
 | `defuseMarginSec` | 0.25 | a defuse must be able to finish this long before the explosion |
 | `losWallTolerancePx`, `losEndpointTolerancePx`, `losLevelStepUnits`, `losLevelSlackUnits` | 1, 3, 16, 48 | sight (`docs/vision.md`) |
-| `losCoverTolerancePx`, `losCoverNearUnits`, `losCoverHeightUnits` | 1, 48, 72 | the cover rule (`docs/vision.md`, "Cover") |
+| `losCoverTolerancePx`, `losCoverNearUnits`, `losCoverHeightUnits` | 1, 48, 72 | the 2D cover rule (`docs/vision.md`, "Cover"; hosts without 3D geometry) |
+| `sightSideUnits` | 12 | G6: the left and right aim points of `sees`, off the body axis at chest height (`docs/vision.md`) |
 
 `reactionSec` and `aimErrorDeg` are the CS2 probe's P5 targets (`docs/cs2-adapter.md`); the rest are 2D choices.
 

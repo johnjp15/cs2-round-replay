@@ -13,7 +13,7 @@ import { Rng, compareOrdinal, roundNumber, type Button, type Goal, type ObsEvent
 import { aimPitch } from './hitscan';
 import { TICKS_PER_SEC } from './movement';
 import type { NavMesh, NavPoint } from './nav';
-import type { Sight } from './vision';
+import type { GuardSight } from './vision';
 import { fallbackWeapon, gunStats, isGrenade } from './weapons';
 
 /** The roles `goal.role` may name (any other string behaves as `hold`). docs/ai.md. G1 added `rejoin`. */
@@ -39,7 +39,10 @@ export interface AiState {
   path: Vec3[];
   pathIndex: number;
   dest: Vec3 | null;
-  /** Stuck detection: the best remaining path length since `progressTick`. */
+  /**
+   * Stuck detection: the best remaining path length since `progressTick`; negative (or null, from an old state's JSON
+   * copy of Infinity) = not measured since the last (re)plan. Kept finite so the state stays JSON (snapshots).
+   */
   progressTick: number;
   progressDist: number;
   repaths: number;
@@ -122,7 +125,8 @@ export interface AiContext {
   /** The round as observe() reports it (`observe.round.phase`). */
   readonly round: { readonly phase: RoundPhase };
   readonly nav: NavMesh;
-  readonly sight: Sight;
+  /** The guard-spot sight test: the CS2 mesh (MeshSight, G6), or the 2D Sight without 3D geometry. */
+  readonly sight: GuardSight;
   readonly tuning: Tuning;
   /** rng.fork('ai:' + id) of the host's AI seed. */
   readonly rng: Rng;
@@ -147,7 +151,7 @@ export function freshAiState(id: PlayerId, tick: number, draws: number): AiState
     pathIndex: 0,
     dest: null,
     progressTick: tick,
-    progressDist: Infinity,
+    progressDist: -1,
     repaths: 0,
     unstickUntilTick: 0,
     unstickSide: 1,
@@ -316,15 +320,15 @@ export function holdFacing(ctx: AiContext, s: AiState, spot: Vec3): number {
 
 /**
  * A spot from which a T guards the planted bomb: on rings of 300–guardMaxUnits around it (every 15°), walkable, with
- * eye-to-bomb sight (`sight.clear`, cover included), nearest to the pawn (ties: ring then angle order). The goal's
- * `hold` wins when it qualifies. null if none qualifies.
+ * eye-to-bomb sight (`sight.pointClear`: the CS2 mesh, G6; in 2D the mask with cover), nearest to the pawn (ties: ring
+ * then angle order). The goal's `hold` wins when it qualifies. null if none qualifies.
  */
 export function guardSpot(ctx: AiContext, bomb: Vec3): Vec3 | null {
   const { nav, sight, tuning } = ctx;
   const eye = tuning.damage.eyeHeight;
   const max = tuning.ai.guardMaxUnits;
-  // The bomb is a point on the ground: low for the cover rule (a box between hides it unless the guard stands at the box).
-  const ok = (p: Vec3): boolean => dist2d(p, bomb) <= max && nav.isWalkable(p) && sight.clear(p, eye, bomb, tuning.damage.bandHeights['leg'] ?? 16, false, true);
+  // The bomb is a point on the ground (leg height above it): a box between hides it unless the line passes over it.
+  const ok = (p: Vec3): boolean => dist2d(p, bomb) <= max && nav.isWalkable(p) && sight.pointClear(p, eye, bomb, tuning.damage.bandHeights['leg'] ?? 16);
   const hold = ctx.goal.hold;
   if (hold !== null && ok(hold)) return copy(hold);
   let best: Vec3 | null = null;
@@ -810,7 +814,7 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
     s.pathIndex = Math.min(1, s.path.length - 1);
     s.dest = copy(dest);
     s.progressTick = tick;
-    s.progressDist = Infinity;
+    s.progressDist = -1;
   };
   if (s.dest === null || dist2d(s.dest, dest) > 1 || s.path.length === 0) replan();
   const path = s.path;
@@ -832,7 +836,7 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
   const next = s.path[s.pathIndex] as Vec3;
   let remaining = dist2d(pos, next);
   for (let j = s.pathIndex; j < s.path.length - 1; j++) remaining += dist2d(s.path[j] as Vec3, s.path[j + 1] as Vec3);
-  if (remaining < s.progressDist - ai.stuckProgressUnits) {
+  if (!(s.progressDist >= 0) || remaining < s.progressDist - ai.stuckProgressUnits) {
     s.progressDist = remaining;
     s.progressTick = tick;
   } else if (tick - s.progressTick > sec(ai.stuckSec)) {

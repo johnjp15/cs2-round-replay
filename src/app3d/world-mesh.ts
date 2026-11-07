@@ -21,6 +21,7 @@
  */
 import type { MapGeometry } from '../sim2d/index';
 import { radarPx, toThree, type RadarTransform } from './coords';
+import type { RenderMesh } from './render-package';
 
 /** An RGBA image (ImageData-like). */
 export interface RgbaImage {
@@ -258,4 +259,53 @@ export function buildWorldTiles(g: MapGeometry, radar: RadarSampler, transform: 
     }))
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   return { tiles: out, stats: { triangles: n, floors, walls, undersides, indoorFloors: indoor, tiles: out.length } };
+}
+
+/**
+ * X1: a map package's render mesh (G2RM: the BSP's drawn faces, displacements and props with baked colours,
+ * src/app3d/render-package.ts, docs/maps.md) as tiles for the renderer: every triangle goes to the `plain` part of the
+ * tile under its centre, with its vertices' colours (sRGB bytes → 0..1). No radar art: the package has its own
+ * materials and lightmaps.
+ */
+export function buildRenderTiles(m: RenderMesh): WorldTile[] {
+  const nt = m.tris.length / 3;
+  const q = m.quant;
+  const tileOf = new Int32Array(nt);
+  const keys = new Map<string, number>();
+  const counts: number[] = [];
+  for (let t = 0; t < nt; t++) {
+    let cx = 0;
+    let cy = 0;
+    for (let c = 0; c < 3; c++) {
+      const v = m.tris[t * 3 + c] as number;
+      cx += (m.positions[v * 3] as number) / q / 3;
+      cy += (m.positions[v * 3 + 1] as number) / q / 3;
+    }
+    const key = `${Math.floor(cx / TILE)},${Math.floor(cy / TILE)}`;
+    let k = keys.get(key);
+    if (k === undefined) {
+      k = counts.length;
+      keys.set(key, k);
+      counts.push(0);
+    }
+    tileOf[t] = k;
+    counts[k] = (counts[k] as number) + 1;
+  }
+  const parts = counts.map((c) => ({ positions: new Float32Array(c * 9), colors: new Float32Array(c * 9), fill: 0 }));
+  for (let t = 0; t < nt; t++) {
+    const part = parts[tileOf[t] as number] as (typeof parts)[number];
+    const o = part.fill * 9;
+    for (let c = 0; c < 3; c++) {
+      const v = m.tris[t * 3 + c] as number;
+      part.positions.set(toThree((m.positions[v * 3] as number) / q, (m.positions[v * 3 + 1] as number) / q, (m.positions[v * 3 + 2] as number) / q), o + c * 3);
+      for (let k = 0; k < 3; k++) part.colors[o + c * 3 + k] = (m.colors[v * 3 + k] as number) / 255;
+    }
+    part.fill++;
+  }
+  return [...keys.entries()]
+    .map(([key, k]) => {
+      const p = parts[k] as (typeof parts)[number];
+      return { key, floor: { positions: new Float32Array(0), uvs: new Float32Array(0), colors: new Float32Array(0), triangles: 0 }, plain: { positions: p.positions, colors: p.colors, triangles: p.fill } };
+    })
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }

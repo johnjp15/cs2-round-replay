@@ -31,6 +31,11 @@
       #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
       #status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; pointer-events: none; }
       #status[hidden] { display: none; }
+      #kbhint { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); max-width: min(92%, 760px); margin: 0; padding: 6px 12px; font-size: 13px; text-align: center; color: var(--sand); background: rgba(5, 8, 12, 0.82); border: 1px solid var(--rule); border-radius: 4px; pointer-events: none; z-index: 5; }
+      #kbhint[hidden] { display: none; }
+      #keybinds { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+      #keybinds .keys-label { font-size: 12px; color: var(--sand-dim); }
+      #bar #keybinds button { padding: 3px 7px; font-size: 12px; }
       #hud { position: absolute; inset: 0; pointer-events: none; font-family: var(--display); font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
       .slab { background: var(--slab); border-radius: 4px; }
       /* Crosshair: CS2's default-ish static cross with a gap; the hit marker is an X. */
@@ -128,6 +133,7 @@
           <div id="summary" class="slab" hidden></div>
         </div>
         <p id="status">Loading the 3D world…</p>
+        <p id="kbhint" role="status" hidden></p>
       </div>
       <div id="bar">
         <button id="start" type="button">Start</button>
@@ -137,6 +143,7 @@
         <button id="takeover" type="button"><span>Take control of cart</span><kbd>E</kbd></button>
         <button id="camera" type="button"><span>Camera: 1st person</span><kbd>V</kbd></button>
         <button id="radar-rules" type="button" title="CS2 rules: teammates always, enemies only while your team spots them (then a fading ?). Show everyone: every player on the radar."><span>Radar: CS2 rules</span></button>
+        <button id="fullscreen" type="button" aria-pressed="false">⛶ Fullscreen</button>
         <span class="sep"></span>
         <button type="button" data-speed="0.25">0.25×</button>
         <button type="button" data-speed="0.5">0.5×</button>
@@ -147,7 +154,10 @@
         <label title="CS2 sensitivity (degrees per mouse count = 0.022 × this). Default 1.25. With pointer lock the page gets raw counts in Chrome; elsewhere pixels of the OS pointer (turn its acceleration off).">Sens <input id="set-sens" type="number" step="0.01" min="0.0001" max="8" /></label>
         <label title="CS2 zoom_sensitivity_ratio: extra scale while scoped (the sensitivity is also scaled by the zoomed FOV / 90).">Zoom ratio <input id="set-zoom" type="number" step="0.01" min="0.01" max="3" /></label>
         <label title="CS2 viewmodel_fov (60–68).">VM FOV <input id="set-vmfov" type="number" step="1" min="60" max="68" /></label>
-        <span class="help">Click to look · WASD move · Space jump · Ctrl duck · Shift walk · Mouse 1 fire · Mouse 2 scope · R reload · 1–5 weapons · E use · Esc frees the mouse · Spectating: mouse 1 / Space next, mouse 2 previous, V mode</span>
+        <label title="Recoil tracking: the share of the recoil the camera follows (CS:GO view_recoil_tracking, default 0.45; 0 = the screen stays still and only the bullets climb, 1 = the camera follows the bullets).">Recoil tracking <input id="set-tracking" type="number" step="0.05" min="0" max="1" /></label>
+        <span class="sep"></span>
+        <span id="keybinds"></span>
+        <span class="help">Click to look · WASD move · Space jump · Ctrl (or C) duck · Shift walk · Mouse 1 fire · Mouse 2 scope · R reload · 1–5 weapons · E use · Esc frees the mouse · Spectating: mouse 1 / Space next, mouse 2 previous, V mode · ⛶ Fullscreen keeps Ctrl+W in the game</span>
       </div>
     </div>
     <script type="module" src="../src/app3d/main.ts"></script>

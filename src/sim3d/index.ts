@@ -7,8 +7,6 @@ export { Sim3DHost } from './host';
 export type { Sim3DWorld } from './host';
 export { traceShot3, eyeOf } from './hitscan';
 export type { Shot3, ShotPawn } from './hitscan';
-export { MeshSight3, SIDE_UNITS, AIM_HEIGHTS } from './sight';
-export type { SightBody, SeePawn3, Sight3Options } from './sight';
 
 /** What the Session's host factory passes (src/app/session.ts `HostParts`, structurally). */
 export interface Sim3DHostParts {
