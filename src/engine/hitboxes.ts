@@ -17,12 +17,12 @@
  *   | stomach   | stomach  | capsule | (0, 4, 35.5)      | (0, −4, 35.5)     | 6.5    |
  *   | arm_l     | arm      | capsule | (0, 11, 52)       | (12, 5, 41)       | 3      |
  *   | arm_r     | arm      | capsule | (0, −11, 52)      | (12, −5, 41)      | 3      |
- *   | leg_l     | leg      | capsule | (0, 4, 29)        | (0, 4.5, 3)       | 4.5    |
- *   | leg_r     | leg      | capsule | (0, −4, 29)       | (0, −4.5, 3)      | 4.5    |
+ *   | leg_l     | leg      | capsule | (0, 4, 29)        | (0, 4.5, 4.5)     | 4.5    |
+ *   | leg_r     | leg      | capsule | (0, −4, 29)       | (0, −4.5, 4.5)    | 4.5    |
  *
- * The body spans z 0.5–68 and ±15.5 in width (inside the hull). Crouched, every z is scaled by
+ * The body spans z 0–68 and stays within 16 of the axis (inside the hull). Crouched, every z is scaled by
  * crouchEyeHeight / eyeHeight (46 / 64), as the bands are (src/sim2d/hitscan.ts `bandHeight`), so the head is at the
- * crouched eye (45.3). The boxes overlap a little where the body parts meet; a ray takes the box it enters first
+ * crouched eye (45.3), but no end goes below its radius (the feet stay on the floor). The boxes overlap a little where the body parts meet; a ray takes the box it enters first
  * (ties: table order, head first). Approximations against CS2: no animation (the arms don't follow the gun, legs
  * don't stride, no lean while strafing), and the head is a sphere rather than CS2's short capsule.
  */
@@ -46,8 +46,8 @@ export const HITBOXES: readonly HitboxDef[] = [
   { name: 'stomach', group: 'stomach', a: [0, 4, 35.5], b: [0, -4, 35.5], radius: 6.5 },
   { name: 'arm_l', group: 'arm', a: [0, 11, 52], b: [12, 5, 41], radius: 3 },
   { name: 'arm_r', group: 'arm', a: [0, -11, 52], b: [12, -5, 41], radius: 3 },
-  { name: 'leg_l', group: 'leg', a: [0, 4, 29], b: [0, 4.5, 3], radius: 4.5 },
-  { name: 'leg_r', group: 'leg', a: [0, -4, 29], b: [0, -4.5, 3], radius: 4.5 },
+  { name: 'leg_l', group: 'leg', a: [0, 4, 29], b: [0, 4.5, 4.5], radius: 4.5 },
+  { name: 'leg_r', group: 'leg', a: [0, -4, 29], b: [0, -4.5, 4.5], radius: 4.5 },
 ];
 
 /** Eye heights the crouched scale uses (`damage.eyeHeight`, `damage.crouchEyeHeight`). */
@@ -83,13 +83,13 @@ export function poseHitboxes(p: HitboxPose, s: HitboxScale): Hitbox[] {
   const c = Math.cos(p.yaw * DEG);
   const sn = Math.sin(p.yaw * DEG);
   const k = p.crouching ? s.crouchEyeHeight / s.eyeHeight : 1;
-  const at = (q: readonly [number, number, number]): Vec3 => ({
+  const at = (q: readonly [number, number, number], r: number): Vec3 => ({
     // forward = (c, sn), left = (−sn, c)
     x: p.pos.x + q[0] * c - q[1] * sn,
     y: p.pos.y + q[0] * sn + q[1] * c,
-    z: p.pos.z + q[2] * k,
+    z: p.pos.z + Math.max(r, q[2] * k),
   });
-  return HITBOXES.map((h) => ({ name: h.name, group: h.group, a: at(h.a), b: at(h.b), radius: h.radius }));
+  return HITBOXES.map((h) => ({ name: h.name, group: h.group, a: at(h.a, h.radius), b: at(h.b, h.radius), radius: h.radius }));
 }
 
 /**
