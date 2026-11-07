@@ -226,6 +226,25 @@ for tests would need:
   the takeover stays on the tape for a forward seek (2D only: CS2 can't seek ahead). The automatic checkpoint on the
   takeover tick is taken after it (before the step), so it keeps the human.
 
+## 3D host (H1: src/sim3d, src/engine/hitboxes.ts)
+
+What the 3D host does that the CS2 server provides natively (so the C# adapter drops it, docs/sim3d.md):
+
+| Sim3DHost | CS2 |
+| --- | --- |
+| Source movement on the collision mesh (`stepMove3d`, shared with 2D) | the engine's player movement (usercmds) |
+| per-pawn yaw + pitch from the input | usercmd view angles (`QAngle`, pitch + = down: the same convention) |
+| hitboxes (`HITBOXES`: a fixed rest pose sized to the hull) | the model's animated hitbox set |
+| 3D hitscan: eye ray, nearest of mesh and hitboxes, `bulletDamage` | `FireBullets` / `TraceAttack` with the weapon's spread, recoil and penetration |
+| `sees`: eye → head / chest / sides / legs traces on the world mesh, FOV, flash, smoke | `UTIL_TraceLine` (MASK_VISIBLE) eye to the same points, the same FOV / flash / smoke tests |
+| hearing: sound events as in 2D | game events (`player_footstep`, `weapon_fire`) |
+| the camera, FOV, sensitivity, aim punch display (src/app3d) | the client |
+
+Port care: `rayCapsule` / `raySphere` are plain + − × ÷ and sqrt in a fixed order (IEEE exact in C#); the poses use
+`Math.cos` / `Math.sin` of the yaw (use `Math.Cos` / `Math.Sin` on doubles; results can differ in the last bit
+between runtimes, which only matters for a ray grazing a capsule's surface). The Core is untouched: a run nobody plays
+gives the same acts in both hosts (tests/sim3d-golden.test.ts), so the 2D golden fixtures stay the Core's oracle.
+
 ## Recorded duels of the human (src/core/duels.ts, G5)
 
 - **Plan** (`BuildDuels`, once, from the `ScriptPlan` and the encounters): for each engagement of the default human
@@ -258,3 +277,22 @@ for tests would need:
   with the hit group, and the kill comes back as an ordinary scripted `damage` (attacker cart, `ak47`, `head`, lethal),
   applied with the same machinery as every other scripted damage (`TakeDamage` with an AK-47 headshot, or Route 3 with
   the `player_death` rewrite: `Headshot` true).
+
+## Weapon mechanics (src/engine/weapons, H2)
+
+What CS2 does natively vs what the module models (docs/weapons.md):
+
+| Mechanic | In CS2 (the C# Core on a server) | In the module (2D / 3D hosts) |
+| --- | --- | --- |
+| Weapon stats | `weapons.vdata` (the same file `data/weapons.json` is built from) | `parseWeaponTable`; ids map to CS2 classes via `className` (`m4a4` = `weapon_m4a1`) |
+| Fire rate, reload, deploy, zoom, burst | the weapon entity | `stepArms`; CS2 is sub-tick, the module is per tick |
+| Spread, inaccuracy, recoil, aim punch | engine, seeded by the usercmd's random seed | `fireShot` with the Core's seeded RNG; recoil tables from `m_nRecoilSeed` (`ValveUniformRandom`, NR ran1); constants in `weapons._engine` |
+| Damage, armor, hitgroups | `OnTakeDamage` on real hitboxes | `damageAfterHitgroup` (identical to sim2d) |
+| Wall penetration | engine traces with surface properties | `penetrate` with the host's `SolidQuery` (no materials on our mesh) |
+| Tagging, hit punch | engine | `applyHit` (unverified model) |
+
+The port does **not** reimplement these: the C# Core only issues inputs (aim, ATTACK, RELOAD) and reads events, so the
+module's numbers matter for the simulators and for comparing a 3D run with a CS2 run, not for the plugin. Port care if
+the module is ever transcribed: `ValveUniformRandom` uses 32-bit int maths and float32 (`Math.fround` → `float`); the
+recoil table must use float, the rest doubles; state numbers are rounded to 6 decimals like the other engines; RNG draw
+order per shot is r1, θ1, then r2, θ2 per pellet.

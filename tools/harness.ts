@@ -58,8 +58,7 @@ import {
   type WeaponId,
 } from '../src/contracts/index';
 import { PuppetTrack, ReplayCore, startYaw, summarize as summarizeRound, tOf, tickOf, type RoundModel } from '../src/core/index';
-import type { Sim2DHost } from '../src/sim2d/index';
-import { SLOT_WEAPONS, Session, defaultCore, parseSessionData, walkQueryOf, weaponForSlot, type CoreFactory, type SessionData, type WeaponSlot, type World3dFiles } from '../src/app/index';
+import { SLOT_WEAPONS, Session, defaultCore, parseSessionData, walkQueryOf, weaponForSlot, type CoreFactory, type HostFactory, type SessionData, type SessionHost, type WeaponSlot, type World3dFiles } from '../src/app/index';
 import { HumanBot, formatTimeline, loadScenario, timeline } from './human-bot';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -359,6 +358,8 @@ export interface HarnessOptions {
    * every tick (a human-bot's shadow puppet needs them all), but its commands apply only once someone plays.
    */
   readonly takeover?: number | null;
+  /** H1: the engine to run (default: the 2D app's Sim2DHost; tools/harness3d.ts passes Sim3DHost's factory). */
+  readonly host?: HostFactory;
 }
 
 export const NO_HUMAN: HarnessOptions = { human: null, driver: null, lastTick: 'end', seed: DEFAULT_SEED };
@@ -400,7 +401,7 @@ export interface HarnessRun {
   readonly model: RoundModel;
   readonly core: ReplayCore;
   /** The engine after the last tick (for its `unhandled()` notes and `combatLog()`). */
-  readonly host: Sim2DHost;
+  readonly host: SessionHost;
   readonly log: SessionLog;
   /** The log's lines, parsed (log.at(i) for every i). */
   readonly entries: readonly LogEntry[];
@@ -482,6 +483,7 @@ export function runHarness(data: SessionData, options: HarnessOptions): HarnessR
     human: takeover === null ? human : null,
     playable: human,
     core,
+    ...(options.host === undefined ? {} : { host: options.host }),
   });
   const ticks = roundTicks(session.model, data.tuning.replay.holdLastPositionSec);
   const last = options.lastTick === 'end' ? ticks - 1 : options.lastTick;
