@@ -107,6 +107,25 @@ locked by cs2/tools/encrypt.cjs ≈ 1,990 KB (budget 3 MB; the 2D locked page is
 stages both pages (`cs2/sim/`, `cs2/sim3d/`) and adds the sim3d card and README row once; the web-apps workflow
 (`git add -A cs2`) needs no change.
 
+## Test API
+
+`window.__cs2sim3d.test` (src/app3d/main.ts), for automated comparisons (V0's frame-by-frame check against the
+round's video) and screenshots. Deterministic: the same tick, camera and viewport give the same pixels (the check
+renders twice in two browsers and compares: identical).
+
+| Call | What it does |
+| --- | --- |
+| `freeze(true)` | the frame loop stops drawing (and a running round pauses); `freeze(false)` resumes drawing |
+| `seekTick(k)` | runs (or rewinds through the Session's checkpoints) the round to observe tick `k`, synchronously; returns the tick reached; tracers are cleared, the round is left paused |
+| `eyes(id)` | the camera through a player's eyes: its sim position, eye 64 / 46, its sim yaw / pitch |
+| `pose(x, y, z, yaw, pitch)` | a free camera (Source units and degrees: yaw counter-clockwise from +x, pitch + = down) |
+| `render()` | draws one frame now, exactly at the current tick: no interpolation between ticks, the duck eased fully, effect animations at time tick × 15.625 ms, no muzzle flash or hit marker; returns `state()` |
+| `state()` | `{tick, t, phase, camera: {mode, followed, eye, yaw, pitch, vfovDeg, hfovDeg, width, height}}` of the last frame drawn |
+
+Example: `const t = window.__cs2sim3d.test; t.freeze(true); t.seekTick(1184); t.eyes('cart'); t.render();` then
+screenshot `#view`. The other hooks (`stats`, `session`, `takeControl`, `aimAt`, `mouse`, `camera`, `fly`, `seek`,
+`view`, `summary`) are the browser check's.
+
 ## Browser check
 
 `tools/browser-check3d.ts` (port 4180; `--single` serves the single file). It screenshots (a) the start, (b) Lokier

@@ -107,11 +107,33 @@ declare global {
       summary: () => string;
       /** The renderer (debugging, benchmarks). */
       debug: () => Renderer3D;
+      /** Deterministic test API (docs/app3d.md "Test API"; V0's video comparison). */
+      test: {
+        /** Stop (true) or resume (false) the frame loop's drawing; freezing also pauses a running round. */
+        freeze: (on: boolean) => void;
+        /** Run (or rewind) the round to observe tick `tick`, synchronously; returns the tick reached. */
+        seekTick: (tick: number) => number;
+        /** Spectate through a player's eyes (its sim yaw / pitch, eye 64 / 46). */
+        eyes: (id: PlayerId) => void;
+        /** A free camera pose (Source coordinates, degrees). */
+        pose: (x: number, y: number, z: number, yaw: number, pitch: number) => void;
+        /** Render one frame now at the current tick exactly (no interpolation, no easing, time = tick × 15.625 ms). */
+        render: () => TestState;
+        state: () => TestState;
+      };
     };
   }
 }
 
 const SETTINGS_KEY = 'cs2-sim3d-settings';
+
+/** What the test API reports: the tick and the camera of the last frame drawn. */
+export interface TestState {
+  readonly tick: number;
+  readonly t: number;
+  readonly phase: string;
+  readonly camera: { readonly mode: CameraMode | 'first-person'; readonly followed: PlayerId; readonly eye: Vec3 | null; readonly yaw: number | null; readonly pitch: number | null; readonly vfovDeg: number; readonly hfovDeg: number; readonly width: number; readonly height: number };
+}
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -175,6 +197,9 @@ class App3D {
   private humanShots = 0;
   private humanHits = 0;
   private eyeZ = 64;
+  /** Test API: the frame loop doesn't draw (the caller renders with test.render()). */
+  private frozen = false;
+  private lastCamera: { eye: Vec3; yaw: number; pitch: number; viewId: PlayerId } | null = null;
   private lastView: PlayerId | null = null;
   private lastDraw: number | null = null;
   private lastFrame: number | null = null;
@@ -245,6 +270,28 @@ class App3D {
       seek: (t) => this.startSeek(t),
       summary: () => summarize(this.session.model, this.session.log()).headline,
       debug: () => this.renderer,
+      test: {
+        freeze: (on) => {
+          this.frozen = on;
+          if (on && this.phase === 'running') this.togglePause();
+        },
+        seekTick: (tick) => this.testSeek(tick),
+        eyes: (id) => {
+          this.camMode = 'pov';
+          this.followed = id;
+          this.updateControls();
+        },
+        pose: (x, y, z, yaw, pitch) => {
+          this.camMode = 'free';
+          this.freePos = { x, y, z };
+          this.look = { yaw: wrapYaw(yaw), pitch };
+        },
+        render: () => {
+          this.draw(this.session.observe().tick * TICK_MS, true);
+          return this.testState();
+        },
+        state: () => this.testState(),
+      },
     };
     requestAnimationFrame(this.frame);
   }
@@ -480,16 +527,16 @@ class App3D {
     this.fpsMeter.add(now, 1);
     this.tpsMeter.add(now, n);
     if (n > 0 || this.frames % 30 === 0) this.updateControls();
-    this.draw(now);
+    if (!this.frozen) this.draw(now);
     const t2 = performance.now();
     this.cost = { sim: this.cost.sim * 0.95 + (t1 - t0) * 0.05, draw: this.cost.draw * 0.95 + (t2 - t1) * 0.05, render: this.cost.render, hud: this.cost.hud };
     requestAnimationFrame(this.frame);
   };
 
   /** Camera, pawns and effects for this frame. */
-  private draw(now: number): void {
+  private draw(now: number, exact = false): void {
     const s = this.session;
-    const alpha = interpolationAlpha(this.loop.pending, TICK_MS);
+    const alpha = exact ? 0 : interpolationAlpha(this.loop.pending, TICK_MS);
     const human = s.human;
     const humanPawn = human === null ? null : this.scene.pawn(human);
     const firstPerson = humanPawn !== null && humanPawn.alive;
@@ -507,7 +554,7 @@ class App3D {
     const crouch = vo?.crouching ?? false;
     if (this.lastView !== viewId) this.duck = crouch ? 1 : 0;
     this.lastView = viewId;
-    this.duck = duckStep(this.duck, crouch, Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000));
+    this.duck = exact ? (crouch ? 1 : 0) : duckStep(this.duck, crouch, Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000));
     this.lastDraw = now;
     this.eyeZ = eyeHeightFor(this.duck);
     let eye: Vec3;
@@ -567,6 +614,7 @@ class App3D {
     const bomb = b.pos !== null && b.state !== 'carried' ? { pos: b.pos, planted: b.state === 'planted' } : null;
     const weapon: WeaponId | null = firstPerson && humanPawn !== null ? humanPawn.weapon : null;
     const r0 = performance.now();
+    this.lastCamera = { eye: { ...eye }, yaw, pitch, viewId };
     this.renderer.render({
       pawns,
       eye,
@@ -577,7 +625,7 @@ class App3D {
       tracers,
       effects: this.scene.effects,
       bomb,
-      viewmodel: weapon === null || this.zoom > 0 ? null : { weapon, sinceShot: (now - this.lastHumanShotMs) / 1000 },
+      viewmodel: weapon === null || this.zoom > 0 ? null : { weapon, sinceShot: exact ? 1 : (now - this.lastHumanShotMs) / 1000 },
       nowMs: now,
     });
     const r1 = performance.now();
@@ -595,7 +643,7 @@ class App3D {
       at: { x: eye.x, y: eye.y, yaw },
       mode: this.phase === 'ready' && human === null ? 'Press Start to watch, or E to play cart' : mode,
       crosshair: firstPerson && this.zoom === 0,
-      hit: this.lastHit === null ? null : { ageMs: now - this.lastHit.ms, head: this.lastHit.head },
+      hit: exact || this.lastHit === null ? null : { ageMs: now - this.lastHit.ms, head: this.lastHit.head },
       perf: `${this.fpsMeter.rate(now).toFixed(0)} fps · ${this.tpsMeter.rate(now).toFixed(0)} ticks/s · ${this.loop.speed}×`,
       summary: over ? `${summarize(s.model, s.log()).headline}<small>Restart to watch again, or take control of cart earlier.</small>` : null,
       tick: o.tick,
@@ -604,6 +652,45 @@ class App3D {
     const r2 = performance.now();
     this.cost.render = this.cost.render * 0.95 + (r1 - r0) * 0.05;
     this.cost.hud = this.cost.hud * 0.95 + (r2 - r1) * 0.05;
+  }
+
+  /** Test API: seek synchronously (no frame slicing), the Scene restarted where it lands, tracers cleared. */
+  private testSeek(tick: number): number {
+    const s = this.session;
+    if (s.seeking !== null) s.cancelSeek();
+    this.seekResume = null;
+    if (!Number.isInteger(tick) || tick < 0) throw new Error(`seekTick: bad tick ${tick}`);
+    if (tick !== s.tick) s.seek(tick / 64);
+    this.scene = new Scene(s.observe(), s.lastAct, this.host().activeEffects(), null);
+    this.tracers = [];
+    if (this.phase === 'ready') this.phase = 'paused';
+    this.loop.reset();
+    this.loop.paused = this.phase !== 'running';
+    this.updateControls();
+    return s.tick;
+  }
+
+  private testState(): TestState {
+    const c = this.renderer.camera;
+    const cam = this.lastCamera;
+    const human = this.session.human;
+    const fp = human !== null && this.scene.pawn(human)?.alive === true;
+    return {
+      tick: this.session.observe().tick,
+      t: this.session.observe().t,
+      phase: this.phase,
+      camera: {
+        mode: fp ? 'first-person' : this.camMode,
+        followed: this.followed,
+        eye: cam === null ? null : cam.eye,
+        yaw: cam === null ? null : cam.yaw,
+        pitch: cam === null ? null : cam.pitch,
+        vfovDeg: c.fov,
+        hfovDeg: (2 * Math.atan(Math.tan((c.fov * Math.PI) / 360) * c.aspect) * 180) / Math.PI,
+        width: this.renderer.renderer.domElement.width,
+        height: this.renderer.renderer.domElement.height,
+      },
+    };
   }
 
   /** The human's aim punch (degrees): zero until H2's recoil is wired in (H4). */
