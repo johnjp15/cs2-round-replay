@@ -57,7 +57,7 @@
       #top .t { color: var(--t); } #top .ct { color: var(--ct); }
       #clock { min-width: 64px; text-align: center; font-size: 26px; }
       #clock.bomb { color: var(--bomb); } #clock.defusing, #clock.defused { color: var(--defuse); }
-      #bombline { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); font-size: 15px; padding: 2px 10px; }
+      #bombline { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); font-size: 15px; padding: 2px 10px; }
       #bombline:empty { display: none; }
       #killfeed { position: absolute; top: 8px; right: 10px; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 15px; }
       #killfeed div { padding: 2px 8px; }
@@ -76,7 +76,19 @@
       #vitals small, #ammo small { font-size: 13px; color: var(--sand-dim); margin-right: 4px; }
       #ammo { position: absolute; bottom: 10px; right: 10px; padding: 6px 14px; font-size: 30px; text-align: right; }
       #ammo .w { font-size: 15px; color: var(--sand-dim); display: block; text-align: right; }
-      #mode { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 4px 12px; font-size: 16px; white-space: nowrap; }
+      /* The mode line under the score: who you are, unmistakably ("You: cart" vs "Watching"). */
+      #mode { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); padding: 3px 12px; font-size: 16px; white-space: nowrap; letter-spacing: 0.02em; }
+      #mode.you { color: #fff; box-shadow: inset 0 0 0 1px rgba(108,255,108,0.55); }
+      #mode.watching, #mode.dead { color: var(--sand-dim); }
+      /* U1: the spectator panel (CS2's bottom-centre spectator bar) and an edge vignette so it never looks like playing. */
+      #spec { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); padding: 6px 16px 7px; text-align: center; min-width: 300px; border-top: 3px solid var(--sand-dim); white-space: nowrap; }
+      #spec.t { border-top-color: var(--t); } #spec.ct { border-top-color: var(--ct); }
+      #spec .l1 { font-size: 20px; } #spec .k { color: var(--sand-dim); font-size: 14px; letter-spacing: 0.12em; margin-right: 8px; }
+      #spec.t #spec-name { color: var(--t); } #spec.ct #spec-name { color: var(--ct); }
+      #spec-mode { font-size: 13px; color: var(--sand-dim); margin-left: 10px; border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; }
+      #spec .l2 { font-size: 15px; margin-top: 2px; } #spec .l3 { font: 11px var(--text); color: var(--sand-dim); margin-top: 3px; }
+      #spec[hidden], #vignette[hidden] { display: none; }
+      #vignette { position: absolute; inset: 0; box-shadow: inset 0 0 90px 18px rgba(0,0,0,0.55); }
       #perf { position: absolute; bottom: 70px; left: 10px; font: 11px var(--text); color: var(--sand-dim); }
       /* The scope: CS2's black surround with hairlines (drawn while the human is zoomed in). */
       #scope { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 0, transparent 44vmin, #000 44.3vmin); }
@@ -96,7 +108,7 @@
       #bar kbd { font: 11px var(--text); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
       #bar .sep { width: 1px; height: 22px; background: var(--rule); }
       #bar .help { color: var(--sand-dim); font-size: 12px; margin-left: auto; }
-      @media (max-width: 700px) { #teams, #perf, #bar .help { display: none; } #minimap { width: 140px; height: 140px; } }
+      @media (max-width: 700px) { #teams, #perf, #bar .help, #spec .l3 { display: none; } #minimap { width: 140px; height: 140px; } #spec { min-width: 0; bottom: 64px; } }
     </style>
   </head>
   <body>
@@ -104,6 +116,7 @@
       <div id="stage">
         <canvas id="view"></canvas>
         <div id="hud" hidden>
+          <div id="vignette" hidden></div>
           <div id="scope" hidden></div>
           <div id="crosshair" hidden><i></i><i></i><i></i><i></i></div>
           <div id="hitmarker" hidden><i></i><i></i><i></i><i></i></div>
@@ -115,6 +128,7 @@
           <div id="vitals" class="slab"><span><small>HP</small><b id="hp">100</b></span><span><small>ARMOR</small><b id="armor">0</b></span></div>
           <div id="ammo" class="slab"><span class="w" id="weapon">Knife</span><b id="clip">–</b> <small id="reserve"></small></div>
           <div id="mode" class="slab"></div>
+          <div id="spec" class="slab" hidden><div class="l1"><span class="k">SPECTATING</span><b id="spec-name"></b><span id="spec-mode"></span></div><div class="l2" id="spec-stats"></div><div class="l3" id="spec-hints"></div></div>
           <div id="perf"></div>
           <div id="summary" class="slab" hidden></div>
         </div>
@@ -127,7 +141,8 @@
         <button id="restart" type="button">Restart</button>
         <span class="sep"></span>
         <button id="takeover" type="button"><span>Take control of cart</span><kbd>E</kbd></button>
-        <button id="camera" type="button"><span>Camera: follow</span><kbd>V</kbd></button>
+        <button id="camera" type="button"><span>Camera: 1st person</span><kbd>V</kbd></button>
+        <button id="radar-rules" type="button" title="CS2 rules: teammates always, enemies only while your team spots them (then a fading ?). Show everyone: every player on the radar."><span>Radar: CS2 rules</span></button>
         <button id="fullscreen" type="button" aria-pressed="false">⛶ Fullscreen</button>
         <span class="sep"></span>
         <button type="button" data-speed="0.25">0.25×</button>
@@ -141,7 +156,7 @@
         <label title="CS2 viewmodel_fov (60–68).">VM FOV <input id="set-vmfov" type="number" step="1" min="60" max="68" /></label>
         <span class="sep"></span>
         <span id="keybinds"></span>
-        <span class="help">Click to look · WASD move · Space jump · Ctrl (or C) duck · Shift walk · Mouse 1 fire · Mouse 2 scope · R reload · 1–5 weapons · E use · Z / X other player · Esc frees the mouse · ⛶ Fullscreen keeps Ctrl+W in the game</span>
+        <span class="help">Click to look · WASD move · Space jump · Ctrl (or C) duck · Shift walk · Mouse 1 fire · Mouse 2 scope · R reload · 1–5 weapons · E use · Esc frees the mouse · Spectating: mouse 1 / Space next, mouse 2 previous, V mode · ⛶ Fullscreen keeps Ctrl+W in the game</span>
       </div>
     </div>
     <script type="module" src="../src/app3d/main.ts"></script>

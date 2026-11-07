@@ -16,7 +16,13 @@
  *     is 1×; the mouse turns the view by exactly counts × 1.25 × 0.022° (pointer-lock deltas through the page's
  *     automation hook, since a headless page can't lock the pointer); aims at Lokier's head, clicks mouse 1 and checks
  *     the shot was fired (the HUD's ammo drops, a tracer); screenshot (f) first person;
- *  4. fails on page errors, console errors or requests to other origins.
+ *  4. U1, spectating: at the start the T radar shows no CT (nobody spotted), "show everyone" shows all ten; first
+ *     person through Sp4rtaN's eyes shows his HP / armor / ammo / weapon, the crosshair, the spectator panel
+ *     ("SPECTATING sp4rtan", 1st person) and "Watching"; mouse 1 / Space / mouse 2 switch player, V cycles 1st → 3rd
+ *     (no crosshair) → free → 1st; then the round plays at 4× until an enemy spotted earlier shows as the "?" ghost;
+ *     screenshots app3d-spectate-*.jpg;
+ *  5. fails on page errors, console errors or requests to other origins.
+ * Port: `--port <n>` or CHECK3D_PORT (default 4180).
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
  */
 import { createServer, type Server } from 'node:http';
@@ -27,7 +33,7 @@ import { cpus, loadavg } from 'node:os';
 import { chromium, type Browser, type Page } from 'playwright-core';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
-const PORT = Number(arg('--port', process.env['CHECK_PORT'] ?? '4180'));
+const PORT = Number(process.argv.includes('--port') ? process.argv[process.argv.indexOf('--port') + 1] : (process.env['CHECK3D_PORT'] ?? '4180'));
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
 function arg(name: string, fallback: string): string {
@@ -67,6 +73,7 @@ interface Stats {
   speed: number;
   human: string | null;
   camera: string;
+  followed: string;
   look: { yaw: number; pitch: number };
   humanShots: number;
   humanHits: number;
@@ -113,6 +120,105 @@ async function rate(page: Page, speed: number): Promise<{ fps: number; tps: numb
   await page.waitForTimeout(SECONDS * 1000);
   const b = await stats(page);
   return { fps: (a.fps + b.fps) / 2, tps: (a.tps + b.tps) / 2 };
+}
+
+type Mark = { id: string; team: string; kind: string; alpha: number };
+
+/** U1: the radar's CS2 rules, first-person spectating (HUD, crosshair, panel) and the spectator controls. */
+async function spectateChecks(browser: Browser, problems: string[], shots: string[]): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  const p = await open(browser, 1280, 720, problems);
+  const radar = (): Promise<{ team: string | null; marks: Mark[] }> => p.evaluate(() => window.__cs2sim3d?.radar() as unknown as { team: string | null; marks: Mark[] });
+  const text = (id: string): Promise<string> => p.evaluate((id) => document.getElementById(id)?.textContent ?? '', id);
+  const hidden = (id: string): Promise<boolean> => p.evaluate((id) => document.getElementById(id)?.hidden ?? true, id);
+  // (1) The start: cart's (T) radar has the five Ts and exactly the CTs a T sees now (the reset evaluates the spotting
+  // at once); the others are hidden. The toggle shows all ten.
+  const r0 = await radar();
+  const seenByT = await p.evaluate(() => {
+    const o = window.__cs2sim3d?.session().observe();
+    const ids = new Set<string>();
+    for (const q of o?.pawns ?? []) if (q.team === 'T' && q.alive) for (const x of q.sees) ids.add(x);
+    return (o?.pawns ?? []).filter((q) => q.team === 'CT' && q.alive && ids.has(q.id)).map((q) => q.id).sort();
+  });
+  const ctShown = r0.marks.filter((m) => m.team === 'CT').map((m) => m.id).sort();
+  out['startRadar'] = { team: r0.team, ids: r0.marks.map((m) => m.id), ctSeenByT: seenByT };
+  if (r0.team !== 'T' || r0.marks.filter((m) => m.team === 'T').length !== 5 || JSON.stringify(ctShown) !== JSON.stringify(seenByT) || ctShown.length >= 5) problems.push(`spectate: start radar (CS2 rules) ${JSON.stringify(out['startRadar'])}`);
+  await p.click('#radar-rules');
+  await p.waitForTimeout(150);
+  const rAll = await radar();
+  const label = await text('radar-rules');
+  if (rAll.marks.length !== 10 || label !== 'Radar: show everyone') problems.push(`spectate: radar toggle ${JSON.stringify({ n: rAll.marks.length, label })}`);
+  const stored = await p.evaluate(() => localStorage.getItem('cs2-sim3d-settings') ?? '');
+  if (!stored.includes('"radar":"all"')) problems.push(`spectate: radar setting not stored: ${stored}`);
+  await p.click('#radar-rules');
+  // (2) First person through Sp4rtaN's eyes: his HUD, the crosshair, the panel.
+  await seek(p, 49.95);
+  await p.evaluate(() => window.__cs2sim3d?.camera('pov', 'sp4rtan'));
+  await p.waitForTimeout(400);
+  const want = await p.evaluate(() => {
+    const s = window.__cs2sim3d?.session().observe().pawns.find((q) => q.id === 'sp4rtan');
+    return s === undefined ? null : { hp: String(Math.round(s.hp)), armor: String(Math.round(s.armor)), clip: String(s.ammo.clip), weapon: s.weapon };
+  });
+  const got = { hp: await text('hp'), armor: await text('armor'), clip: await text('clip'), weapon: await text('weapon'), crosshair: !(await hidden('crosshair')), panel: await text('spec'), panelHidden: await hidden('spec'), vignette: !(await hidden('vignette')), mode: await text('mode') };
+  out['firstPerson'] = { want, got };
+  if (want === null || got.hp !== want.hp || got.armor !== want.armor || got.clip !== want.clip || !got.weapon.startsWith('sp4rtan')) problems.push(`spectate: first-person HUD ${JSON.stringify(out['firstPerson'])}`);
+  if (!got.crosshair || got.panelHidden || !got.vignette || !got.panel.startsWith('SPECTATINGsp4rtan1st person') || !got.mode.startsWith('Watching')) problems.push(`spectate: first-person panel / crosshair ${JSON.stringify(got)}`);
+  shots.push(await shot(p, 'spectate-first-person'));
+  // (3) Controls: mouse 1 next, mouse 2 previous, Space next; V 1st → 3rd → free → 1st.
+  const followed = async (): Promise<string> => (await stats(p)).followed;
+  const box = await p.locator('#view').boundingBox();
+  const order: string[] = [await followed()];
+  if (box !== null) {
+    await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'left' });
+    await p.waitForTimeout(100);
+    order.push(await followed());
+    await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
+    await p.waitForTimeout(100);
+    order.push(await followed());
+  }
+  await p.keyboard.press('Space');
+  await p.waitForTimeout(100);
+  order.push(await followed());
+  out['switch'] = order;
+  if (order.length !== 4 || order[1] === order[0] || order[2] !== order[0] || order[3] !== order[1]) problems.push(`spectate: mouse 1 / mouse 2 / Space ${JSON.stringify(order)}`);
+  const modes: { camera: string; crosshair: boolean; mode: string }[] = [];
+  for (let i = 0; i < 3; i++) {
+    await p.keyboard.press('KeyV');
+    await p.waitForTimeout(150);
+    modes.push({ camera: (await stats(p)).camera, crosshair: !(await hidden('crosshair')), mode: await text('spec-mode') });
+    if (i === 0) shots.push(await shot(p, 'spectate-third-person'));
+  }
+  out['modes'] = modes;
+  const m = modes.map((x) => `${x.camera}:${x.crosshair ? 'x' : '-'}:${x.mode}`).join(' ');
+  if (m !== 'follow:-:3rd person free:-:free camera pov:x:1st person') problems.push(`spectate: V cycle ${m}`);
+  // (4) The "?": play from 15 s at 4× following cart until an enemy (CT) spotted before shows as the ghost.
+  // The clicks on the view may have locked the pointer (then every click goes to the canvas): let go.
+  await p.evaluate(() => document.exitPointerLock());
+  await p.evaluate(() => window.__cs2sim3d?.camera('pov', 'cart'));
+  await seek(p, 15);
+  await p.evaluate(() => {
+    const b = document.getElementById('pause');
+    if (b instanceof HTMLButtonElement && b.textContent === 'Resume') b.click();
+  });
+  await p.click('button[data-speed="4"]');
+  let ghost: Mark | null = null;
+  let spotted = false;
+  for (let i = 0; i < 300 && ghost === null; i++) {
+    await p.waitForTimeout(100);
+    const r = await radar();
+    const enemy = r.marks.filter((x) => x.team !== r.team);
+    if (enemy.some((x) => x.kind === 'dot')) spotted = true;
+    ghost = enemy.find((x) => x.kind === 'ghost') ?? null;
+  }
+  if (ghost !== null) {
+    await p.evaluate(() => window.__cs2sim3d?.test.freeze(true));
+    await p.waitForTimeout(250);
+    shots.push(await shot(p, 'spectate-radar-ghost'));
+  }
+  out['ghost'] = { spotted, ghost, tick: (await stats(p)).tick };
+  if (!spotted || ghost === null) problems.push(`spectate: no spotted enemy / "?" ghost on cart's radar ${JSON.stringify(out['ghost'])}`);
+  await p.close();
+  return out;
 }
 
 async function main(): Promise<void> {
@@ -249,13 +355,16 @@ async function main(): Promise<void> {
     report['fire'] = { shots: t1.humanShots, hits: t1.humanHits, clip: [clipBefore, clipAfter], hp: t1.hud.hp, killfeed: feed };
     if (t1.humanShots < 1 || clipAfter === clipBefore) problems.push(`firing: ${JSON.stringify(report['fire'])}`);
     shots.push(await shot(p, 'f-first-person'));
-    report['screenshots'] = shots.map((x) => x.replace(ROOT + '/', ''));
     await p.close();
+    // 4. Spectating (U1).
+    report['spectate'] = await spectateChecks(browser, problems, shots);
+    report['screenshots'] = shots.map((x) => x.replace(ROOT + '/', ''));
   } finally {
     await browser.close();
     server.close();
   }
   report['problems'] = problems;
+  mkdirSync(join(ROOT, 'logs'), { recursive: true });
   writeFileSync(join(ROOT, 'logs', 'browser-check3d.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
   if (problems.length > 0) {
