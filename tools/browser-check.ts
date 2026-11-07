@@ -69,6 +69,7 @@ interface Stats {
   camera: { zoom: number; cx: number; cy: number };
   radarRebuilds: number;
   labels: { drawn: readonly Box[]; dropped: number; hud: readonly Box[] };
+  guard: { leaveGuard: boolean; keyboardLocked: boolean; fullscreen: boolean; duckKey: string };
 }
 
 interface Box {
@@ -89,7 +90,7 @@ const SECONDS = Number(arg('--seconds', '10'));
 const ONLY = arg('--only', '');
 /** Golden parity: compare the logs through this observe tick (20 s). */
 const PARITY_TICK = 20 * 64;
-const PORT = 4179;
+const PORT = Number(arg('--port', process.env['CHECK_PORT'] ?? '4179'));
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
 async function waitForServer(url: string, ms: number): Promise<void> {
@@ -512,6 +513,24 @@ async function main(): Promise<void> {
     const ran = await stats(desk);
     console.log(`after ~3 s at 1x: tick ${ran.tick}, clock ${await clockText(desk)}`);
     await desk.screenshot({ path: join(OUT, 'desktop-running.png') });
+    // Ctrl+W (crouch forward) while playing: the page blocks it and the leave-site guard is on (play-guard.ts).
+    const ctrlW = await desk.evaluate(() => {
+      // No named functions in here (tsx's __name helper isn't in the page).
+      const specs: [string, string, boolean][] = [
+        ['keydown', 'ControlLeft', true],
+        ['keydown', 'KeyW', true],
+        ['keydown', 'KeyN', true],
+        ['keyup', 'KeyW', true],
+        ['keyup', 'KeyN', true],
+        ['keyup', 'ControlLeft', false],
+      ];
+      const evs = specs.map((x) => new KeyboardEvent(x[0], { code: x[1], ctrlKey: x[2], bubbles: true, cancelable: true }));
+      for (const e of evs) document.body.dispatchEvent(e);
+      return evs.slice(0, 3).map((e) => e.defaultPrevented);
+    });
+    const guard = (await stats(desk)).guard;
+    console.log(`Ctrl+W while playing: prevented ${ctrlW.join(' ')}, guard ${JSON.stringify(guard)}`);
+    if (!ctrlW.every((x) => x) || !guard.leaveGuard || guard.duckKey !== 'Control') problems.push(`Ctrl+W guard: prevented ${ctrlW.join(' ')}, ${JSON.stringify(guard)}`);
 
     let logPath = '';
     // 2. Play cart: aim east, hold S (screen-down = south) for 1 s, switch to the knife, download.
