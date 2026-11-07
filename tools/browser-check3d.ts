@@ -15,7 +15,8 @@
  *  3. takes control: restart, seek to 18.2 s, E (keyboard): cart is the human, the HUD says "You: cart", the speed
  *     is 1×; the mouse turns the view by exactly counts × 1.25 × 0.022° (pointer-lock deltas through the page's
  *     automation hook, since a headless page can't lock the pointer); aims at Lokier's head, clicks mouse 1 and checks
- *     the shot was fired (the HUD's ammo drops, a tracer); screenshot (f) first person;
+ *     the shot was fired (the HUD's ammo drops, a tracer); screenshot (f) first person; then (H2b) sprays ~0.8 s: the
+ *     camera kicks up and the crosshair rises to where the bullets go (screenshot (g)), and both recover after release;
  *  4. fails on page errors, console errors or requests to other origins.
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
  */
@@ -230,6 +231,32 @@ async function main(): Promise<void> {
     report['fire'] = { shots: t1.humanShots, hits: t1.humanHits, clip: [clipBefore, clipAfter], hp: t1.hud.hp, killfeed: feed };
     if (t1.humanShots < 1 || clipAfter === clipBefore) problems.push(`firing: ${JSON.stringify(report['fire'])}`);
     shots.push(await shot(p, 'f-first-person'));
+    // 3b. H2b: recoil on the camera and the crosshair. Spray ~0.8 s at the floor in front of cart (the bullets kick
+    // the camera up by 45 % of the punch and move the crosshair to where they go), then release: both recover.
+    const camPitch = async (): Promise<number> => (await p.evaluate(() => window.__cs2sim3d?.test.state().camera.pitch ?? null)) ?? 0;
+    const crossXf = async (): Promise<string> => p.evaluate(() => document.getElementById('crosshair')?.style.transform ?? '');
+    await p.waitForTimeout(1500);
+    const pitch0 = await camPitch();
+    const look0 = (await stats(p)).look.pitch;
+    if (box !== null) {
+      await p.mouse.down();
+      await p.waitForTimeout(800);
+    }
+    const pitchSpray = await camPitch();
+    const xfSpray = await crossXf();
+    shots.push(await shot(p, 'g-spray-kick'));
+    if (box !== null) await p.mouse.up();
+    await p.waitForTimeout(1500);
+    const pitchAfter = await camPitch();
+    const xfAfter = await crossXf();
+    const lookAfter = (await stats(p)).look.pitch;
+    const crossY = (xf: string): number => Number(/translate\([^,]+,\s*(-?[\d.]+)px\)/.exec(xf)?.[1] ?? 0);
+    report['recoil'] = { cameraPitch: { before: pitch0, spraying: pitchSpray, after: pitchAfter }, look: [look0, lookAfter], crosshair: { spraying: xfSpray, after: xfAfter } };
+    // Source pitch: − = up. The camera kicks up at least 1.5° (45 % of ≥ 3.5° of punch after ~8 bullets) and the
+    // crosshair rises above the centre; 1.5 s later both are back (within 0.2° and 2 px).
+    if (!(pitchSpray < pitch0 - 1.5)) problems.push(`recoil: camera did not kick (${JSON.stringify(report['recoil'])})`);
+    if (!(crossY(xfSpray) < -5)) problems.push(`recoil: crosshair did not rise (${JSON.stringify(report['recoil'])})`);
+    if (!(Math.abs(pitchAfter - lookAfter) < 0.2 && Math.abs(crossY(xfAfter)) < 2)) problems.push(`recoil: did not recover (${JSON.stringify(report['recoil'])})`);
     report['screenshots'] = shots.map((x) => x.replace(ROOT + '/', ''));
     await p.close();
   } finally {

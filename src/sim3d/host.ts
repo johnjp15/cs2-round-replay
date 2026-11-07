@@ -650,7 +650,7 @@ export class Sim3DHost implements IHost {
   private movementFor(p: PawnState, input: PawnInput | null): Tuning['movement'] {
     const m = this.tuning.movement;
     const ctx = this.armsCtx;
-    if (ctx === null || p.mode === 'REPLAY') return m;
+    if (ctx === null || (p.mode === 'REPLAY' && !(p.id === this.human && this.humanInput !== null))) return m;
     const a = this.arms[this.pawnIndex(p.id)];
     if (a === undefined) return m;
     const cap = maxSpeedOf(ctx, a, input !== null && input.buttons.includes('ATTACK'));
@@ -666,17 +666,17 @@ export class Sim3DHost implements IHost {
   }
 
   /**
-   * H2: for the first-person view of `id` looking along `view`: the camera angles (view + 45 % of the punch offset
-   * + the view punch), the crosshair angles (where the next bullet goes: view + aim punch × recoilScale) and the zoom
+   * H2: for the first-person view of `id` looking along `view`: the camera angles (view + `tracking` (default 0.45)
+   * of the punch offset + the view punch), the crosshair angles (where the next bullet goes: view + aim punch × recoilScale) and the zoom
    * level with its FOV (4:3 degrees, from the weapon table; 90 unscoped).
    */
-  aimView(id: PlayerId, view: Angle2): { camera: Angle2; crosshair: Angle2; zoom: number; fov4x3: number } {
+  aimView(id: PlayerId, view: Angle2, tracking?: number): { camera: Angle2; crosshair: Angle2; zoom: number; fov4x3: number } {
     const a = this.armsOf(id);
     const ctx = this.armsCtx;
     if (a === null || ctx === null) return { camera: view, crosshair: view, zoom: 0, fov4x3: 90 };
     const w = ctx.table.weapons[a.weapon];
     const fov = w === undefined || a.zoom <= 0 ? 90 : (w.zoom.fov[Math.min(a.zoom, 2) - 1] ?? 90);
-    return { camera: cameraAngles(ctx, a, view), crosshair: crosshairAngles(ctx, a, view), zoom: a.zoom, fov4x3: fov };
+    return { camera: cameraAngles(ctx, a, view, tracking ?? ctx.model.viewRecoilTracking), crosshair: crosshairAngles(ctx, a, view), zoom: a.zoom, fov4x3: fov };
   }
 
   private stepPawnWeapon(p: PawnState, t: number): void {

@@ -21,6 +21,8 @@ export interface HudFrame {
   readonly at: { readonly x: number; readonly y: number; readonly yaw: number };
   readonly mode: string;
   readonly crosshair: boolean;
+  /** H2b: crosshair offset from the centre (CSS px, + right / down): where the bullets go under recoil. */
+  readonly crosshairPx: { readonly x: number; readonly y: number };
   /** ms since the human's last hit, and whether it was a headshot (null: none recently). */
   readonly hit: { readonly ageMs: number; readonly head: boolean } | null;
   readonly perf: string;
@@ -41,6 +43,8 @@ const MINIMAP_SPAN_PX = 600;
 const MINIMAP_MS = 100;
 
 export class Hud3D {
+  /** H2b: the crosshair's current CSS transform (null = centred). */
+  private crosshairTransform: string | null = null;
   private readonly cache = new Map<string, string>();
   private readonly minimap: HTMLCanvasElement;
   private readonly mctx: CanvasRenderingContext2D | null;
@@ -118,6 +122,11 @@ export class Hud3D {
       this.text('perf', f.perf);
     }
     this.attr('crosshair', 'hidden', f.crosshair ? null : '');
+    const xf = f.crosshairPx.x === 0 && f.crosshairPx.y === 0 ? null : `translate(${f.crosshairPx.x}px, ${f.crosshairPx.y}px)`;
+    if (xf !== this.crosshairTransform) {
+      this.crosshairTransform = xf;
+      el('crosshair').style.transform = xf ?? '';
+    }
     const showHit = f.hit !== null && f.hit.ageMs < 180;
     this.attr('hitmarker', 'hidden', showHit ? null : '');
     this.attr('hitmarker', 'class', showHit && f.hit?.head === true ? 'head' : null);

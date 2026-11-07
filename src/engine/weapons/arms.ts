@@ -422,12 +422,13 @@ export function crosshairAngles(ctx: ArmsContext, s: ArmsState, view: Angle2): A
 }
 
 /**
- * The first-person camera: view + aim punch × recoilScale × viewRecoilTracking + view punch (screen shake). The camera
+ * The first-person camera: view + aim punch × recoilScale × tracking (default viewRecoilTracking 0.45, CS:GO's
+ * `view_recoil_tracking`; the 3D app lets the player set it, 0–1) + view punch (screen shake). The camera
  * moves less than the bullets, so with a fixed crosshair (cl_crosshair_recoil false) the spray drifts off the centre.
  */
-export function cameraAngles(ctx: ArmsContext, s: ArmsState, view: Angle2): Angle2 {
+export function cameraAngles(ctx: ArmsContext, s: ArmsState, view: Angle2, tracking: number = ctx.model.viewRecoilTracking): Angle2 {
   const o = punchOffset(s.punch, ctx.model);
-  const k = ctx.model.viewRecoilTracking;
+  const k = Math.max(0, Math.min(1, tracking));
   return { pitch: roundNumber(view.pitch + o.pitch * k + s.punch.view.pitch), yaw: roundNumber(view.yaw + o.yaw * k + s.punch.view.yaw) };
 }
 
