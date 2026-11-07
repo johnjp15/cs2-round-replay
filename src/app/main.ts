@@ -38,6 +38,7 @@ import { FOLLOWED, Renderer } from './renderer';
 import { Scene, interpolationAlpha } from './scene';
 import { Session, parseSessionData, type SessionData } from './session';
 import { STANDING_HULL, TRACE_SKIN } from '../sim2d/index';
+import { SummaryCache } from './run-entries';
 import { SUMMARY_DELAY_TICKS, SummaryOverlay, summaryDue, summaryView } from './summary-overlay';
 import { TAKEOVER_KEY, startHuman, takeoverButtonView, youNote } from './takeover';
 import { TimelineDom, seekFraction, seekStepForKey, stepTarget, timelineSpanTicks } from './timeline';
@@ -154,6 +155,8 @@ class App {
   private seekResume: Phase | null = null;
   /** The summary was closed for this round end (it comes back after a rewind past it, or with the Summary button). */
   private summaryDismissed = false;
+  /** P1: the summary, computed once per (round end, deaths) from incrementally parsed log entries. */
+  private readonly summaryCache = new SummaryCache();
   /** Deaths ingested, and the count the open summary was made with (a later death, the post-round kill, refreshes it). */
   private deaths = 0;
   private summaryDeaths = -1;
@@ -334,12 +337,20 @@ class App {
     this.updateControls();
   }
 
-  /** Show the summary of the run so far. */
-  private showSummary(): void {
+  /**
+   * Show the summary of the run so far. P1: from log entries parsed a few per frame since the round ended
+   * (run-entries.ts), computed once per (round end, deaths); false while the entries are still catching up (call
+   * again next frame). `now` parses whatever is left at once (the Summary button).
+   */
+  private showSummary(now = false): boolean {
     const s = this.session;
-    this.overlay.show(summaryView(summarize(s.model, s.log()), (id) => s.model.player(id).team));
+    const r = this.scene.cur.round;
+    const sum = this.summaryCache.get(s.model, s.log(), `${r.endTick}|${this.deaths}|${s.human ?? ''}`, now ? Infinity : undefined);
+    if (sum === null) return false;
+    this.overlay.show(summaryView(sum, (id) => s.model.player(id).team));
     this.summaryDeaths = this.deaths;
     this.updateControls();
+    return true;
   }
 
   /** The host's grenade effects (Sim2DHost.activeEffects). */
@@ -429,7 +440,7 @@ class App {
     on(b.restart, () => this.restart());
     on(b.summary, () => {
       if (this.overlay.open) this.overlay.hide();
-      else this.showSummary();
+      else this.showSummary(true);
     });
     on(b.back5, () => this.startSeek(stepTarget(this.session.tick, -5)));
     on(b.back10, () => this.startSeek(stepTarget(this.session.tick, -10)));
@@ -554,6 +565,7 @@ class App {
     if (this.seekResume !== null) return;
     const cur = this.scene.cur;
     if (cur.round.phase !== 'over') {
+      this.summaryCache.invalidate();
       if (this.overlay.open || this.summaryDismissed) {
         this.overlay.hide();
         this.summaryDismissed = false;
@@ -563,6 +575,7 @@ class App {
     }
     if (!this.overlay.open && !this.summaryDismissed && summaryDue(cur.round, cur.tick, SUMMARY_DELAY_TICKS)) this.showSummary();
     else if (this.overlay.open && this.summaryDeaths !== this.deaths) this.showSummary();
+    else if (!this.overlay.open) this.summaryCache.warm(this.session.log());
     if (this.buttons.summary.disabled) this.updateControls();
   }
 
