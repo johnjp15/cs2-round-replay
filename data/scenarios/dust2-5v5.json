@@ -1,0 +1,290 @@
+{
+  "format": "cs2-round-replay/scenario@1",
+  "name": "dust2-5v5",
+  "title": "Dust II: 5v5 free play",
+  "description": "A full-buy round from the spawns on CS2's Dust II (map package de_dust2), every bot live on CS2's own nav. Take over any pawn.",
+  "map": "de_dust2",
+  "seed": 3,
+  "rules": {
+    "c4TimerSec": 40,
+    "freezeTimeSec": 0,
+    "roundTimeSec": 115,
+    "score": {
+      "ct": 0,
+      "t": 0
+    },
+    "botDifficulty": "normal",
+    "site": null
+  },
+  "players": [
+    {
+      "id": "barely",
+      "name": "barely",
+      "team": "T",
+      "spawn": 0,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "c4": false,
+      "weapons": [
+        {
+          "weapon": "ak47",
+          "clip": 30,
+          "reserve": 90
+        },
+        {
+          "weapon": "glock",
+          "clip": 20,
+          "reserve": 120
+        }
+      ],
+      "grenades": [
+        "smoke",
+        "flash"
+      ],
+      "money": 800
+    },
+    {
+      "id": "cart",
+      "name": "cart",
+      "team": "T",
+      "spawn": 1,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "c4": false,
+      "weapons": [
+        {
+          "weapon": "ak47",
+          "clip": 30,
+          "reserve": 90
+        },
+        {
+          "weapon": "glock",
+          "clip": 20,
+          "reserve": 120
+        }
+      ],
+      "grenades": [
+        "molotov",
+        "flash"
+      ],
+      "money": 800
+    },
+    {
+      "id": "donk",
+      "name": "donk",
+      "team": "T",
+      "spawn": 2,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "c4": true,
+      "weapons": [
+        {
+          "weapon": "ak47",
+          "clip": 30,
+          "reserve": 90
+        },
+        {
+          "weapon": "glock",
+          "clip": 20,
+          "reserve": 120
+        }
+      ],
+      "grenades": [
+        "smoke",
+        "flash"
+      ],
+      "money": 800
+    },
+    {
+      "id": "eradicate",
+      "name": "eradicate",
+      "team": "T",
+      "spawn": 3,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "c4": false,
+      "weapons": [
+        {
+          "weapon": "ak47",
+          "clip": 30,
+          "reserve": 90
+        },
+        {
+          "weapon": "glock",
+          "clip": 20,
+          "reserve": 120
+        }
+      ],
+      "grenades": [
+        "molotov",
+        "flash"
+      ],
+      "money": 800
+    },
+    {
+      "id": "snarlbot",
+      "name": "snarlbot",
+      "team": "T",
+      "spawn": 4,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "c4": false,
+      "weapons": [
+        {
+          "weapon": "ak47",
+          "clip": 30,
+          "reserve": 90
+        },
+        {
+          "weapon": "glock",
+          "clip": 20,
+          "reserve": 120
+        }
+      ],
+      "grenades": [
+        "smoke",
+        "flash"
+      ],
+      "money": 800
+    },
+    {
+      "id": "incredibad",
+      "name": "incredibad",
+      "team": "CT",
+      "spawn": 0,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "kit": true,
+      "weapons": [
+        {
+          "weapon": "m4a4",
+          "clip": 30,
+          "reserve": 90
+        },
+        {
+          "weapon": "deagle",
+          "clip": 7,
+          "reserve": 35
+        }
+      ],
+      "grenades": [
+        "smoke",
+        "he"
+      ],
+      "money": 800
+    },
+    {
+      "id": "lokier",
+      "name": "lokier",
+      "team": "CT",
+      "spawn": 1,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "kit": false,
+      "weapons": [
+        {
+          "weapon": "awp",
+          "clip": 5,
+          "reserve": 30
+        },
+        {
+          "weapon": "deagle",
+          "clip": 7,
+          "reserve": 35
+        }
+      ],
+      "grenades": [
+        "flash"
+      ],
+      "money": 800
+    },
+    {
+      "id": "snakelore",
+      "name": "snakelore",
+      "team": "CT",
+      "spawn": 2,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "kit": true,
+      "weapons": [
+        {
+          "weapon": "m4a4",
+          "clip": 30,
+          "reserve": 90
+        },
+        {
+          "weapon": "deagle",
+          "clip": 7,
+          "reserve": 35
+        }
+      ],
+      "grenades": [
+        "smoke",
+        "he"
+      ],
+      "money": 800
+    },
+    {
+      "id": "sp4rtan",
+      "name": "sp4rtan",
+      "team": "CT",
+      "spawn": 3,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "kit": false,
+      "weapons": [
+        {
+          "weapon": "m4a4",
+          "clip": 30,
+          "reserve": 90
+        },
+        {
+          "weapon": "deagle",
+          "clip": 7,
+          "reserve": 35
+        }
+      ],
+      "grenades": [
+        "flash"
+      ],
+      "money": 800
+    },
+    {
+      "id": "zwomp",
+      "name": "zwomp",
+      "team": "CT",
+      "spawn": 4,
+      "hp": 100,
+      "armor": 100,
+      "helmet": true,
+      "kit": true,
+      "weapons": [
+        {
+          "weapon": "m4a4",
+          "clip": 30,
+          "reserve": 90
+        },
+        {
+          "weapon": "deagle",
+          "clip": 7,
+          "reserve": 35
+        }
+      ],
+      "grenades": [
+        "smoke",
+        "he"
+      ],
+      "money": 800
+    }
+  ],
+  "human": null
+}

@@ -84,3 +84,5 @@ export { AIM_BANDS, eyeHeight, bandHeight, aimPitch, pickBand, traceShot } from 
 export type { AimBand, ScanPawn, LosQuery, ShotHit } from './hitscan';
 export { throwElevation, throwGrenade, flightPos, smokeBlocks, activeEffects, flashSeconds, stepGrenades } from './grenades';
 export type { Grenade, GrenadeNav, Thrower, EffectPawn, GrenadeOutcome, GrenadeEffect, GrenadeWorld, SmokeEngine, SmokePawn, SmokePop, SmokeCellView } from './grenades';
+export { legacyMapNav } from './ai';
+export type { MapNav } from './map-nav';

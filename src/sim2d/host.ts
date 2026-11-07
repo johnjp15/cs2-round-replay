@@ -50,8 +50,9 @@ import {
   type Vec3,
   type WeaponId,
 } from '../contracts/index';
-import { freshAiState, roleOf, stepAi, type AiBehaviour, type AiOther, type AiState } from './ai';
-import { applyBombAction, bombFromObs, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
+import { freshAiState, legacyMapNav, roleOf, stepAi, type AiBehaviour, type AiOther, type AiState } from './ai';
+import type { MapNav } from './map-nav';
+import { applyBombAction, bombFromObs, freshBomb, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
 import { collideMove, type CollisionNav, type Obstacle } from './collision';
 import type { MapGeometry } from './geometry';
 import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeNav, type GrenadeOutcome, type SmokeEngine } from './grenades';
@@ -227,6 +228,8 @@ interface HostState {
 
 export class Sim2DHost implements IHost {
   private readonly nav: NavMesh;
+  /** H3: the AI's view of the nav (the 2020 grid's places). */
+  private readonly aiNav: MapNav;
   /** G3: the collision mesh (world + player clips) for 3D movement, or null for the nav's 2D movement. */
   private readonly geometry: MapGeometry | null;
   private readonly tuning: Tuning;
@@ -274,7 +277,8 @@ export class Sim2DHost implements IHost {
    * @param smokes S1: smoke grenades on the CS2 engine (src/sim3d/smokes.ts `Cs2Smokes` on the world mesh); null = the
    *   2D model's disc smokes.
    */
-  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null = null, vision: Sim2DVision | null = null, geometry: MapGeometry | null = null, smokes: SmokeEngine | null = null) {
+  /** @param aiNav H3: the LIVE AI's nav and the plant rule's sites (a CS2 nav in free play); default the 2020 grid's (`legacyMapNav`). */
+  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null = null, vision: Sim2DVision | null = null, geometry: MapGeometry | null = null, aiNav: MapNav | null = null, smokes: SmokeEngine | null = null) {
     if (roster.length === 0) throw new Error('Sim2DHost: empty roster');
     const seen = new Set<string>();
     for (const r of roster) {
@@ -283,6 +287,7 @@ export class Sim2DHost implements IHost {
       seen.add(r.id);
     }
     this.nav = nav;
+    this.aiNav = aiNav ?? legacyMapNav(nav);
     this.geometry = geometry;
     this.smokes = smokes;
     this.tuning = tuning;
@@ -631,7 +636,7 @@ export class Sim2DHost implements IHost {
         events: this.events,
         bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick },
         round: { phase: roundPhase(this.round, isTicking(this.bomb)) },
-        nav: this.nav,
+        nav: this.aiNav,
         sight: this.meshSight ?? this.sight,
         tuning: this.tuning,
         rng: root.fork('ai:' + p.id),
@@ -879,7 +884,7 @@ export class Sim2DHost implements IHost {
       const input = this.inputFor(p.id);
       const use = input !== null && input.buttons.includes('USE');
       const hasC4 = p.inventory.some((q) => q.item === 'c4');
-      const inSite = p.alive && p.team === 'T' && use && p.weapon === 'c4' && isBombsite(this.nav.placeName(p.move.pos));
+      const inSite = p.alive && p.team === 'T' && use && p.weapon === 'c4' && this.aiNav.inBombsite(p.move.pos);
       return { id: p.id, team: p.team, pos: copyVec(p.move.pos), alive: p.alive, weapon: p.weapon, use, hasC4, hasKit: p.inventory.some((q) => q.item === 'defuser'), inSite };
     });
   }
