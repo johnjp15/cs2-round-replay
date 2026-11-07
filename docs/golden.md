@@ -14,7 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 63bd3d86 (M1's movement fixes)
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 04121ba7 (T1's level flips)
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
@@ -160,7 +160,7 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `63bd3d86` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `04121ba7` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `72d1547f` |
 | `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `fb19a2fa` |
 | `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `6cd197f2` |
@@ -305,6 +305,13 @@ tested (no WebKit here).
 
 ## History
 
+- T1 (`tools/snap-tracks.ts` pass 0, barely back on Catwalk 35.1–44.7 s): no-human `63bd3d86` → `04121ba7`, cart-idle
+  `fb19a2fa` → `0e6c83fa` (walk oracles `72d1547f` → `a4e079c6` and cart-idle's), cart-takeover unchanged
+  (`e1131654`, it ends at tick 1536). `tools/fixture-diff.ts`, no-human: only barely's pawn fields differ (pos from tick
+  2072; ≤ 28 u before 35 s, ≤ 220 u 35–45 s, ≤ 12 u 46–49.9 s while his puppet catches up, identical from 50.3 s; yaw,
+  pitch, sees and crouching follow) and footstep `sound` events; every shot, damage, death, plant and defuse event is
+  on the same tick (Zwomp 2829). cart-idle: barely, LIVE there from 40.30 s, now sees Zwomp up Catwalk and kills him at
+  2650 instead of the scripted 2829 (the fixture ends at 2880); docs/core.md "Results: never-peeks".
 - M1 (movement vs CS2, `docs/movement.md` "M1 fixes"): every fixture moves (no-human `72b58704` → `63bd3d86`, cart-idle
   `9a995ab4` → `fb19a2fa`, cart-takeover `a3163f9d` → `e1131654`, walk oracles `e5b887cf` → `72d1547f`, `b1b09042` →
   `6cd197f2`; the rejoin-off never-peeks run `7ca637e5` → `4dc88459`). `tools/fixture-diff.ts`: positions and velocities

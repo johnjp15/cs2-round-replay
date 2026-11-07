@@ -425,11 +425,18 @@ walls, props or the Truck, or on the wrong floor. `npm run tracks:snap` writes `
 app applies it to the round before the Core sees it (`applyTracks3d`), so puppets follow positions a hull can stand
 at. Deterministic, offline (36 s). Passes:
 
+0. **Level flips** (T1, `levelFlips`): the recording's z is the 2020 nav floor under the radar dot, so where two
+   floors overlap a dot near one's edge can pick up the other. A stretch whose z jumps by more than 48 in one sample
+   step and back again within 20 s, with the floor it left within 128 units of every sample in between, and where
+   neither change of floor is a way a hull can go (the A* below, with drops and jumps, finds none), keeps its x/y and
+   takes the floor it left. It flags one stretch: barely 35.1–44.7 s (97 samples, dz −198 in, +154 out), whose dot
+   ran 40–110 units north of Catwalk's north strip, over the underpass and the Tunnel Stairs beneath it; it is put back
+   on Catwalk (below).
 1. **Snap** each sample to the nearest allowed stand level within 64 units (2-unit search grid, level within 32 of the
    recorded z), preferring one on the previous sample's floor in a clear hull line from it (`hullLineClear`, as the
    puppets' WalkQuery); else the spot reachable from the previous one nearest the recording (`follow`). A recorded
    change of floor is taken when a hull can walk there; a track left on another floor than the recording's for a
-   second restarts on the recording's (barely's underpass at 35.1 s).
+   second restarts on the recording's.
 2. **Repair**: where consecutive samples still aren't in a clear line, re-place the samples around the gap together
    (Viterbi over candidate spots).
 3. **Detour**: a gap that remains is a wall the recording walked through: an A* over stand levels (8-unit grid, up a
@@ -442,12 +449,12 @@ at. Deterministic, offline (36 s). Passes:
    through the Apartments and off the Balcony's west end, 1,427 → 1,072 units; cart 19.5–21.1 s and 46.9–48.6 s).
    Plant and defuse samples never move.
 
-Result: 3,562 samples; 2,286 unmoved, 163 moved ≤ 16 units, 1,074 moved 16–64, 39 further (horizontal moves ≤ 4: 72,
-≤ 8: 86, ≤ 16: 110, ≤ 32: 286, ≤ 48: 328, more: 189). 7 transitions are still not in a clear hull line: the recording's own
-jump back up from the underpass (barely 44.9 s); the recording walking through an A-site box CS2 has, with no way
-round found in time (cart 29.3 s and 64.2 s); floors that don't match (barely 35.0 s into the underpass, donk 20.9 s
-onto a floor CS2 raises 32 units in the Apartments, snarlbot 9.8 s on T ramp where the 2020 z is 80 above CS2's
-floor); and 9 units at barely 2.5 s. The puppets snap at these when nobody watches (`docs/core.md`, "Snaps on CS2
+Result: 3,562 samples; 2,248 unmoved, 136 moved ≤ 16 units, 1,094 moved 16–64, 84 further (horizontal moves ≤ 4: 67,
+≤ 8: 60, ≤ 16: 103, ≤ 32: 271, ≤ 48: 335, more: 214; most of the 64+ are barely's 35–45 s on Catwalk, 40–110 north of
+his radar dot). 5 transitions are still not in a clear hull line: the recording walking through an A-site box CS2 has,
+with no way round found in time (cart 29.3 s and 64.2 s); floors that don't match (donk 20.9 s onto a floor CS2 raises
+32 units in the Apartments, snarlbot 9.8 s on T ramp where the 2020 z is 80 above CS2's floor); and 9 units at barely
+2.5 s. The puppets snap at these when nobody watches (`docs/core.md`, "Snaps on CS2
 Mirage"). **Jumps: none.** The search found
 jump edges (the B Apartments window's 20-unit sill), but a jump there bumps the lintel and stalls the puppet, so jump
 landings need headroom for a whole jump; with that rule no track needs one. Puppets still press JUMP for any take-off
@@ -462,3 +469,23 @@ the tracks mark (`docs/core.md`), tested with synthetic tracks.
   triangle index (traces) or by (|nz| desc, index) (floors), so iteration order doesn't matter.
 - The CS2 game itself doesn't need any of this: the CS2 host moves players with the engine. Only a C# re-run of 2D-sim
   logs that include 3D movement would.
+
+### barely 33–48 s: Catwalk, not the underpass (T1)
+
+John: "It's not possible to jump from underpass to catwalk like that. It's the result of a position overlaying on top of
+the map." The recording had barely drop from Catwalk into the underpass at 35.1 s (dz −198 in 0.1 s), walk up the Tunnel
+Stairs, hold them 38–44 s, kill Zwomp "from the Tunnel Stairs" at 44.20 s and be back on Catwalk at 44.8 s (+154 in
+0.1 s). On CS2 Mirage neither is possible, and the kill isn't either:
+
+- Catwalk's north strip (z ≈ −168, y ≤ ~310 at x −1040 … −760) and the Tunnel Stairs (y ≈ 335–475, rising east from the
+  underpass at −368 to the Back Alley at −80) are separated by a solid wall at y ≈ 310–335 from below the underpass to
+  above the Apartments; the underpass runs under Catwalk at x −1050 … −975.
+- No way between the floors near by: `astar` (drops ≤ 216, jumps) finds none at either flip.
+- Sight: of every stand spot at x −1000 … −640, y 260 … 460, only the Catwalk ones (y ≤ 280) have an eye-height line to
+  Zwomp at the kill (−752, 243, eye −107); no spot on the stairs or in the underpass does.
+
+So barely stayed on Catwalk: he walked east along its north strip (35–38 s), held its north-east corner by the wall
+(−760, 294) 38–40.5 s, moved along the strip between x −836 and −771 (40.5–44.6 s), killed Zwomp coming north up
+Catwalk at 44.20 s from (−783, 289, −165) with a clear line, and turned south down Catwalk (−772, 254 at 45.0 s), as
+recorded from 44.8 s on. Pass 0 does this; the snapped track is a continuous walk (every step a clear hull line, at most
+22 units per 0.1 s), and the golden master's barely snaps 2299 and 2880 are gone.

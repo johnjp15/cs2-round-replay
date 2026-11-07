@@ -143,7 +143,9 @@ eradicate 5.7 and snarlbot 8.1. What the model can't follow:
 - **A jump through a wall between levels.** Barely, at 44.7 → 44.8 s, goes from Tunnel Stairs
   (−772, 379, z −320) to Catwalk (−772, 290, z −166): 89 units across and 154 up in 0.1 s, and the chord is
   not walkable. The pawn has to go round by Tunnel, which accounts for 98.8 % of barely's squared error (max
-  268).
+  268). T1: this was never a jump. The recording's z is the 2020 nav floor under the radar dot, which ran 40–110 units
+  north of Catwalk over the underpass from 35.1 s; barely stayed on Catwalk. `tools/snap-tracks.ts` pass 0
+  (`levelFlips`, `docs/geometry.md`) puts the stretch back on Catwalk, so the puppet walks it.
 - **The literal controller on the patch mesh.** Pure pursuit with a 0.15 s lookahead cuts corners by about
   5–10 units. In patch regions the walkable space is a staircase of 25-unit cells (`docs/nav.md`, patch areas).
   The cut line then runs into a hole, and a near head-on wall hit has almost no tangential speed to slide

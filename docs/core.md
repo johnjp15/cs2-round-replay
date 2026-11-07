@@ -157,7 +157,7 @@ What it finds in `data/round.json` (no real spike survives the "comes back" test
 
 | player | event | kind | what |
 | --- | --- | --- | --- |
-| barely | 44.70–44.80 s | discontinuity | Tunnel Stairs → Catwalk, 89 u across, dz +154, 890 u/s |
+| barely | 44.70–44.80 s | discontinuity | Tunnel Stairs → Catwalk, 89 u across, dz +154, 890 u/s (raw recording; T1's snapped track has none here: barely is on Catwalk throughout) |
 | barely | 45.20–45.30 s | discontinuity | 91 u in 0.1 s on Catwalk (910 u/s) |
 | cart | 12.80–13.00 s | discontinuity | 137 u in 0.2 s (709 u/s) |
 | cart | 14.20–14.50 s | discontinuity | 217 u in 0.3 s (1,084 u/s), then walks at 41 u/s |
@@ -264,7 +264,7 @@ window is over). Each take-off is used once (`PuppetState.usedJumps`). Tested wi
 
 ### Snaps on CS2 Mirage (G3)
 
-With 3D movement on the snapped tracks the golden master snaps 11 times instead of main's 6
+With 3D movement on the snapped tracks the golden master snaps 9 times instead of main's 6
 (`tests/golden-round.test.ts` lists them). A puppet only snaps inside a teleport window (an over-speed stretch of its
 track) when it is more than `driftSnapUnits` (96) behind and the human doesn't see it.
 
@@ -274,11 +274,13 @@ track) when it is more than `driftSnapUnits` (96) behind and the human doesn't s
 | sp4rtan 1171 | main's sp4rtan 1165 | the recording's spike (inferred CT positions) |
 | sp4rtan 1229, 1245 | main's sp4rtan 1248 | the same inferred 700 u/s stretch, split in two by the snapping |
 | cart 1393 | main's cart 1350 | the recording's discontinuity, reached later |
-| barely 2880 | main's barely 2879 | the recording's jump back up from the underpass |
 | snarlbot 633 | new | T ramp: the 2020 z is 80 above CS2's floor there; the track rejoins the recording's floor in one step |
 | donk 1344 | new (main's donk 923 is gone) | Apartments: CS2 raises the floor 32 units where the 2020 floor is flat; the track gets onto it in one step (a jump would do it: the snapping's detours have no jumps yet) |
 | cart 1880, 4114 | new | A site: the recording walks through a box CS2 has; the snapping finds no way round in time |
-| barely 2299 | new, on purpose | the recording drops from B short's corridor into the underpass (35.1 s); CS2 has no way down near by, so the track restarts on the recording's floor (keeping barely out of Mid's sight, as on main) |
+
+Gone with T1 (`docs/geometry.md`, "barely 33–48 s"): barely 2299 (the recording's drop from Catwalk into the underpass
+at 35.1 s) and barely 2880 (main's 2879, its jump back up at 44.8 s). Both were one level flip of the radar dot over
+the underpass; the snapped track keeps barely on Catwalk and he walks it, killing Zwomp at 2829 with a clear line.
 
 Fixable later: the A-site box (a wider detour search), the Apartments step (detours with jumps) and the split
 sp4rtan stretch; the floor mismatches are recording error against CS2's floors.
@@ -473,7 +475,7 @@ Sp4rtan's post-round kill on cart stays real, if it happens (B3: an implied tap,
 | who | role | anchor / hold |
 | --- | --- | --- |
 | T, bomb not planted | `plant` for the c4 carrier (barely), else `take_site` | the recorded plant (27.52 s); the carrier holds the recorded bomb position, the others their recorded spot then |
-| T, bomb planted | `guard_bomb` | the recorded post-plant stay (`dwellSpot`: the longest run of samples within `dwellUnits` of its first): barely (−818, 360) on the Tunnel / underpass stairs from 37.4 s, donk (−1556, 781) in the Apartments from 28.5 s ("scoped east"). The AI moves a spot more than `ai.guardMaxUnits` from the bomb to a ring point with sight to it |
+| T, bomb planted | `guard_bomb` | the recorded post-plant stay (`dwellSpot`: the longest run of samples within `dwellUnits` of its first): barely (−831, 295) on Catwalk's north strip from 37.5 s (T1; before, (−818, 360) on the Tunnel Stairs), donk (−1556, 781) in the Apartments from 28.5 s ("scoped east"). The AI moves a spot more than `ai.guardMaxUnits` from the bomb to a ring point with sight to it |
 | CT `flank_then_retake` (sp4rtan) | `retake`, `defuse` once planted | his recorded defuse start (61.8 s): the flank via T side and the Apartments to B |
 | CT `rotate_b` (zwomp) | `rotate` | the end of his track (Mid, underpass, Catwalk) |
 | CT `hold_a` / `hold_b` (incredibad, snakelore, lokier) | `hold` | the end of the track (lokier: his last sample on B, (−2145.8, 432.2)) |
@@ -555,6 +557,12 @@ From that tick the pawn's status is `REPLAY` with trigger `rejoin` (the HUD's st
 | sp4rtan kills donk | 50.35 | 49.97 (AI) | **50.34** (tick 3222, the golden master's) |
 | sp4rtan kills barely (HS) | 58.85 | – (barely kills sp4rtan at 59.61: T elimination) | **58.84** (tick 3766) |
 | sp4rtan's kit defuse | 66.80 | – | **66.80**: CT bomb_defused 12 – 15, 0.72 s on the bomb |
+
+T1 (barely on Catwalk, not the underpass beneath it, 35–45 s): barely, LIVE from 40.30 s (heard sp4rtan kill cart),
+now has a line down Catwalk and sees Zwomp walking up it on his *inferred* route; he kills him for real (headshot) at
+**41.41 s** (tick 2650), 2.8 s before the tape, and rejoins at 43.59 s. Every other event is unchanged (sp4rtan → donk
+3222, sp4rtan → barely 3766, defuse 3955–4275). The recording only sights Zwomp from 43.9 s, so his route up Catwalk
+before that is a guess; a later route for him (or LIVE barely facing B) would give the tape's kill back.
 
 Every event that doesn't involve cart is on the golden master's observe tick. With `rejoin: false` the run is B4's byte for byte (digest `b424522f`). The puppets catch up after the switch: barely within 24 u in 0.88 s, sp4rtan in 2.3 s; nothing teleports and nothing runs above its weapon's run speed (beyond the engine's own ≤ 5 % acceleration transients) from a LIVE switch to 2 s after the rejoin.
 
