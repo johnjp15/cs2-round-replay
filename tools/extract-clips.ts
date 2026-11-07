@@ -76,8 +76,16 @@ function read(path: string): Uint8Array {
   return new Uint8Array(readFileSync(resolve(ROOT, path)));
 }
 
+/** X1: what decides whether a surface point is allowed (the CS2 nav here; everything, for a map with real clips). */
+export interface SurfaceRule {
+  allowsSurface(x: number, y: number, z: number): boolean;
+}
+
+/** X1: a map package with its own player clips (the 2020 BSP) needs no nav rule: every surface is allowed. */
+export const ALLOW_ALL: SurfaceRule = { allowsSurface: () => true };
+
 /** "Does the CS2 nav have a polygon at this height near here?" */
-export class NavCover {
+export class NavCover implements SurfaceRule {
   private readonly idx: Cs2NavIndex;
   private readonly offsets: [number, number][] = [];
 
@@ -152,7 +160,7 @@ export class Pieces {
   constructor(
     private readonly g: MapGeometry,
     private readonly worldTriangles: number,
-    private readonly nav: NavCover,
+    private readonly nav: SurfaceRule,
   ) {}
 
   private key(t: number, ci: number, cj: number): number {

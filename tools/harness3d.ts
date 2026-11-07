@@ -13,9 +13,11 @@ import { pathToFileURL } from 'node:url';
 import { tickOf, summarize as summarizeRound } from '../src/core/index';
 import { sim3dHostFactory, worldMesh, type Sim3DHost } from '../src/sim3d/index';
 import { HumanBot, formatTimeline, loadScenario, timeline } from './human-bot';
+import { DEFAULT_MAP, type MapId } from '../src/contracts/maps';
 import {
   describeSummary,
   driftTable,
+  ROOT,
   loadHarnessData,
   measureDrift,
   optionsFromArgs,
@@ -33,8 +35,8 @@ export interface Harness3dData extends HarnessData {
   readonly world: ReturnType<typeof worldMesh>;
 }
 
-export function loadHarness3dData(): Harness3dData {
-  const data = loadHarnessData();
+export function loadHarness3dData(map: MapId = DEFAULT_MAP): Harness3dData {
+  const data = loadHarnessData(ROOT, map);
   return { ...data, world: worldMesh(data.sources.geometry) };
 }
 
@@ -50,10 +52,10 @@ export function host3d(run: HarnessRun): Sim3DHost {
 
 function main(): void {
   const args = parseCliArgs(process.argv.slice(2));
-  const t0 = performance.now();
-  const data = loadHarness3dData();
-  const t1 = performance.now();
   const scenario = args.scenario === null ? null : loadScenario(args.scenario);
+  const t0 = performance.now();
+  const data = loadHarness3dData(args.map ?? scenario?.map ?? DEFAULT_MAP);
+  const t1 = performance.now();
   const bot = scenario === null ? null : HumanBot.fromScenario(data, scenario);
   const options: HarnessOptions =
     scenario === null || bot === null
