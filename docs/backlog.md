@@ -77,6 +77,8 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 43 | 11-07 11:02 | Higher-fidelity knife model (classic CS feeling); 250 u/s on knife | queued | knife viewmodel detail; `maxSpeedOf(knife)` = 250 verified |
 | 44 | 11-07 11:03 | Fix the sound — "it's really bad right now" | queued | A2: the synthesized placeholder bank + mix (levels, clipping, distance curve, footstep cadence, occlusion); real CS2 sounds still need John's extraction (#17) |
 | 45 | 11-07 11:03 | cart's smoke into Market is still wrong | queued | S1: what the live hosts actually render at 25.8–45 s vs the video (window covered from outside; where the bloom sits); the data landing (#44) vs the host's own throw; wire the grenade engine's smoke for this throw if the host uses something else |
+| 46 | 11-07 11:05 | When cart leaves Market to try to kill sp4rtan he teleports through the Market window; don't do that | queued | T2: the snapped track at Market exit (a snap teleport, or the window climb animated as a jump instead of a path); fix the path on the CS2 mesh |
+| 47 | 11-07 11:05 | An agent compares the video frame by frame with our game spectating cart, flags every issue, puts them into the backlog | queued | V3: cart first-person POV, video vs game, every 0.5 s + key moments; findings ranked into this file |
 
 ## Queued (not started)
 - **H3** generic maps + scenarios + free play + LIVE AI on the CS2 nav (plan card).
