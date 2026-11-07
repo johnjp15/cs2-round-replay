@@ -502,14 +502,19 @@ async function main(): Promise<void> {
     const anchor = { x: -1200, y: 700 };
     const before = await spec.evaluate(([x, y]) => window.__cs2replay?.screenOf(x, y), [anchor.x, anchor.y] as const);
     if (before === undefined) throw new Error('no screenOf');
+    const zoom0 = (await stats(spec)).camera.zoom;
     await spec.mouse.move(before.x, before.y);
     for (let i = 0; i < 6; i++) await spec.mouse.wheel(0, -100);
     await spec.waitForTimeout(200);
     const after = await spec.evaluate(([x, y]) => window.__cs2replay?.screenOf(x, y), [anchor.x, anchor.y] as const);
     const zoomed = await stats(spec);
     const drift = after === undefined ? Infinity : Math.hypot(after.x - before.x, after.y - before.y);
-    console.log(`wheel: 6 notches in about (${anchor.x}, ${anchor.y}): zoom ${zoomed.camera.zoom.toFixed(2)}, point moved ${drift.toFixed(2)} px`);
-    if (drift > 2) problems.push(`wheel zoom moved the point under the cursor by ${drift.toFixed(2)} px`);
+    // The pointer sits on whole CSS px: the zoom is about that pixel, not the anchor's exact spot, which moves the
+    // anchor by its sub-pixel offset × (zoom ratio − 1) even when the zoom is exact.
+    const offset = Math.hypot(Math.round(before.x) - before.x, Math.round(before.y) - before.y);
+    const rounding = offset * Math.max(0, zoomed.camera.zoom / zoom0 - 1);
+    console.log(`wheel: 6 notches in about (${anchor.x}, ${anchor.y}): zoom ${zoomed.camera.zoom.toFixed(2)}, point moved ${drift.toFixed(2)} px (pointer rounding allows ${rounding.toFixed(2)})`);
+    if (drift > 2 + rounding) problems.push(`wheel zoom moved the point under the cursor by ${drift.toFixed(2)} px`);
     await shoot(spec, 'b2-desktop-spectate-zoomed');
     await spec.close();
 

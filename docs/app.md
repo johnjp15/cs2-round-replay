@@ -211,7 +211,7 @@ code took it from 58.7 to 82.9 KB and D2's renderer, HUD and camera add 29.9 KB 
 (the height map layer, 125 KB), and the session plays in 3D (`parseSessionData`'s `world3d`). The normal build
 fetches them (`?url`, `arrayBuffer`); the single file embeds the binaries and the tracks gzipped + base64 and inflates
 them with `DecompressionStream` (geometry 313 KB, clips 81 KB, tracks 20 KB as embedded) and the height map as a data:
-URI (156 KB). `npm run build:single` is now 1,143,705 bytes (1116.9 KB; gzip 706.5 KB; locked ≈ 1,495 KB), up from
+URI (156 KB). `npm run build:single` is now 1,144,387 bytes (1117.6 KB; gzip 706.7 KB; locked ≈ 1,496 KB), up from
 560,231 bytes (547.1 KB) before; the geometry is the 313 KB G2 estimated, the height map layer the next biggest part
 (a JPEG would halve it: a follow-up). Building the 3D nav (portal checks on the CS2 mesh) takes about 0.25 s at
 start-up in Node.
