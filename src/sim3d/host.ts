@@ -57,13 +57,21 @@ import {
 } from '../contracts/index';
 import weaponsJson from '../../data/weapons.json';
 import {
+  FIRST_SWING_SEC,
+  KNIFE_HULL_HALF,
+  KNIFE_RANGE,
   applyHit,
+  armorPen,
   armsContext,
   cameraAngles,
   compensatedView,
   crosshairAngles,
   damageAfterHitgroup,
   freshArms,
+  isBackstab,
+  knifeAttackFor,
+  knifeDamage,
+  knifeDelays,
   maxSpeedOf,
   nextShotPunch,
   parseWeaponTable,
@@ -89,7 +97,7 @@ import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, t
 import { MeshGrenadeNav, MeshSight, meshSightOptionsFromTuning, scriptedHitThroughGeometry } from '../sim2d/mesh-sight';
 import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning } from '../sim2d/vision';
 import type { AiDebug, BlockedPair, CombatLogLine, HostNote, InventoryItem, PawnState, RosterEntry, Sim2DOptions, Sim2DVision } from '../sim2d/host';
-import { meshSolidQuery, traceShot3, type Shot3, type ShotPawn } from './hitscan';
+import { meshSolidQuery, traceMelee3, traceShot3, type Melee3, type Shot3, type ShotPawn } from './hitscan';
 import {
   armorDamage,
   bulletDamage,
@@ -153,6 +161,15 @@ interface HostState {
   readonly aiSeed: number;
   /** H2: per pawn (pawn order) the weapon mechanics state (accuracy, recoil, punch, scope, tagging); absent in older snapshots. */
   readonly arms?: readonly ArmsState[];
+  /** W1: the knife's next slash / stab ticks of the pawns that have swung (by id); absent while nobody has. */
+  readonly melee?: readonly MeleeTimers[];
+}
+
+/** W1: a pawn's knife timers (fractional ticks): m_flNextPrimaryAttack / m_flNextSecondaryAttack after a swing. */
+interface MeleeTimers {
+  readonly id: PlayerId;
+  readonly slash: number;
+  readonly stab: number;
 }
 
 export class Sim3DHost implements IHost {
@@ -199,6 +216,11 @@ export class Sim3DHost implements IHost {
   private readonly armsCtx: ArmsContext | null;
   /** H2: per pawn (pawn order). */
   private arms: ArmsState[] = [];
+  /** W1: knife timers of the pawns that have swung, sorted by id (state, snapshotted). */
+  private melee: MeleeTimers[] = [];
+  /** W1: knife attacks of the last completed tick (viewmodel, sounds, tests); not state. */
+  private lastSwings: Melee3[] = [];
+  private swingsOut: Melee3[] = [];
   /** H2b: the solids along a bullet on the world mesh, for wall penetration (built on first use). */
   private solids: SolidQuery | null = null;
   /** B1: bots (LIVE AI) and puppets compensate recoil (docs/weapons.md); off only for tests of the old behaviour. */
@@ -309,6 +331,8 @@ export class Sim3DHost implements IHost {
       events: this.events,
       aiSeed: this.aiSeed,
       arms: this.arms,
+      // Only once someone has swung a knife, so a run without one snapshots exactly as before.
+      ...(this.melee.length > 0 ? { melee: this.melee } : {}),
     };
     return { kind: 'host', data: toJsonValue(state) };
   }
@@ -357,6 +381,8 @@ export class Sim3DHost implements IHost {
     this.events = [...copy.events];
     this.aiSeed = copy.aiSeed;
     this.arms = copy.arms !== undefined && copy.arms.length === this.pawns.length ? [...copy.arms] : this.freshArmsAll();
+    this.melee = Array.isArray(copy.melee) ? [...copy.melee] : [];
+    this.lastSwings = [];
     this.seesCache = null;
     this.aiInputs = [];
     this.lastShots = [];
@@ -376,6 +402,7 @@ export class Sim3DHost implements IHost {
     const t = this.tickNo;
     this.outbox = [];
     this.shotsOut = [];
+    this.swingsOut = [];
     this.stepLiveAi(t);
     const locked = lockedPawns(this.bomb, t, this.bombPawns(), this.tuning.bomb);
     this.moveAll(t, locked);
@@ -397,12 +424,19 @@ export class Sim3DHost implements IHost {
     this.outbox = [];
     this.lastShots = this.shotsOut;
     this.shotsOut = [];
+    this.lastSwings = this.swingsOut;
+    this.swingsOut = [];
     this.seesCache = null;
   }
 
   /** H1: the bullets fired on the last tick (eye, impact, victim, hitgroup), in firing order. Not part of observe(). */
   shots(): readonly Shot3[] {
     return this.lastShots.map((x) => ({ ...x, from: copyVec(x.from), to: copyVec(x.to) }));
+  }
+
+  /** W1: the knife attacks of the last tick (slash / stab, what they hit), in pawn order. Not part of observe(). */
+  swings(): readonly Melee3[] {
+    return this.lastSwings.map((x) => ({ ...x, from: copyVec(x.from), to: copyVec(x.to) }));
   }
 
   /** H1: the sight and bullet mesh (the world, no player clips). */
@@ -749,6 +783,7 @@ export class Sim3DHost implements IHost {
         motion,
       });
     }
+    if (p.weapon === 'knife' && ctx !== null && this.mechanical(p)) this.stepKnife(p, t, buttons, ctx);
     const step = stepWeapon(p.wpn, {
       tick: t,
       item: p.weapon,
@@ -803,6 +838,42 @@ export class Sim3DHost implements IHost {
       }
     }
     if (step.thrown && isGrenade(p.weapon)) this.throwHeld(p, t);
+  }
+
+  /**
+   * W1 (#38): the knife of a mechanical pawn (the human, LIVE bots; puppets keep their recorded outcomes): mouse 1
+   * slashes, mouse 2 stabs, on CS:GO / CS2's timers, reach, backstab rule and damage (src/engine/weapons/knife.ts);
+   * the trace is hitscan.ts traceMelee3. A hit is `generic` (MASK_SOLID hits the collision box, not a hitbox): ×1,
+   * armored, 85 % through armor (m_flArmorRatio 1.7). Damage, kills and blocked duels go as a bullet's do.
+   */
+  private stepKnife(p: PawnState, t: number, buttons: readonly string[], ctx: ArmsContext): void {
+    if (!reached(t, p.wpn.deployEndTick)) return;
+    const timers = this.melee.find((m) => m.id === p.id);
+    // The deploy sets both timers (m_flNextPrimaryAttack = deploy end), as in CS.
+    const slashAt = Math.max(timers?.slash ?? 0, p.wpn.deployEndTick);
+    const stabAt = Math.max(timers?.stab ?? 0, p.wpn.deployEndTick);
+    const attack = knifeAttackFor(buttons.includes('ATTACK'), buttons.includes('ATTACK2'), reached(t, slashAt), reached(t, stabAt));
+    if (attack === null) return;
+    // bFirstSwing = m_flNextPrimaryAttack + 0.4 < curtime.
+    const firstSwing = slashAt + FIRST_SWING_SEC * TICKS_PER_SEC < t;
+    const world = this.meshSight.geometry();
+    const tr = traceMelee3(shotPawn(p), this.pawns.map((q) => shotPawn(q)), world, this.tuning.damage, attack, KNIFE_RANGE[attack], KNIFE_HULL_HALF, (q) => hullOf(q.crouching));
+    const d = knifeDelays(attack, tr.victim !== null || tr.wall);
+    const next: MeleeTimers = { id: p.id, slash: roundNumber(t + d.slash * TICKS_PER_SEC), stab: roundNumber(t + d.stab * TICKS_PER_SEC) };
+    this.melee = [...this.melee.filter((m) => m.id !== p.id), next].sort((a, b) => compareOrdinal(a.id, b.id));
+    if (tr.victim === null) {
+      this.swingsOut.push(tr);
+      return;
+    }
+    const victim = this.pawn(tr.victim) as PawnState;
+    const backstab = isBackstab(p.move.pos, victim.move.pos, victim.move.yaw);
+    const raw = knifeDamage(attack, backstab, firstSwing);
+    this.swingsOut.push({ ...tr, backstab, damage: raw });
+    const dmg = armorDamage(raw, armorPen(weaponDef(ctx.table, 'knife')), victim.armor, isArmored('generic', victim.helmet), this.tuning.damage);
+    if (p.id === this.human && this.isBlocked(p.id, victim.id)) this.outbox.push({ type: 'blocked_hit', attacker: p.id, victim: victim.id, weapon: p.weapon, hitgroup: 'generic' });
+    const vi = this.pawnIndex(victim.id);
+    if (vi >= 0 && !this.isBlocked(p.id, victim.id)) this.arms[vi] = applyHit(ctx, this.arms[vi] as ArmsState, 'knife', victim.armor > 0);
+    this.engineDamage(p.id, victim, p.weapon, 'generic', dmg);
   }
 
   private throwHeld(p: PawnState, t: number): void {
@@ -1068,6 +1139,7 @@ export class Sim3DHost implements IHost {
       nextAltTick: roundNumber(a.nextAltTick + delta),
       lastShotTick: roundNumber(a.lastShotTick + delta),
     }));
+    this.melee = this.melee.map((m) => ({ ...m, slash: roundNumber(m.slash + delta), stab: roundNumber(m.stab + delta) }));
     for (const p of this.pawns) {
       p.wpn = shiftWeaponState(p.wpn, delta);
       p.blindUntilTick = p.blindUntilTick === 0 ? 0 : Math.max(0, roundNumber(p.blindUntilTick + delta));

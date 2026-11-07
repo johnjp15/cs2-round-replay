@@ -18,8 +18,9 @@
  * sensitivity (mouse 2 with the AWP / SSG 08); viewmodel_fov 60 in its own camera; the eye eases between 64 and 46
  * through a duck. Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b);
  * the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
- * shake; the crosshair stays at the screen centre (CS2's cl_crosshair_recoil 0; "Crosshair follows recoil" puts it
- * where the next bullet goes).
+ * shake; the crosshair stays at the centre (CS2's cl_crosshair_recoil 0; "Crosshair follows recoil" puts it where the
+ * next bullet goes). W1: Q lastinv, F inspect, the knife's slash / stab, wheel jump, the round hotkeys (Enter, P,
+ * Backspace twice) and the Ctrl+W / Ctrl+scroll guards (docs/app3d.md "Controls").
  *
  * URL parameters: `?seed=<int>` (default 1), `?human=cart` plays cart from the start, `?sens=<CS2 sensitivity>`
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
@@ -47,7 +48,9 @@ import { Hud3D } from './hud3d';
 import { runBench } from './bench3d';
 import { FPS_PRESETS, FrameDriver, parseFpsLimit, type FpsLimit } from './frame-driver';
 import { BucketRate, FrameProbe, Ring, displayHz, meterText } from './perf';
-import { DEFAULT_SENSITIVITY, crosshairOffsetPx, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
+import { DEFAULT_SENSITIVITY, LastInv, WheelJump, crosshairOffsetPx, flyStep, fpsInput, lastInvSlots, turnView, wheelJumps, wrapYaw, type Look, type WheelJumpBinds } from './input3d';
+import { HotkeyMatcher, parseHotkeys, type PageHotkey } from './hotkeys3d';
+import { HotkeysDom } from './hotkeys-dom';
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
 import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
@@ -254,10 +257,19 @@ class App3D {
    */
   private recoilTracking = VIEW_RECOIL_TRACKING;
   /**
-   * W1 (#32, #77): CS2's cl_crosshair_recoil (default 0: the crosshair stays at the centre, the view kicks by the
-   * recoil tracking; the bullet still goes where the aim punch puts it). The "Crosshair follows recoil" setting.
+   * W1 (#32): CS2's cl_crosshair_recoil (default 0: the crosshair stays at the centre, the view kicks by the recoil
+   * tracking; the bullet still goes where the aim punch puts it). The "Crosshair follows recoil" setting.
    */
   private crosshairRecoil = false;
+  /** W1 (#40): +jump on the wheel (the Keys group's checkboxes) and the notch latched for the next tick. */
+  private wheelBinds: WheelJumpBinds = { down: false, up: false };
+  private readonly wheelJump = new WheelJump();
+  /** W1 (#41): Q = lastinv: the human's previous item. */
+  private readonly lastInv = new LastInv();
+  /** W1 (#49): Start / Pause / Restart hotkeys (Enter, P, Backspace twice). */
+  private readonly hotkeys = new HotkeyMatcher();
+  /** W1 (#53): go fullscreen with the keyboard locked on Start / takeover / a click into the game (setting). */
+  private autoFullscreen = true;
   /** The camera's duck amount (0..1, view-cs2.ts duckStep). */
   private duck = 0;
   private session: Session;
@@ -340,6 +352,12 @@ class App3D {
       onAttack2: () => {
         if (!this.playing()) this.spectateClick(-1);
       },
+      onWheel: (dy) => {
+        if (this.playing() && wheelJumps(this.wheelBinds, dy)) this.wheelJump.notch();
+      },
+    });
+    canvas.addEventListener('mousedown', () => {
+      if (this.playing()) this.autoFull();
     });
     this.controls.keyMap = keyMapFor(this.keys.binds);
     this.keys.onChange((b) => (this.controls.keyMap = keyMapFor(b)));
@@ -353,9 +371,13 @@ class App3D {
       // Under Keyboard Lock the browser no longer frees the mouse on a short Esc: do it here.
       onEscape: () => document.exitPointerLock(),
       onChange: () => this.updateControls(),
+      banner: document.getElementById('ctrlw-banner'),
     });
     const keybinds = document.getElementById('keybinds');
-    if (keybinds !== null) new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+    if (keybinds !== null) {
+      new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+      this.wireW1Keys(keybinds);
+    }
     this.wireSettings();
     this.buttons = {
       start: el('start', HTMLButtonElement),
@@ -492,6 +514,7 @@ class App3D {
     const s = this.session;
     const act = s.step();
     const o = s.observe();
+    if (s.human !== null) this.lastInv.observe(o.pawns.find((p) => p.id === s.human)?.weapon ?? null);
     const h = this.host();
     const tick = o.tick - 1;
     for (const shot of h.shots()) {
@@ -526,6 +549,9 @@ class App3D {
       s.control({ type: 'speed', x: 1 });
     }
     s.takeControl(target);
+    this.lastInv.reset();
+    this.wheelJump.reset();
+    this.autoFull();
     const p = this.scene.pawn(s.human ?? this.followed);
     if (p !== null) this.look = { yaw: p.yaw, pitch: p.pitch };
     this.controls.release();
@@ -545,6 +571,8 @@ class App3D {
     this.session.cancelSeek();
     this.seekResume = null;
     this.session.restart();
+    this.lastInv.reset();
+    this.wheelJump.reset();
     this.scene = this.ready(this.session);
     this.updateControls();
   }
@@ -656,6 +684,29 @@ class App3D {
 
   private onKey(code: string): boolean {
     const s = this.session;
+    // W1 (#49): the round hotkeys (keys no control of the game has; Restart wants a second press within 1 s).
+    if (!this.controls.keyMap.has(code)) {
+      const k = this.hotkeys.press(code, performance.now());
+      if (k !== null) {
+        this.hotkey(k);
+        return true;
+      }
+      if (code === this.hotkeys.keys.restart) return true;
+    }
+    if (this.playing() && !this.controls.keyMap.has(code)) {
+      // W1 (#41): Q = lastinv (CS2's default bind): back to the previous item, with its deploy.
+      if (code === 'KeyQ') {
+        const h = s.human as PlayerId;
+        const carried = (this.host().pawnState(h)?.inventory ?? []).map((q) => q.item);
+        for (const slot of lastInvSlots(this.lastInv.previous, this.scene.pawn(h)?.weapon ?? '', carried)) s.requestWeaponSlot(slot);
+        return true;
+      }
+      // W1 (#42): F = +lookatweapon: the viewmodel's inspect (no gameplay effect).
+      if (code === 'KeyF') {
+        if (this.zoom === 0) this.a1.inspect(this.scene.cur.tick, this.scene.renderTick(interpolationAlpha(this.loop.pending, TICK_MS)));
+        return true;
+      }
+    }
     if (code === 'KeyE' && s.human === null) {
       this.takeControl();
       return true;
@@ -679,11 +730,50 @@ class App3D {
       this.spectateStep(1);
       return true;
     }
-    if (code === 'KeyP') {
-      this.togglePause();
-      return true;
-    }
     return false;
+  }
+
+  /** W1 (#49): a round hotkey. */
+  private hotkey(k: PageHotkey): void {
+    if (k === 'start') {
+      if (this.phase === 'ready') {
+        this.start();
+        this.autoFull();
+      }
+    } else if (k === 'pause') this.togglePause();
+    else this.restart();
+    this.updateControls();
+  }
+
+  /** W1 (#53): fullscreen with Keyboard Lock, unless the setting is off (desktop only; needs a user gesture). */
+  private autoFull(): void {
+    if (this.autoFullscreen && !this.touchOnly && !this.guard.fullscreen) void this.guard.enter();
+  }
+
+  /** W1: the Keys group's round hotkeys (#49) and the wheel-jump checkboxes (#40), persisted with the settings. */
+  private wireW1Keys(container: HTMLElement): void {
+    new HotkeysDom(container, this.hotkeys.keys, (code) => this.controls.keyMap.has(code), (h) => {
+      this.hotkeys.keys = h;
+      this.saveSettings();
+    }, { start: document.getElementById('start') as HTMLButtonElement | null, pause: document.getElementById('pause') as HTMLButtonElement | null, restart: document.getElementById('restart') as HTMLButtonElement | null });
+    const check = (key: keyof WheelJumpBinds, text: string, title: string): void => {
+      const label = document.createElement('label');
+      label.className = 'keys-check';
+      label.title = title;
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.id = `set-wheel-jump-${key}`;
+      box.checked = this.wheelBinds[key];
+      box.addEventListener('change', () => {
+        this.wheelBinds = { ...this.wheelBinds, [key]: box.checked };
+        this.saveSettings();
+        box.blur();
+      });
+      label.append(box, text);
+      container.append(label);
+    };
+    check('down', 'Jump on scroll down', 'CS2 bind mwheeldown +jump: every wheel notch down is a jump press (the weapon wheel does nothing here).');
+    check('up', 'Jump on scroll up', 'CS2 bind mwheelup +jump: every wheel notch up is a jump press.');
   }
 
   private togglePause(): void {
@@ -704,7 +794,10 @@ class App3D {
         this.updateControls();
       });
     };
-    on(b.start, () => this.start());
+    on(b.start, () => {
+      this.start();
+      this.autoFull();
+    });
     on(b.pause, () => this.togglePause());
     on(b.restart, () => this.restart());
     on(b.takeover, () => this.takeControl());
@@ -757,7 +850,10 @@ class App3D {
       if (p !== null) this.setZoom(p.weapon, av.zoom, av.fov4x3);
       this.look = turnView(this.look, mouse.dx, mouse.dy, effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio));
       // H2b: the input carries the plain view; the host adds the aim punch × weapon_recoil_scale and the inaccuracy cone.
-      const inp = fpsInput(s.human as PlayerId, this.controls.controls(), this.look);
+      if (av.zoom > 0) this.a1.cancelInspect();
+      // W1 (#40): a wheel notch bound to +jump holds JUMP until a tick has seen it (WheelJump).
+      const held = this.controls.controls();
+      const inp = fpsInput(s.human as PlayerId, this.wheelJump.held() ? { ...held, jump: true } : held, this.look);
       s.setHumanInput(inp);
       this.a1.input(inp, p, this.scene.cur.tick, this.scene.cur.round.bomb.state === 'planted');
     } else if (this.camMode === 'free') {
@@ -769,6 +865,7 @@ class App3D {
     const t0 = performance.now();
     this.probe.mark('input', t0);
     const n = this.loop.advance(dt);
+    this.wheelJump.ticksRan(n);
     const t1 = performance.now();
     this.probe.mark('sim', t1);
     this.frames++;
@@ -957,7 +1054,7 @@ class App3D {
     const canTake = human === null && s.takeControlBlocked(this.takeTarget()) === null && !this.touchOnly;
     const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake, this.takeTarget() ?? 'cart');
     const r = this.renderer.renderer.domElement;
-    // W1 (#32, #77): the crosshair stays at the centre (CS2's cl_crosshair_recoil 0: it shows the view, the bullet goes
+    // W1 (#32): the crosshair stays at the centre (CS2's cl_crosshair_recoil 0: it shows the view, the bullet goes
     // where the aim punch puts it); with "Crosshair follows recoil" it sits where the next bullet goes.
     const off = (firstPerson || specPov) && !scoped ? crosshairOffsetPx(this.crosshairRecoil, { yaw, pitch }, aim, (c, a) => aimOffsetPx(c, a, vfovDeg, r.clientHeight)) : { x: 0, y: 0 };
     const radarTeam = firstPerson ? (humanPawn?.team ?? null) : viewTeam;
@@ -1070,10 +1167,14 @@ class App3D {
   /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
   private loadSettings(sensFromUrl: boolean): void {
     try {
-      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatency?: boolean; res?: number; recoilTracking?: number; crosshairRecoil?: boolean };
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatencyOptIn?: boolean; res?: number; recoilTracking?: number; crosshairRecoil?: boolean; wheelJump?: { down?: unknown; up?: unknown }; hotkeys?: unknown; autoFullscreen?: boolean };
       if (typeof j.crosshairRecoil === 'boolean') this.crosshairRecoil = j.crosshairRecoil;
+      if (typeof j.autoFullscreen === 'boolean') this.autoFullscreen = j.autoFullscreen;
+      if (typeof j.wheelJump === 'object' && j.wheelJump !== null) this.wheelBinds = { down: j.wheelJump.down === true, up: j.wheelJump.up === true };
+      this.hotkeys.keys = parseHotkeys(j.hotkeys);
       this.fpsLimit = parseFpsLimit(j.fps);
-      if (typeof j.lowLatency === 'boolean') this.lowLatency = j.lowLatency;
+      // W1 (#78): off by default (it may flicker); an older stored `lowLatency` no longer counts, so everyone starts off.
+      if (typeof j.lowLatencyOptIn === 'boolean') this.lowLatency = j.lowLatencyOptIn;
       if (typeof j.res === 'number' && Number.isFinite(j.res)) this.resScale = clamp(j.res, 0.25, 2);
       if (j.radar === 'cs2' || j.radar === 'all') this.radarRules = j.radar;
       if (!sensFromUrl && typeof j.sensitivity === 'number') this.sensitivity = clamp(j.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX);
@@ -1087,7 +1188,7 @@ class App3D {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatency: this.lowLatency, res: this.resScale, crosshairRecoil: this.crosshairRecoil }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatencyOptIn: this.lowLatency, res: this.resScale, crosshairRecoil: this.crosshairRecoil, wheelJump: this.wheelBinds, hotkeys: this.hotkeys.keys, autoFullscreen: this.autoFullscreen }));
     } catch {
       // ignore
     }
@@ -1112,15 +1213,18 @@ class App3D {
     field('set-zoom', () => this.zoomRatio, (v) => (this.zoomRatio = clamp(v, 0.01, 3)));
     field('set-vmfov', () => this.viewmodelFov, (v) => (this.viewmodelFov = clamp(v, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX)));
     field('set-tracking', () => this.recoilTracking, (v) => (this.recoilTracking = clamp(v, 0, 1)));
-    const xhair = document.getElementById('set-xhair-recoil');
-    if (xhair instanceof HTMLInputElement) {
-      xhair.checked = this.crosshairRecoil;
-      xhair.addEventListener('change', () => {
-        this.crosshairRecoil = xhair.checked;
+    const box = (id: string, get: () => boolean, set: (v: boolean) => void): void => {
+      const input = document.getElementById(id);
+      if (!(input instanceof HTMLInputElement)) return;
+      input.checked = get();
+      input.addEventListener('change', () => {
+        set(input.checked);
         this.saveSettings();
-        xhair.blur();
+        input.blur();
       });
-    }
+    };
+    box('set-xhair-recoil', () => this.crosshairRecoil, (v) => (this.crosshairRecoil = v));
+    box('set-autofs', () => this.autoFullscreen, (v) => (this.autoFullscreen = v));
     this.wirePerfSettings(field);
   }
 

@@ -41,7 +41,14 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
 
 ## Controls
 
-Watching (default, every device) and dead: spectating, as CS2 (below). P pause.
+Watching (default, every device) and dead: spectating, as CS2 (below).
+
+**Round hotkeys (W1, #49)**: **Enter** starts the round, **P** pauses / resumes, **Backspace twice within 1 s**
+restarts (one accidental tap does nothing). None is near a hand on WASD and the mouse, none is a CS2 default bind;
+they work while the pointer is locked. Rebindable under **Keys** (Start / Pause / Restart buttons there): game keys
+(WASD, Q, E, R, F, G, B, C, T, V, Z, X, 1–5, Space, Ctrl, Shift, Alt, Tab, the arrows, the rebindable controls'
+keys) and browser keys (Esc, ⌘, F11, F12) are refused; the page's Start / Pause / Restart buttons show the bindings
+as tooltips. src/app3d/hotkeys3d.ts, hotkeys-dom.ts; kept in the settings (`hotkeys`).
 
 **E** or the button takes control of cart from that tick (the speed drops to 1×; the pointer is locked): mouse look,
 W / S forward / back and A / D strafe relative to the view (CS2's), Space jump, Ctrl or C duck, Shift walk, mouse 1
@@ -49,8 +56,54 @@ fire / throw, mouse 2 scope (the input's ATTACK2: the scope is the engine's, H2b
 data/weapons.json, scoped accuracy and speed, a reload or a bolt cycle drops it), R reload, 1–5 weapon slots (as the 2D app), E use (plant, defuse). Esc frees the mouse. Dead,
 the camera spectates again (your living teammates first, as CS2 competitive's mp_forcecamera 1). G (drop) is not implemented: the engine has no dropped weapons yet (H4).
 
+W1 additions (CS2's default binds):
+
+- **Q** = `lastinv`: back to the item held before the last switch (knife ↔ rifle, grenades too: as many slot-4
+  presses as the grenade cycle needs), each switch with its deploy time (the host's `set_weapon`). It goes through
+  the Session's taped slot presses (`requestWeaponSlot`), so a rewind replays it (input3d.ts `lastInvSlots`,
+  `LastInv`).
+- **F** = `+lookatweapon`: a 2.5 s inspect of the viewmodel per class (rifles and snipers rolled to both sides,
+  pistols turned and flipped, the knife spun round its axis, C4 / grenades turned over; viewmodels/pose.ts
+  `inspectPose`). A shot, a swing, a switch, a reload, a throw, the pin or the scope cuts it off. No gameplay effect.
+- **Knife**: mouse 1 slashes, mouse 2 stabs, with CS's numbers (docs/weapons.md "Knife"); the viewmodel slashes
+  (alternating direction) and stabs as the host swings, with the slash / hit / wall sounds.
+- **Jump on scroll down / up** (two checkboxes under Keys, off by default; CS2's `bind mwheeldown +jump`): every
+  wheel notch over the view (under pointer lock or while playing) is a jump press. A notch between two ticks is held
+  until a tick has run with JUMP, then released for a tick, so it registers on the next tick at any frame rate and the
+  next notch is a fresh press (input3d.ts `WheelJump`). The wheel never changes weapons here.
+
 Duck, walk, jump and use are rebindable under **Keys** in the bar (one localStorage setting
 with the 2D page; Reset keys = CS2's defaults).
+
+### Ctrl+W, Ctrl+scroll and pinch zoom (W1, #35, #53)
+
+John: "totally block the ctrl+w and ctrl+scroll inputs". What the page does:
+
+- **Ctrl / ⌘ + wheel and trackpad pinch never zoom the page**: a non-passive capture `wheel` listener on the window
+  cancels every wheel event with ctrlKey or metaKey (Chromium and Firefox send a trackpad pinch as a Ctrl+wheel),
+  anywhere on the page, pointer-locked or not; Safari's `gesturestart / change / end` are cancelled too; the view
+  has `touch-action: none`. Under pointer lock (or over the view while playing) every wheel event is cancelled (no
+  page scroll).
+- **Ctrl+W / Ctrl+S**: cancelled in the capture phase of the window `keydown` (before anything else; not stopped,
+  the movement still needs the W).
+- **Auto fullscreen** (setting, on by default): Start, taking control and a click into the game while playing go
+  fullscreen and lock the keyboard (`navigator.keyboard.lock`, play-guard.ts `enter()`), so in Chromium Ctrl+W
+  reaches the page and is blocked. Off: only ⛶ does it.
+- **Banner**: while you play and Ctrl+W can still close the tab, a line at the bottom says "Press ⛶ for fullscreen to
+  disable Ctrl+W" (or, without Keyboard Lock, that the browser asks before leaving).
+- The `beforeunload` leave-site guard stays for what no page can block.
+
+| Browser | Not fullscreen | Fullscreen |
+| --- | --- | --- |
+| Chrome, Edge, Opera, Brave (Windows, Linux) | Ctrl+W **guarded** (the browser closes tabs before the page sees the key; the "Leave site?" dialog asks first); banner | Ctrl+W **blocked** (Keyboard Lock): crouches forward |
+| Firefox (Windows, Linux) | Ctrl+W **guarded**; banner | Ctrl+W **guarded** (no Keyboard Lock); banner |
+| Safari / any browser on macOS | Ctrl+W is no shortcut (crouches forward); ⌘W **guarded** (no page can capture it) | the same |
+| Ctrl / ⌘ + scroll, trackpad pinch | **blocked** in all of them | **blocked** |
+
+`npm run check:browser:3d:w1` (after `npm run build:3d`) checks in headless Chromium that Ctrl+wheel,
+⌘+wheel and a trackpad pinch (CDP `Input.synthesizePinchGesture`, mouse source) leave `visualViewport.scale`,
+`devicePixelRatio` and `innerWidth` unchanged (the same pinch zooms a page without the game to 2.5×), and that a
+synthesized Ctrl+wheel and Ctrl+W keydown are `defaultPrevented`.
 
 **Ctrl+W** (crouch forward) is "close tab" on Windows and Linux. **⛶ Fullscreen** in the bar enters fullscreen and,
 in Chromium browsers (Chrome, Edge, Opera, Brave; feature-detected `navigator.keyboard.lock`), locks the keyboard, so
