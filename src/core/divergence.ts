@@ -84,12 +84,18 @@ export function tenthsText(ticks: number, signed: boolean): string {
 
 /**
  * Trigger 1, unscripted damage: a `damage` event this tick on `id` from the human or a LIVE pawn (any hit, any weapon,
- * grenades included; world damage and self-damage don't count).
+ * grenades included; world damage and self-damage don't count). D1: nor a hit `recorded(attacker, victim)` says is a
+ * recorded engagement (the human's hits on the target of the recorded duel he is in: his shots there do real damage,
+ * but the duel is the tape's, so the target keeps replaying until he dies).
  */
-export function damageTrigger(o: Observe, modes: readonly PawnMode[], id: PlayerId): TriggerHit | null {
+/** D1: true when a hit of `attacker` on `victim` is part of a recorded engagement (HumanDuels.engaged). */
+export type RecordedHit = (attacker: PlayerId, victim: PlayerId) => boolean;
+
+export function damageTrigger(o: Observe, modes: readonly PawnMode[], id: PlayerId, recorded: RecordedHit | null = null): TriggerHit | null {
   for (const e of o.events) {
     if (e.type !== 'damage' || e.victim !== id || e.attacker === null || e.attacker === id) continue;
     if (!isOffScript(o, modes, e.attacker)) continue;
+    if (recorded !== null && recorded(e.attacker, id)) continue;
     return { id, trigger: 'damage', reason: `hit by ${e.attacker} (${intText(e.amount)} hp${e.weapon === null ? '' : `, ${e.weapon}`})` };
   }
   return null;
@@ -720,6 +726,8 @@ export class Divergence {
   private st: DivergenceState;
   /** G8: the LIVE pawns whose fate went on the last `step` (they got the survivor's goal), with the trigger, id order. */
   regoaled: { id: PlayerId; trigger: 'fate' | 'outlived' }[] = [];
+  /** D1: hits the damage trigger ignores (the human's hits on his recorded duel's target); set by ReplayCore. */
+  recordedHit: RecordedHit | null = null;
 
   constructor(model: RoundModel, schedule: EventSchedule, plan: ScriptPlan, tuning: Tuning) {
     this.model = model;
@@ -811,7 +819,7 @@ export class Divergence {
       const fate = this.isForGood(id) ? fateGone(o, this.model, id, this.tuning) : null;
       const hit =
         (fate === null ? null : { id, trigger: fate.trigger, reason: fate.reason }) ??
-        damageTrigger(o, modes, id) ??
+        damageTrigger(o, modes, id, this.recordedHit) ??
         sightingTrigger(o, modes, id, this.model, this.index, encs, states, this.tuning) ??
         gunfireTrigger(o, modes, id, this.model, this.index, encs, states, this.tuning) ??
         outlivedTrigger(o, this.model, id, this.tuning) ??

@@ -116,10 +116,9 @@ describe('a takeover at T (G4)', () => {
       const cart = g.observe.pawns.find((p) => p.id === 'cart');
       expect(logsAt(r, k)[0]).toBe(`takeover: cart is the human from tick ${k} (${cart?.hp ?? 0} hp, ${cart?.weapon ?? ''}); 11 damage blocks lifted`);
       // Nothing moves him (a puppet's own snap on that tick, barely's at 45 s, is the golden master's too), and nothing
-      // re-blocks him but the recorded duel he is in (G5: taken over at the window, 17.6–18.6 s, his bullets on Lokier).
+      // re-blocks him: D1 (John 13:10), his bullets are real inside his recorded duels too (G5 blocked cart>lokier at 18–18.6 s).
       const reblocked = e.act.actions.flatMap((a) => (a.type === 'block_damage' && (a.attacker === 'cart' || a.victim === 'cart') ? [`${a.attacker}>${a.victim}`] : []));
-      // G6: not at 17.6 s: Lokier sees him at the window from tick 1138 on the CS2 mesh, after that takeover.
-      expect(reblocked, `T = ${t}`).toEqual(t >= 18 && t <= 18.6 ? ['cart>lokier'] : []);
+      expect(reblocked, `T = ${t}`).toEqual([]);
       expect(e.act.actions.some((a) => (a.type === 'teleport' || a.type === 'set_mode') && a.id === 'cart')).toBe(false);
       // From the takeover on: HUMAN since T while alive, never in the Core's inputs, no scripted damage to or from him.
       for (let i = k; i < r.entries.length; i++) {

@@ -148,6 +148,8 @@ export class ReplayCore implements ICore {
     this.divergenceOn = options === null || options.divergence;
     this.rejoin = walk === null || !this.divergenceOn || options?.rejoin === false ? null : new Rejoin(model, schedule, tuning, this.divergence, this.script, walk);
     this.duels = new HumanDuels(model, this.script.plan, this.divergence.encounters, tuning);
+    // D1: the human's hits on his recorded duel's target don't make it LIVE (the duel is the tape's).
+    this.divergence.recordedHit = (a, v) => this.duels.engaged(a, v);
     this.state = initialState();
     this.loadout = initialLoadouts(model);
   }
@@ -236,7 +238,7 @@ export class ReplayCore implements ICore {
         }
       }
       // G5: the human's recorded duels (after this tick's switches, so a target that just went LIVE is out of it).
-      this.duels.step(o, s.pawns, this.divergence.encounters, this.divergence.state.encounters, this.script, actions);
+      this.duels.step(o, s.pawns, this.divergence.encounters, this.divergence.state.encounters, actions);
     }
 
     this.scheduledActions(o, actions);
@@ -375,14 +377,13 @@ export class ReplayCore implements ICore {
     return out;
   }
 
-  /** B4 encounter blocks in force (the scripted hit's block_damage shooter → human, not yet lifted), then G5's duel blocks (human → target). */
+  /** B4 encounter blocks in force (the scripted hit's block_damage shooter → human, not yet lifted). D1: the duels block nothing. */
   private standingBlocks(): StandingBlock[] {
     const out: StandingBlock[] = [];
     const st = this.divergence.state.encounters;
     this.divergence.encounters.forEach((e, i) => {
       if (st[i]?.blocked === true) out.push({ attacker: e.shooter, victim: e.victim });
     });
-    for (const b of this.duels.standingBlocks()) out.push(b);
     return out;
   }
 
