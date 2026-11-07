@@ -1,0 +1,149 @@
+{
+  "name": "kill-lokier-early",
+  "description": "G7: cart runs ahead of his recording (from 6 s) through the Apartments to the window and fights Lokier there about 4 s before the recorded duel: Lokier, scoped on the corridor from Truck, sees him in it first, goes LIVE and shoots (a real hit); cart's real headshot kills him. Lokier's recorded kill of eradicate (12.75 s) is dropped. Then cart plays his recording again: the survivors rejoin their tape where it still makes sense, the Ts' push and plant go on, donk and barely carry on.",
+  "human": "cart",
+  "seed": 1,
+  "until": "end",
+  "steps": [
+    {
+      "do": "followRecording",
+      "until": 6.0
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -605,
+        604
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -672,
+        589
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -763,
+        563
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -804,
+        562
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -950,
+        582
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1019,
+        595
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1086,
+        611
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1168,
+        669
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1286,
+        685
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1364,
+        703
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1414,
+        707
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1435,
+        724
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1509,
+        757
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1571,
+        736
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1598,
+        770
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1665,
+        792
+      ]
+    },
+    {
+      "do": "aimAt",
+      "id": "lokier"
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1712,
+        700
+      ]
+    },
+    {
+      "do": "fire",
+      "untilDead": true,
+      "maxSec": 2
+    },
+    {
+      "do": "aimAt",
+      "id": null
+    },
+    {
+      "do": "followRecording",
+      "until": 70.6
+    }
+  ]
+}

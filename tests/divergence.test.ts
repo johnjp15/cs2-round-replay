@@ -111,9 +111,14 @@ describe('trigger 2: unscripted sighting', () => {
     expect(sightingTrigger(o(2500), modes(['barely']), 'donk', model, index, encs, waiting, tuning)).toBeNull();
   });
 
-  it('a waiting encounter owns Lokier seeing cart at the recorded spot; elsewhere the normal rule applies', () => {
-    const atSpot = obs(2000, [pawn('lokier', -2139, 439, { sees: ['cart'] }), pawn('cart', -1764 + 100, 800)]);
-    expect(sightingTrigger(atSpot, modes(), 'lokier', model, index, encs, waiting, tuning)).toBeNull();
+  it('a waiting encounter owns Lokier seeing cart at the recorded spot (G7: within encounterWindowSec of the recorded sighting); elsewhere the normal rule applies', () => {
+    const w = Math.round(tuning.replay.encounterWindowSec * 64);
+    const atSpot = (tick: number): Observe => obs(tick, [pawn('lokier', -2139, 439, { sees: ['cart'] }), pawn('cart', -1764 + 100, 800)]);
+    expect(sightingTrigger(atSpot(1117 + w), modes(), 'lokier', model, index, encs, waiting, tuning)).toBeNull();
+    expect(sightingTrigger(atSpot(1117 - w), modes(), 'lokier', model, index, encs, waiting, tuning)).toBeNull();
+    // G7: at the spot 9 s early (or 3 s + a tick late) the encounter doesn't own it: a T in the window, a real fight.
+    expect(sightingTrigger(atSpot(1117 - w - 1), modes(), 'lokier', model, index, encs, waiting, tuning)?.trigger).toBe('sighting');
+    expect(sightingTrigger(atSpot(2000), modes(), 'lokier', model, index, encs, waiting, tuning)?.trigger).toBe('sighting');
     const away = obs(2000, [pawn('lokier', -2139, 439, { sees: ['cart'] }), pawn('cart', -1764 + 300, 800)]);
     expect(sightingTrigger(away, modes(), 'lokier', model, index, encs, waiting, tuning)?.trigger).toBe('sighting');
     const seen: EncounterState[] = [{ key: 'enc:0', phase: 'seen', seenTick: 1990, shotTick: 2054, blocked: false, puppetSightTick: null, puppetSightOnCourse: false }];
@@ -132,13 +137,20 @@ describe('trigger 3: unscripted gunfire nearby', () => {
     expect(gunfireTrigger(obs(2000, [pawn('donk', 0, 0)], [shot('cart', 800)]), modes(), 'donk', model, index, encs, waiting, tuning)).toBeNull();
   });
 
-  it('cart’s recorded fire (18.5–19.0 s, ± expectedGunfireWindowSec) is no divergence, and shifts with a started encounter', () => {
-    expect(gunfireTrigger(obs(1190, [me], [shot('cart', 800)]), modes(), 'zwomp', model, index, encs, waiting, tuning)).toBeNull();
-    expect(gunfireTrigger(obs(1216 + 128, [me], [shot('cart', 800)]), modes(), 'zwomp', model, index, encs, waiting, tuning)).toBeNull();
-    expect(gunfireTrigger(obs(1216 + 129, [me], [shot('cart', 800)]), modes(), 'zwomp', model, index, encs, waiting, tuning)?.trigger).toBe('gunfire');
-    // Seen 3 s late: cart's fire at Lokier is expected 3 s late too.
+  it('cart’s recorded fire (18.5–19.0 s, ± expectedGunfireWindowSec) from about where he fired is no divergence, and shifts with a started encounter', () => {
+    const at = (tick: number): Vec3 => model.trackAtTick('cart', tick)?.pos as Vec3;
+    const from = (source: PlayerId, p: Vec3, dy = 0): ObsEvent => ({ type: 'sound', source, pos: { x: p.x, y: p.y - dy, z: p.z }, kind: 'shot' });
+    const ear = (p: Vec3): PawnObs => pawn('zwomp', p.x + 800, p.y);
+    expect(gunfireTrigger(obs(1190, [ear(at(1190))], [from('cart', at(1190))]), modes(), 'zwomp', model, index, encs, waiting, tuning)).toBeNull();
+    expect(gunfireTrigger(obs(1216 + 128, [ear(at(1344))], [from('cart', at(1344))]), modes(), 'zwomp', model, index, encs, waiting, tuning)).toBeNull();
+    expect(gunfireTrigger(obs(1216 + 129, [ear(at(1345))], [from('cart', at(1345))]), modes(), 'zwomp', model, index, encs, waiting, tuning)?.trigger).toBe('gunfire');
+    // G7: the same gun in the recorded window but from somewhere else (500 u south of his track) is not the recording.
+    expect(gunfireTrigger(obs(1190, [ear(at(1190))], [from('cart', at(1190), 500)]), modes(), 'zwomp', model, index, encs, waiting, tuning)?.trigger).toBe('gunfire');
+    // Seen 3 s late: cart's fire at Lokier is expected 3 s late too, from the encounter's spot.
     const late: EncounterState[] = [{ key: 'enc:0', phase: 'fired', seenTick: 1117 + 192, shotTick: 1117 + 256, blocked: false, puppetSightTick: null, puppetSightOnCourse: false }];
-    expect(gunfireTrigger(obs(1216 + 192 + 64, [me], [shot('cart', 800)]), modes(), 'zwomp', model, index, encs, late, tuning)).toBeNull();
+    const spot = encs[0]?.spot as Vec3;
+    expect(gunfireTrigger(obs(1216 + 192 + 64, [ear(spot)], [from('cart', spot)]), modes(), 'zwomp', model, index, encs, late, tuning)).toBeNull();
+    expect(gunfireTrigger(obs(1216 + 192 + 64, [ear(spot)], [from('cart', spot, 400)]), modes(), 'zwomp', model, index, encs, late, tuning)?.trigger).toBe('gunfire');
   });
 });
 
