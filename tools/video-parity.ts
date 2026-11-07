@@ -247,7 +247,7 @@ async function main(): Promise<void> {
           out, video: join(OUT, 'truth', 'frames', `f_${String(tt.frame).padStart(5, '0')}.jpg`), sim: shot?.path ?? null, simRadar: shot === undefined,
           title: `${name} · t ${tt.t.toFixed(3)} s · tick ${f.tick} · frame ${tt.frame} · camera ${f.watched ?? f.layout} · ${f.verdict.toUpperCase()}`,
           lines: [`HUD (video|sim): ${hudLine || '-'}`, ...(failing.length === 0 ? [] : [`FAIL ${failing.join(' · ')}`])],
-          dots: f.players.filter((p) => p.video !== null || p.sim !== null).map((p) => ({ id: p.id, colour: p.source === 'recording-inferred' ? 'ct' : COLOUR[p.id], video: p.source === 'video-dot' ? p.video : null, sim: p.sim, ok: p.verdict !== 'fail' })),
+          dots: f.players.filter((p) => p.video !== null || p.sim !== null).map((p) => ({ id: p.id, colour: p.source === 'video-dot' || p.source === 'recording-observed' ? COLOUR[p.id] : 'ct', video: p.source === 'video-dot' || p.source === 'recording-observed' ? p.video : null, sim: p.sim, ok: p.verdict !== 'fail' })),
         });
       }
     }
@@ -269,7 +269,7 @@ async function main(): Promise<void> {
   writeFileSync(join(OUT, 'index.html'), html(APP, reports, sheetsOf));
   for (const s of summaries) {
     log(`${s.run}: ${s.pass}/${s.timestamps} timestamps pass; radar ${s.radar.checks} checks, ${s.radar.fail} > 40 u, RMS ${s.radar.rms} u, worst ${s.radar.max} u (${s.radar.maxAt}); ` +
-      `inferred CTs ${s.inferred.fail}/${s.inferred.checks} outside radius; alive/dead ${s.status.fail}; HUD ${Object.entries(s.hud).map(([k, v]) => `${k} ${v.fail}/${v.checks}`).join(', ')}; events ${s.events.fail}/${s.events.checks} (worst ${s.events.worstOffset} ticks)`);
+      `recording-observed ${s.recObserved.fail}/${s.recObserved.checks} > 40 u; inferred CTs ${s.inferred.fail}/${s.inferred.checks} outside radius; alive/dead ${s.status.fail}; HUD ${Object.entries(s.hud).map(([k, v]) => `${k} ${v.fail}/${v.checks}`).join(', ')}; events ${s.events.fail}/${s.events.checks} (worst ${s.events.worstOffset} ticks)`);
   }
   log(`index: ${relative(ROOT, join(OUT, 'index.html'))}`);
   if (WRITE_DOCS !== '') writeDocs(resolve(WRITE_DOCS), summaryMarkdown(APP, date, summaries, reports, true));
