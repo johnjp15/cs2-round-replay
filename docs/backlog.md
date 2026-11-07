@@ -11,7 +11,8 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 - 06:16 check-in #2: 11 agents active and pushing. PR #32 (round-end stutter: the HUD re-parsed the whole 4,500-line session log every frame after round end, 150–250 ms + 9 MB garbage per frame; now parsed incrementally and cached) is green but conflicts with #31's HUD changes — its agent is merging main; merge + deploy at the next check-in.
 - 07:02 check-in #3: a server restart at ~07:00 stopped all ten working agents; nine resumed from their transcripts, two (parity, grenades) relaunched as finishers on their nearly-done branches. **#32 merged and live** (Pages da9bc5d): no more stutter after the round ends.
 - 07:20 **#33 merged and live** (Pages 1a302dd): Ctrl+W fix — ⛶ Fullscreen + Keyboard Lock in Chromium browsers (Ctrl+W just crouch-walks), a leave-site guard elsewhere, a Keys group (Duck/Walk/Jump/Use rebindable, Reset).
-- 07:32 **#34 merged and live**: the Source BSP pipeline, the March-2020 CS:GO files recipe (`docs/csgo-2020-files.md`), and the map-package switch (`?map=mirage-2020`, `--map`). The default map is unchanged. **John's morning step is below.** Next check-in 07:48.
+- 07:32 **#34 merged and live**: the Source BSP pipeline, the March-2020 CS:GO files recipe (`docs/csgo-2020-files.md`), and the map-package switch (`?map=mirage-2020`, `--map`). The default map is unchanged. **John's morning step is below.**
+- 07:49 check-in #4: no open PRs; nine agents alive and pushing (G6 sight, H2b weapons integration, H5 grenades finisher, V0 parity + data fixes, P1 performance, A1 audio/viewmodels, T1 stairs, G7 bots, V2 view fit). Next check-in 08:34.
 
 ## Operating rules John set
 - Merge PRs without asking (2026-11-05). Fable orchestrates; Opus 5.5 agents do the expensive work (2026-11-07 02:02). Permission to read anything on any website (04:26). John's messages are not stop requests; agents stopped by client-side interrupts get resumed.
