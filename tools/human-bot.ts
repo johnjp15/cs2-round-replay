@@ -61,6 +61,7 @@ import { gunStats, throwElevation, type NavMesh } from '../src/sim2d/index';
 import { walkQueryOf } from '../src/app/index';
 import type { Session, SessionData } from '../src/app/index';
 import { FollowAim } from './follow-aim';
+import { parseMapId, type MapId } from '../src/contracts/maps';
 import type { HumanCommand, HumanDriver } from './harness';
 
 /** A step's position: [x, y] (z from the nav floor). */
@@ -86,6 +87,8 @@ export interface Scenario {
   /** G4: seconds; the human takes control on tick round(t × 64) (nobody plays before), or null: from the start. */
   readonly takeover: number | null;
   readonly steps: readonly BotStep[];
+  /** X1: the map package the scenario runs on (docs/maps.md), or null: the harness's `--map` / the default. */
+  readonly map: MapId | null;
 }
 
 export class ScenarioError extends Error {
@@ -171,7 +174,7 @@ export function parseScenario(json: unknown): Scenario {
   const v = typeof json === 'string' ? (JSON.parse(json) as unknown) : json;
   if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new ScenarioError('scenario: expected an object');
   const o = v as Record<string, unknown>;
-  keys(o, ['name', 'description', 'human', 'seed', 'until', 'takeover', 'steps'], 'scenario');
+  keys(o, ['name', 'description', 'human', 'seed', 'until', 'takeover', 'steps', 'map'], 'scenario');
   const human = o['human'] ?? 'cart';
   if (typeof human !== 'string' || !isPlayerId(human)) throw new ScenarioError('scenario.human: expected a player id');
   const until = o['until'] ?? 'end';
@@ -188,7 +191,18 @@ export function parseScenario(json: unknown): Scenario {
     until: until as number | 'end',
     takeover: takeover as number | null,
     steps: steps.map((s: unknown, i) => parseStep(s, `scenario.steps[${i}]`)),
+    map: mapOf(o['map']),
   };
+}
+
+function mapOf(v: unknown): MapId | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string') throw new ScenarioError('scenario.map: expected a map package id');
+  try {
+    return parseMapId(v);
+  } catch (e) {
+    throw new ScenarioError(`scenario.map: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 export function loadScenario(path: string): Scenario {

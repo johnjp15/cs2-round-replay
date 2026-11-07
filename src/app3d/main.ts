@@ -9,7 +9,9 @@
  * third person, or free fly (V cycles; mouse 1 / Space next player, mouse 2 previous; Z / X too), the spectator
  * panel, and the radar under CS2's spotting rules (radar3d.ts; the panel toggle shows everyone). E or "Take control of cart" hands him to the player from that tick on (a speed other than 1× drops to 1×):
  * first-person camera at his eye (64 standing, 46 crouched), pointer-lock mouse look, WASD, Space, Ctrl, Shift,
- * mouse 1, R, 1–5, E (input3d.ts). Dead, the camera goes back to spectating. Restart watches again.
+ * mouse 1, R, 1–5, E (input3d.ts; duck, walk, jump and use rebindable under Keys). ⛶ Fullscreen locks the keyboard
+ * where the browser can, so Ctrl+W crouches forward instead of closing the tab (src/app/play-guard.ts). Dead, the
+ * camera goes back to spectating. Restart watches again.
  *
  * The view is CS2's (view-cs2.ts, with sources): mouse counts × sensitivity × m_yaw / m_pitch (0.022°), no
  * acceleration; FOV 90° horizontal at 4:3, hor+ on wider screens (vertical ≈ 73.74°); scoped FOVs and the zoomed
@@ -20,13 +22,18 @@
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
  */
 import tuningJson from '../../data/tuning.json';
-import type { Observe, PlayerId, Team, Vec3, WeaponId } from '../contracts/index';
+import { parseMapId, type Observe, type PlayerId, type Team, type Vec3, type WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { FixedLoop, RateMeter, TICK_MS } from '../app/loop';
 import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
 import { Session, parseSessionData, type SessionData } from '../app/session';
+import { SummaryCache } from '../app/run-entries';
 import { weaponName } from '../app/hud-model';
 import { startHuman, takeoverButtonView } from '../app/takeover';
+import { keyMapFor } from '../app/input';
+import { KeyBindsStore, pageStorage } from '../app/keybinds';
+import { KeyBindsDom } from '../app/keybinds-dom';
+import { PlayGuard } from '../app/play-guard';
 import { anglesTo, poseHitboxes } from '../engine/hitboxes';
 import { sim3dHostFactory, worldMesh, type Sim3DHost } from '../sim3d/index';
 import type { MapGeometry } from '../sim2d/index';
@@ -38,7 +45,8 @@ import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } 
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
 import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
-import { RadarSampler, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
+import { RadarSampler, buildRenderTiles, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
+import { decodeRenderMesh } from './render-package';
 import {
   DEFAULT_ZOOM_RATIO,
   SENSITIVITY_MAX,
@@ -83,6 +91,8 @@ export interface App3DStats {
   readonly followed: PlayerId;
   readonly look: Look;
   readonly locked: boolean;
+  /** play-guard.ts: the leave-site guard is on, the keyboard is locked (fullscreen, Chromium), the duck key. */
+  readonly guard: { readonly leaveGuard: boolean; readonly keyboardLocked: boolean; readonly fullscreen: boolean; readonly duckKey: string };
   readonly triangles: number;
   readonly humanShots: number;
   readonly humanHits: number;
@@ -178,6 +188,9 @@ class App3D {
   private readonly renderer: Renderer3D;
   private readonly hud: Hud3D;
   private readonly controls: ControlsDom;
+  /** The key-binding setting (duck / walk / jump / use) and the Ctrl+W guard (fullscreen Keyboard Lock, leave-site). */
+  private readonly keys = new KeyBindsStore(pageStorage());
+  private readonly guard: PlayGuard;
   private readonly loop: FixedLoop;
   private readonly fpsMeter = new RateMeter(1000);
   private readonly tpsMeter = new RateMeter(1000);
@@ -223,9 +236,13 @@ class App3D {
   private seekResume: Phase | null = null;
   /** Smoothed per-frame costs (ms): the ticks, the whole draw, the WebGL render call, the HUD. */
   private cost = { sim: 0, draw: 0, render: 0, hud: 0 };
+  /** P1: the end-of-round summary, computed once (run-entries.ts). */
+  private readonly summaryCache = new SummaryCache();
+  /** The last summary line shown (kept while a refresh catches up). */
+  private summaryLine: string | null = null;
   private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; radar: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
-  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number) {
+  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number, render: Uint8Array | null = null) {
     this.data = data;
     this.world = world;
     this.seed = seed;
@@ -234,7 +251,8 @@ class App3D {
     const canvas = el('view', HTMLCanvasElement);
     const rgba = rgbaOf(radar);
     const art = floorArt(rgba);
-    const { tiles } = buildWorldTiles(world, new RadarSampler(art, MIRAGE_RADAR), MIRAGE_RADAR, rgba);
+    // X1: a map package with its own render mesh (?map=mirage-2020) draws that; else the collision mesh coloured from the radar.
+    const tiles = render === null ? buildWorldTiles(world, new RadarSampler(art, MIRAGE_RADAR), MIRAGE_RADAR, rgba).tiles : buildRenderTiles(decodeRenderMesh(render));
     this.session = this.newSession(human);
     this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), resolution);
     this.hud = new Hud3D(radar, MIRAGE_RADAR);
@@ -246,12 +264,29 @@ class App3D {
       },
       onKey: (code) => this.onKey(code),
       onFire: () => this.spectateClick(1),
+      playing: () => this.playing(),
+      keyboardLocked: () => this.guard.keyboardLocked,
       onAttack2: () => {
         const p = this.session.human === null ? null : this.scene.pawn(this.session.human);
         if (this.playing() && p !== null) this.setZoom(p.weapon, nextZoom(p.weapon, this.zoomWeapon === p.weapon ? this.zoom : 0));
         else this.spectateClick(-1);
       },
     });
+    this.controls.keyMap = keyMapFor(this.keys.binds);
+    this.keys.onChange((b) => (this.controls.keyMap = keyMapFor(b)));
+    this.guard = new PlayGuard({
+      button: document.getElementById('fullscreen') as HTMLButtonElement | null,
+      hint: document.getElementById('kbhint'),
+      // The leave-site guard is on while cart is the player's and alive (paused too).
+      playing: () => this.session.human !== null && this.phase !== 'ready' && this.scene.pawn(this.session.human)?.alive === true,
+      binds: () => this.keys.binds,
+      pointerLock: true,
+      // Under Keyboard Lock the browser no longer frees the mouse on a short Esc: do it here.
+      onEscape: () => document.exitPointerLock(),
+      onChange: () => this.updateControls(),
+    });
+    const keybinds = document.getElementById('keybinds');
+    if (keybinds !== null) new KeyBindsDom(keybinds, this.keys, this.guard.mac);
     this.wireSettings();
     this.buttons = {
       start: el('start', HTMLButtonElement),
@@ -601,6 +636,7 @@ class App3D {
     const camText = this.playing() ? 'Camera: first person' : `Camera: ${this.camMode === 'pov' ? '1st person' : this.camMode === 'follow' ? '3rd person' : 'free'}`;
     if (cam !== null && cam.textContent !== camText) cam.textContent = camText;
     b.camera.disabled = this.playing();
+    this.guard.update();
     const radarLabel = b.radar.querySelector('span');
     const radarText = this.radarRules === 'cs2' ? 'Radar: CS2 rules' : 'Radar: show everyone';
     if (radarLabel !== null && radarLabel.textContent !== radarText) radarLabel.textContent = radarText;
@@ -751,6 +787,21 @@ class App3D {
     });
     const r1 = performance.now();
     const over = o.round.phase === 'over' && o.round.endTick !== null && o.tick > o.round.endTick + 128;
+    // P1: the summary line once per (round end, deaths), from log entries parsed a few per frame since the round
+    // ended (run-entries.ts); it used to be summarize(model, log) on every frame (~200 ms each).
+    let summary: string | null = null;
+    if (o.round.phase !== 'over') {
+      this.summaryCache.invalidate();
+      this.summaryLine = null;
+    } else {
+      if (over) {
+        // A test render (exact) parses what is left at once.
+        const sum = this.summaryCache.get(s.model, s.log(), `${o.round.endTick}|${this.scene.deaths.size}|${human ?? ''}`, exact ? Infinity : undefined);
+        summary = sum === null ? null : `${sum.headline}<small>Restart to watch again, or take control of cart earlier.</small>`;
+        if (sum !== null) this.summaryLine = summary;
+        else summary = this.summaryLine;
+      } else this.summaryCache.warm(s.log());
+    }
     const mode = firstPerson ? `You: ${human} · Esc frees the mouse` : human !== null ? `You: ${human} (dead) · spectating` : 'Watching';
     const canTake = human === null && s.canTakeControl && !this.touchOnly;
     const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake);
@@ -773,7 +824,7 @@ class App3D {
       spectate: spec,
       hit: exact || this.lastHit === null ? null : { ageMs: now - this.lastHit.ms, head: this.lastHit.head },
       perf: `${this.fpsMeter.rate(now).toFixed(0)} fps · ${this.tpsMeter.rate(now).toFixed(0)} ticks/s · ${this.loop.speed}×`,
-      summary: over ? `${summarize(s.model, s.log()).headline}<small>Restart to watch again, or take control of cart earlier.</small>` : null,
+      summary: over ? summary : null,
       tick: o.tick,
       nowMs: now,
     });
@@ -915,6 +966,7 @@ class App3D {
       followed: this.followed,
       look: this.look,
       locked: this.controls.locked,
+      guard: { leaveGuard: this.guard.guarded, keyboardLocked: this.guard.keyboardLocked, fullscreen: this.guard.fullscreen, duckKey: this.keys.binds.duck },
       triangles: this.renderer.drawnTriangles,
       humanShots: this.humanShots,
       humanHits: this.humanHits,
@@ -933,10 +985,10 @@ async function boot(): Promise<void> {
     const sensParam = params.get('sens');
     const sens = sensParam === null ? NaN : Number(sensParam);
     const res = Number(params.get('res') ?? '1');
-    const a = await loadAssets3d();
+    const a = await loadAssets3d(parseMapId(params.get('map')));
     const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
     const world = worldMesh(a.world3d.geometry);
-    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : 1);
+    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : 1, a.render);
     status.hidden = true;
   } catch (err) {
     status.textContent = `Could not start: ${err instanceof Error ? err.message : String(err)}`;

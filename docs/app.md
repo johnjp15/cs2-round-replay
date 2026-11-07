@@ -15,7 +15,10 @@ cart** (the button or E) and play him with keyboard and mouse from there while C
 | `timeline.ts` | B5: the timeline scrubber's pure mapping (tick ↔ bar fraction ↔ pointer, video time, `[` / `]`, seek progress) and `TimelineDom`, the bar under the map. | mapping no, `TimelineDom` yes |
 | `summary-overlay.ts` | B5: `summaryView` (a Core `RoundSummary` → display strings), `summaryDue` (2 s after the round end) and `SummaryOverlay`, the end-of-round card. | view no, overlay yes |
 | `loop.ts` | `FixedLoop`: 64 Hz accumulator, speed 0.25–4×, pause, per-frame cap. `RateMeter` for fps / ticks-per-second. | no |
-| `input.ts` | Pure keyboard/mouse → `PawnInput` mapping, key bindings, `weaponForSlot`. | no |
+| `input.ts` | Pure keyboard/mouse → `PawnInput` mapping, key bindings (fixed keys plus the rebindable duck / walk / jump / use: `keyMapFor`, `rebind`, `parseKeyBinds`), the shortcut guard `blocksShortcut`, `weaponForSlot`. | no |
+| `keybinds.ts` | `KeyBindsStore`: the key-binding setting in localStorage (`cs2-sim-keybinds`, shared by the 2D and 3D pages). | no (storage injected) |
+| `keybinds-dom.ts` | The Keys buttons in the controls bar (click a control, press its new key; Reset keys). | yes |
+| `play-guard.ts` | `PlayGuard`: the ⛶ Fullscreen button with Keyboard Lock, and the leave-site (`beforeunload`) guard while playing (see "Ctrl+W" below). | yes |
 | `radar.ts` | World ↔ radar ↔ screen transforms, `fitView`, yaw → screen direction. | no |
 | `scene.ts` | `Scene`: what is drawn, built tick by tick (previous/current observe, statuses, kill feed, tracers, effects, pops, bomb, round end, Core logs); interpolation helpers. | no |
 | `camera.ts` | Zoom, pan, follow, clamp; the camera → `View`. | no |
@@ -150,7 +153,7 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
 | Mouse | Cart faces the cursor (world coordinates) |
 | Left / right button | ATTACK / ATTACK2 |
 | Shift | WALK |
-| Ctrl or C | DUCK |
+| Ctrl or C | DUCK (rebindable under **Keys**; C ducks too while no other control has it) |
 | Space | JUMP (G3; held, it jumps once: a fresh press each jump, as CS2 with `sv_autobunnyhopping 0`; a tap shorter than a frame is latched until the next frame reads the keys) |
 | R / E | RELOAD / USE while playing. **E while watching: take control of cart** (G4; CS2's own key for taking over a spectated bot) |
 | 1 2 3 4 5 | Primary, pistol, knife, grenades (repeat to cycle), C4 (app-side `set_weapon`, see above) |
@@ -169,10 +172,47 @@ the yaw frame of `docs/movement.md`: `forward = d · (cos yaw, sin yaw)`, `side 
 (+side = strafe right). So W at yaw 90 is forward 1, W at yaw 0 is side −1, and D at yaw 90 is side +1.
 The test also checks, through `wishFromInput`, that the wish direction equals the screen direction at any yaw.
 
-Keys are matched by `KeyboardEvent.code` (layout-independent). While the human plays, bound keys have
-their default blocked, except with ⌘ held, so Mac shortcuts still work. On Windows/Linux, Chrome does
-not let a page block Ctrl+W/T/N: crouch with C there. All keys are released when the window loses
+Keys are matched by `KeyboardEvent.code` (layout-independent). While the human plays, bound keys and every Ctrl
+combination have their default blocked, except with ⌘ held, so Mac shortcuts still work. All keys are released when the window loses
 focus. The grenade cycle order (he → flash → smoke → molotov) has not been checked against CS2.
+
+### Ctrl+W, fullscreen and key bindings
+
+Ctrl is CS2's duck and W is forward, so Ctrl+W (crouch-walk forward) is constant; on Windows and Linux it is also the
+browser's "close tab", and Chromium and Firefox act on Ctrl+W / Ctrl+T / Ctrl+N before the page can `preventDefault`
+them. Three layers, shared with the 3D page (`play-guard.ts`, `keybinds.ts`, `keybinds-dom.ts`):
+
+1. **⛶ Fullscreen + Keyboard Lock (the real fix).** The button calls `requestFullscreen()` and then, where the browser
+   has the [Keyboard Lock API](https://developer.mozilla.org/en-US/docs/Web/API/Keyboard/lock) (feature-detected:
+   `navigator.keyboard.lock`), locks the letters, digits, Ctrl, Shift, Alt, Space, Tab, Escape and the arrows
+   (`KEYBOARD_LOCK_CODES`). The keys then reach the page first, and keydown blocks Ctrl+W / S / T / N (also while
+   watching) and every Ctrl combination while playing. With Escape locked the browser leaves fullscreen only on a
+   **held** Esc (it shows its own "Press and hold Esc to exit full screen" banner, and the page shows a hint line); a
+   short Esc goes to the page (the 3D page frees the mouse with it, as before). Leaving fullscreen (held Esc or the
+   button) unlocks.
+2. **Leave-site guard (every browser).** While the player controls a living pawn a `beforeunload` handler is on, so an
+   accidental Ctrl+W outside fullscreen, in Safari or Firefox, or ⌘W on a Mac brings up the browser's "Leave site?"
+   dialog instead of closing the tab silently. It comes off when the player is not playing (watching, dead, round not
+   started). Ctrl+W and Ctrl+S are `preventDefault`ed in keydown in any state as a best effort (it works where the
+   browser lets the page see them first).
+3. **Keys** in the controls bar: Duck, Walk, Jump, Use show their key; click one, press the new key (Esc cancels; a key
+   another of the four has swaps; WASD, arrows, R, 1–5, Escape, Tab, ⌘ and the page's own keys F G T H [ ] V Z X P are
+   refused). Stored in localStorage (`cs2-sim-keybinds`, one setting for both pages); **Reset keys** goes back to CS2's
+   defaults (Ctrl duck, Shift walk, Space jump, E use). C ducks as well unless another control takes it, so moving
+   Duck off Ctrl is one click away (Duck → press C, or Alt).
+
+| Browser | Ctrl+W while playing |
+| --- | --- |
+| Chrome, Edge, Opera, Brave (Windows, Linux, ChromeOS), in ⛶ Fullscreen | crouch-walks forward; the tab stays (Keyboard Lock) |
+| The same, not fullscreen | the browser closes the tab, but the leave-site guard asks first |
+| Firefox, Safari (no Keyboard Lock) | as "not fullscreen": the dialog asks first; rebind Duck to C or Alt to avoid it |
+| macOS, any browser | Ctrl+W is not a shortcut there (tab close is ⌘W), so it just crouches forward. **⌘W can't be captured by any page** (not even with Keyboard Lock); while playing the leave-site dialog asks first |
+| iPhone / iPad | no keyboard play (touch-only devices can't take control); iPhone Safari has no element fullscreen, so the button is hidden |
+
+Checked: `tests/keybinds.test.ts` (Ctrl+W `preventDefault`ed with duck and forward still held, the locked-state
+shortcuts, ⌘ never blocked, rebinding, the store); `npm run check:browser` / `check:browser:3d` dispatch Ctrl+W, Ctrl+T
+and Ctrl+N while playing and require them prevented and the leave-site guard on. Headless Chrome can't show that the
+real browser shortcut is held off; that needs a manual check in desktop Chrome or Edge.
 
 **Timeline (B5)**, the bar under the map: the played part filled, the checkpoints as marks (automatic dim, on demand
 amber), the round end in green, the human's replayable future (the tape) dashed. Drag (or tap) to seek; on the
