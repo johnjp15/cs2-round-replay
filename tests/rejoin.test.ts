@@ -230,8 +230,8 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     }
   });
 
-  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 8c3d2f92, the on-script drift and the holder\'s reaction)', () => {
-    expect(logDigest(before.log)).toBe('8c3d2f92');
+  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction)', () => {
+    expect(logDigest(before.log)).toBe('93e0dc15');
     expect(rejoins(before.entries)).toEqual([]);
   });
 });

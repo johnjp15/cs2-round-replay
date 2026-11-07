@@ -1,14 +1,36 @@
 {
   "name": "cart-dies",
-  "description": "cart is at the Apartments window 9.5 s early (teleported there at 8 s: this tests Core logic, not pathing) and never fires. Lokier, holding the corridor from Truck, sees him at the recorded spot, and his scripted hit lands about 1 s later, time-shifted (cart 27 HP). cart then walks on toward the Balcony, into Lokier's angle: seen away from the window at a time the recording has no duel, he makes Lokier go LIVE, and Lokier kills him for real. The round goes on; the puppets nothing reached keep replaying.",
+  "description": "cart is at the Apartments window 9.5 s early (teleported there at 8 s: this tests Core logic, not pathing) and never fires. Lokier, holding the corridor from Truck, sees him at the recorded spot, 9.4 s before the recorded sighting: G7: outside the encounter window, so the encounter is cancelled and Lokier goes LIVE and fights for real (before G7 his scripted hit was time-shifted to 9.0 s). The round goes on; the puppets nothing reached keep replaying, and the LIVE ones rejoin.",
   "human": "cart",
   "seed": 1,
   "until": "end",
   "steps": [
-    {"do": "followRecording", "until": 8.0},
-    {"do": "teleport", "pos": [-1764, 740], "yaw": 180},
-    {"do": "holdStill", "sec": 1.3},
-    {"do": "walkTo", "pos": [-2096, 758]},
-    {"do": "holdStill", "until": 70.6}
+    {
+      "do": "followRecording",
+      "until": 8.0
+    },
+    {
+      "do": "teleport",
+      "pos": [
+        -1764,
+        740
+      ],
+      "yaw": 180
+    },
+    {
+      "do": "holdStill",
+      "sec": 1.3
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -2096,
+        758
+      ]
+    },
+    {
+      "do": "holdStill",
+      "until": 70.6
+    }
   ]
 }

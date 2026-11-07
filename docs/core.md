@@ -646,7 +646,7 @@ Before G1: barely and sp4rtan stayed LIVE, barely planted at 28.41 (AI), killed 
 | 61.84 | **barely LIVE: outlived recording (+3.0 s)** → `guard_bomb`, leaves the blast too |
 | 67.52 | the bomb explodes: donk is 1,826 units away (100 HP), barely 1,564 (74 HP); both live. Before F the 2D AI stayed by the bomb and both died. G5: cart dies in it, in Back Alley on 27 HP (his recording up to 44.6 s now takes Lokier's hit at 18.50 s and kills him in the duel at 18.80 s; before G5 his real headshot at 18.50 s came first and he kept 100 HP) |
 
-**6. `cart-dies`** (cart teleported to the window at 8 s, 9.5 s early, never fires). **G7:** 9.4 s before the recorded sighting is outside the encounter window: the encounter is cancelled at 8.02 s and Lokier goes LIVE on that tick (a real fight, no scripted 73); with the 2D mask barely kills him at 8.33 s, eradicate outlives his recording, and the round ends T bomb_exploded 11 – 16. The table below is B4–G3's:
+**6. `cart-dies`** (cart teleported to the window at 8 s, 9.5 s early, never fires). **G7:** 9.4 s before the recorded sighting is outside the encounter window: the encounter is cancelled at 8.02 s and Lokier goes LIVE on that tick (a real fight, no scripted 73). On the CS2 mesh (G6) he kills cart for real at 9.86 s (SSG 08), rejoins at 11.45 s and kills eradicate on the tape's tick (12.75 s); with cart dead he outlives his recording (21.80 s), barely kills him (22.16 s) and rejoins; plant 7 ticks late, the rest the tape: CT defuse 12 – 15. The table below is B4–G3's:
 
 | t (s) | event |
 | ---: | --- |

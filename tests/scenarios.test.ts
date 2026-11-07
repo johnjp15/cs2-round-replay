@@ -451,11 +451,17 @@ describe('6. cart dies early', () => {
     console.log(`[cart-dies] cancelled at ${enc[0]?.tick}, lokier LIVE ${lk?.tick}; kills: ${deaths(run.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}`).join(', ')}`);
   });
 
-  it('G1: the Ts who went LIVE for the LIVE Lokier rejoin; eradicate (Lokier’s recorded kill dropped) outlives his recording', () => {
-    const back = rejoins(run.entries).map((b) => b.id);
-    for (const id of ['barely', 'zwomp'] as const) expect(back).toContain(id);
-    expect(switches(run).filter((s) => s.id === 'eradicate').map((s) => s.trigger)).toContain('outlived');
-    expect(deaths(run.entries).some((d) => d.victim === 'eradicate' && d.tick === 816)).toBe(false);
+  it('G1/G6/G7: Lokier kills cart for real, rejoins and kills eradicate on the tape’s tick; barely kills the outlived Lokier and rejoins; the rest is the tape', () => {
+    const death = deaths(run.entries).find((d) => d.victim === 'cart');
+    expect(death).toMatchObject({ attacker: 'lokier', weapon: 'ssg08' });
+    expect(damages(run.entries).find((d) => d.victim === 'cart' && d.tick === death?.tick)?.scripted).toBe(false);
+    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['lokier', 'barely']);
+    expect(deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim])).toContainEqual([816, 'lokier', 'eradicate']);
+    const lk = switches(run).filter((s) => s.id === 'lokier');
+    expect(lk.map((s) => s.trigger)).toEqual(['sighting', 'outlived']);
+    expect(lk[1]?.tick).toBe(LOKIER_DEATH + GRACE);
+    expect(deaths(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ attacker: 'barely' });
+    expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER);
   });
 
   it('the round continues and every untouched puppet still replays', () => {
