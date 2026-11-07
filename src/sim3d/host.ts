@@ -11,9 +11,10 @@
  * - **Bullets**: 3D hitscan (src/sim3d/hitscan.ts): a ray from the eye along the view direction, the nearest of the
  *   world mesh and the hitboxes (src/engine/hitboxes.ts); the hitgroup is the hitbox's; damage by the same CS damage
  *   math (`bulletDamage`). No spread or recoil yet (H2).
- * - **Sight** (`sees`): eye to the target's head, chest, sides and legs on the CS2 world mesh (src/sim3d/sight.ts),
- *   FOV, flash and smoke as in 2D.
- * - Kept from sim2d as they are: weapons (cadence, reload, deploy), grenades (on the 2D sight, as in 2D), the bomb,
+ * - **Sight** (`sees`), bullets' wall test, the LIVE AI's guard spot and grenade effects: G6's MeshSight
+ *   (src/sim2d/mesh-sight.ts), the one implementation both hosts share: eye to the target's head, chest, sides and legs
+ *   on the CS2 world mesh, FOV, flash and smoke (`computeSees`, src/sim2d/vision.ts), exactly as in Sim2DHost.
+ * - Kept from sim2d as they are: weapons (cadence, reload, deploy), grenades (throws clamp on the 2D mask, effects on the mesh, as in 2D), the bomb,
  *   the round rules, hearing (sound events), the LIVE AI (src/sim2d/ai.ts on the Mirage 2D nav; H3 makes it generic).
  *
  * The class is a copy of Sim2DHost's because its phases are private and src/sim2d is not edited while G5 / G6 work
@@ -54,18 +55,37 @@ import {
   type Vec3,
   type WeaponId,
 } from '../contracts/index';
+import weaponsJson from '../../data/weapons.json';
+import {
+  applyHit,
+  armsContext,
+  cameraAngles,
+  crosshairAngles,
+  damageAfterHitgroup,
+  freshArms,
+  maxSpeedOf,
+  parseWeaponTable,
+  trackArms,
+  trackShot,
+  weaponDef,
+  type Angle2,
+  type ArmsContext,
+  type ArmsState,
+  type Motion,
+  type SolidQuery,
+} from '../engine/weapons/index';
 import { freshAiState, roleOf, stepAi, type AiOther } from '../sim2d/ai';
 import { applyBombAction, bombFromObs, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from '../sim2d/bomb';
 import { collideMove, type CollisionNav, type Obstacle } from '../sim2d/collision';
 import type { MapGeometry } from '../sim2d/geometry';
 import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeOutcome } from '../sim2d/grenades';
-import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove3d, type MoveState, type MoveStep } from '../sim2d/movement';
+import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove3d, type MoveOptions, type MoveState, type MoveStep } from '../sim2d/movement';
 import type { NavMesh, NavPoint } from '../sim2d/nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from '../sim2d/round';
-import { GrenadeSight, Sight, sightOptionsFromTuning } from '../sim2d/vision';
+import { MeshGrenadeNav, MeshSight, meshSightOptionsFromTuning, scriptedHitThroughGeometry } from '../sim2d/mesh-sight';
+import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning } from '../sim2d/vision';
 import type { AiDebug, BlockedPair, CombatLogLine, HostNote, InventoryItem, PawnState, RosterEntry, Sim2DOptions, Sim2DVision } from '../sim2d/host';
-import { traceShot3, type Shot3, type ShotPawn } from './hitscan';
-import { MeshSight3 } from './sight';
+import { meshSolidQuery, traceShot3, type Shot3, type ShotPawn } from './hitscan';
 import {
   armorDamage,
   bulletDamage,
@@ -127,18 +147,22 @@ interface HostState {
   /** Events of the last tick, as observe() reports them. */
   readonly events: readonly ObsEvent[];
   readonly aiSeed: number;
+  /** H2: per pawn (pawn order) the weapon mechanics state (accuracy, recoil, punch, scope, tagging); absent in older snapshots. */
+  readonly arms?: readonly ArmsState[];
 }
 
 export class Sim3DHost implements IHost {
   private readonly nav: NavMesh;
   /** The collision mesh (world + player clips) for movement. */
   private readonly geometry: MapGeometry;
-  /** Sight (`sees`) and bullets on the world mesh. */
-  private readonly meshSight: MeshSight3;
+  /** G6: sight (`sees`), the guard spot and grenade effects on the world mesh (MeshSight, shared with Sim2DHost). */
+  private readonly meshSight: MeshSight;
   private readonly tuning: Tuning;
-  /** The 2D sight (mask + level check): the LIVE AI's queries and grenades (as in 2D), and its flat form for grenades. */
+  /** The 2D sight (mask + level check): only grenade throws clamp on it (their flight is 2D), as in Sim2DHost. */
   private readonly sight: Sight;
   private readonly grenadeSight: GrenadeSight;
+  /** Grenades: throws on the 2D mask, effects (flash, HE) on the mesh. */
+  private readonly grenadeNav: MeshGrenadeNav;
   private aiSeed: number;
   /** `sees` of the current state (pawn order), or null when it must be recomputed. */
   private seesCache: PlayerId[][] | null = null;
@@ -166,6 +190,12 @@ export class Sim3DHost implements IHost {
   /** Bullets of the last completed tick (renderer, tests); not state. */
   private lastShots: Shot3[] = [];
   private shotsOut: Shot3[] = [];
+  /** H2: CS2 weapon mechanics (src/engine/weapons); null if the tuning has no `weapons._engine` (bullets go exactly along the view). */
+  private readonly armsCtx: ArmsContext | null;
+  /** H2: per pawn (pawn order). */
+  private arms: ArmsState[] = [];
+  /** H2b: the solids along a bullet on the world mesh, for wall penetration (built on first use). */
+  private solids: SolidQuery | null = null;
 
   /**
    * @param options score before the round and the round clock at tick 0; default 0 – 0 and `tuning.round.timeSec`.
@@ -185,7 +215,8 @@ export class Sim3DHost implements IHost {
     this.tuning = tuning;
     this.sight = new Sight(vision?.mask ?? null, nav, sightOptionsFromTuning(tuning));
     this.grenadeSight = new GrenadeSight(this.sight, nav);
-    this.meshSight = new MeshSight3(world.world, { fovDeg: tuning.ai.fovDeg, eyeHeight: tuning.damage.eyeHeight, crouchEyeHeight: tuning.damage.crouchEyeHeight });
+    this.meshSight = new MeshSight(world.world, meshSightOptionsFromTuning(tuning));
+    this.grenadeNav = new MeshGrenadeNav(this.grenadeSight, this.meshSight);
     this.aiSeed = vision?.seed ?? 0;
     if (!Number.isInteger(this.aiSeed)) throw new Error(`Sim3DHost: AI seed must be an integer, got ${this.aiSeed}`);
     this.pawns = [...roster].sort((a, b) => compareOrdinal(a.id, b.id)).map((r) => spawnPawn(r));
@@ -195,6 +226,14 @@ export class Sim3DHost implements IHost {
       throw new Error(`Sim3DHost: bad score ${o.score.ct}-${o.score.t}`);
     }
     this.round = freshRound(o.roundTimeSec, o.score);
+    this.armsCtx = tuning.weaponModel === undefined ? null : armsContext(parseWeaponTable(weaponsJson), tuning, TICKS_PER_SEC);
+    this.arms = this.freshArmsAll();
+  }
+
+  private freshArmsAll(): ArmsState[] {
+    const ctx = this.armsCtx;
+    if (ctx === null) return [];
+    return this.pawns.map(() => freshArms(ctx, 'knife', 0));
   }
 
   // ---- IHost ---------------------------------------------------------------------------------
@@ -261,6 +300,7 @@ export class Sim3DHost implements IHost {
       round: this.round,
       events: this.events,
       aiSeed: this.aiSeed,
+      arms: this.arms,
     };
     return { kind: 'host', data: toJsonValue(state) };
   }
@@ -308,6 +348,7 @@ export class Sim3DHost implements IHost {
     this.round = copy.round;
     this.events = [...copy.events];
     this.aiSeed = copy.aiSeed;
+    this.arms = copy.arms !== undefined && copy.arms.length === this.pawns.length ? [...copy.arms] : this.freshArmsAll();
     this.seesCache = null;
     this.aiInputs = [];
     this.lastShots = [];
@@ -357,7 +398,7 @@ export class Sim3DHost implements IHost {
   }
 
   /** H1: the sight and bullet mesh (the world, no player clips). */
-  world(): MeshSight3 {
+  world(): MeshSight {
     return this.meshSight;
   }
 
@@ -439,7 +480,7 @@ export class Sim3DHost implements IHost {
     return i < 0 ? [] : [...(this.currentSees()[i] ?? [])];
   }
 
-  /** The 2D sight query (mask plus level check) the LIVE AI and grenades use (Sim2DHost's surface). `world()` is the 3D sight. */
+  /** The 2D sight query (mask plus level check): grenade throws and tests (Sim2DHost's surface). `world()` is the 3D sight. */
   sightQuery(): Sight {
     return this.sight;
   }
@@ -476,12 +517,15 @@ export class Sim3DHost implements IHost {
 
   // ---- tick phases ---------------------------------------------------------------------------
 
-  /** `sees` for the current state (contract F5; src/sim3d/sight.ts), cached until the state changes. */
+  /** `sees` for the current state (contract F5; vision.ts computeSees on MeshSight, as Sim2DHost), cached until the state changes. */
   private currentSees(): PlayerId[][] {
     if (this.seesCache === null) {
-      this.seesCache = this.meshSight.computeSees(
-        this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick })),
+      const d = this.tuning.damage;
+      this.seesCache = computeSees(
+        this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick, busy: this.bomb.plant?.id === p.id || this.bomb.defuse?.id === p.id })),
+        this.meshSight,
         this,
+        { fovDeg: this.tuning.ai.fovDeg, eyeHeight: d.eyeHeight, crouchEyeHeight: d.crouchEyeHeight },
       );
     }
     return this.seesCache;
@@ -531,7 +575,7 @@ export class Sim3DHost implements IHost {
         bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick },
         round: { phase: roundPhase(this.round, isTicking(this.bomb)) },
         nav: this.nav,
-        sight: this.sight,
+        sight: this.meshSight,
         tuning: this.tuning,
         rng: root.fork('ai:' + p.id),
       });
@@ -567,7 +611,7 @@ export class Sim3DHost implements IHost {
       const from = p.move.pos;
       const lockedInput = input === null ? null : { ...input, forward: 0, side: 0, buttons: input.buttons.filter((b) => b !== 'JUMP') };
       const base: MoveState = isLocked ? { ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } } : p.move;
-      const step: MoveStep = stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT);
+      const step: MoveStep = stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT, this.moveOptionsFor(p, input));
       let next = step.state;
       if (!isLocked) {
         const obstacles = this.solidFor(p, next);
@@ -602,11 +646,83 @@ export class Sim3DHost implements IHost {
     }
   }
 
+  private pawnIndex(id: PlayerId): number {
+    return this.pawns.findIndex((q) => q.id === id);
+  }
+
+  /** The weapon table id of a held item (the 2D ids are the table's; anything unknown counts as the knife). */
+  private armsWeapon(item: string): string {
+    return this.armsCtx !== null && this.armsCtx.table.weapons[item] !== undefined ? item : 'knife';
+  }
+
+  /**
+   * H2b: true when a pawn plays by the weapon mechanics (its bullets' outcome comes from spread, recoil and
+   * penetration; its speed from the weapon's max speed and tagging): the human while controlled and LIVE pawns.
+   * Puppets (REPLAY) keep their recorded outcomes: scripted damage is the truth, their tracks the table's speeds.
+   */
+  private mechanical(p: PawnState): boolean {
+    return this.armsCtx !== null && !(p.mode === 'REPLAY' && !(p.id === this.human && this.humanInput !== null));
+  }
+
+  private static readonly NO_MOVE_OPTIONS: MoveOptions = {};
+
+  /**
+   * H2b: the movement options (src/sim2d/movement.ts `MoveOptions`, M1) of a mechanical pawn: `runSpeed` = the held
+   * weapon's max speed in its mode (CS2 m_flMaxSpeed: AWP 100 scoped; × attackMovespeedFactor while firing, e.g.
+   * the Negev), `velocityModifier` = tagging. Left out where they equal the table's run speed / 1, so a pawn nothing
+   * slows moves exactly as before.
+   */
+  private moveOptionsFor(p: PawnState, input: PawnInput | null): MoveOptions {
+    const ctx = this.armsCtx;
+    if (ctx === null || !this.mechanical(p)) return Sim3DHost.NO_MOVE_OPTIONS;
+    const a = this.arms[this.pawnIndex(p.id)];
+    if (a === undefined) return Sim3DHost.NO_MOVE_OPTIONS;
+    const run = roundNumber(maxSpeedOf(ctx, { ...a, velocityModifier: 1 }, input !== null && input.buttons.includes('ATTACK')));
+    const base = this.tuning.movement.runSpeedByWeapon[p.weapon];
+    const o: { runSpeed?: number; velocityModifier?: number } = {};
+    if (base === undefined || Math.abs(run - base) > 1e-9) o.runSpeed = run;
+    if (a.velocityModifier < 1) o.velocityModifier = a.velocityModifier;
+    return o.runSpeed === undefined && o.velocityModifier === undefined ? Sim3DHost.NO_MOVE_OPTIONS : o;
+  }
+
+  /** H2: a pawn's weapon mechanics state (recoil, punch, scope, tagging), or null (unknown pawn or no weapon model). */
+  armsOf(id: PlayerId): ArmsState | null {
+    const i = this.pawnIndex(id);
+    return i < 0 ? null : (this.arms[i] ?? null);
+  }
+
+  /**
+   * H2: for the first-person view of `id` looking along `view`: the camera angles (view + `tracking` (default 0.45)
+   * of the punch offset + the view punch), the crosshair angles (where the next bullet goes: view + aim punch × recoilScale) and the zoom
+   * level with its FOV (4:3 degrees, from the weapon table; 90 unscoped).
+   */
+  aimView(id: PlayerId, view: Angle2, tracking?: number): { camera: Angle2; crosshair: Angle2; zoom: number; fov4x3: number } {
+    const a = this.armsOf(id);
+    const ctx = this.armsCtx;
+    if (a === null || ctx === null) return { camera: view, crosshair: view, zoom: 0, fov4x3: 90 };
+    const w = ctx.table.weapons[a.weapon];
+    const fov = w === undefined || a.zoom <= 0 ? 90 : (w.zoom.fov[Math.min(a.zoom, 2) - 1] ?? 90);
+    return { camera: cameraAngles(ctx, a, view, tracking ?? ctx.model.viewRecoilTracking), crosshair: crosshairAngles(ctx, a, view), zoom: a.zoom, fov4x3: fov };
+  }
+
   private stepPawnWeapon(p: PawnState, t: number): void {
     const input = this.inputFor(p.id);
     const buttons = input === null ? [] : input.buttons;
     const held = p.inventory.find((q) => q.item === p.weapon) ?? null;
     const gun = gunStats(p.weapon, this.tuning);
+    const ai = this.pawnIndex(p.id);
+    const ctx = this.armsCtx;
+    const motion: Motion = { velocity: p.move.vel, onGround: p.move.onGround, crouched: p.move.crouching, onLadder: false };
+    if (ctx !== null && ai >= 0) {
+      this.arms[ai] = trackArms(ctx, this.arms[ai] as ArmsState, {
+        tick: t,
+        weapon: this.armsWeapon(p.weapon),
+        attack2: buttons.includes('ATTACK2'),
+        reloading: p.wpn.reloadEndTick !== null,
+        nextAttackTick: p.wpn.nextAttackTick,
+        motion,
+      });
+    }
     const step = stepWeapon(p.wpn, {
       tick: t,
       item: p.weapon,
@@ -622,13 +738,36 @@ export class Sim3DHost implements IHost {
     if (step.fired && gun !== null) {
       this.outbox.push({ type: 'shot', shooter: p.id, weapon: p.weapon });
       this.sound(p, 'shot');
-      const shot = traceShot3(shotPawn(p), this.pawns.map((q) => shotPawn(q)), this.meshSight.geometry(), this.tuning.damage);
-      this.shotsOut.push(shot);
+      // H2: the bullet leaves along view + aim punch × recoilScale + the inaccuracy / spread cone (seeded per shooter
+      // and tick). H2b: the human's and LIVE pawns' bullets land there and may go through walls; a puppet's bullet is
+      // drawn there but its outcome is traced along its scripted view exactly as before (scripted damage is the truth).
+      let dir: Vec3 | null = null;
+      if (ctx !== null && ai >= 0) {
+        const rng = new Rng(this.aiSeed).fork(`spread:${p.id}:${t}`);
+        const r = trackShot(ctx, this.arms[ai] as ArmsState, rng, { pitch: p.move.pitch, yaw: p.move.yaw }, motion, t, p.wpn.nextAttackTick);
+        this.arms[ai] = r.state;
+        dir = r.shot.pellets[0] ?? null;
+      }
+      const world = this.meshSight.geometry();
+      const targets = this.pawns.map((q) => shotPawn(q));
+      const mech = ctx !== null && this.mechanical(p);
+      const pen = mech && ctx !== null ? { weapon: weaponDef(ctx.table, this.armsWeapon(p.weapon)), query: (this.solids ??= meshSolidQuery(world)), model: ctx.model } : null;
+      const shot = mech ? traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir, pen) : traceShot3(shotPawn(p), targets, world, this.tuning.damage);
+      this.shotsOut.push(mech || dir === null ? shot : traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir));
       if (shot.victim !== null && shot.hitgroup !== null) {
         const victim = this.pawn(shot.victim) as PawnState;
-        const dmg = bulletDamage(gun, shot.distance, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
+        // Open air: the 2D table's damage (as before); through a wall: the damage penetration left, then hitgroup and armor.
+        const dmg =
+          shot.penDamage !== undefined && pen !== null
+            ? damageAfterHitgroup(pen.weapon, shot.penDamage, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage)
+            : bulletDamage(gun, shot.distance, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
         // G5: the human's bullet on a blocked pair (a recorded duel, docs/core.md): report where it would have hit.
         if (p.id === this.human && this.isBlocked(p.id, victim.id)) this.outbox.push({ type: 'blocked_hit', attacker: p.id, victim: victim.id, weapon: p.weapon, hitgroup: shot.hitgroup });
+        // H2: tagging and hit punch for a hit that lands (not on a blocked pair, so the recording's runs are unchanged).
+        const vi = this.pawnIndex(victim.id);
+        if (ctx !== null && vi >= 0 && !this.isBlocked(p.id, victim.id)) {
+          this.arms[vi] = applyHit(ctx, this.arms[vi] as ArmsState, this.armsWeapon(p.weapon), victim.armor > 0 && isArmored(shot.hitgroup, victim.helmet));
+        }
         this.engineDamage(p.id, victim, p.weapon, shot.hitgroup, dmg);
       }
     }
@@ -652,7 +791,7 @@ export class Sim3DHost implements IHost {
   private stepGrenades(t: number): void {
     if (this.grenades.length === 0) return;
     const r = stepGrenades(this.grenades, t, {
-      nav: this.grenadeSight,
+      nav: this.grenadeNav,
       pawns: this.pawns.map((p) => ({ id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, alive: p.alive })),
       grenades: this.tuning.grenades,
       damage: this.tuning.damage,
@@ -699,7 +838,17 @@ export class Sim3DHost implements IHost {
     const victim = this.pawn(a.victim);
     if (victim === null) return this.note('action', 'damage', 'unknown pawn', a);
     if (!victim.alive) return this.note('action', 'damage', 'victim is dead', a);
+    this.auditScriptedHit(a, victim);
     this.hurt(a.attacker, victim, a.weapon, a.hitgroup, Math.max(0, a.amount), Math.max(0, a.armor), true, a.lethal);
+  }
+
+  /** G6: a scripted gun hit whose eye-to-victim line crosses a wall of the mesh goes to the combat log (docs/vision.md). */
+  private auditScriptedHit(a: DamageAction, victim: PawnState): void {
+    const shooter = a.attacker === null ? null : this.pawn(a.attacker);
+    if (shooter === null || !shooter.alive || a.weapon === null || gunStats(a.weapon, this.tuning) === null) return;
+    const body = (p: PawnState) => ({ id: p.id, pos: p.move.pos, crouching: p.move.crouching });
+    const line = scriptedHitThroughGeometry(this.meshSight, body(shooter), body(victim), a.weapon, a.hitgroup, this.tuning.damage.bandHeights, this.tickNo + 1, TICKS_PER_SEC);
+    if (line !== null) this.combat.push({ tick: this.tickNo + 1, text: line });
   }
 
   /**
@@ -882,6 +1031,12 @@ export class Sim3DHost implements IHost {
   private setRound(a: SetRoundAction): void {
     const delta = a.tick - this.tickNo;
     this.tickNo = a.tick;
+    this.arms = this.arms.map((a) => ({
+      ...a,
+      nextAttackTick: roundNumber(a.nextAttackTick + delta),
+      nextAltTick: roundNumber(a.nextAltTick + delta),
+      lastShotTick: roundNumber(a.lastShotTick + delta),
+    }));
     for (const p of this.pawns) {
       p.wpn = shiftWeaponState(p.wpn, delta);
       p.blindUntilTick = p.blindUntilTick === 0 ? 0 : Math.max(0, roundNumber(p.blindUntilTick + delta));

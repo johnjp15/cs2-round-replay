@@ -32,6 +32,7 @@ import {
   RoundModel,
   ScriptPlan,
   aimPitchAt,
+  aimSpotAt,
   bearing,
   cadenceOffsets,
   fitSpray,
@@ -61,6 +62,8 @@ interface StubOptions {
   readonly deaths?: ReadonlyMap<PlayerId, number>;
   /** Extra events by observe tick. */
   readonly events?: ReadonlyMap<number, readonly ObsEvent[]>;
+  /** G6: every alive pawn sees every other alive one (default: `sees` is empty, nobody sees anyone). */
+  readonly seeAll?: boolean;
 }
 
 interface StubPawn {
@@ -78,6 +81,7 @@ class StubHost implements IHost {
   readonly human: PlayerId | null;
   readonly deaths: ReadonlyMap<PlayerId, number>;
   readonly events: ReadonlyMap<number, readonly ObsEvent[]>;
+  readonly seeAll: boolean;
   pawns: StubPawn[];
 
   constructor(opts: StubOptions = {}) {
@@ -86,6 +90,7 @@ class StubHost implements IHost {
     for (const p of model.players) if (p.deathTick !== null) recorded.set(p.id, p.deathTick);
     this.deaths = opts.deaths ?? recorded;
     this.events = opts.events ?? new Map();
+    this.seeAll = opts.seeAll === true;
     this.pawns = PLAYER_IDS.map((id) => {
       const kit = model.player(id).kit;
       return { id, yaw: 0, pitch: 0, weapon: kit.primary ?? kit.secondary ?? 'knife' };
@@ -121,7 +126,7 @@ class StubHost implements IHost {
             ammo: { clip: 30, reserve: 90 },
             crouching: false,
             onGround: true,
-            sees: [],
+            sees: this.seeAll && !dead ? PLAYER_IDS.filter((q) => q !== p.id && (this.deaths.get(q) ?? Infinity) > t) : [],
           };
         }),
       ),
@@ -231,9 +236,10 @@ function logs(log: SessionLog): { tick: number; level: string; text: string }[] 
   return allActions(log).flatMap((x) => (x.a.type === 'log' ? [{ tick: x.tick, level: x.a.level, text: x.a.text }] : []));
 }
 
-// One golden-master run of the act stream (human null), shared by most tests.
+// One golden-master run of the act stream (human null), shared by most tests; `seeing`: the same with everyone in sight.
 const FULL = 4460;
 const golden = stubRun(FULL);
+const seeing = stubRun(FULL, { seeAll: true });
 
 // ---------------------------------------------------------------------------
 
@@ -434,13 +440,14 @@ describe('the human', () => {
 });
 
 describe('aim', () => {
+  // In sight (the stub's seeAll), the shooter tracks the target's body; out of sight (G6), the recorded spot.
   it('snarlbot faces incredibad before 0.50 s, at chest height', () => {
     const k = 31;
-    const o = golden.log.get(k)?.observe;
+    const o = seeing.log.get(k)?.observe;
     const sn = o?.pawns.find((p) => p.id === 'snarlbot');
     const ib = o?.pawns.find((p) => p.id === 'incredibad');
     if (sn === undefined || ib === undefined) throw new Error('missing pawns');
-    const i = input(golden.log, k, 'snarlbot');
+    const i = input(seeing.log, k, 'snarlbot');
     expect(Math.abs((i?.yaw ?? NaN) - bearing(sn.pos, ib.pos))).toBeLessThan(0.01);
     expect(i?.pitch).toBe(aimPitchAt(sn.pos, false, ib.pos, false, 'chest', tuning.damage));
     // The aim starts preAimSec (22 ticks) before the shot press.
@@ -454,14 +461,41 @@ describe('aim', () => {
       ['cart', 'lokier'],
       ['sp4rtan', 'barely'],
     ]);
-    const o = golden.log.get(814)?.observe;
+    const o = seeing.log.get(814)?.observe;
     const lk = o?.pawns.find((p) => p.id === 'lokier');
     const er = o?.pawns.find((p) => p.id === 'eradicate');
     if (lk === undefined || er === undefined) throw new Error('missing pawns');
-    expect(input(golden.log, 814, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, er.pos, false, 'head', tuning.damage));
+    expect(input(seeing.log, 814, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, er.pos, false, 'head', tuning.damage));
   });
 
-  it('agrees with the 2D hitscan on band pitches (shared tuning.damage)', () => {
+    it('G6: out of sight it holds the pre-aim on the recorded spot, and tracks the body only in sight', () => {
+    const eng = plan.engagements.find((e) => e.shooter === 'lokier' && e.target === 'eradicate');
+    if (eng === undefined) throw new Error('no engagement');
+    const spot = aimSpotAt(eng, 814);
+    expect(spot).not.toBeNull();
+    const o = golden.log.get(814)?.observe;
+    const lk = o?.pawns.find((p) => p.id === 'lokier');
+    const er = o?.pawns.find((p) => p.id === 'eradicate');
+    if (lk === undefined || er === undefined || spot === null) throw new Error('missing pawns');
+    // Nobody sees anyone (the stub's empty sees): Lokier looks at eradicate's recorded spot where the kill lands.
+    expect(spot.tick >= 814 && spot.tick <= eng.toTick).toBe(true);
+    // (eradicate's track ends just before the kill: the spot is its last sample)
+    const last = model.track('eradicate').at(-1);
+    expect(spot.pos).toEqual(model.trackAtTick('eradicate', spot.tick + tuning.replay.inputLatencyTicks)?.pos ?? { x: last?.x, y: last?.y, z: last?.z });
+    expect(input(golden.log, 814, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, spot.pos, false, 'head', tuning.damage));
+    expect(Math.abs((input(golden.log, 814, 'lokier')?.yaw ?? NaN) - bearing(lk.pos, spot.pos))).toBeLessThan(0.01);
+    // In sight: the body, wherever it is (the two differ while eradicate moves).
+    expect(input(seeing.log, 814, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, er.pos, false, 'head', tuning.damage));
+    // Every engagement has its spots, one per merged window end, in tick order, inside the engagement.
+    for (const e of plan.engagements) {
+      const ticks = (e.spots ?? []).map((x) => x.tick);
+      expect(ticks.length).toBeGreaterThan(0);
+      expect([...ticks].sort((a, b) => a - b)).toEqual(ticks);
+      for (const t of ticks) expect(t >= e.fromTick && t <= e.toTick).toBe(true);
+    }
+  });
+
+it('agrees with the 2D hitscan on band pitches (shared tuning.damage)', () => {
     const cases: [Vec3, boolean, Vec3, boolean][] = [
       [{ x: 0, y: 0, z: 0 }, false, { x: 500, y: 30, z: 0 }, false],
       [{ x: -1764, y: 794, z: -48 }, true, { x: -2139, y: 439, z: -161 }, false],
