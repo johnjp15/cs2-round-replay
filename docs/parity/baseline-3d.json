@@ -3,84 +3,84 @@
  "view": {
   "shots": 181,
   "edgeF": {
-   "mean": 0.553,
-   "median": 0.568,
-   "min": 0.189
+   "mean": 0.566,
+   "median": 0.58,
+   "min": 0.225
   },
   "ssim": {
-   "mean": 0.694,
-   "median": 0.696,
-   "min": 0.58
+   "mean": 0.702,
+   "median": 0.706,
+   "min": 0.587
   },
   "byCamera": {
    "barely": {
     "shots": 20,
-    "edgeF": 0.555,
-    "ssim": 0.698
+    "edgeF": 0.569,
+    "ssim": 0.71
    },
    "cart": {
     "shots": 112,
-    "edgeF": 0.569,
-    "ssim": 0.698
+    "edgeF": 0.581,
+    "ssim": 0.706
    },
    "donk": {
     "shots": 19,
-    "edgeF": 0.365,
+    "edgeF": 0.382,
     "ssim": 0.644
    },
    "eradicate": {
     "shots": 30,
-    "edgeF": 0.61,
-    "ssim": 0.708
+    "edgeF": 0.622,
+    "ssim": 0.719
    }
   },
   "worst": [
    {
+    "t": 33.5,
+    "edgeF": 0.2249,
+    "ssim": 0.5912,
+    "watched": "donk"
+   },
+   {
     "t": 35.5,
-    "edgeF": 0.1893,
+    "edgeF": 0.2345,
     "ssim": 0.5969,
     "watched": "donk"
    },
    {
     "t": 36,
-    "edgeF": 0.1974,
-    "ssim": 0.602,
-    "watched": "donk"
-   },
-   {
-    "t": 33.5,
-    "edgeF": 0.2134,
-    "ssim": 0.5932,
+    "edgeF": 0.2475,
+    "ssim": 0.5963,
     "watched": "donk"
    },
    {
     "t": 37,
-    "edgeF": 0.2276,
-    "ssim": 0.6087,
-    "watched": "donk"
-   },
-   {
-    "t": 34.5,
-    "edgeF": 0.2454,
-    "ssim": 0.599,
-    "watched": "donk"
-   },
-   {
-    "t": 36.5,
-    "edgeF": 0.2432,
-    "ssim": 0.6079,
+    "edgeF": 0.2549,
+    "ssim": 0.6021,
     "watched": "donk"
    },
    {
     "t": 34,
-    "edgeF": 0.2607,
-    "ssim": 0.5944,
+    "edgeF": 0.2696,
+    "ssim": 0.5897,
+    "watched": "donk"
+   },
+   {
+    "t": 36.5,
+    "edgeF": 0.261,
+    "ssim": 0.6031,
+    "watched": "donk"
+   },
+   {
+    "t": 34.5,
+    "edgeF": 0.2725,
+    "ssim": 0.5949,
     "watched": "donk"
    },
    {
     "t": 35,
-    "edgeF": 0.2522,
-    "ssim": 0.6061,
+    "edgeF": 0.2917,
+    "ssim": 0.5997,
     "watched": "donk"
    }
   ]
