@@ -33,13 +33,45 @@ interface ScenarioRun {
   readonly tl: readonly TimelineEvent[];
 }
 
+/** Every scenario run of this file, for the G6 checks at the end. */
+const played: { name: string; run: HarnessRun }[] = [];
+
 function play(name: string): ScenarioRun {
   const s = loadScenario(`${ROOT}/fixtures/scenarios/${name}.json`);
   const bot = HumanBot.fromScenario(data, s);
   const run = runHarness(data, { human: s.human, driver: bot, lastTick: s.until === 'end' ? 'end' : tickOf(s.until), seed: s.seed, takeover: s.takeover === null ? null : tickOf(s.takeover) });
   const tl = timeline(run.entries);
   console.log(`[scenario ${name}] ${s.description}\n${formatTimeline(tl)}\n`);
+  played.push({ name, run });
   return { run, bot, tl };
+}
+
+/**
+ * G6: engine bullet hits whose segment (the shooter's eye to where the ray enters the victim's circle, at the hit band's
+ * height; positions, yaw and posture as the observe of the hit reports them) crosses a wall of the CS2 mesh: none.
+ */
+function hitsThroughWalls(run: HarnessRun): string[] {
+  const g = data.geometry as MapGeometry;
+  const d = tuning.damage;
+  const out: string[] = [];
+  for (const e of run.entries) {
+    for (const ev of e.observe.events) {
+      if (ev.type !== 'damage' || ev.scripted || ev.attacker === null || ev.weapon === null || tuning.weapons[ev.weapon] === undefined) continue;
+      const a = pawnAt(e, ev.attacker);
+      const v = pawnAt(e, ev.victim);
+      const rad = (a.yaw * Math.PI) / 180;
+      const cx = v.pos.x - a.pos.x;
+      const cy = v.pos.y - a.pos.y;
+      const along = cx * Math.cos(rad) + cy * Math.sin(rad);
+      const perp2 = Math.max(0, cx * cx + cy * cy - along * along);
+      const enter = cx * cx + cy * cy <= d.pawnRadius * d.pawnRadius ? 0 : along - Math.sqrt(Math.max(0, d.pawnRadius * d.pawnRadius - perp2));
+      const band = (d.bandHeights[ev.hitgroup] ?? 0) * (v.crouching ? d.crouchEyeHeight / d.eyeHeight : 1);
+      const eye = a.pos.z + (a.crouching ? d.crouchEyeHeight : d.eyeHeight);
+      const f = g.traceSight(a.pos.x, a.pos.y, eye, a.pos.x + Math.cos(rad) * enter, a.pos.y + Math.sin(rad) * enter, v.pos.z + band);
+      if (f < 1) out.push(`${e.observe.tick} ${ev.attacker}->${ev.victim} ${ev.weapon} ${ev.hitgroup}`);
+    }
+  }
+  return out;
 }
 
 const pawnAt = (e: LogEntry, id: PlayerId): Observe['pawns'][number] => e.observe.pawns.find((p) => p.id === id) as Observe['pawns'][number];
