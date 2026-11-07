@@ -212,7 +212,7 @@ export interface WeaponModelTuning {
   recoilSuppressionShots: number;
   /** ... starting at this fraction of the magnitude (`weapon_recoil_suppression_factor`). */
   recoilSuppressionFactor: number;
-  /** +1: a recoil angle of +90° kicks the view left (+yaw); −1 mirrors. */
+  /** −1 (Valve's CCSPlayer::KickBack, yaw velocity −= sin a × m): a recoil angle of +90° kicks the aim right (−yaw); +1 mirrors (the pre-#54 bug). */
   recoilYawSign: number;
   /** The camera follows this share of the bullet's punch offset (CS:GO `view_recoil_tracking` 0.45; not in CS2's dump). */
   viewRecoilTracking: number;
