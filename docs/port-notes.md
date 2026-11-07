@@ -128,6 +128,19 @@ for tests would need:
 - **Sightings**: `RoundModel.sightings[].by` is resolved from the free text by splitting the lowercase string at anything but `a-z0-9` and keeping the words that are player ids, in `PLAYER_IDS` order (`Regex.Split(by.ToLowerInvariant(), "[^a-z0-9]+")`).
 - **RDP route thinning** uses an explicit stack of index pairs (push a, best, best, b; pop b then a); the furthest point wins, on a tie the first (strict `>` against the tolerance).
 - **State** (`DivergenceState`: encounter phases and ticks, contacts) is plain data in the Core snapshot. B3's `ScriptState` gained `extraFire`, `extraEngagements` (run-time items, decided like the plan's) and `holds`; `suppress(key)` pre-decides a plan item as dropped without a log.
+- **G7: the on-script test is time-aware, and the CS2 adapter needs the same one.** `humanOnScript` is not "near his
+  track" but "within `offCourseUnits` of his recorded track at some tick in [now − d, now + d]", d =
+  `secTicks(onCourseDriftSec)`: `distanceToRecording` takes the minimum 2D distance from the pawn to the polyline of
+  `TrackPosAt(now − d)`, every track sample strictly inside the span (sample order), `TrackPosAt(now + d)` (segment
+  distance, clamped projection, `Math.Sqrt`); `<=` against the units. The same function with
+  `humanSpotToleranceUnits` / `expectedSightingWindowSec` gates a recorded pair within `closeRangeUnits` (2D, `>` is
+  "far") and, with the gunfire window, recorded fire (the shot's sound position). `inEncounterWindow` is `tick` in
+  [recordedSightTick − w, recordedSightTick + w] with w = `secTicks(encounterWindowSec)`. In CS2 the inputs are the
+  pawns' origins (`m_vecAbsOrigin`, 2D), the snapped tracks the puppets follow (the same `mirage-tracks.json`), and the
+  shot's `weapon_fire` position: no other engine state. An adapter that tested "near the track" without the time span
+  would treat cart in Lokier's corridor 7 s early as the recording (John's report): Lokier must react.
+- **G7: the LIVE bot reacting** (docs/ai.md): CS2's own bots already stop and turn to a target they acquire; the
+  2D AI now does too. Nothing for the adapter to send.
 - **Goal coordinates** come from track samples (they may be fractional: Lokier's last sample is (−2145.78125, 432.21875, −160.03125), exact in binary).
 
 ## Rejoin (src/core/rejoin.ts, G1)
