@@ -127,6 +127,10 @@ entries), and the generator checks that playing the file reproduces the generati
   through the Apartments window (2D has no spread) before the time-shifted hit was due (18.59 s), so cart kept
   100 HP and survived the post-round shot (on 73 HP): "Same result, different round: CT defuse, 0.72 s left; 2 kills
   changed". `docs/core.md` "Recorded duels of the human", "Divergence" scenario 1.
+- **D1 (John 2026-11-07 13:10): real damage in the duel.** Lokier's hit still lands on 18.50 s (cart 27 HP); his
+  first would-hit bullet is now real and kills Lokier at 18.61 s (tick 1191, 0.19 s early); nobody goes LIVE, every
+  other kill, the plant and the defuse are on the tape's ticks, and the post-round shot still kills cart: "Same result,
+  different round: CT defuse, 0.72 s left; 1 kill changed".
 - The shadow is a `ReplayCore` with `{divergence: false}` (B2/B3 only).
 
 ## The golden master (CI gate)
