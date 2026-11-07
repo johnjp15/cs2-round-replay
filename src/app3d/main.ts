@@ -32,6 +32,8 @@ import { loadAssets3d } from './assets3d';
 import { ControlsDom } from './controls-dom';
 import { MIRAGE_RADAR } from './coords';
 import { Hud3D } from './hud3d';
+import { runBench } from './bench3d';
+import { FrameProbe } from './perf';
 import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
 import { RadarSampler, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
@@ -107,6 +109,8 @@ declare global {
       summary: () => string;
       /** The renderer (debugging, benchmarks). */
       debug: () => Renderer3D;
+      /** P1: the per-frame phase timings and the frame driver (tools/bench-app3d.ts, `?bench=1`). */
+      perf: PerfHooks;
       /** Deterministic test API (docs/app3d.md "Test API"; V0's video comparison). */
       test: {
         /** Stop (true) or resume (false) the frame loop's drawing; freezing also pauses a running round. */
@@ -126,6 +130,21 @@ declare global {
 }
 
 const SETTINGS_KEY = 'cs2-sim3d-settings';
+
+/** P1: what the bench (bench3d.ts) drives. */
+export interface PerfHooks {
+  readonly probe: FrameProbe;
+  /** 'raf': the normal requestAnimationFrame loop; 'manual': the loop stops and the caller runs frames with `step`. */
+  driver(mode: 'raf' | 'manual'): void;
+  /** Run one frame now (manual driver). */
+  step(now: number): void;
+  /** Called after every frame (both drivers). */
+  onFrame: (() => void) | null;
+  speed(x: number): void;
+  start(): void;
+  /** Three.js renderer counters of the last frame. */
+  info(): { calls: number; triangles: number; programs: number; geometries: number; textures: number };
+}
 
 /** What the test API reports: the tick and the camera of the last frame drawn. */
 export interface TestState {
@@ -207,6 +226,11 @@ class App3D {
   private seekResume: Phase | null = null;
   /** Smoothed per-frame costs (ms): the ticks, the whole draw, the WebGL render call, the HUD. */
   private cost = { sim: 0, draw: 0, render: 0, hud: 0 };
+  /** P1: per-frame phase timings (perf.ts). */
+  private readonly probe = new FrameProbe(600);
+  private probing = false;
+  private driverMode: 'raf' | 'manual' = 'raf';
+  private hooks: PerfHooks | null = null;
   private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
   constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number) {
@@ -270,6 +294,7 @@ class App3D {
       seek: (t) => this.startSeek(t),
       summary: () => summarize(this.session.model, this.session.log()).headline,
       debug: () => this.renderer,
+      perf: this.perfHooks(),
       test: {
         freeze: (on) => {
           this.frozen = on;
@@ -503,6 +528,14 @@ class App3D {
   }
 
   private readonly frame = (now: number): void => {
+    if (this.driverMode !== 'raf') return;
+    this.runFrame(now);
+    requestAnimationFrame(this.frame);
+  };
+
+  private runFrame(now: number): void {
+    this.probe.begin(performance.now());
+    this.probing = true;
     const dt = this.lastFrame === null ? 0 : Math.min(100, now - this.lastFrame);
     this.lastFrame = now;
     if (this.seekResume !== null) this.advanceSeek();
@@ -521,17 +554,52 @@ class App3D {
       this.orbit = turnView(this.orbit, mouse.dx, mouse.dy, this.sensitivity);
     }
     const t0 = performance.now();
+    this.probe.mark('input', t0);
     const n = this.loop.advance(dt);
     const t1 = performance.now();
+    this.probe.mark('sim', t1);
     this.frames++;
     this.fpsMeter.add(now, 1);
     this.tpsMeter.add(now, n);
     if (n > 0 || this.frames % 30 === 0) this.updateControls();
+    this.probe.mark('hud', performance.now());
     if (!this.frozen) this.draw(now);
     const t2 = performance.now();
+    this.probing = false;
+    this.probe.end(n);
     this.cost = { sim: this.cost.sim * 0.95 + (t1 - t0) * 0.05, draw: this.cost.draw * 0.95 + (t2 - t1) * 0.05, render: this.cost.render, hud: this.cost.hud };
-    requestAnimationFrame(this.frame);
-  };
+    this.hooks?.onFrame?.();
+  }
+
+  private perfHooks(): PerfHooks {
+    const hooks: PerfHooks = {
+      probe: this.probe,
+      driver: (mode) => {
+        const was = this.driverMode;
+        this.driverMode = mode;
+        this.lastFrame = null;
+        if (mode === 'raf' && was !== 'raf') requestAnimationFrame(this.frame);
+      },
+      step: (now) => this.runFrame(now),
+      onFrame: null,
+      speed: (x) => {
+        this.loop.speed = x;
+        this.session.control({ type: 'speed', x });
+        this.updateControls();
+      },
+      start: () => {
+        if (this.phase === 'ready') this.start();
+        else if (this.phase === 'paused') this.togglePause();
+        this.updateControls();
+      },
+      info: () => {
+        const i = this.renderer.renderer.info;
+        return { calls: i.render.calls, triangles: i.render.triangles, programs: i.programs?.length ?? 0, geometries: i.memory.geometries, textures: i.memory.textures };
+      },
+    };
+    this.hooks = hooks;
+    return hooks;
+  }
 
   /** Camera, pawns and effects for this frame. */
   private draw(now: number, exact = false): void {
@@ -614,6 +682,7 @@ class App3D {
     const bomb = b.pos !== null && b.state !== 'carried' ? { pos: b.pos, planted: b.state === 'planted' } : null;
     const weapon: WeaponId | null = firstPerson && humanPawn !== null ? humanPawn.weapon : null;
     const r0 = performance.now();
+    if (this.probing) this.probe.mark('scene', r0);
     this.lastCamera = { eye: { ...eye }, yaw, pitch, viewId };
     this.renderer.render({
       pawns,
@@ -629,6 +698,7 @@ class App3D {
       nowMs: now,
     });
     const r1 = performance.now();
+    if (this.probing) this.probe.mark('render', r1);
     const over = o.round.phase === 'over' && o.round.endTick !== null && o.tick > o.round.endTick + 128;
     const mode = firstPerson
       ? `You: ${human} · Esc frees the mouse`
@@ -650,6 +720,7 @@ class App3D {
       nowMs: now,
     });
     const r2 = performance.now();
+    if (this.probing) this.probe.mark('hud', r2);
     this.cost.render = this.cost.render * 0.95 + (r1 - r0) * 0.05;
     this.cost.hud = this.cost.hud * 0.95 + (r2 - r1) * 0.05;
   }
@@ -793,6 +864,7 @@ async function boot(): Promise<void> {
     const world = worldMesh(a.world3d.geometry);
     new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : 1);
     status.hidden = true;
+    if (params.get('bench') !== null) void runBench(params);
   } catch (err) {
     status.textContent = `Could not start: ${err instanceof Error ? err.message : String(err)}`;
     throw err;
