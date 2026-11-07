@@ -3,7 +3,7 @@
   "fixtures": [
     {
       "bytes": 969817,
-      "commit": "17dc63cd3b097d626e62053c4ca5534c52ee8475",
+      "commit": "f27d4189b1563bd844643c5f9ce441d34854b48d",
       "description": "The golden master: no human, the Core drives all ten pawns for the whole round (npm run harness -- --human none --until end).",
       "digest": "7339dbf2",
       "file": "round-nohuman.jsonl.gz",
@@ -18,7 +18,7 @@
       "script": null,
       "scriptHash": null,
       "seed": 1,
-      "sourceDirty": true,
+      "sourceDirty": false,
       "takeover": null,
       "ticks": 4517,
       "tracksHash": "0ff91769",
@@ -32,7 +32,7 @@
     },
     {
       "bytes": 606534,
-      "commit": "17dc63cd3b097d626e62053c4ca5534c52ee8475",
+      "commit": "f27d4189b1563bd844643c5f9ce441d34854b48d",
       "description": "Human cart stands still in Back Alley (fixtures/scripts/cart-idle.json) for 45 s: the Core skips him and his scripted damage; Lokier outlives his recording, barely kills him and rejoins (G1), sp4rtan kills cart on his flank and rejoins, barely hears it, goes LIVE and rejoins again (rejoin path queries in the walk oracle).",
       "digest": "f0ba1a27",
       "file": "round-cart-idle.jsonl.gz",
@@ -47,7 +47,7 @@
       "script": "fixtures/scripts/cart-idle.json",
       "scriptHash": "4577d8df",
       "seed": 1,
-      "sourceDirty": true,
+      "sourceDirty": false,
       "takeover": null,
       "ticks": 2881,
       "tracksHash": "0ff91769",
@@ -61,7 +61,7 @@
     },
     {
       "bytes": 376167,
-      "commit": "17dc63cd3b097d626e62053c4ca5534c52ee8475",
+      "commit": "f27d4189b1563bd844643c5f9ce441d34854b48d",
       "description": "G4: nobody plays until 15 s, where the player takes control of cart in the Apartments and then stands still (npm run harness -- --takeover 15 --until 24): ticks 0–959 are the golden master; on tick 960 observe.human becomes cart and the Core lifts his 11 damage blocks and activates Lokier’s encounter (waiting); Lokier outlives his recording, barely kills him and rejoins (G1).",
       "digest": "fb303936",
       "file": "round-cart-takeover.jsonl.gz",
@@ -76,7 +76,7 @@
       "script": null,
       "scriptHash": null,
       "seed": 1,
-      "sourceDirty": true,
+      "sourceDirty": false,
       "takeover": 15,
       "ticks": 1537,
       "tracksHash": "0ff91769",
