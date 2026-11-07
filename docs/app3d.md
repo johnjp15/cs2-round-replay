@@ -46,7 +46,10 @@ Watching (default, every device) and dead: spectating, as CS2 (below). P pause.
 **E** or the button takes control of cart from that tick (the speed drops to 1×; the pointer is locked): mouse look,
 W / S forward / back and A / D strafe relative to the view (CS2's), Space jump, Ctrl or C duck, Shift walk, mouse 1
 fire / throw, mouse 2 scope (the input's ATTACK2: the scope is the engine's, H2b: levels and FOVs from
-data/weapons.json, scoped accuracy and speed, a reload or a bolt cycle drops it), R reload, 1–5 weapon slots (as the 2D app), E use (plant, defuse). Esc frees the mouse. Dead,
+data/weapons.json, scoped accuracy and speed, a reload or a bolt cycle drops it), R reload, 1–5 weapon slots (as the 2D app: 1 primary, 2 pistol, 3 knife, 4 grenades, 5 C4; the HUD lists the
+carried ones above the ammo, the held one bright), E use (plant, defuse, W2: pick up the gun looked at within 80 units,
+swapping a full slot; walking over a gun whose slot is empty picks it up), G drop the active gun (docs/sim3d.md "World
+items"). Esc frees the mouse. Dead,
 the camera spectates again (your living teammates first, as CS2 competitive's mp_forcecamera 1). G (drop) is not implemented: the engine has no dropped weapons yet (H4).
 
 Duck, walk, jump and use are rebindable under **Keys** in the bar (one localStorage setting

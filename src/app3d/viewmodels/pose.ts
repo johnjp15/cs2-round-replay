@@ -33,6 +33,13 @@ export interface VmAnim {
   readonly deploy: Timed | null;
   /** Seconds since a knife swing started, or null. */
   readonly swing: number | null;
+  /**
+   * W2 hooks for W1's knife animations (absent / null: not playing). `stab`: seconds since a heavy attack (mouse 2)
+   * started; `inspect`: seconds since an inspect started. vmPose gives each a simple placeholder pose (phases `stab`,
+   * `inspect`); W1 fills in the sequencing.
+   */
+  readonly stab?: number | null;
+  readonly inspect?: number | null;
   /** Seconds since the plant started (USE held with the C4), or null. */
   readonly plant: number | null;
   readonly primed: boolean;
@@ -61,7 +68,7 @@ export interface VmPose {
   visible: boolean;
   flash: boolean;
   /** For tests and the browser check: what is playing and how far (0..1). */
-  phase: 'idle' | 'deploy' | 'fire' | 'reload' | 'swing' | 'plant' | 'primed' | 'throw';
+  phase: 'idle' | 'deploy' | 'fire' | 'reload' | 'swing' | 'stab' | 'inspect' | 'plant' | 'primed' | 'throw';
   progress: number;
 }
 
@@ -72,6 +79,9 @@ export function freshPose(): VmPose {
 const FLASH_SEC = 0.035;
 const KICK_SEC = 0.06;
 const SWING_SEC = 0.4;
+/** W2 placeholders: a heavy stab (CS2's secondary attack is ~1 s between stabs) and an inspect. */
+export const STAB_SEC = 0.9;
+export const INSPECT_SEC = 3.2;
 const THROW_SEC = 0.25;
 
 function smooth(x: number): number {
@@ -144,6 +154,37 @@ export function vmPose(a: VmAnim, m: WeaponModel, out: VmPose): VmPose {
     }
     if (bolt !== null && p >= bolt - 0.04) out.bolt = m.boltTravel * (ramp(p, bolt - 0.04, bolt) - ramp(p, bolt + 0.03, bolt + 0.08));
     out.phase = 'reload';
+    out.progress = p;
+    return out;
+  }
+  // W2: the knife at rest breathes (a slow 0.4 Hz rise and fall), held low right with the blade up and in.
+  if (m.kind === 'knife') {
+    out.y += Math.sin(a.time * 2 * Math.PI * 0.4) * 0.18;
+    out.rx += Math.sin(a.time * 2 * Math.PI * 0.4 + 0.6) * 0.012;
+  }
+  if (m.kind === 'knife' && a.stab !== undefined && a.stab !== null && a.stab < STAB_SEC) {
+    // Placeholder: draw back, thrust forward and in, recover.
+    const p = a.stab / STAB_SEC;
+    const back = ramp(p, 0, 0.25) * (1 - ramp(p, 0.25, 0.4));
+    const thrust = ramp(p, 0.25, 0.42) * (1 - ramp(p, 0.55, 0.95));
+    out.z += 3 * back - 9 * thrust;
+    out.x -= 3 * thrust;
+    out.y += 1.5 * thrust;
+    out.rx -= 0.35 * thrust;
+    out.phase = 'stab';
+    out.progress = p;
+    return out;
+  }
+  if (m.kind === 'knife' && a.inspect !== undefined && a.inspect !== null && a.inspect < INSPECT_SEC) {
+    // Placeholder: lift the knife toward the screen centre and turn the blade flat to the camera, then back.
+    const p = a.inspect / INSPECT_SEC;
+    const k = ramp(p, 0, 0.2) * (1 - ramp(p, 0.8, 1));
+    out.x -= 3 * k;
+    out.y += 2 * k;
+    out.z += 2 * k;
+    out.ry += 1.1 * k;
+    out.rz += 0.9 * k * Math.sin(Math.PI * ramp(p, 0.2, 0.8));
+    out.phase = 'inspect';
     out.progress = p;
     return out;
   }

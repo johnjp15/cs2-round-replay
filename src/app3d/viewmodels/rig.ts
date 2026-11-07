@@ -35,27 +35,109 @@ const HOLD: Readonly<Record<WeaponModel['kind'], readonly [number, number, numbe
 };
 /** The barrel turned this much toward the screen centre (radians, yaw left), like CS2's composition. */
 const TOE_IN = 0.045;
+/**
+ * W2: the rest attitude per class on top of TOE_IN (radians: x pitch up, y yaw left, z roll left). The knife: CS2's
+ * default idle, held low on the right with the point up and in toward the crosshair, the edge turned down-left.
+ */
+const REST: Readonly<Record<WeaponModel['kind'], readonly [number, number, number]>> = {
+  rifle: [0, 0, 0],
+  sniper: [0, 0, 0],
+  pistol: [0, 0, 0],
+  knife: [0.3, 0.62, 0.5],
+  c4: [0, 0, 0],
+  grenade: [0, 0, 0],
+};
 
 const SLEEVE: Readonly<Record<Team, number>> = { CT: 0x34465a, T: 0x705d3c };
 const GLOVE = 0x2b2826;
 
-function armParts(m: WeaponModel, sleeve: number): { right: Part[]; left: Part[] } {
-  const right: Part[] = [
-    { s: 'box', c: GLOVE, size: [2.0, 2.6, 2.4], at: [0.3, -1.6, 0.9], rot: [0.25, 0, 0] },
-    { s: 'box', c: sleeve, size: [3.0, 3.0, 13], at: [1.8, -4.6, 8.2], rot: [0.42, -0.18, 0] },
+type V3 = readonly [number, number, number];
+
+/**
+ * W2: a forearm from the wrist `a` to the elbow `b` (model space): a glove cuff at the wrist, then the sleeve, each a
+ * box along the segment. Euler XYZ (three.js: Rx · Ry) that turns +z onto the direction d: yaw asin(dx), pitch
+ * atan2(−dy, dz).
+ */
+export function forearm(a: V3, b: V3, sleeve: number, cuff = 1.8, wrist = 2.3, arm = 3.1): Part[] {
+  const d: V3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len = Math.hypot(d[0], d[1], d[2]);
+  const u: V3 = [d[0] / len, d[1] / len, d[2] / len];
+  const rot: V3 = [Math.atan2(-u[1], u[2]), Math.asin(u[0]), 0];
+  const at = (t: number): V3 => [a[0] + u[0] * t, a[1] + u[1] * t, a[2] + u[2] * t];
+  return [
+    { s: 'box', c: GLOVE, size: [wrist, wrist, cuff], at: at(cuff / 2), rot },
+    { s: 'box', c: sleeve, size: [arm, arm, len - cuff + 0.6], at: at(cuff + (len - cuff) / 2 - 0.3), rot },
   ];
+}
+
+/**
+ * W2: the hands and forearms per weapon class (model space, origin at the top of the grip). The right hand wraps the
+ * grip (thumb over the top on the left, index finger on the trigger) with its forearm running back and down to the
+ * lower right, out of the view; the left hand cups the handguard from below (rifles, snipers; it follows the mag in a
+ * reload) or wraps the right hand (pistols), its forearm to the lower left. Knife and grenades: the right hand only
+ * (CS2's one-handed idle). The C4: both hands under the brick.
+ */
+function armParts(m: WeaponModel, sleeve: number): { right: Part[]; left: Part[] } {
   const lh = m.leftHand;
-  const left: Part[] =
-    lh === null
-      ? [
-          { s: 'box', c: GLOVE, size: [1.8, 2.4, 2.2], at: [-1.1, -2.2, 0.9], rot: [0.25, 0, 0.2] },
-          { s: 'box', c: sleeve, size: [2.8, 2.8, 12], at: [-3.8, -5.2, 7.6], rot: [0.45, 0.35, 0] },
-        ]
-      : [
-          { s: 'box', c: GLOVE, size: [2.6, 2.0, 2.8], at: [lh[0], lh[1] - 0.6, lh[2]] },
-          { s: 'box', c: sleeve, size: [2.8, 2.8, 13], at: [lh[0] - 3.2, lh[1] - 4.2, lh[2] + 6.4], rot: [0.5, 0.42, 0] },
-        ];
-  return { right, left };
+  switch (m.kind) {
+    case 'knife':
+      return {
+        right: [
+          { s: 'box', c: GLOVE, size: [1.6, 1.8, 3.4], at: [0.1, -0.15, 0.15] },
+          { s: 'box', c: GLOVE, size: [0.6, 0.6, 1.6], at: [-0.6, 0.72, -0.7] },
+          ...forearm([0.4, -0.5, 1.9], [3.4, -6.5, 12.5], sleeve),
+        ],
+        left: [],
+      };
+    case 'grenade':
+      return {
+        right: [
+          { s: 'box', c: GLOVE, size: [2.2, 1.4, 1.8], at: [0.5, -0.95, 0.3] },
+          { s: 'box', c: GLOVE, size: [0.6, 1.8, 1.8], at: [1.55, 0.1, -1.2] },
+          { s: 'box', c: GLOVE, size: [0.6, 0.6, 1.6], at: [-1.0, 0.9, -0.6] },
+          ...forearm([0.8, -1.2, 1.0], [3.8, -7.5, 11.5], sleeve),
+        ],
+        left: [],
+      };
+    case 'c4': {
+      const l = lh ?? [-1.6, -1.2, -4.5];
+      return {
+        right: [{ s: 'box', c: GLOVE, size: [2.0, 1.0, 2.6], at: [1.4, -1.7, -1.4] }, ...forearm([1.6, -2.2, 0.0], [4.5, -8, 10.5], sleeve)],
+        left: [{ s: 'box', c: GLOVE, size: [2.0, 1.0, 2.6], at: [l[0], l[1] - 0.5, l[2]] }, ...forearm([l[0] - 0.4, l[1] - 1.0, l[2] + 1.4], [l[0] - 4, l[1] - 7.5, l[2] + 11], sleeve)],
+      };
+    }
+    case 'pistol':
+      return {
+        right: [
+          { s: 'box', c: GLOVE, size: [2.2, 3.2, 2.4], at: [0.2, -1.8, 0.75], rot: [0.22, 0, 0] },
+          { s: 'box', c: GLOVE, size: [0.5, 0.5, 1.4], at: [0.0, -0.75, -0.75] },
+          ...forearm([0.45, -3.3, 1.9], [3.4, -8.8, 12.5], sleeve),
+        ],
+        left: [
+          { s: 'box', c: GLOVE, size: [1.9, 2.6, 2.4], at: [-1.35, -2.3, 0.45], rot: [0.22, 0, 0] },
+          { s: 'box', c: GLOVE, size: [0.6, 0.6, 2.0], at: [-0.8, -0.35, -0.8] },
+          ...forearm([-1.7, -3.5, 1.6], [-6.5, -9, 11.5], sleeve),
+        ],
+      };
+    default: {
+      // Rifles and snipers.
+      const l = lh ?? [0, -0.4, -12];
+      return {
+        right: [
+          { s: 'box', c: GLOVE, size: [2.2, 3.0, 2.6], at: [0.25, -1.75, 0.95], rot: [0.25, 0, 0] },
+          { s: 'box', c: GLOVE, size: [0.7, 0.7, 1.8], at: [-0.85, -0.55, 0.3] },
+          { s: 'box', c: GLOVE, size: [0.5, 0.5, 1.5], at: [0.0, -1.1, -0.85] },
+          ...forearm([0.5, -3.0, 2.4], [3.2, -8.5, 12.5], sleeve),
+        ],
+        left: [
+          { s: 'box', c: GLOVE, size: [2.2, 1.0, 3.2], at: [l[0] - 0.2, l[1] - 0.95, l[2]] },
+          { s: 'box', c: GLOVE, size: [0.6, 1.8, 3.0], at: [l[0] - 1.35, l[1] + 0.05, l[2]] },
+          { s: 'box', c: GLOVE, size: [0.6, 0.9, 2.2], at: [l[0] + 1.35, l[1] - 0.25, l[2] + 0.2] },
+          ...forearm([l[0] - 0.6, l[1] - 1.6, l[2] + 1.2], [l[0] - 7, l[1] - 8, l[2] + 10], sleeve),
+        ],
+      };
+    }
+  }
 }
 
 interface Built {
@@ -156,7 +238,8 @@ export class ViewmodelRig {
     b.group.visible = true;
     const h = HOLD[b.model.kind];
     b.group.position.set(h[0] + VIEWMODEL_OFFSET.x + p.x, h[1] + VIEWMODEL_OFFSET.z + p.y, h[2] - VIEWMODEL_OFFSET.y + p.z);
-    b.group.rotation.set(p.rx, TOE_IN + p.ry, p.rz);
+    const rest = REST[b.model.kind];
+    b.group.rotation.set(rest[0] + p.rx, TOE_IN + rest[1] + p.ry, rest[2] + p.rz);
     if (b.mag !== null) {
       b.mag.position.set(0, p.magY, p.magZ);
       b.mag.visible = p.magVisible;

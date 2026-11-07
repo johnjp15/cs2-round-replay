@@ -234,16 +234,16 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     }
   });
 
-  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction)', () => {
-    expect(logDigest(before.log)).toBe('93e0dc15');
+  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; W2 pistols: b861137b)', () => {
+    expect(logDigest(before.log)).toBe('b861137b');
     expect(rejoins(before.entries)).toEqual([]);
   });
 });
 
 describe('nobody leaves the tape: rejoin never runs', () => {
-  it('golden no-human round: no rejoin line, no path query, digest 7168c0a5 (T1; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
+  it('golden no-human round: no rejoin line, no path query, digest 9f07df0b (W2 pistols; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
     const g = runHarness(data, { ...NO_HUMAN, recordWalk: true });
-    expect(logDigest(g.log)).toBe('7168c0a5');
+    expect(logDigest(g.log)).toBe('9f07df0b');
     expect(g.paths).toEqual([]);
     expect(coreLogs(g.entries).some((l) => / (rejoin|REPLAY): /.test(l.text))).toBe(false);
   });

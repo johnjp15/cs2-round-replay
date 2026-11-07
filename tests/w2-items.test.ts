@@ -153,3 +153,23 @@ describe('W2 world items', () => {
     for (const d of drops) expect(d.resting, d.dropper ?? '').toBe(true);
   });
 });
+
+describe('W2 drawing', () => {
+  it('world items are pooled meshes keyed by seq', async () => {
+    const { WorldItemMeshes } = await import('../src/app3d/viewmodels/rig');
+    const w = new WorldItemMeshes();
+    const at = { x: 10, y: 20, z: 30 };
+    w.update([{ seq: 1, item: 'ak47', pos: at, yaw: 0 }, { seq: 2, item: 'usps', pos: at, yaw: 90 }]);
+    expect(w.count).toBe(2);
+    expect(w.root.children.length).toBe(2);
+    w.update([{ seq: 2, item: 'usps', pos: at, yaw: 90 }]);
+    expect(w.count).toBe(1);
+    expect(w.root.children[0]?.position.toArray()).toEqual([10, 30, -20]);
+  });
+
+  it('the HUD slot list: slot order, the held one marked', async () => {
+    const { slotsHtml } = await import('../src/app3d/hud3d');
+    const html = slotsHtml(['ak47', 'c4', 'glock', 'he', 'knife', 'smoke'], 'glock');
+    expect(html).toBe('<div>AK-47<b>1</b></div><div class="on">Glock-18<b>2</b></div><div>Knife<b>3</b></div><div>HE grenade<b>4</b></div><div>Smoke<b>4</b></div><div>C4<b>5</b></div>');
+  });
+});
