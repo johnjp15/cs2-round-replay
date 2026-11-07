@@ -226,6 +226,8 @@ The status panel adds `z −48` and `+56 in the air` (or `crouched`) for LIVE pa
 
 ![cart near the top of a jump: bigger and lighter, his shadow on the floor, +56 in the air in the panel](img/app-jump.jpg)
 
+![The same spot with the Height layer: CS2 floor heights instead of the radar](img/app-height-map.jpg)
+
 ![Follow camera zoomed in on cart: his smoke, a tracer stopping at a wall, the ghost 4.7 m away](img/app-follow-zoomed.jpg)
 
 **Look.** Dark and quiet so the round reads at a glance: the replay page's "Mirage after dusk" palette
