@@ -491,7 +491,7 @@ class App3D {
     }
     this.tracers = this.tracers.filter((t) => tick - t.tick < TRACER_TICKS);
     this.scene.ingest(o, act, h.activeEffects());
-    this.a1.tick(o, h, s.human);
+    this.a1.tick(o, h, s.human, this.loop.speed);
   }
 
   private takeControl(): void {
