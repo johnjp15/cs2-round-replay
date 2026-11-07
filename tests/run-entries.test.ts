@@ -67,10 +67,16 @@ describe('SummaryCache', () => {
     }
     // Budget 0: at least one line per frame, so it caught up in about as many frames as lines (never all at once).
     expect(frames).toBeGreaterThan(100);
-    // Every later frame with the same key: the cached object, no work.
-    const t0 = performance.now();
+    // Every later frame with the same key: the cached object, no parsing.
+    const at = golden.at.bind(golden);
+    let parses = 0;
+    golden.at = (i: number) => {
+      parses++;
+      return at(i);
+    };
     for (let i = 0; i < 1000; i++) expect(c.get(model, golden, 'end|9')).toBe(s);
-    expect(performance.now() - t0).toBeLessThan(50);
+    expect(parses).toBe(0);
+    golden.at = at;
     // A new key (a post-round death) recomputes; invalidate (a rewind before the end) forgets it.
     const s2 = c.get(model, golden, 'end|10');
     expect(s2).not.toBe(s);
