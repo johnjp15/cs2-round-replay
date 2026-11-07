@@ -1,0 +1,157 @@
+{
+  "format": "cs2-round-replay/clips@1",
+  "note": "Player clips for Dust II (de_dust2): prisms over walkable surfaces a pawn could reach that the CS2 nav does not cover. G2GM; merged into geometry.bin for movement. Built by tools/build-map.ts (tools/extract-clips.ts method); see docs/geometry.md \"Player clips\".",
+  "binary": {
+    "file": "data/maps/de_dust2/clips.bin",
+    "bytes": 284922,
+    "sha256": "79af029f529f2c0a819ccffd85d9cdb1d3d6f79d987c12717855cada63004f4c"
+  },
+  "sources": [
+    {
+      "file": "data/maps/de_dust2/geometry.bin",
+      "sha256": "18e0cd695ae265d4a655a6e68cc9cdf9a41fb8c4746b35f0ca964fa81da77d4e"
+    },
+    {
+      "file": "data/source/cs2/de_dust2/de_dust2.nav",
+      "sha256": "64bbc202edae8a92d432368e86948bbee3af9c56555e190dda251d28c64e1ea7"
+    },
+    {
+      "file": "data/source/maps/de_dust2.json",
+      "sha256": "2ac33081225b231846046ea713e68a8ca5103cb5266055e5d751f2e934cdfbd5"
+    }
+  ],
+  "params": {
+    "maskGrow": 64,
+    "jumpUp": 72,
+    "navExactDz": 16,
+    "navNearRadius": 24,
+    "navNearDz": 16,
+    "navProbe": 4,
+    "pieceCell": 8,
+    "clipHeight": 512,
+    "ceilingGap": 0.125,
+    "seedSearchPx": 13,
+    "seedDz": 24,
+    "maxRounds": 8
+  },
+  "pieces": 5964,
+  "rounds": [
+    {
+      "round": 0,
+      "pixels": 580775,
+      "levels": 780149,
+      "seedsMoved": 1,
+      "walkEdges": 423018,
+      "dropEdges": 1365,
+      "jumpEdges": 1314,
+      "frontierWalk": 3169,
+      "frontierDrop": 742,
+      "frontierJump": 373,
+      "reachedLevels": 421423,
+      "frontierLevels": 4284,
+      "added": 5795,
+      "thin": 143
+    },
+    {
+      "round": 1,
+      "pixels": 580775,
+      "levels": 764335,
+      "seedsMoved": 1,
+      "walkEdges": 417314,
+      "dropEdges": 787,
+      "jumpEdges": 1332,
+      "frontierWalk": 533,
+      "frontierDrop": 68,
+      "frontierJump": 30,
+      "reachedLevels": 418812,
+      "frontierLevels": 631,
+      "added": 160,
+      "thin": 2
+    },
+    {
+      "round": 2,
+      "pixels": 580775,
+      "levels": 764240,
+      "seedsMoved": 1,
+      "walkEdges": 417222,
+      "dropEdges": 788,
+      "jumpEdges": 1319,
+      "frontierWalk": 474,
+      "frontierDrop": 68,
+      "frontierJump": 14,
+      "reachedLevels": 418783,
+      "frontierLevels": 556,
+      "added": 9,
+      "thin": 1
+    },
+    {
+      "round": 3,
+      "pixels": 580775,
+      "levels": 764240,
+      "seedsMoved": 1,
+      "walkEdges": 417223,
+      "dropEdges": 789,
+      "jumpEdges": 1319,
+      "frontierWalk": 472,
+      "frontierDrop": 68,
+      "frontierJump": 14,
+      "reachedLevels": 418787,
+      "frontierLevels": 554,
+      "added": 0,
+      "thin": 0
+    }
+  ],
+  "mesh": {
+    "caps": 11981,
+    "walls": 38790,
+    "degenerate": 302,
+    "vertices": 30261,
+    "triangles": 50428
+  },
+  "validation": {
+    "reachedLevels": 418927,
+    "notAllowedByNav": 140,
+    "notAllowedCells": [
+      "-1152,-256,150",
+      "-128,-512,8",
+      "-128,1280,1",
+      "-1280,64,8",
+      "-1280,64,9",
+      "-1344,256,8",
+      "-1408,2304,0",
+      "-1408,2624,135",
+      "-1536,1792,0",
+      "-1600,1792,0",
+      "-1600,2752,34",
+      "-1600,960,38",
+      "-1664,1664,12",
+      "-1664,1728,3",
+      "-1792,1856,14",
+      "-1792,640,35",
+      "-1792,640,36",
+      "-192,-640,1",
+      "-1920,1856,14",
+      "-1984,1664,34",
+      "-2048,1664,33",
+      "-2176,2368,60",
+      "-2176,2368,61",
+      "-2176,2368,62",
+      "-2176,2368,63",
+      "-256,-640,1",
+      "-320,1472,-125",
+      "-384,1472,-125",
+      "-384,1728,-51",
+      "-384,256,4",
+      "-704,192,8",
+      "-768,1280,-112",
+      "128,-1024,1",
+      "128,-1088,1",
+      "128,192,3",
+      "1280,2432,60",
+      "1664,2240,10",
+      "192,-128,8",
+      "192,-192,8",
+      "192,-64,6"
+    ]
+  }
+}

@@ -164,3 +164,5 @@ export type { MapId, MapPackagePaths } from './maps';
 
 export { MAP_INFO_FORMAT, MapInfoError, bombsiteAt, parseMapInfo } from './map-info';
 export type { MapInfo, MapBombsite, MapRect, MapSpawn } from './map-info';
+export { BOT_DIFFICULTIES, CS2_RULES, SCENARIO_FORMAT, ScenarioError, isScenarioName, parseScenario } from './scenario';
+export type { BotDifficulty, Scenario, ScenarioPlayer, ScenarioRecording, ScenarioRules, ScenarioWeapon } from './scenario';
