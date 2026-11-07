@@ -8,6 +8,7 @@ export type {
   WeaponTuning,
   BombTuning,
   GrenadeTuning,
+  GrenadeCs2Tuning,
   DamageTuning,
   SoundTuning,
   AiTuning,
