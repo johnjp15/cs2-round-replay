@@ -4,6 +4,7 @@
  *
  *   npm run harness3d -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
  *   npm run harness3d -- --scenario fixtures/scenarios/<name>.json [--takeover <t>] [--until <t|end>] [--out <dir>]
+ *   npm run harness3d -- --game <data/scenarios name> [--map <package>] [--until <t>] [--human <pawn>]   # H3
  *
  * Plus a line with the 3D bullets the human fired (hitbox, damage) and the sight traces.
  */
@@ -13,8 +14,10 @@ import { pathToFileURL } from 'node:url';
 import { tickOf, summarize as summarizeRound } from '../src/core/index';
 import { sim3dHostFactory, worldMesh, type Sim3DHost } from '../src/sim3d/index';
 import { HumanBot, formatTimeline, loadScenario, timeline } from './human-bot';
+import { checkRecording, loadGameScenario, playFreePlayCli } from './game-scenario';
 import { DEFAULT_MAP, type MapId } from '../src/contracts/maps';
 import {
+  DEFAULT_SEED,
   describeSummary,
   driftTable,
   ROOT,
@@ -52,9 +55,16 @@ export function host3d(run: HarnessRun): Sim3DHost {
 
 function main(): void {
   const args = parseCliArgs(process.argv.slice(2));
+  // H3: a data/scenarios/ scenario: free play runs on its own; a recording sets the map and plays as below.
+  const game = args.game === null ? null : loadGameScenario(args.game);
+  if (game !== null && game.recording === null) {
+    playFreePlayCli(game, { engine: '3d', map: args.map, until: args.untilGiven && args.until !== 'end' ? args.until : null, seed: args.seed === DEFAULT_SEED ? null : args.seed, human: args.human });
+    return;
+  }
+  if (game !== null) checkRecording(game);
   const scenario = args.scenario === null ? null : loadScenario(args.scenario);
   const t0 = performance.now();
-  const data = loadHarness3dData(args.map ?? scenario?.map ?? DEFAULT_MAP);
+  const data = loadHarness3dData(args.map ?? game?.map ?? scenario?.map ?? DEFAULT_MAP);
   const t1 = performance.now();
   const bot = scenario === null ? null : HumanBot.fromScenario(data, scenario);
   const options: HarnessOptions =

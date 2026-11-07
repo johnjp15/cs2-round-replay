@@ -20,6 +20,7 @@ anywhere else your bullets are real ([`docs/core.md`](docs/core.md) "Recorded du
 control of cart and the log/trace downloads (`?human=cart` plays him from the start).
 F follows cart, G shows his recorded position (the ghost), T everyone's recorded path, Tab the status
 panel; the wheel zooms, dragging pans and a double-click shows the whole map.
+**Scenarios** (H3, [`docs/scenarios.md`](docs/scenarios.md)): `?scenario=mirage-5v5` or `?scenario=dust2-5v5` in the 3D page (`npm run dev:3d`; the bar's Scenario and Map pickers) is free play, every bot live on CS2's nav, on Mirage or CS2's Dust II (map packages built from awpy-data by `tools/build-map.ts`, [`docs/maps.md`](docs/maps.md)); `npm run harness3d -- --game <name>` plays one headless.
 On a phone you watch (there are no touch controls for playing). To serve the static build, run `npm run build && npm run preview`
 (http://localhost:4173). To try it on a phone on the same network, run `npm run dev -- --host` and open
 the Network URL it prints. Details: [`docs/app.md`](docs/app.md).

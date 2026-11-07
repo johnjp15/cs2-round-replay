@@ -1,0 +1,27 @@
+{
+  "format": "cs2-round-replay/map-facts@1",
+  "map": "de_dust2",
+  "package": "de_dust2",
+  "name": "Dust II",
+  "notes": [
+    "Bomb sites and spawn zones: CS2's awpy-data nav has no place names and map_data.json has no entities, so these are measured by tools/build-map.ts's method in docs/maps.md ('Map facts').",
+    "rects: the CS2 radar's own outlines (radars/de_dust2.png of awpy-data 2000942: orange = bomb site, green = spawn zone), found as colour components and converted with the map_data transform (pos_x -2476, pos_y 3239, scale 4.4).",
+    "planter: the 'CanBePlanter' spawns of B3none/cs2-retakes RetakesPlugin/map_config/de_dust2.json (commit 2fde4a9cc21e791d6909b98bacc833aa5c54bdad, GPL-3.0; coordinates only), team 2 (T), Bombsite 0 = A, 1 = B. Every one lies inside its radar outline."
+  ],
+  "bombsites": [
+    {
+      "name": "A",
+      "rects": [[956, 2324, 1255, 2632]],
+      "planter": [[1235.97, 2348.03, 99.72], [1235.97, 2460.97, 97.9], [1069.03, 2348.03, 99.2], [987.97, 2444.03, 96.53]]
+    },
+    {
+      "name": "B",
+      "rects": [[-1728, 2469, -1345, 2883]],
+      "planter": [[-1366.03, 2565.97, 4.63], [-1684.03, 2546.56, 7.28], [-1589.59, 2758.31, 65.03], [-1364.03, 2755.03, 17.68]]
+    }
+  ],
+  "spawnZones": {
+    "T": [[-1182, -985, -962, -607], [-1011, -981, -320, -637]],
+    "CT": [[50, 2381, 230, 2561], [50, 2095, 230, 2240]]
+  }
+}

@@ -5,7 +5,18 @@
  */
 import embedded from 'virtual:cs2-embedded-assets-3d';
 import { loadImage, type PageAssets3d } from './assets3d';
-import { DEFAULT_MAP, type MapId } from '../contracts/index';
+import { DEFAULT_MAP, parseScenario, type MapId, type Scenario } from '../contracts/index';
+import defaultScenario from '../../data/scenarios/mirage-sp4rtan-1v3.json';
+import type { FreePlayAssets3d } from './assets3d';
+
+/** H3: this page embeds only the default scenario (the recorded round); free play needs the normal build (docs/scenarios.md). */
+export function scenarioList(): Scenario[] {
+  return [parseScenario(defaultScenario, 'mirage-sp4rtan-1v3')];
+}
+
+export function loadFreePlayAssets3d(map: MapId): Promise<FreePlayAssets3d> {
+  return Promise.reject(new Error(`free play (map package "${map}") isn't embedded in this page: it plays the recorded round only (docs/scenarios.md)`));
+}
 
 function bytesOf(base64: string): Uint8Array<ArrayBuffer> {
   const s = atob(base64);

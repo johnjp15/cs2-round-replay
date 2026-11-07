@@ -60,6 +60,7 @@ import {
 import { PuppetTrack, ReplayCore, startYaw, summarize as summarizeRound, tOf, tickOf, type RoundModel } from '../src/core/index';
 import { SLOT_WEAPONS, Session, defaultCore, parseSessionData, walkQueryOf, weaponForSlot, type CoreFactory, type HostFactory, type SessionData, type SessionHost, type WeaponSlot, type World3dFiles } from '../src/app/index';
 import { HumanBot, formatTimeline, loadScenario, timeline } from './human-bot';
+import { checkRecording, loadGameScenario, playFreePlayCli } from './game-scenario';
 import { DEFAULT_MAP, mapPackagePaths, parseMapId, type MapId } from '../src/contracts/maps';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -977,6 +978,8 @@ export interface CliArgs {
   readonly untilGiven: boolean;
   /** X1: `--map` (docs/maps.md), or null: the scenario's, else the default. */
   readonly map: MapId | null;
+  /** H3: `--game`: a data/scenarios/ scenario (name or path), or null. */
+  readonly game: string | null;
 }
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
@@ -990,6 +993,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
   let seed = DEFAULT_SEED;
   let out: string | null = null;
   let map: MapId | null = null;
+  let game: string | null = null;
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i] as string;
     const value = (): string => {
@@ -1038,8 +1042,11 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
       case '--map':
         map = parseMapId(value());
         break;
+      case '--game':
+        game = value();
+        break;
       default:
-        throw new Error(`unknown option ${flag} (options: --human none|cart, --takeover <t>, --script <path>, --scenario <path>, --until <t|end>, --seed <n>, --out <dir>, --map <package>)`);
+        throw new Error(`unknown option ${flag} (options: --human none|cart, --takeover <t>, --script <path>, --scenario <path>, --game <name|path>, --until <t|end>, --seed <n>, --out <dir>, --map <package>)`);
     }
   }
   // G4: a takeover is of the human pawn, cart unless --human names another.
@@ -1049,7 +1056,8 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
   }
   if (scenario !== null && script !== null) throw new Error('--scenario and --script exclude each other');
   if (script !== null && human === null) throw new Error('--script needs --human (e.g. --human cart)');
-  return { human, takeover, script, until, seed, out, scenario, untilGiven, map };
+  if (game !== null && (scenario !== null || script !== null)) throw new Error('--game (a data/scenarios/ scenario) excludes --scenario and --script (human-bot scripts of the recorded round)');
+  return { human, takeover, script, until, seed, out, scenario, untilGiven, map, game };
 }
 
 /** Harness options for parsed CLI arguments (reads the script file). */
@@ -1060,8 +1068,15 @@ export function optionsFromArgs(args: CliArgs): HarnessOptions {
 
 function main(): void {
   const args = parseCliArgs(process.argv.slice(2));
+  // H3: a data/scenarios/ scenario: free play runs on its own; a recording sets the map and plays as below.
+  const game = args.game === null ? null : loadGameScenario(args.game);
+  if (game !== null && game.recording === null) {
+    playFreePlayCli(game, { engine: '2d', map: args.map, until: args.untilGiven && args.until !== 'end' ? args.until : null, seed: args.seed === DEFAULT_SEED ? null : args.seed, human: args.human });
+    return;
+  }
+  if (game !== null) checkRecording(game);
   const scenario = args.scenario === null ? null : loadScenario(args.scenario);
-  const map = args.map ?? scenario?.map ?? DEFAULT_MAP;
+  const map = args.map ?? game?.map ?? scenario?.map ?? DEFAULT_MAP;
   const t0 = performance.now();
   const data = loadHarnessData(ROOT, map);
   const t1 = performance.now();

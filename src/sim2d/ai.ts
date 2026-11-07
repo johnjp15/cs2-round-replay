@@ -13,6 +13,7 @@ import { Rng, compareOrdinal, roundNumber, type Button, type Goal, type ObsEvent
 import { aimPitch } from './hitscan';
 import { TICKS_PER_SEC } from './movement';
 import type { NavMesh, NavPoint } from './nav';
+import type { MapNav } from './map-nav';
 import type { GuardSight } from './vision';
 import { fallbackWeapon, gunStats, isGrenade } from './weapons';
 
@@ -124,7 +125,8 @@ export interface AiContext {
   readonly bomb: { readonly planted: Vec3 | null; readonly ticking: boolean; readonly explodeTick: number | null };
   /** The round as observe() reports it (`observe.round.phase`). */
   readonly round: { readonly phase: RoundPhase };
-  readonly nav: NavMesh;
+  /** H3: the map's nav (`legacyMapNav` of the Mirage 2020 nav grid, or a CS2 nav). */
+  readonly nav: MapNav;
   /** The guard-spot sight test: the CS2 mesh (MeshSight, G6), or the 2D Sight without 3D geometry. */
   readonly sight: GuardSight;
   readonly tuning: Tuning;
@@ -304,7 +306,7 @@ export function holdFacing(ctx: AiContext, s: AiState, spot: Vec3): number {
     const y = facePath(spot, s.lastKnown.pos, false);
     if (y !== null) return y;
   }
-  const spawn = placeCentre(nav, ctx.self.team === 'CT' ? 'T Spawn' : 'CT Spawn');
+  const spawn = nav.spawnCentre(ctx.self.team === 'CT' ? 'T' : 'CT');
   if (spawn !== null) {
     const y = facePath(spawn, spot, true);
     if (y !== null) return y;
@@ -420,6 +422,26 @@ export function escapeSpot(nav: NavMesh, from: Vec3, bomb: Vec3, clear: number):
 }
 
 /**
+ * H3: the Mirage 2020 nav grid as the AI's MapNav: exactly the queries the AI made of it before (snapToNav,
+ * nearestBombsitePoint, placeCentre of "T Spawn" / "CT Spawn", escapeSpot, places starting with "Bombsite").
+ */
+export function legacyMapNav(nav: NavMesh): MapNav {
+  return {
+    isWalkable: (p) => nav.isWalkable(p),
+    zAt: (p) => nav.zAt(p),
+    snap: (p) => snapToNav(nav, p),
+    path: (a, b) => nav.path(a, b),
+    segmentWalkable: (a, b) => nav.segmentWalkable(a, b),
+    inBombsite: (p) => (nav.placeName(p) ?? '').startsWith('Bombsite'),
+    bombsitePoint: (p) => nearestBombsitePoint(nav, p),
+    spawnCentre: (team) => placeCentre(nav, team === 'T' ? 'T Spawn' : 'CT Spawn'),
+    escapeSpot: (from, bomb, clear) => escapeSpot(nav, from, bomb, clear),
+    lineOfSight: (a, b) => nav.lineOfSight(a, b),
+    floorsAt: (x, y) => nav.floorsAt(x, y),
+  };
+}
+
+/**
  * Can this CT still finish a defuse before the bomb explodes? Defusing now: only if its progress bar ends before
  * the explosion (the engine's rule). Otherwise: the time left must cover the walk to within the defuse range (nav
  * path at the held weapon's run speed), the defuse itself (bomb.defuseKitSec with a kit, else bomb.defuseSec) and
@@ -440,7 +462,7 @@ export function canFinishDefuse(ctx: AiContext, bomb: Vec3): boolean {
   if (straight / speed > budget) return false;
   // Only when the straight line leaves it in doubt: the walking distance.
   if ((3 * straight) / speed <= budget) return true;
-  const path = ctx.nav.path(self.pos, snapToNav(ctx.nav, bomb));
+  const path = ctx.nav.path(self.pos, ctx.nav.snap(bomb));
   const walk = path === null ? straight : Math.max(0, pathLength2d(path) - range);
   return walk / speed <= budget;
 }
@@ -527,6 +549,9 @@ export function stepAi(prev: AiState, ctx: AiContext): AiStep {
       if (m !== null) {
         move = m;
         faceYaw ??= Math.atan2(m.dirY, m.dirX) / DEG;
+        // H3 (CS2 nav only): jump links and crouch areas.
+        if (m.jump) buttons.push('JUMP');
+        if (m.duck) buttons.push('DUCK');
       }
     }
     if (!reacting && s.lookAt !== null && tick < s.lookAt.untilTick && !plan.use) faceYaw = bearing(self.pos, s.lookAt.pos);
@@ -681,7 +706,7 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
   const bombAt = ctx.bomb.planted;
   const escape = (): RolePlan => {
     if (s.escape === undefined || s.escape === null) {
-      s.escape = bombAt === null ? copy(self.pos) : (escapeSpot(nav, self.pos, bombAt, tuning.bomb.radius + ai.blastMarginUnits) ?? copy(self.pos));
+      s.escape = bombAt === null ? copy(self.pos) : (nav.escapeSpot(self.pos, bombAt, tuning.bomb.radius + ai.blastMarginUnits) ?? copy(self.pos));
       s.holdYaw = null;
     }
     const spot = s.escape;
@@ -698,11 +723,11 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
   if (mustLeave || stayOut) return escape();
 
   // The route first (every role); off-mesh points count at their projection onto the mesh.
-  while (s.routeIndex < goal.route.length && dist2d(self.pos, snapToNav(nav, goal.route[s.routeIndex] as Vec3)) <= arrive) s.routeIndex++;
-  if (s.routeIndex < goal.route.length) return plan('route', snapToNav(nav, goal.route[s.routeIndex] as Vec3), null);
+  while (s.routeIndex < goal.route.length && dist2d(self.pos, nav.snap(goal.route[s.routeIndex] as Vec3)) <= arrive) s.routeIndex++;
+  if (s.routeIndex < goal.route.length) return plan('route', nav.snap(goal.route[s.routeIndex] as Vec3), null);
 
   const defaultSpot = (): Vec3 => {
-    s.spot ??= snapToNav(nav, goal.hold ?? (goal.route.length > 0 ? (goal.route[goal.route.length - 1] as Vec3) : self.pos));
+    s.spot ??= nav.snap(goal.hold ?? (goal.route.length > 0 ? (goal.route[goal.route.length - 1] as Vec3) : self.pos));
     return s.spot;
   };
 
@@ -714,11 +739,11 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
       if (!hasC4) return holdAt(defaultSpot());
       if (s.spot === null) {
         const hold = goal.hold;
-        const inSite = hold !== null && (ctx.nav.placeName(hold) ?? '').startsWith('Bombsite');
-        s.spot = inSite && hold !== null ? snapToNav(nav, hold) : nearestBombsitePoint(nav, goal.route.length > 0 ? (goal.route[goal.route.length - 1] as Vec3) : self.pos);
+        const inSite = hold !== null && ctx.nav.inBombsite(hold);
+        s.spot = inSite && hold !== null ? nav.snap(hold) : nav.bombsitePoint(goal.route.length > 0 ? (goal.route[goal.route.length - 1] as Vec3) : self.pos);
       }
       const spot = s.spot ?? defaultSpot();
-      const inSiteNow = ctx.nav.placeName(self.pos).startsWith('Bombsite');
+      const inSiteNow = ctx.nav.inBombsite(self.pos);
       if (inSiteNow && dist2d(self.pos, spot) <= ai.plantSpotUnits) {
         // In the site: draw the c4 and hold USE (the engine locks movement while planting).
         return plan('planting', null, null, self.weapon === 'c4', 'c4');
@@ -742,13 +767,13 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
           if (!enemyInSight) return plan('defusing', null, bearing(self.pos, s.bombPos), true, gun);
           return plan('holding', null, bearing(self.pos, s.bombPos));
         }
-        return plan('moving', snapToNav(nav, s.bombPos), null, false, gun, range);
+        return plan('moving', nav.snap(s.bombPos), null, false, gun, range);
       }
       return holdAt(defaultSpot());
     }
     case 'hunt': {
       if (s.lastKnown !== null && tick - s.lastKnown.tick <= sec(ai.memorySec)) {
-        const there = snapToNav(nav, s.lastKnown.pos);
+        const there = nav.snap(s.lastKnown.pos);
         if (dist2d(self.pos, there) > arrive) return plan('hunting', there, null);
         // Reached it without contact: forget it and look around from there.
         s.lastKnown = null;
@@ -799,7 +824,7 @@ function guardPlan(
  * off within 48 units of the end, and repath with a sideways nudge when the remaining length hasn't dropped by
  * stuckProgressUnits in stuckSec. null once within arriveUnits.
  */
-function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number): { dirX: number; dirY: number; mag: number } | null {
+function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number): { dirX: number; dirY: number; mag: number; jump: boolean; duck: boolean } | null {
   const { nav, self, tick, tuning } = ctx;
   const ai = tuning.ai;
   const pos = self.pos;
@@ -826,8 +851,10 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
       break;
     }
   }
+  // H3: heading for a jump link's landing (CS2 nav): the leg is a jump, not a straight walk.
+  const jumpLeg = nav.isJumpPoint !== undefined && nav.isJumpPoint(path[s.pathIndex] as Vec3);
   // Off the corridor (a corner cut short): re-plan from here, so the first leg is walkable again.
-  if (!nav.segmentWalkable(pos, path[s.pathIndex] as Vec3) && nav.isWalkable(pos)) {
+  if (!jumpLeg && !nav.segmentWalkable(pos, path[s.pathIndex] as Vec3) && nav.isWalkable(pos)) {
     const keep = { progressTick: s.progressTick, progressDist: s.progressDist };
     replan();
     s.progressTick = keep.progressTick;
@@ -858,5 +885,19 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
   }
   const toEnd = dist2d(pos, dest);
   const mag = Math.min(1, Math.max(0.25, toEnd / 48));
-  return { dirX: dx, dirY: dy, mag };
+  // H3 (CS2 nav): near a jump link's landing, jump from the ground and tuck the legs in the air (a crouch jump);
+  // duck through the nav's crouch areas.
+  let jump = false;
+  let duck = false;
+  if (nav.isJumpPoint !== undefined && nav.isJumpPoint(next) && next.z - pos.z > 8 && dist2d(pos, next) <= AI_JUMP_TRIGGER) {
+    if (Math.abs(self.vel.z) < 1e-6) jump = true;
+    else duck = true;
+  }
+  // Stuck on a CS2 nav (a lip, a crate edge the nav steps over): jump while nudging sideways, as players do.
+  if (nav.isJumpPoint !== undefined && tick < s.unstickUntilTick && Math.abs(self.vel.z) < 1e-6) jump = true;
+  if (nav.isCrouchAt !== undefined && (nav.isCrouchAt(pos) || (dist2d(pos, next) <= 32 && nav.isCrouchAt(next)))) duck = !jump;
+  return { dirX: dx, dirY: dy, mag, jump, duck };
 }
+
+/** H3: jump this close (units, 2D) to a jump link's landing. */
+const AI_JUMP_TRIGGER = 48;
