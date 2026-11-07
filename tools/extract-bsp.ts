@@ -5,6 +5,7 @@
  *   npx tsx tools/extract-bsp.ts                       # data/source/csgo-2020/ → data/maps/mirage-2020/
  *   npx tsx tools/extract-bsp.ts --src ~/mirage-2020   # another source folder (John's extraction, before it's committed)
  *   npx tsx tools/extract-bsp.ts --check               # rebuild in memory; exit 1 if a committed file is stale
+ *   npx tsx tools/extract-bsp.ts --compare             # the built package vs the CS2 one at every recorded sample (markdown)
  *   npx tsx tools/extract-bsp.ts --bsp <file.bsp> --out <dir> --map-name <name>   # any BSP (the tests' public maps)
  *
  * Source folder: `maps/<map>.bsp` (required), `maps/<map>.nav`, `materials/`, `models/` and `MANIFEST.json` as
@@ -23,7 +24,9 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { encodeGeometry } from '../src/sim2d/geometry';
+import { MapGeometry, combineMeshes, decodeGeometry, encodeGeometry } from '../src/sim2d/geometry';
+import { PLAYER_IDS, mapPackagePaths, type MapId, type PlayerId, type RoundData } from '../src/contracts/index';
+import { loadRound, standLevels } from './extract-geometry';
 import { encodeRenderMesh } from '../src/app3d/render-package';
 import { BspFile } from './bsp/bsp';
 import { normalizePath } from './bsp/assets';
@@ -159,7 +162,88 @@ export function buildPackageFiles(src: SourceInfo, mapName: string, id: string):
   return { files, pkg };
 }
 
+/** One package's answer at a recorded sample: is there a stand level within `window` of the recorded z at (x, y)? */
+interface SampleFit {
+  readonly level: number | null;
+  readonly standing: boolean;
+}
+
+function fitAt(g: MapGeometry, x: number, y: number, z: number, window: number): SampleFit {
+  let best: SampleFit = { level: null, standing: false };
+  for (const l of standLevels(g, x, y, z + window, z - window)) if (best.level === null || Math.abs(l.z - z) < Math.abs(best.level - z)) best = { level: l.z, standing: l.standing };
+  return best;
+}
+
+/** The movement mesh (world + player clips) of a package. */
+export function movementGeometry(map: MapId): MapGeometry {
+  const p = mapPackagePaths(map);
+  return new MapGeometry(combineMeshes(decodeGeometry(new Uint8Array(readFileSync(resolve(ROOT, p.geometry)))), decodeGeometry(new Uint8Array(readFileSync(resolve(ROOT, p.clips))))));
+}
+
+/**
+ * X1 step 4: the two packages at every recorded track sample (data/round.json, 10 Hz, x/y from the 2020 video, z
+ * from the 2020 nav): how often a hull stands right there (a stand level within 32 of the recorded z, the hull free),
+ * and how far the floors are from the recording's z. The 2020 package should fit the recording almost everywhere.
+ */
+export function compareReport(round: RoundData, a: { name: string; g: MapGeometry }, b: { name: string; g: MapGeometry }): string {
+  const window = 32;
+  const rows: string[] = [];
+  const tot = { n: 0, fitA: 0, fitB: 0, dzA: [] as number[], dzB: [] as number[], onlyA: 0, onlyB: 0, diff: [] as number[] };
+  for (const id of PLAYER_IDS) {
+    const tr = round.tracks[id as PlayerId];
+    if (tr === undefined) continue;
+    let n = 0;
+    let fa = 0;
+    let fb = 0;
+    for (const s of tr.samples) {
+      const ra = fitAt(a.g, s.x, s.y, s.z, window);
+      const rb = fitAt(b.g, s.x, s.y, s.z, window);
+      n++;
+      const okA = ra.level !== null;
+      const okB = rb.level !== null;
+      if (okA) {
+        fa++;
+        tot.dzA.push(Math.abs((ra.level as number) - s.z));
+      }
+      if (okB) {
+        fb++;
+        tot.dzB.push(Math.abs((rb.level as number) - s.z));
+      }
+      if (okA && !okB) tot.onlyA++;
+      if (okB && !okA) tot.onlyB++;
+      if (okA && okB) tot.diff.push(Math.abs((ra.level as number) - (rb.level as number)));
+    }
+    tot.n += n;
+    tot.fitA += fa;
+    tot.fitB += fb;
+    rows.push(`| ${id} | ${n} | ${fa} (${((100 * fa) / n).toFixed(1)} %) | ${fb} (${((100 * fb) / n).toFixed(1)} %) |`);
+  }
+  const pct = (v: number[], p: number): string => {
+    const s = [...v].sort((x, y) => x - y);
+    return s.length === 0 ? '–' : (s[Math.min(s.length - 1, Math.floor(s.length * p))] as number).toFixed(1);
+  };
+  const within = (v: number[], d: number): string => `${v.filter((x) => x <= d).length}`;
+  return [
+    `| player | samples | a hull stands there: ${a.name} | ${b.name} |`,
+    '| --- | ---: | ---: | ---: |',
+    ...rows,
+    `| **all** | ${tot.n} | ${tot.fitA} (${((100 * tot.fitA) / tot.n).toFixed(1)} %) | ${tot.fitB} (${((100 * tot.fitB) / tot.n).toFixed(1)} %) |`,
+    '',
+    `| | ${a.name} | ${b.name} |`,
+    '| --- | ---: | ---: |',
+    `| samples a hull fits at only on this map | ${tot.onlyA} | ${tot.onlyB} |`,
+    `| floor − recorded z, median / 90th / 99th percentile | ${pct(tot.dzA, 0.5)} / ${pct(tot.dzA, 0.9)} / ${pct(tot.dzA, 0.99)} | ${pct(tot.dzB, 0.5)} / ${pct(tot.dzB, 0.9)} / ${pct(tot.dzB, 0.99)} |`,
+    `| floor within 1 / 4 / 16 of the recorded z | ${within(tot.dzA, 1)} / ${within(tot.dzA, 4)} / ${within(tot.dzA, 16)} | ${within(tot.dzB, 1)} / ${within(tot.dzB, 4)} / ${within(tot.dzB, 16)} |`,
+    '',
+    `Where both fit: the two floors differ by median ${pct(tot.diff, 0.5)}, 90th percentile ${pct(tot.diff, 0.9)}, max ${pct(tot.diff, 1)} (${tot.diff.length} samples).`,
+  ].join('\n');
+}
+
 function main(argv: readonly string[]): void {
+  if (argv.includes('--compare')) {
+    console.log(compareReport(loadRound(), { name: MIRAGE_2020.id, g: movementGeometry(MIRAGE_2020.id) }, { name: 'mirage-cs2', g: movementGeometry('mirage-cs2') }));
+    return;
+  }
   const flag = (name: string): string | null => {
     const i = argv.indexOf(name);
     return i >= 0 ? (argv[i + 1] ?? null) : null;

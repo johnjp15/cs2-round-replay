@@ -90,7 +90,7 @@ describe('BSP reader on public maps (counts from vbspinfo)', () => {
       expect(max[0]).toBeLessThanOrEqual(mm.maxs.x + 1);
       expect(min[2]).toBeGreaterThanOrEqual(mm.mins.z - 1);
       expect(max[2]).toBeLessThanOrEqual(mm.maxs.z + 1);
-      expect(max[0] - min[0]).toBeGreaterThan(mm.maxs.x - mm.mins.x - 4);
+      expect((max[0] as number) - (min[0] as number)).toBeGreaterThan(mm.maxs.x - mm.mins.x - 4);
     }
   });
 
