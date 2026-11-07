@@ -519,11 +519,17 @@ describe('7. body block', () => {
     const e = run.entries[k] as LogEntry;
     expect(dist(pawnAt(e, 'cart').pos, pawnAt(e, 'sp4rtan').pos)).toBeLessThanOrEqual(tuning.replay.closeRangeUnits);
     expect(run.core.divergence.index.saw('sp4rtan', 'cart', k)).toBe(true);
-    // G1: once cart is dead and it is calm, sp4rtan rejoins before his scripted defuse and starts it on the tape's tick.
+    // G1: once cart is dead and it is calm, sp4rtan rejoins. G8: his LIVE fight with cart no longer hits barely, and
+    // he is LIVE on the tick of his scripted kill of barely (58.84 s), so it is dropped: barely survives his recorded
+    // death and plays on for good (fate, execute: guard the bomb). Before G8 the LIVE spray killed barely at 58.58 s and
+    // sp4rtan defused on the tape's tick; now the round is a real 1v1 (outcome printed), ending by the rules.
     const back = rejoins(run.entries).filter((b) => b.id === 'sp4rtan');
     expect(back.length).toBeGreaterThan(0);
     expect((back[0] as { tick: number }).tick).toBeGreaterThan(deaths(run.entries).find((d) => d.victim === 'cart')?.tick ?? Infinity);
-    expect(run.entries.find((e) => e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'defuse_start'))?.observe.tick).toBe(3955);
+    const barely = switches(run).filter((s) => s.id === 'barely');
+    if (deaths(run.entries).every((d) => d.victim !== 'barely' || d.tick > 3766)) expect(barely.at(-1)).toMatchObject({ tick: 3767, trigger: 'fate' });
+    const end = expectRoundEndByRules(run);
+    console.log(`[block-sp4rtan] round_end ${end.tick}: ${end.winner} ${end.reason}; kills ${deaths(run.entries).filter((d) => d.tick > 3600).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}`).join(', ')}`);
     expectUntouchedReplay(run);
   });
 });

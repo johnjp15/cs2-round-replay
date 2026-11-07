@@ -271,8 +271,9 @@ describe('the switch to LIVE', () => {
     expect(unblocks).toEqual(['lokier>barely', 'barely>lokier', 'lokier>donk', 'donk>lokier', 'lokier>eradicate', 'eradicate>lokier', 'lokier>lokier', 'lokier>snarlbot', 'snarlbot>lokier']);
     expect(act.actions.filter((a) => a.type === 'set_mode').map((a) => (a.type === 'set_mode' ? a.id : ''))).toEqual(['lokier']);
     const set = act.actions.find((a) => a.type === 'set_mode');
-    expect(set).toMatchObject({ type: 'set_mode', id: 'lokier', mode: 'LIVE', goal: { role: 'hold', route: [] } });
-    expect(act.actions.some((a) => a.type === 'log' && a.text === 'lokier LIVE: outlived recording (+3.0 s); goal hold, 0 waypoints')).toBe(true);
+    // G8: outlived = his fate is gone (fate.ts): LIVE for good with a CT survivor's goal, retake.
+    expect(set).toMatchObject({ type: 'set_mode', id: 'lokier', mode: 'LIVE', goal: { role: 'retake', route: [] } });
+    expect(act.actions.some((a) => a.type === 'log' && a.text === 'lokier LIVE: outlived recording (+3.0 s); goal retake, 0 waypoints')).toBe(true);
     expect(act.status.find((s) => s.id === 'lokier')).toEqual({ id: 'lokier', mode: 'LIVE', trigger: 'outlived', sinceTick: 1395 });
     expect(act.inputs.some((i) => i.id === 'lokier')).toBe(false);
     expect(core.triggerOf('lokier')).toBe('outlived');

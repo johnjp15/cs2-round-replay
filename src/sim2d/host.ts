@@ -619,7 +619,7 @@ export class Sim2DHost implements IHost {
         others: others.filter((q) => q.id !== p.id),
         sees: sees[i] ?? [],
         events: this.events,
-        bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick },
+        bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick, defuser: this.bomb.defuse?.id ?? null },
         round: { phase: roundPhase(this.round, isTicking(this.bomb)) },
         nav: this.aiNav,
         sight: this.meshSight ?? this.sight,

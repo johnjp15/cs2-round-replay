@@ -135,7 +135,13 @@ export interface AiContext {
   /** Last tick's events (what observe() reports). */
   readonly events: readonly ObsEvent[];
   /** The bomb: planted position (null if not planted), whether it is still ticking, and its explode tick (as the round shows: plant + timer). */
-  readonly bomb: { readonly planted: Vec3 | null; readonly ticking: boolean; readonly explodeTick: number | null };
+  readonly bomb: {
+    readonly planted: Vec3 | null;
+    readonly ticking: boolean;
+    readonly explodeTick: number | null;
+    /** G8: who is defusing it now (the round shows the defuse; CS2 shows a teammate defusing), or null. Absent = null. */
+    readonly defuser?: PlayerId | null;
+  };
   /** The round as observe() reports it (`observe.round.phase`). */
   readonly round: { readonly phase: RoundPhase };
   /** H3: the map's nav (`legacyMapNav` of the Mirage 2020 nav grid, or a CS2 nav). */
@@ -900,6 +906,16 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
       }
       if (self.team === 'CT' && s.bombPos !== null && ctx.bomb.ticking) {
         const range = tuning.bomb.defuseRange * ai.defuseRangeFactor;
+        // G8: a teammate is on the bomb already: cover him (a guard-ring spot with sight to the bomb, facing the Ts'
+        // approach) instead of queueing for the defuse; take over if he stops.
+        const mate = ctx.bomb.defuser ?? null;
+        if (mate !== null && mate !== self.id) {
+          if (s.spot === null || dist2d(s.spot, s.bombPos) > ai.guardMaxUnits || dist2d(s.spot, s.bombPos) < 1) {
+            s.spot = guardSpot({ ...ctx, goal: { ...goal, hold: null } }, s.bombPos) ?? copy(self.pos);
+            s.holdYaw = null;
+          }
+          return holdAt(s.spot, 'guarding');
+        }
         if (dist2d(self.pos, s.bombPos) <= range) {
           // Check for visible Ts first: only defuse with none in sight.
           const enemyInSight = ctx.others.some((o) => o.alive && isEnemy(self, o) && ctx.sees.includes(o.id));

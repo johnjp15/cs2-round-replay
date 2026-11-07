@@ -529,7 +529,18 @@ Back Alley door frame (`tools/live-trace.ts` shows it, 1,000 idle LIVE ticks, 23
    roles do (plant with the c4 when the site is reached, otherwise cover the plant from the site, guard the bomb, go to
    the planted bomb and defuse, fight on the way, take cover under fire) is docs/ai.md's.
 
-The no-human run never reaches the rule (everyone dies on his tick): byte-identical (`7168c0a5`). It works for any
+Scenarios (`tests/survivors.test.ts`, 2D and the 3D host): `eradicate-survives` (cart kills Lokier from the window
+at 10.2 s): eradicate LIVE for good at 12.77 s (`fate`), jumps onto the Apartments sill, drops onto B and covers the
+plant from (−1268, 506), guards the bomb after it, kills sp4rtan when he comes for the defuse (58.4 s): T elimination.
+`zwomp-survives` (John 15:22, "if barely does not kill Zwomp, Zwomp just stands still"; the human takes barely at 40 s
+and stands still): Zwomp LIVE for good at 47.20 s (`outlived`: his recorded killer is the human), kills barely, walks
+to the bomb and defuses it without a kit (53.55 → 63.55 s): CT bomb_defused. `never-peeks` (Lokier survives: LIVE for
+good at 21.80 s, `retake`, holds B) and `flank-sp4rtan` (donk and barely survive sp4rtan: `fate` one tick after their
+recorded deaths, guard the bomb, leave its blast). In each: LIVE from the switch to death or the round's end, no idle
+LIVE stretch over 1 s, at most 2 jitters, no calm turn over 12°/tick, no tick above the run speed (`liveMotion`), and
+G7's react invariant.
+
+The no-human run never reaches the rule (everyone dies on his tick): byte-identical (`9a994b97`, main's). It works for any
 human pawn (it reads `observe.human`; the human's own death is never "gone").
 
 ### The human's pawn

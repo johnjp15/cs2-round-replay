@@ -68,7 +68,10 @@ reversed; else the current yaw. While moving it looks where it goes, or at a hea
 `aiDebug().behaviour` is one of `route moving holding planting guarding defusing hunting searching reacting fighting
 escaping rejoining covering` (G1: `rejoining` for the `rejoin` role, moving or waiting; G8: `covering`, below).
 
-A CT LIVE for good gets `retake` (hold where its recorded track ends, then the planted bomb once it hears it).
+A CT LIVE for good gets `retake` (hold where its recorded track ends, then the planted bomb once it hears it). G8: a
+`retake` / `defuse` CT whose teammate is already defusing (`ctx.bomb.defuser`, what the round shows; both hosts pass
+it) doesn't queue for the bomb: it covers him from a guard-ring spot with sight to the bomb (`guardSpot`, the goal's
+hold ignored), facing the Ts' approach, and takes over if he stops.
 
 ## Navigation
 
