@@ -206,3 +206,12 @@ cannot be reproduced on the CS2 map, and the recorded yaws near the stack are ab
 cart at 65-66.7 s), so yaw-based bearings don't settle it either. The plant spot stays where the radar puts it until
 the 2020 map (X1) or V2's view angles can place the stack and the bomb against each other.
 
+## Re-guessed stretches (G7c)
+
+`tools/extract-round.ts` `REGUESSED` replaces an inferred stretch of a CT's track (strictly between two kept samples,
+the second the first observed one) with a walk along explicit waypoints, a wait at the first leg's end, and a second
+leg arriving on time, both at a fixed speed (at most the player's run speed). Confidence stays `inferred`, uncertainty
+the page's. One entry: **Zwomp 34.0–43.9 s**: through Mid, into the side pocket west of the Catwalk corridor by 39.5 s,
+waiting until 42.2 s, up the corridor at 225 u/s to his observed spot at 43.9 s (the page's guess walked him up the
+corridor in view of Catwalk north from 40.5 s; docs/core.md "Results: never-peeks", docs/geometry.md "Which positions
+are evidence").

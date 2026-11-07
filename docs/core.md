@@ -574,11 +574,13 @@ From that tick the pawn's status is `REPLAY` with trigger `rejoin` (the HUD's st
 | sp4rtan kills barely (HS) | 58.85 | – (barely kills sp4rtan at 59.61: T elimination) | **58.84** (tick 3766) |
 | sp4rtan's kit defuse | 66.80 | – | **66.80**: CT bomb_defused 12 – 15, 0.72 s on the bomb |
 
-T1 (barely on Catwalk, not the underpass beneath it, 35–45 s): barely, LIVE from 40.30 s (heard sp4rtan kill cart),
-now has a line down Catwalk and sees Zwomp walking up it on his *inferred* route; he kills him for real (headshot) at
-**41.41 s** (tick 2650), 2.8 s before the tape, and rejoins at 43.59 s. Every other event is unchanged (sp4rtan → donk
-3222, sp4rtan → barely 3766, defuse 3955–4275). The recording only sights Zwomp from 43.9 s, so his route up Catwalk
-before that is a guess; a later route for him (or LIVE barely facing B) would give the tape's kill back.
+T1 (barely on Catwalk, not the underpass beneath it, 35–45 s): barely, LIVE from 40.27 s (heard sp4rtan kill cart),
+had a line down Catwalk and saw Zwomp walking up it on his *inferred* route; he killed him for real at 41.41 s (tick
+2650), 2.8 s before the tape. **G7c:** the recording only shows Zwomp from 43.9 s, so his approach before that is a
+guess, and it is now re-guessed (`tools/extract-round.ts` `REGUESSED`): through Mid, into the side pocket west of the
+Catwalk corridor (no sight line to Catwalk north) by 39.5 s, waiting there, and up the corridor from 42.2 s at m4a4
+run speed. barely, calm from 40.6 s, rejoins at 42.48 s before Zwomp shows, and the scripted kill lands on the tape's
+**44.20 s** (tick 2829) again; every event of the table is the golden master's tick.
 
 Every event that doesn't involve cart is on the golden master's observe tick. With `rejoin: false` the run is B4's byte for byte (digest `b424522f`). The puppets catch up after the switch: barely within 24 u in 0.88 s, sp4rtan in 2.3 s; nothing teleports and nothing runs above its weapon's run speed (beyond the engine's own ≤ 5 % acceleration transients) from a LIVE switch to 2 s after the rejoin.
 
@@ -588,7 +590,7 @@ Every event that doesn't involve cart is on the golden master's observe tick. Wi
 - **Late planter.** A planter back after the recorded draw tick plants late by the c4's deploy (1 s, `damage.defaultDeploySec`, which CS2 needs; the 2D engine doesn't) unless the approach drew it: in never-peeks it did, so the plant is on the tape.
 - **No late defuse**: a defuser who can't be back by his scripted USE start stays LIVE and defuses as AI.
 - **Lagging switch**: a pawn may rejoin up to 2 s behind its tape; until the puppet catches up its scripted shots aim from where it is (the damage is scripted, so kills land on the tape's ticks), and a puppet snap at a teleport point can still happen (B2's rule).
-- **Zwomp 2.8 s early when cart idles** (since T1 #36; diagnosis G7b): in never-peeks, cart-idle and the idle takeovers at T = 0 / 5, sp4rtan meets the idle cart on his flank (LIVE, sighting, 40.06 s) and fires at him. That fire is not on the tape (sp4rtan's recorded fire is 17.8 s and 49.9 s on), so barely, 1,415 u away, legitimately goes LIVE at 40.27 s (trigger 3). His LIVE guard AI on Catwalk (T1's corrected spot) then sees Zwomp coming straight up from the underpass on Zwomp's *inferred* route (observed only from 43.9 s) and kills him for real at 41.41 s (tick 2650; the tape has 2829). Before T1, barely's track had him down the Tunnel stairs, out of that line. Neither cheap fix fits the rules. Re-routing Zwomp's guess moves the no-human run off the golden master. Changing trigger 3 or what a LIVE bot may shoot is a design call that moves other scenarios. Left open.
+- **Zwomp 2.8 s early when cart idles** (T1 #36 → fixed in G7c): barely's LIVE switch at 40.27 s is legitimate (sp4rtan, LIVE because he met the idle cart on his flank, fires at him: not on the tape). What made it cost Zwomp's life was Zwomp's *guessed* approach up the Catwalk corridor in full view of T1's Catwalk spot. Re-guessed in G7c (above, "Results: never-peeks"); the kill is the tape's 2829 in never-peeks, cart-idle and the idle takeovers. A guessed stretch that a LIVE bot can see is evidence of nothing: docs/geometry.md "Which positions are evidence".
 - **The recording's own sightings** decide "unexpected enemy in sight" (2 s windows per pair, not positions): a LIVE pawn that runs into a REPLAY enemy the tape doesn't pair it with stays LIVE and the AI fights it.
 
 ### Scenarios (`tests/scenarios.test.ts`, `fixtures/scenarios/*.json`)

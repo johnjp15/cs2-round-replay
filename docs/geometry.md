@@ -466,6 +466,19 @@ jump edges (the B Apartments window's 20-unit sill), but a jump there bumps the 
 landings need headroom for a whole jump; with that rule no track needs one. Puppets still press JUMP for any take-off
 the tracks mark (`docs/core.md`), tested with synthetic tracks.
 
+## Which positions are evidence (G7c)
+
+Track samples carry a `confidence` (docs/round-data.md): **observed** (the video shows the player: the POV, a teammate
+spectated, a sighting, the radar for Ts), **estimated**, **inferred** (a guess along the nav mesh between evidence).
+Only observed samples are evidence. The CTs are inferred almost everywhere (their radar dots aren't on a T POV): per
+CT, the observed samples (data/round.json, the `sightings[]` moments) are: Lokier 12.5–12.7 s and 17.5–18.8 s,
+Snakelore 12.0–12.4 s, Zwomp 43.9–44.2 s, sp4rtan 49.9–50.3 s, 58.6–65.1 s and 68.8–70.3 s; Incredibad none.
+Everything else of theirs is a guess and may be re-guessed when it is wrong (it walks a CT into a sight line that, on
+the tape, produced no fight): `tools/extract-round.ts` `REGUESSED` (G7c: Zwomp 34.0–43.9 s, out of Catwalk north's
+sight until 42.2 s; the waypoints are A* corners on the CS2 mesh, every step walkable), then `npm run tracks:snap`.
+The Ts' tracks are radar-observed (±20–40 u) but T1 showed the radar overlays levels (barely 35–45 s): there the
+corrected floor, not the dot, is the evidence (docs/parity.md "Baseline history").
+
 ## Port notes (C#)
 
 - G2GM decoding: unsigned LEB128 and zigzag (`u % 2 == 0 ? u / 2 : -(u + 1) / 2` on `long`), integer coordinates

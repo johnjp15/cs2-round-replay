@@ -305,6 +305,12 @@ tested (no WebKit here).
 
 ## History
 
+- G7c (Zwomp's unobserved approach re-guessed, `tools/extract-round.ts` `REGUESSED`, tracks re-snapped): no-human
+  `7168c0a5` → `351ec509`, cart-idle → `a1812973`, cart-takeover unchanged (`53e00fa6`). `tools/fixture-diff.ts`,
+  no-human: Zwomp's pos / yaw / vel / sees from tick 2168 (34 s; his body lies ≤ 3.2 u from the old spot after his
+  death at 2829), the Core's inputs for him (2167–2828), barely's pitch and yaw while his recorded burst aims at the
+  new Zwomp (2768–2836; barely's position ≤ 0.005 u), and footstep `sound` events. Every shot, damage, death, plant,
+  defuse and round event is identical (Zwomp 2829). cart-idle: barely no longer sees Zwomp while LIVE: the scripted 2829.
 - T1 (`tools/snap-tracks.ts` pass 0, barely back on Catwalk 35.1–44.7 s): on G6's base no-human `150f77b4` → `7168c0a5`
   (walk oracle `8d41dc25` → `29adfc6e`), cart-idle `8f471b88` → `5770cd34` (`f9a434ca` → `7fae11b5`), cart-takeover
   unchanged (`cae23207`, it ends at tick 1536). `tools/fixture-diff.ts`, no-human: only barely's pawn fields differ (pos from tick
