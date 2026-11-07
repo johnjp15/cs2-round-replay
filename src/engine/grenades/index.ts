@@ -9,3 +9,4 @@ export { createInferno, stepInferno, touchesFlame, floorUnder, type InfernoStart
 export { blast, blastDamage, applyArmor, teamScale, type BlastSpec } from './he';
 export { createDecoy } from './decoy';
 export { hashRandom, forward, TICK_RATE } from './math';
+export { aimAtLanding, type AimOptions, type AimSolution } from './aim';

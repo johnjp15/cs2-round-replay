@@ -165,9 +165,20 @@ const state = createGrenadeState(seed, firstTick);       // plain JSON: snapshot
 throwGrenade(state, { type, thrower, team, eye, pitch, yaw, strength, velocity, decoyShotIntervalSec }, world, cfg);
 // every tick, after movement and shots (dt = 1/64; state.tick advances by one):
 const events = stepGrenades(state, world, { pawns, friendlyFire }, cfg);
+// scripted throw at a measured landing (once, cached): const a = aimAtLanding({ type, thrower, team, eye, velocity }, landing, world, cfg);
 // queries for tick T (the tick just stepped): smokeBlocks(state, eyeA, eyeB, T, t), smokeDensityAt(...),
 // per bullet: smokeBulletHole(state, muzzle, impact, T, t); flash: flashAlpha(blind, T), isBlind(blind, T, t)
 ```
+
+**Aiming at a landing** (`aim.ts`): `aimAtLanding(base, target, world, cfg, opts?)` → `{pitch, yaw, strength,
+landing, error, sec, evaluated}` finds the throw from `base` (type, thrower, team, eye, velocity) whose detonation
+lands nearest `target` (3D). It simulates a grid on the host's world (strength 1 / 0.5 / 0, yaw ±15° around the
+bearing in 3° steps, pitch −60…+30° in 5° steps) and then refines around the best three times (halving the steps);
+it is deterministic. For the recorded round the target is `utility[].landing` (V0, `data/round.json`), so a host
+solves each scripted throw once (≈ 650 throws, a few seconds on the Mirage mesh; cache the angles) and releases with
+the result. Where `landing` is null the host keeps an assumed target. On cart's B-site smoke: aimed at the Market
+window's front it lands 3.4 from it (pitch −5°, yaw −64.8°, strength 0.5); aimed at V0's counter spot the best is
+89.6 away (−2030, −246, −161), on the B side of the solid wall (see below).
 
 `GrenadeWorld` = `traceHull(c, half, d) → {fraction, hit, normal, startSolid, allSolid}` and
 `traceLine(a, b) → fraction` (1 = clear). `pawns` are `{id, team, alive, pos (feet), height, eye, yaw, pitch}`.
