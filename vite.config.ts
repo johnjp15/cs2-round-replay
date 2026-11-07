@@ -10,7 +10,7 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
-    // Many tests run whole rounds (1.6–3 s each in Node); on a loaded 2-vCPU runner the 5 s default was too tight.
-    testTimeout: 30_000,
+    // G3: a whole scenario round in 3D (hull traces every tick) takes 5–10 s on a CI runner, more than vitest's 5 s.
+    testTimeout: 60_000,
   },
 });

@@ -14,6 +14,7 @@ import { performance } from 'node:perf_hooks';
 import type { Observe, PawnInput, PawnObs } from '../src/contracts/index';
 import { ReplayCore } from '../src/core/index';
 import { Session, defaultCore, parseSessionData, type CoreFactory } from '../src/app/session';
+import { readWorld3d } from './harness';
 
 function read(rel: string): string {
   return readFileSync(new URL(rel, import.meta.url), 'utf8');
@@ -33,7 +34,7 @@ function pct(sorted: Float64Array, q: number): number {
 }
 
 function bench(name: string, core: CoreFactory, runs: number): void {
-  const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'));
+  const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'), readWorld3d());
   const ticks = Math.round(data.round.meta.durationSec * 64);
   for (let r = 0; r < runs; r++) {
     const s = new Session({ ...data, seed: 1, human: null, core });

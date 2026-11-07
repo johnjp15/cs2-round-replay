@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, SessionLog, canonicalize, replay, stableStringify, type DamageEvent, type LogEntry, type Observe, type PlayerId } from '../src/contracts/index';
 import { ReplayCore, tickOf } from '../src/core/index';
-import { NavWalkQuery } from '../src/sim2d/index';
+import { walkQueryOf } from '../src/app/index';
 import { FOLLOW_SCRIPT, playScript } from '../tools/follow-script';
 import { NO_HUMAN, ROOT, coreLogs, deaths, loadHarnessData, runHarness, type HarnessRun } from '../tools/harness';
 import { HumanBot, ScenarioError, formatTimeline, liveSwitches, loadScenario, parseScenario, rejoins, timeline, type TimelineEvent } from '../tools/human-bot';
@@ -23,6 +23,7 @@ import { HumanBot, ScenarioError, formatTimeline, liveSwitches, loadScenario, pa
 const data = loadHarnessData();
 const tuning = data.tuning;
 const golden = runHarness(data, NO_HUMAN);
+const goldenSnaps = snapTicks(golden);
 
 interface ScenarioRun {
   readonly run: HarnessRun;
@@ -50,12 +51,32 @@ function damages(entries: readonly LogEntry[]): (DamageEvent & { tick: number })
   return out;
 }
 
-/** Per pawn, the largest distance from the golden master's position on ticks it is REPLAY and alive in both runs, not body-blocked yet and not LIVE yet. */
+/** Ticks (after setup) at which a pawn was teleported (a puppet's snap to its track). */
+function snapTicks(run: HarnessRun): Map<PlayerId, number[]> {
+  const out = new Map<PlayerId, number[]>();
+  run.entries.forEach((e, k) => {
+    if (k === 0) return;
+    for (const a of e.act.actions) if (a.type === 'teleport') out.set(a.id, [...(out.get(a.id) ?? []), k]);
+  });
+  return out;
+}
+
+/**
+ * Per pawn, the largest distance from the golden master's position on ticks it is REPLAY and alive in both runs, not
+ * body-blocked yet, not LIVE yet, and (G3) not past a snap the golden master made that this run held back: a puppet
+ * never snaps in the human's sight (B2), and on CS2 Mirage the golden master snaps where the recording runs into CS2's
+ * walls (docs/core.md "Snaps").
+ */
 function replayDeviation(run: HarnessRun): Map<PlayerId, number> {
   const out = new Map<PlayerId, number>();
   const firstBlock = new Map<PlayerId, number>();
   for (const b of run.bodyBlocks) if (!firstBlock.has(b.id)) firstBlock.set(b.id, b.tick);
   for (const s of liveSwitches(run.entries)) if ((firstBlock.get(s.id) ?? Infinity) > s.tick) firstBlock.set(s.id, s.tick);
+  const mine = snapTicks(run);
+  for (const [id, ticks] of goldenSnaps) {
+    const held = ticks.find((k) => k < run.entries.length && !(mine.get(id) ?? []).includes(k));
+    if (held !== undefined && (firstBlock.get(id) ?? Infinity) > held) firstBlock.set(id, held);
+  }
   for (let k = 1; k < run.entries.length && k < golden.entries.length; k++) {
     const e = run.entries[k] as LogEntry;
     const g = golden.entries[k] as LogEntry;
@@ -115,8 +136,11 @@ const GRACE = Math.round(tuning.replay.outliveGraceSec * 64);
  * G1: the recorded events that don't involve cart, on the golden master's observe ticks (= the tape's): barely's
  * plant, his kill of Zwomp, sp4rtan's kills of donk and barely, the kit defuse and its round end.
  */
+// G3: the plant 7 ticks after the tape's 1761. On CS2 Mirage barely, LIVE after killing Lokier, leaves the Balcony by
+// its west end (CS2 walls in the 2020 drop under the Apartments window) and goes round the B-site box the recording
+// walks through, so G1's plant shift starts his USE 7 ticks late; everything after it is on the tape's ticks.
 const TAPE_AFTER_LOKIER = [
-  ['bomb', 1761, 'planted'],
+  ['bomb', 1768, 'planted'],
   ['kill', 2829, 'barely>zwomp'],
   ['kill', 3222, 'sp4rtan>donk'],
   ['kill', 3766, 'sp4rtan>barely'],
@@ -231,7 +255,7 @@ describe('2. cart kills Lokier about 3 s late', () => {
   });
 
   it('replays identically through a fresh Core, and a Core snapshot mid-encounter continues exactly', () => {
-    const fresh = (): ReplayCore => new ReplayCore(run.model, run.session.schedule, tuning, 1, new NavWalkQuery(data.nav));
+    const fresh = (): ReplayCore => new ReplayCore(run.model, run.session.schedule, tuning, 1, walkQueryOf(data));
     const log = SessionLog.fromText(run.log.toText());
     expect(replay(log, fresh())).toMatchObject({ identical: true, mismatchCount: 0 });
     const seen = seenTick(run) as number;
@@ -384,13 +408,17 @@ describe('6. cart dies early', () => {
   });
 
   it('G1: donk (who kills Lokier) and zwomp (who heard it) rejoin; eradicate, saved by Lokier’s early death, has no tape and stays LIVE', () => {
-    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['donk', 'zwomp']);
+    // G3: barely too: on his snapped CS2 track he sees the LIVE Lokier from the Apartments at 10.7 s and is back on
+    // his tape 1.3 s later.
+    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['barely', 'donk', 'zwomp']);
     expect(switches(run).find((s) => s.id === 'eradicate')).toMatchObject({ trigger: 'outlived' });
     // So barely's kill of Zwomp and sp4rtan's of donk are the tape's again (B4 alone: barely killed a LIVE zwomp at
     // 31.09 s and donk killed sp4rtan at 53.19 s); then the LIVE eradicate meets sp4rtan on B and wins: T elimination.
     const ticks = deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim]);
     expect(ticks).toContainEqual([2829, 'barely', 'zwomp']);
-    expect(ticks).toContainEqual([3222, 'sp4rtan', 'donk']);
+    // G3: sp4rtan meets the LIVE eradicate on B earlier (49.7 s) on CS2 Mirage, so his donk kill is a LIVE one 11
+    // ticks before the tape's 3222, and eradicate kills him right after.
+    expect(ticks).toContainEqual([3211, 'sp4rtan', 'donk']);
     expect(deaths(run.entries).find((d) => d.victim === 'sp4rtan')).toMatchObject({ attacker: 'eradicate' });
   });
 
@@ -487,7 +515,8 @@ describe('9. cart goes A instead of B and never fires (G1)', () => {
   it('Lokier outlives his recording on B; barely kills him and rejoins; everything else is the tape: CT defuse, 0.72 s left', () => {
     expect(switches(run).find((s) => s.id === 'lokier')).toMatchObject({ tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });
     expect(deaths(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ attacker: 'barely' });
-    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['sp4rtan', 'barely']);
+    // G3: barely is back first (tick 1483, as on main), sp4rtan after his fight in A main (later on CS2 Mirage).
+    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['barely', 'sp4rtan']);
     expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER);
     expectRoundEndByRules(run);
     expectUntouchedReplay(run);

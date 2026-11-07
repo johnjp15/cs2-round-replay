@@ -1,6 +1,6 @@
 {
   "name": "miss-lokier-shop",
-  "description": "cart plays his recording to the Apartments window and takes Lokier's scripted 73, but his spray goes 6° wide and misses: Lokier lives. cart backs off deep into the Apartments, out of Lokier's sight, waits for the Ts to deal with him, then takes his recorded way over the Balcony drop and across B to Shop and hides there for the rest of the round, never firing again.",
+  "description": "cart plays his recording to the Apartments window and takes Lokier's scripted 73, but his spray goes 6° wide and misses: Lokier lives. cart backs off deep into the Apartments, out of Lokier's sight, waits for the Ts to deal with him, then takes his recorded way over the Balcony drop and across B to Shop (on CS2 Mirage round a pillar on the Balcony and west of the A-site boxes) and hides there for the rest of the round, never firing again.",
   "human": "cart",
   "seed": 1,
   "until": "end",
@@ -9,14 +9,19 @@
     {"do": "aimAt", "id": "lokier", "band": "chest", "offsetDeg": 6},
     {"do": "fire", "untilDead": false, "maxSec": 0.6},
     {"do": "aimAt", "id": null},
+    {"do": "walkTo", "pos": [-1500, 755]},
     {"do": "walkTo", "pos": [-1250, 738]},
     {"do": "holdStill", "until": 25},
+    {"do": "walkTo", "pos": [-1870, 745]},
+    {"do": "walkTo", "pos": [-1960, 745]},
     {"do": "walkTo", "pos": [-1991, 811]},
     {"do": "walkTo", "pos": [-2096, 758]},
     {"do": "walkTo", "pos": [-2109, 644]},
     {"do": "walkTo", "pos": [-2085, 500]},
     {"do": "walkTo", "pos": [-2080, 346]},
     {"do": "walkTo", "pos": [-1940, -178]},
+    {"do": "walkTo", "pos": [-2320, -210]},
+    {"do": "walkTo", "pos": [-2320, -600]},
     {"do": "walkTo", "pos": [-2360, -642]},
     {"do": "holdStill", "until": 70.6}
   ]

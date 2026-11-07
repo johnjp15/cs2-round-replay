@@ -1,5 +1,7 @@
 /**
- * The page's data: the round, the nav mesh and the sight mask (JSON), and the radar image.
+ * The page's data: the round, the nav mesh and the sight mask (JSON), the radar image, and (G3) the 3D world: the CS2
+ * Mirage movement mesh and player clips (binary, `data/geometry/*.bin`), the snapped tracks (JSON) and the height map
+ * (PNG, the map layer toggle).
  *
  * Normal build (`npm run build`): the JSON files are emitted next to the page and fetched in parallel with the
  * radar, so they are cached separately and don't bloat the script.
@@ -14,6 +16,11 @@ import roundUrl from '../../data/round.json?url';
 import navUrl from '../../data/mirage-nav.json?url';
 import visionUrl from '../../data/mirage-vismask.json?url';
 import radarUrl from '../../data/mirage-radar.jpg';
+import geometryUrl from '../../data/geometry/mirage-geometry.bin?url';
+import clipsUrl from '../../data/geometry/mirage-clips.bin?url';
+import tracksUrl from '../../data/geometry/mirage-tracks.json?url';
+import heightUrl from '../../data/geometry/mirage-height.png';
+import type { World3dFiles } from './session';
 
 /** The JSON values (or their text: parseSessionData takes either) and the decoded radar. */
 export interface PageAssets {
@@ -21,12 +28,22 @@ export interface PageAssets {
   readonly nav: unknown;
   readonly vision: unknown;
   readonly radar: HTMLImageElement;
+  /** G3: the 3D world (`parseSessionData`'s last argument). */
+  readonly world3d: World3dFiles;
+  /** G3: the height map (data/geometry/mirage-height.png, radar frame), for the map layer toggle. */
+  readonly height: HTMLImageElement;
 }
 
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   return (await res.json()) as unknown;
+}
+
+async function fetchBytes(url: string): Promise<Uint8Array> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
 }
 
 async function loadImage(url: string): Promise<HTMLImageElement> {
@@ -37,6 +54,15 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 export async function loadAssets(): Promise<PageAssets> {
-  const [round, nav, vision, radar] = await Promise.all([fetchJson(roundUrl), fetchJson(navUrl), fetchJson(visionUrl), loadImage(radarUrl)]);
-  return { round, nav, vision, radar };
+  const [round, nav, vision, radar, geometry, clips, tracks, height] = await Promise.all([
+    fetchJson(roundUrl),
+    fetchJson(navUrl),
+    fetchJson(visionUrl),
+    loadImage(radarUrl),
+    fetchBytes(geometryUrl),
+    fetchBytes(clipsUrl),
+    fetchJson(tracksUrl),
+    loadImage(heightUrl),
+  ]);
+  return { round, nav, vision, radar, world3d: { geometry, clips, tracks }, height };
 }

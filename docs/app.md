@@ -149,12 +149,14 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
 | Left / right button | ATTACK / ATTACK2 |
 | Shift | WALK |
 | Ctrl or C | DUCK |
+| Space | JUMP (G3; held, it jumps once: a fresh press each jump, as CS2 with `sv_autobunnyhopping 0`; a tap shorter than a frame is latched until the next frame reads the keys) |
 | R / E | RELOAD / USE |
 | 1 2 3 4 5 | Primary, pistol, knife, grenades (repeat to cycle), C4 (app-side `set_weapon`, see above) |
 | F | Follow cart (the camera centres on him; from the full map it zooms to 3×) |
 | G | Ghost: cart's recorded position now, as a hollow outline (on by default) |
 | T | Recorded tracks: every pawn's recorded path for the next 3 s, and its recorded position now |
 | Tab | Status panel (open by default on screens at least 900 px wide) |
+| H | Height map (G3): the map layer shows `data/geometry/mirage-height.png` (CS2 floor heights, radar-aligned) instead of the radar |
 | Mouse wheel / trackpad pinch | Zoom about the cursor (about the centre while following), 1–8× |
 | Drag | Pan (left button while not playing, middle button any time); panning turns follow off |
 | Double-click | Back to the whole map |
@@ -187,13 +189,13 @@ lands. Escape, × or Keep watching close it; the **Summary** button (enabled onc
 back. A rewind to before the round end closes it.
 
 **Controls bar:** Start (from the ready state), Pause/Resume, Restart (back to ready), Summary (B5), speed
-0.25/0.5/1/2/4×, the view toggles Follow / Ghost / Tracks / Panel (the F, G, T and Tab keys, as
+0.25/0.5/1/2/4×, the view toggles Follow / Ghost / Tracks / Panel / Height (the F, G, T, Tab and H keys, as
 buttons for touch), Spectate (rebuilds the session with `human: null` or `cart` and returns to ready),
 Download log (JSONL), Download trace (JSON). Downloads are `Blob` URLs. Tab toggles the panel only
 while focus is on the page, so it still moves focus inside the controls bar.
 
 **Touch (iPhone):** there are no touch controls for the human (on-screen joystick and fire button are
-out of scope). Touch-only devices (`(hover: none) and (pointer: coarse)`) start in spectate mode, and
+out of scope; so no jump button either). Touch-only devices (`(hover: none) and (pointer: coarse)`) start in spectate mode, and
 the controls bar works by tapping; drag, pinch and double-tap move the camera. In landscape on a phone
 the bar moves to a column on the right.
 
@@ -221,7 +223,27 @@ inflated with `DecompressionStream`, the radar is a data: URI, and the page make
 [`deploy.md`](deploy.md). Of the script, C2's combat
 code took it from 58.7 to 82.9 KB and D2's renderer, HUD and camera add 29.9 KB (10.3 KB gzip).
 
+**3D world (G3).** Both builds also load `data/geometry/mirage-geometry.bin` (the CS2 collision mesh, 428 KB),
+`mirage-clips.bin` (player clips, 151 KB), `mirage-tracks.json` (the snapped tracks, 70 KB) and `mirage-height.png`
+(the height map layer, 125 KB), and the session plays in 3D (`parseSessionData`'s `world3d`). The normal build
+fetches them (`?url`, `arrayBuffer`); the single file embeds the binaries and the tracks gzipped + base64 and inflates
+them with `DecompressionStream` (geometry 313 KB, clips 81 KB, tracks 20 KB as embedded) and the height map as a data:
+URI (156 KB). `npm run build:single` is now 1,144,387 bytes (1117.6 KB; gzip 706.7 KB; locked ≈ 1,496 KB), up from
+560,231 bytes (547.1 KB) before; the geometry is the 313 KB G2 estimated, the height map layer the next biggest part
+(a JPEG would halve it: a follow-up). Building the 3D nav (portal checks on the CS2 mesh) takes about 0.25 s at
+start-up in Node.
+
 ## Renderer and HUD (D2)
+
+**Height (G3).** The view is top-down, so height needs a cue: a pawn in the air (not `onGround`) is drawn up to 35 %
+bigger and lighter with its shadow on the floor below, offset down and to the right in proportion to its height above
+the floor (`airCue`, capped at 120 units; the floor from `MapGeometry.floorBelow` under the standing hull's footprint).
+The status panel adds `z −48` and `+56 in the air` (or `crouched`) for LIVE pawns and anyone in the air
+(`heightText`). H swaps the radar for the height map (same frame; its transparency kept).
+
+![cart near the top of a jump: bigger and lighter, his shadow on the floor, +56 in the air in the panel](img/app-jump.jpg)
+
+![The same spot with the Height layer: CS2 floor heights instead of the radar](img/app-height-map.jpg)
 
 ![Follow camera zoomed in on cart: his smoke, a tracer stopping at a wall, the ghost 4.7 m away](img/app-follow-zoomed.jpg)
 

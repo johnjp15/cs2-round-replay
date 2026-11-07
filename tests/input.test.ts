@@ -95,6 +95,9 @@ describe('buttons and bindings', () => {
     expect(bindingForKey('KeyD')).toEqual({ kind: 'hold', control: 'right' });
     expect(bindingForKey('Digit4')).toEqual({ kind: 'slot', slot: 4 });
     expect(bindingForKey('KeyQ')).toBeNull();
+    // G3: Space = JUMP (held: the movement jumps once per press).
+    expect(bindingForKey('Space')).toEqual({ kind: 'hold', control: 'jump' });
+    expect(buttonsFor(held('jump', 'duck', 'walk'))).toEqual(['DUCK', 'WALK', 'JUMP']);
     expect(bindingForMouseButton(0)).toEqual({ kind: 'hold', control: 'attack' });
     expect(bindingForMouseButton(2)).toEqual({ kind: 'hold', control: 'attack2' });
     expect(bindingForMouseButton(1)).toBeNull();

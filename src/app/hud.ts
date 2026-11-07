@@ -19,7 +19,7 @@
  */
 import type { PlayerId, RoundData, Team } from '../contracts/index';
 import type { RoundClock } from '../core/index';
-import { aiDebugLine, clockView, rectsOverlap, scoreView, statusBadge, youView, weaponName, type AiDebugSource, type ClockView, type ScreenRect } from './hud-model';
+import { aiDebugLine, heightText, clockView, rectsOverlap, scoreView, statusBadge, youView, weaponName, type AiDebugSource, type ClockView, type ScreenRect } from './hud-model';
 import type { KillEntry, Scene } from './scene';
 
 export interface HudFrame {
@@ -39,6 +39,8 @@ export interface HudFrame {
   readonly tps: number;
   /** The 2D engine's LIVE AI debug view (Sim2DHost.aiDebug) for the status panel; null or absent: none. */
   readonly ai?: AiDebugSource | null;
+  /** G3: the floor under a point (RenderFrame.floorZ), for the height in the status panel; absent: z only. */
+  readonly floorZ?: ((x: number, y: number, z: number) => number | null) | null;
 }
 
 /** Space kept between the kill feed and what it moves below (CSS px). */
@@ -245,8 +247,12 @@ export class Hud {
             `<td class="since">${since}</td></tr>`,
         );
         // LIVE: what the 2D engine's AI is doing (behaviour, target, goal). 2D debug; the Core doesn't see it.
-        const line = badge.tone === 'alert' && f.ai !== undefined && f.ai !== null && p.alive ? aiDebugLine(f.ai.aiDebug(p.id)) : null;
-        if (line !== null) rows.push(`<tr class="${teamClass(team)} ai"><td colspan="4">${escapeHtml(line)}</td></tr>`);
+        const ai = badge.tone === 'alert' && f.ai !== undefined && f.ai !== null && p.alive ? aiDebugLine(f.ai.aiDebug(p.id)) : null;
+        // G3: the height (z, and how high in the air) for a LIVE pawn and for anyone in the air.
+        const floor = p.alive && !p.onGround && f.floorZ !== undefined && f.floorZ !== null ? f.floorZ(p.pos.x, p.pos.y, p.pos.z) : null;
+        const height = p.alive && (ai !== null || !p.onGround) ? heightText(p, floor === null ? null : p.pos.z - floor) : null;
+        const line = [ai, height].filter((x): x is string => x !== null).join(' · ');
+        if (line !== '') rows.push(`<tr class="${teamClass(team)} ai"><td colspan="4">${escapeHtml(line)}</td></tr>`);
       }
     }
     return rows.join('');

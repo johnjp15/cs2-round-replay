@@ -56,6 +56,7 @@ function pawn(id: PlayerId, x: number, y: number, extra: Partial<PawnObs> = {}):
     weapon: 'ak47',
     ammo: { clip: 30, reserve: 90 },
     crouching: false,
+    onGround: true,
     sees: [],
     ...extra,
   };

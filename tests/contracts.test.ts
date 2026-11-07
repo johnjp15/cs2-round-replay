@@ -103,6 +103,7 @@ function fullObserve(): Observe {
         weapon: 'knife',
         ammo: { clip: 0, reserve: 0 },
         crouching: i % 2 === 0,
+        onGround: true,
         sees: i === 0 ? ['cart', 'donk'] : [],
       })),
     ),

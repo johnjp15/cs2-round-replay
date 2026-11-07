@@ -103,6 +103,8 @@ export type { IHost, ICore, HostSnapshot, CoreSnapshot, HostCapabilities } from 
 export type { WalkQuery } from './walk';
 
 export { TICKS_PER_SEC, toTick, CONFIDENCES, GRENADE_IDS, SHOT_KINDS, RoundDataError, parseRound } from './round';
+export { TRACKS3D_FORMAT, Tracks3dError, applyTracks3d, parseTracks3d } from './tracks3d';
+export type { Tracks3d, Tracks3dJump } from './tracks3d';
 export type {
   Confidence,
   GrenadeId,

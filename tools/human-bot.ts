@@ -57,7 +57,8 @@ import {
   type AimBand,
   type Look,
 } from '../src/core/index';
-import { NavWalkQuery, gunStats, throwElevation, type NavMesh } from '../src/sim2d/index';
+import { gunStats, throwElevation, type NavMesh } from '../src/sim2d/index';
+import { walkQueryOf } from '../src/app/index';
 import type { Session, SessionData } from '../src/app/index';
 import { FollowAim } from './follow-aim';
 import type { HumanCommand, HumanDriver } from './harness';
@@ -241,7 +242,7 @@ export class HumanBot implements HumanDriver {
     this.model = new RoundModel(data.round);
     const tuning: Tuning = { ...data.tuning, replay: { ...data.tuning.replay, driftSnapUnits: 1e9 } };
     const schedule = new EventSchedule(data.round);
-    this.shadow = new ReplayCore(this.model, schedule, tuning, seed, new NavWalkQuery(data.nav), { divergence: false });
+    this.shadow = new ReplayCore(this.model, schedule, tuning, seed, walkQueryOf(data), { divergence: false });
     this.shadow.control({ type: 'start' });
     this.followAim = new FollowAim(data.round, this.model, schedule, data.tuning, this.shadow.script.plan, id);
     this.yaw = startYaw(this.model, id).yaw;

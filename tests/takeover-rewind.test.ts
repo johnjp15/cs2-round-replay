@@ -7,9 +7,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { replay, type LogEntry, type PawnInput, type SessionLog } from '../src/contracts/index';
-import { EventSchedule, ReplayCore, RoundModel, summarize, tickOf } from '../src/core/index';
-import { NavWalkQuery } from '../src/sim2d/index';
-import { Session, type SessionConfig } from '../src/app/session';
+import { summarize, tickOf } from '../src/core/index';
+import { Session, defaultCore, type SessionConfig } from '../src/app/session';
 import { GOLDEN_DIR, gunzipText, readManifest } from '../tools/golden-fixtures';
 import { ROOT, coreLogs, deaths, loadHarnessData, logDigest, runHarness } from '../tools/harness';
 import { HumanBot, formatTimeline, loadScenario, timeline } from '../tools/human-bot';
@@ -156,7 +155,7 @@ describe('rewind across the takeover (resync: no host snapshot, as in CS2)', () 
     const want = key(goldenEntries);
     expect(got.map((x) => x.key)).toEqual(want.map((x) => x.key));
     for (let i = 0; i < want.length; i++) expect(Math.abs((got[i]?.tick ?? 0) - (want[i]?.tick ?? 0)), want[i]?.key).toBeLessThanOrEqual(2);
-    const core = new ReplayCore(new RoundModel(data.round), new EventSchedule(data.round), data.tuning, 1, new NavWalkQuery(data.nav));
+    const core = defaultCore({ model: s.model, schedule: s.schedule, tuning: s.tuning, seed: 1, nav: s.nav, geometry: s.geometry });
     expect(replay(s.log(), core)).toMatchObject({ identical: true, mismatchCount: 0 });
 
     // Second takeover at 40 s (after the resync step).
@@ -167,7 +166,7 @@ describe('rewind across the takeover (resync: no host snapshot, as in CS2)', () 
     const k = 2561;
     expect((s.log().at(k) as LogEntry).observe.human).toBe('cart');
     expect(coreLogs(entries(s.log())).filter((l) => l.text.startsWith('takeover: ')).map((l) => l.tick)).toEqual([k]);
-    expect(replay(s.log(), new ReplayCore(new RoundModel(data.round), new EventSchedule(data.round), data.tuning, 1, new NavWalkQuery(data.nav)))).toMatchObject({ identical: true });
+    expect(replay(s.log(), defaultCore({ model: s.model, schedule: s.schedule, tuning: s.tuning, seed: 1, nav: s.nav, geometry: s.geometry }))).toMatchObject({ identical: true });
   }, 120_000);
 });
 

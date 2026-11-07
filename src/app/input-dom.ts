@@ -7,6 +7,7 @@
  *   Some Ctrl shortcuts (Ctrl+W, Ctrl+T, Ctrl+N on Windows/Linux) cannot be blocked: use C to crouch there.
  * - Mouse/pen pointers only; touch is ignored (no touch controls for the human yet).
  * - Everything is released when the window loses focus, so keys never stick.
+ * - A Space tap shorter than a frame still jumps: a press is latched until the next `controls()` reads it.
  */
 import { NO_CONTROLS, bindingForKey, bindingForMouseButton, type Binding, type HeldControl, type HeldControls, type WeaponSlot } from './input';
 import type { Point2 } from './radar';
@@ -23,6 +24,8 @@ export class InputDom {
   private readonly options: InputDomOptions;
   private held: Record<HeldControl, boolean> = { ...NO_CONTROLS };
   private cursorCss: Point2 | null = null;
+  /** Space went down since the last `controls()` (a tap between two frames would otherwise be lost). */
+  private jumpTapped = false;
   private readonly off: (() => void)[] = [];
 
   constructor(target: HTMLElement, options: InputDomOptions) {
@@ -43,7 +46,9 @@ export class InputDom {
 
   /** What is held right now. */
   controls(): HeldControls {
-    return { ...this.held };
+    const c = { ...this.held, jump: this.held.jump || this.jumpTapped };
+    this.jumpTapped = false;
+    return c;
   }
 
   /** Last mouse position over the canvas, in CSS px relative to it, or null before the mouse moved. */
@@ -53,6 +58,7 @@ export class InputDom {
 
   release(): void {
     this.held = { ...NO_CONTROLS };
+    this.jumpTapped = false;
   }
 
   dispose(): void {
@@ -100,6 +106,7 @@ export class InputDom {
 
   private apply(b: Binding, down: boolean, repeat: boolean): void {
     if (b.kind === 'hold') {
+      if (down && !repeat && b.control === 'jump') this.jumpTapped = true;
       this.held[b.control] = down;
     } else if (down && !repeat) {
       this.options.onSlot(b.slot);

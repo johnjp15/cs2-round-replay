@@ -12,9 +12,9 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SessionLog, fnv1a32Hex, replay, stableStringify, type Vec3, type WalkQuery } from '../src/contracts/index';
 import { EventSchedule, ReplayCore, RoundModel } from '../src/core/index';
-import { NavWalkQuery } from '../src/sim2d/index';
+import { walkQueryOf } from '../src/app/index';
 import { FIXTURE_SPECS, GOLDEN_DIR, gunzipText, parseWalkOracle, readManifest, runFixture, type FixtureEntry, type OracleTick } from '../tools/golden-fixtures';
-import { ROOT, canonicalHash, loadHarnessData, logDigest } from '../tools/harness';
+import { ROOT, bytesHash, canonicalHash, loadHarnessData, logDigest } from '../tools/harness';
 
 const data = loadHarnessData();
 const manifest = readManifest();
@@ -30,12 +30,12 @@ class OracleWalk implements WalkQuery {
   private nextPath = 0;
   private readonly calls: { tick: number; a: Vec3; b: Vec3; walkable: boolean }[];
   private readonly paths: { tick: number; a: Vec3; b: Vec3; length: number | null }[];
-  private readonly nav: NavWalkQuery;
+  private readonly nav: WalkQuery;
   problems: string[] = [];
   count = 0;
   pathCount = 0;
 
-  constructor(oracle: readonly OracleTick[], nav: NavWalkQuery) {
+  constructor(oracle: readonly OracleTick[], nav: WalkQuery) {
     this.calls = oracle.flatMap((t) => t.calls.map((c) => ({ tick: t.tick, a: c.a, b: c.b, walkable: c.walkable })));
     this.paths = oracle.flatMap((t) => (t.paths ?? []).map((c) => ({ tick: t.tick, a: c.a, b: c.b, length: c.length })));
     this.nav = nav;
@@ -79,7 +79,7 @@ class OracleWalk implements WalkQuery {
 
 /** Replay a log, telling the oracle walk which tick the Core is on. */
 function replayWithOracle(log: SessionLog, f: FixtureEntry, oracle: readonly OracleTick[]): { result: ReturnType<typeof replay>; walk: OracleWalk } {
-  const walk = new OracleWalk(oracle, new NavWalkQuery(data.nav));
+  const walk = new OracleWalk(oracle, walkQueryOf(data));
   const core = new ReplayCore(new RoundModel(data.round), new EventSchedule(data.round), data.tuning, f.seed, walk);
   // A thin ICore around the Core that sets the oracle's tick before each step.
   const ticking = {
@@ -116,11 +116,13 @@ for (const spec of FIXTURE_SPECS) {
     const walkText = gunzipText(walkGz);
 
     it('was made from the current data files, script and settings', () => {
-      expect({ tuning: f.tuningHash, round: f.roundHash, nav: f.navHash, vision: f.visionHash }, STALE).toEqual({
+      expect({ tuning: f.tuningHash, round: f.roundHash, nav: f.navHash, vision: f.visionHash, tracks: f.tracksHash, geometry: f.geometryHash }, STALE).toEqual({
         tuning: canonicalHash(data.sources.tuning),
         round: canonicalHash(data.sources.round),
         nav: canonicalHash(data.sources.nav),
         vision: canonicalHash(data.sources.vision),
+        tracks: canonicalHash(data.sources.tracks),
+        geometry: bytesHash(data.sources.geometry, data.sources.clips),
       });
       expect(f.scriptHash, STALE).toBe(spec.script === null ? null : canonicalHash(readFileSync(resolve(ROOT, spec.script), 'utf8')));
       expect({ human: f.human, script: f.script, seed: f.seed, until: f.until, takeover: f.takeover }, STALE).toEqual({ human: spec.human, script: spec.script, seed: spec.seed, until: spec.until, takeover: spec.takeover });

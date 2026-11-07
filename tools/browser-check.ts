@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright-core';
 import { SessionLog, fnv1a32Hex, replay, stableStringify, type Control } from '../src/contracts/index';
 import { Session, defaultCore, parseSessionData } from '../src/app/session';
-import { NO_HUMAN, loadHarnessData, runHarness } from './harness';
+import { NO_HUMAN, loadHarnessData, readWorld3d, runHarness } from './harness';
 
 function read(rel: string): string {
   return readFileSync(new URL(rel, import.meta.url), 'utf8');
@@ -308,9 +308,9 @@ async function rewindAndSummary(browser: Awaited<ReturnType<typeof chromium.laun
   // The rewound log is one straight run: it replays against a fresh Core.
   const text = await page.evaluate(() => window.__cs2replay?.session().log().toText() ?? '');
   const log = SessionLog.fromText(text);
-  const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'));
+  const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'), readWorld3d());
   const ref = new Session({ ...data, seed: 1 });
-  const rp = replay(log, defaultCore({ model: ref.model, schedule: ref.schedule, tuning: data.tuning, seed: 1, nav: data.nav }));
+  const rp = replay(log, defaultCore({ model: ref.model, schedule: ref.schedule, tuning: data.tuning, seed: 1, nav: data.nav, geometry: data.geometry ?? null }));
   const straight = log.lines().every((l, i) => (JSON.parse(l) as { observe: { tick: number } }).observe.tick === i);
   console.log(`page log after the rewinds: ${log.length} lines, straight ${straight}, replays in Node ${rp.identical}`);
   if (!straight || !rp.identical) problems.push(`rewound page log: straight ${straight}, replays ${rp.identical} (first mismatch ${rp.firstMismatchTick})`);
@@ -502,14 +502,19 @@ async function main(): Promise<void> {
     const anchor = { x: -1200, y: 700 };
     const before = await spec.evaluate(([x, y]) => window.__cs2replay?.screenOf(x, y), [anchor.x, anchor.y] as const);
     if (before === undefined) throw new Error('no screenOf');
+    const zoom0 = (await stats(spec)).camera.zoom;
     await spec.mouse.move(before.x, before.y);
     for (let i = 0; i < 6; i++) await spec.mouse.wheel(0, -100);
     await spec.waitForTimeout(200);
     const after = await spec.evaluate(([x, y]) => window.__cs2replay?.screenOf(x, y), [anchor.x, anchor.y] as const);
     const zoomed = await stats(spec);
     const drift = after === undefined ? Infinity : Math.hypot(after.x - before.x, after.y - before.y);
-    console.log(`wheel: 6 notches in about (${anchor.x}, ${anchor.y}): zoom ${zoomed.camera.zoom.toFixed(2)}, point moved ${drift.toFixed(2)} px`);
-    if (drift > 2) problems.push(`wheel zoom moved the point under the cursor by ${drift.toFixed(2)} px`);
+    // The pointer sits on whole CSS px: the zoom is about that pixel, not the anchor's exact spot, which moves the
+    // anchor by its sub-pixel offset × (zoom ratio − 1) even when the zoom is exact.
+    const offset = Math.hypot(Math.round(before.x) - before.x, Math.round(before.y) - before.y);
+    const rounding = offset * Math.max(0, zoomed.camera.zoom / zoom0 - 1);
+    console.log(`wheel: 6 notches in about (${anchor.x}, ${anchor.y}): zoom ${zoomed.camera.zoom.toFixed(2)}, point moved ${drift.toFixed(2)} px (pointer rounding allows ${rounding.toFixed(2)})`);
+    if (drift > 2 + rounding) problems.push(`wheel zoom moved the point under the cursor by ${drift.toFixed(2)} px`);
     await shoot(spec, 'b2-desktop-spectate-zoomed');
     await spec.close();
 
@@ -589,6 +594,51 @@ async function main(): Promise<void> {
     if (fx === null || fx.tracers === 0) problems.push('no tracers after the burst');
     await shoot(play, 'c-desktop-follow-zoomed');
     await play.close();
+
+    // 5b. G3: jump. Space while playing: cart leaves the floor (z up by about sv_jump_impulse²/2g ≈ 57 at the apex),
+    //     is drawn bigger with a shadow, and lands again; H swaps the radar for the height map.
+    const jump = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+    watch(jump, problems);
+    await jump.goto(ORIGIN + '/');
+    await jump.waitForFunction(() => window.__cs2replay !== undefined);
+    await jump.click('#start');
+    await jump.keyboard.press('f');
+    await jump.mouse.move(640, 430);
+    for (let i = 0; i < 3; i++) await jump.mouse.wheel(0, -100);
+    await jump.keyboard.down('s');
+    await jump.waitForTimeout(700);
+    await jump.keyboard.up('s');
+    await jump.waitForTimeout(500);
+    const z0 = await jump.evaluate(() => window.__cs2replay?.scene().pawn('cart')?.pos.z ?? null);
+    await jump.keyboard.press('Space');
+    // Pause near the apex (about 0.38 s up) for the screenshot.
+    const apex = await jump.waitForFunction(
+      (zs) => {
+        const p = window.__cs2replay?.scene().pawn('cart');
+        if (p === null || p === undefined || zs === null || p.onGround || p.vel.z > 40) return false;
+        document.getElementById('pause')?.click();
+        return { z: p.pos.z, onGround: p.onGround };
+      },
+      z0,
+      { polling: 'raf', timeout: 5000 },
+    );
+    const peak = (await apex.jsonValue()) as { z: number; onGround: boolean };
+    await jump.waitForTimeout(200);
+    await shoot(jump, 'j-desktop-jump');
+    console.log(`jump: cart z ${z0?.toFixed(1)} -> ${peak.z.toFixed(1)} near the apex (on ground ${peak.onGround})`);
+    if (z0 === null || !(peak.z - z0 > 40)) problems.push(`Space did not lift cart (z ${z0} -> ${peak.z})`);
+    await jump.click('#pause');
+    const landed = await jump.waitForFunction(() => window.__cs2replay?.scene().pawn('cart')?.onGround === true, null, { polling: 'raf', timeout: 5000 }).then(
+      () => true,
+      () => false,
+    );
+    if (!landed) problems.push('cart did not land after the jump');
+    await jump.keyboard.press('h');
+    await jump.waitForTimeout(300);
+    const layer = await jump.evaluate(() => window.__cs2replay?.stats().overlays.height ?? null);
+    if (layer !== true) problems.push(`H did not switch to the height map (${String(layer)})`);
+    await shoot(jump, 'k-desktop-height-map');
+    await jump.close();
 
     // 6. (d) Phone-sized, touch: spectate by default.
     const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
@@ -698,14 +748,14 @@ async function main(): Promise<void> {
     await live.close();
 
     // 7. Determinism, Node vs. Chrome.
-    const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'));
+    const data = parseSessionData(read('../data/round.json'), read('../data/mirage-nav.json'), read('../data/tuning.json'), read('../data/mirage-vismask.json'), readWorld3d());
     const node = new Session({ ...data, seed: 1, human: null });
     for (let i = 0; i < (browserLog?.lines ?? 0); i++) node.step();
     console.log(`spectate log: Chrome ${browserLog?.lines} lines ${browserLog?.digest}, Node ${node.log().length} lines ${node.log().digest()}`);
     if (browserLog === null || browserLog.digest !== node.log().digest()) problems.push('spectate log differs between Chrome and Node');
     const human = SessionLog.fromText(readFileSync(logPath, 'utf8'));
     // The app's Core: puppets steer with the nav mesh's walkable-line query (B2).
-    const result = replay(human, defaultCore({ model: node.model, schedule: node.schedule, tuning: data.tuning, seed: 1, nav: data.nav }));
+    const result = replay(human, defaultCore({ model: node.model, schedule: node.schedule, tuning: data.tuning, seed: 1, nav: data.nav, geometry: data.geometry ?? null }));
     console.log(`desktop log (human cart, ${human.length} lines) replayed in Node: identical ${result.identical}`);
     if (!result.identical) problems.push(`desktop log does not replay: first mismatch at tick ${result.firstMismatchTick}`);
 

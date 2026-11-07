@@ -1,6 +1,7 @@
 /**
- * Single-file build only (vite.single.config.ts swaps it in for `./assets`): the round, nav and sight-mask JSON
- * and the radar come from `virtual:cs2-embedded-assets`, which the build fills in, so the page makes no requests.
+ * Single-file build only (vite.single.config.ts swaps it in for `./assets`): the round, nav and sight-mask JSON,
+ * the radar and (G3) the 3D world (movement mesh and clips as bytes, snapped tracks, height map) come from
+ * `virtual:cs2-embedded-assets`, which the build fills in, so the page makes no requests.
  *
  * The JSON is gzipped and base64-encoded at build time (about 103 KB instead of 1.18 MB as escaped text) and
  * inflated here with `DecompressionStream` (Safari 16.4+, Chrome 80+, Firefox 113+). `CS2_SINGLE_RAW=1` at build
@@ -16,10 +17,18 @@ function bytesOf(base64: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-async function inflate(base64: string): Promise<string> {
+function gunzip(base64: string): Response {
   if (typeof DecompressionStream === 'undefined') throw new Error('this browser is too old to open the replay (it needs Safari 16.4 or newer)');
-  const stream = new Blob([bytesOf(base64)]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new Response(stream).text();
+  return new Response(new Blob([bytesOf(base64)]).stream().pipeThrough(new DecompressionStream('gzip')));
+}
+
+async function inflate(base64: string): Promise<string> {
+  return gunzip(base64).text();
+}
+
+/** A binary file: always gzip + base64 (CS2_SINGLE_RAW only changes the JSON). */
+async function inflateBytes(base64: string): Promise<Uint8Array> {
+  return new Uint8Array(await gunzip(base64).arrayBuffer());
 }
 
 async function text(value: string): Promise<string> {
@@ -34,6 +43,15 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 export async function loadAssets(): Promise<PageAssets> {
-  const [round, nav, vision, radar] = await Promise.all([text(embedded.round), text(embedded.nav), text(embedded.vision), loadImage(embedded.radar)]);
-  return { round, nav, vision, radar };
+  const [round, nav, vision, radar, geometry, clips, tracks, height] = await Promise.all([
+    text(embedded.round),
+    text(embedded.nav),
+    text(embedded.vision),
+    loadImage(embedded.radar),
+    inflateBytes(embedded.geometry),
+    inflateBytes(embedded.clips),
+    text(embedded.tracks),
+    loadImage(embedded.height),
+  ]);
+  return { round, nav, vision, radar, world3d: { geometry, clips, tracks }, height };
 }

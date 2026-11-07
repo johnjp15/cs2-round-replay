@@ -1,7 +1,7 @@
 /** Sim2D: the 2D top-down engine/host (IHost) for Mirage; may import only src/contracts. */
 export { NavMesh, NavError, navOptionsFromTuning, areaZ } from './nav';
-export type { NavArea, NavData, NavOptions, NavPoint, NavPortal, NavPos } from './nav';
-export { NavWalkQuery } from './walk-query';
+export type { NavArea, NavData, NavOptions, NavPoint, NavPortal, NavPos, Nav3d } from './nav';
+export { NavWalkQuery, HullWalkQuery, hullLineClear, nav3dFor } from './walk-query';
 export {
   TICKS_PER_SEC,
   TICK_DT,
@@ -12,8 +12,16 @@ export {
   applyFriction,
   accelerate,
   stepMove,
+  stepMove3d,
+  settle,
+  restingState,
+  hullOf,
+  fallDamageFor,
+  unstick,
 } from './movement';
 export type { MoveState, MoveInput, MoveStep, Wish } from './movement';
+export { MapGeometry, GeometryError, combineMeshes, decodeGeometry, encodeGeometry, STANDING_HULL, CROUCHING_HULL, TRACE_SKIN } from './geometry';
+export type { GeometryMesh, Hull, BoxTrace, FloorHit } from './geometry';
 export { Sim2DHost, UNSUPPORTED_V0 } from './host';
 export type { RosterEntry, InventoryItem, PawnState, HostNote, CombatLogLine, BlockedPair, Sim2DOptions, Sim2DVision, AiDebug } from './host';
 export {

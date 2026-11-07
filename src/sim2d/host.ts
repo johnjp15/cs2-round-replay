@@ -52,10 +52,11 @@ import {
 } from '../contracts/index';
 import { freshAiState, roleOf, stepAi, type AiBehaviour, type AiOther, type AiState } from './ai';
 import { applyBombAction, bombFromObs, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
-import { collideMove, type Obstacle } from './collision';
+import { collideMove, type CollisionNav, type Obstacle } from './collision';
+import type { MapGeometry } from './geometry';
 import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeOutcome } from './grenades';
 import { traceShot, type ScanPawn } from './hitscan';
-import { TICKS_PER_SEC, TICK_DT, stepMove, type MoveState } from './movement';
+import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove, stepMove3d, type MoveState, type MoveStep } from './movement';
 import type { NavMesh, NavPoint } from './nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from './round';
 import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning, type VisMask } from './vision';
@@ -162,6 +163,9 @@ export interface Sim2DVision {
   readonly seed: number;
 }
 
+/** A pawn's hull can't pass another's when their heights overlap by more than this (units): a pawn can jump over a crouched one only if it clears it. */
+const BODY_OVERLAP_Z = 1;
+
 /** What `aiDebug(id)` reports for a LIVE pawn (renderer, status panel, tests). Not part of observe(). */
 export interface AiDebug {
   readonly id: PlayerId;
@@ -182,8 +186,8 @@ export interface AiDebug {
 /** Queued bomb and round actions (applied in the next tick(), after scripted damage, in Core order). */
 type QueuedRoundAction = BombAction | EndRoundAction;
 
-/** 4 (C4): pawns carry `ai` / `aiDraws`, and the host its AI seed. */
-const HOST_SNAPSHOT_VERSION = 4;
+/** 4 (C4): pawns carry `ai` / `aiDraws`, and the host its AI seed. 5 (G3): moves carry `onGround`, `jumpHeld`, `stamina`. */
+const HOST_SNAPSHOT_VERSION = 5;
 /** CS2 spawn state for a pawn before Core sets it up (game rules, not calibration). */
 const SPAWN_HP = 100;
 const SPAWN_WEAPON: WeaponId = 'knife';
@@ -216,6 +220,8 @@ interface HostState {
 
 export class Sim2DHost implements IHost {
   private readonly nav: NavMesh;
+  /** G3: the collision mesh (world + player clips) for 3D movement, or null for the nav's 2D movement. */
+  private readonly geometry: MapGeometry | null;
   private readonly tuning: Tuning;
   /** Sight for `sees` and bullets (mask + level check), and its flat form for grenades. */
   private readonly sight: Sight;
@@ -248,8 +254,10 @@ export class Sim2DHost implements IHost {
   /**
    * @param options score before the round and the round clock at tick 0; default 0 – 0 and `tuning.round.timeSec`.
    * @param vision the sight mask and the AI seed (C4); default no mask (the nav mesh's line of sight) and seed 0.
+   * @param geometry G3: the collision mesh (world merged with the player clips, docs/geometry.md) for 3D movement
+   *   (`stepMove3d`: jumps, falls, steps); null = the nav's ground-only movement (`stepMove`).
    */
-  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null = null, vision: Sim2DVision | null = null) {
+  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null = null, vision: Sim2DVision | null = null, geometry: MapGeometry | null = null) {
     if (roster.length === 0) throw new Error('Sim2DHost: empty roster');
     const seen = new Set<string>();
     for (const r of roster) {
@@ -258,6 +266,7 @@ export class Sim2DHost implements IHost {
       seen.add(r.id);
     }
     this.nav = nav;
+    this.geometry = geometry;
     this.tuning = tuning;
     this.sight = new Sight(vision?.mask ?? null, nav, sightOptionsFromTuning(tuning));
     this.grenadeSight = new GrenadeSight(this.sight, nav);
@@ -616,33 +625,49 @@ export class Sim2DHost implements IHost {
   private moveAll(t: number, locked: readonly PlayerId[]): void {
     const m = this.tuning.movement;
     const snd = this.tuning.sound;
+    const g = this.geometry;
     for (const p of this.pawns) {
       p.blockedBy = null;
       if (!p.alive) {
-        p.move = { ...p.move, vel: { x: 0, y: 0, z: 0 } };
+        p.move = { ...p.move, vel: { x: 0, y: 0, z: g === null ? 0 : p.move.vel.z } };
+        if (g !== null && !p.move.onGround) p.move = stepMove3d({ ...p.move, vel: { x: 0, y: 0, z: p.move.vel.z } }, null, p.weapon, g, m, TICK_DT).state;
+        p.move = roundMove({ ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } });
         continue;
       }
       const input = this.inputFor(p.id);
       const isLocked = locked.includes(p.id);
       const from = p.move.pos;
-      const step = isLocked
-        ? stepMove({ ...p.move, vel: { x: 0, y: 0, z: 0 } }, input === null ? null : { ...input, forward: 0, side: 0 }, p.weapon, this.nav, m, TICK_DT)
-        : stepMove(p.move, input, p.weapon, this.nav, m, TICK_DT);
+      const lockedInput = input === null ? null : { ...input, forward: 0, side: 0, buttons: input.buttons.filter((b) => b !== 'JUMP') };
+      const base: MoveState = isLocked ? { ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } } : p.move;
+      const step: MoveStep = g === null ? stepMove(base, isLocked ? lockedInput : input, p.weapon, this.nav, m, TICK_DT) : stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT);
       let next = step.state;
       if (!isLocked) {
-        const obstacles = this.solidFor(p);
+        const obstacles = this.solidFor(p, next);
         if (obstacles.length > 0) {
-          const c = collideMove(from, next.pos, obstacles, this.tuning.collision.pawnRadius, this.nav);
+          const c = collideMove(from, next.pos, obstacles, this.tuning.collision.pawnRadius, g === null ? this.nav : new HullClamp(g, next.pos.z, hullOf(next.crouching)));
           if (c.blockedBy !== null) {
-            const z = this.nav.zAt({ x: c.x, y: c.y, z: from.z });
-            next = { ...next, pos: { x: c.x, y: c.y, z }, vel: { x: (c.x - from.x) / TICK_DT, y: (c.y - from.y) / TICK_DT, z: 0 } };
+            let z = g === null ? this.nav.zAt({ x: c.x, y: c.y, z: from.z }) : next.pos.z;
+            let x = c.x;
+            let y = c.y;
+            if (g !== null && g.hullBlocked(x, y, z, hullOf(next.crouching))) {
+              // Back where it was in xy, at its old height if that fits (else it doesn't move at all).
+              if (!g.hullBlocked(x, y, from.z, hullOf(next.crouching))) z = from.z;
+              else {
+                x = from.x;
+                y = from.y;
+                z = from.z;
+              }
+            }
+            next = { ...next, pos: { x, y, z }, vel: { x: (x - from.x) / TICK_DT, y: (y - from.y) / TICK_DT, z: next.vel.z } };
             p.blockedBy = c.blockedBy;
           }
         }
       }
       p.move = roundMove(next);
+      if (step.landSpeed >= m.landSoundSpeed) this.sound(p, 'land');
+      if (step.fallDamage > 0) this.hurt(null, p, null, 'generic', step.fallDamage, 0, false, false);
       const speed = Math.hypot(p.move.vel.x, p.move.vel.y);
-      if (speed > snd.footstepSpeed && reached(t, p.nextFootstepTick)) {
+      if (p.alive && p.move.onGround && speed > snd.footstepSpeed && reached(t, p.nextFootstepTick)) {
         this.sound(p, 'footstep');
         p.nextFootstepTick = roundNumber(t + snd.footstepIntervalSec * TICKS_PER_SEC);
       }
@@ -772,9 +797,16 @@ export class Sim2DHost implements IHost {
   // ---- collision, bomb and round -------------------------------------------------------------
 
   /** Pawns `p` collides with: alive, not `p`, enemies (and teammates with solidTeammates), in id order. */
-  private solidFor(p: PawnState): Obstacle[] {
+  /** The pawns that block `p`'s move to `next`: alive enemies (and teammates with solidTeammates) whose hulls overlap it in height (3D). */
+  private solidFor(p: PawnState, next: MoveState): Obstacle[] {
     const mates = this.tuning.collision.solidTeammates;
-    return this.pawns.filter((q) => q.id !== p.id && q.alive && (mates || q.team !== p.team)).map((q) => ({ id: q.id, x: q.move.pos.x, y: q.move.pos.y }));
+    const g = this.geometry;
+    const lo = Math.min(p.move.pos.z, next.pos.z);
+    const hi = Math.max(p.move.pos.z, next.pos.z) + hullOf(next.crouching).height;
+    return this.pawns
+      .filter((q) => q.id !== p.id && q.alive && (mates || q.team !== p.team))
+      .filter((q) => g === null || (q.move.pos.z < hi - BODY_OVERLAP_Z && q.move.pos.z + hullOf(q.move.crouching).height > lo + BODY_OVERLAP_Z))
+      .map((q) => ({ id: q.id, x: q.move.pos.x, y: q.move.pos.y }));
   }
 
   /** What the bomb rules see of each pawn now (id order). Bombsite lookups only for pawns that could plant. */
@@ -940,7 +972,12 @@ export class Sim2DHost implements IHost {
       case 'teleport': {
         const p = this.pawn(action.id);
         if (p === null) return this.note('action', type, 'unknown pawn', action);
-        p.move = { ...p.move, pos: { x: action.pos.x, y: action.pos.y, z: action.pos.z }, vel: { x: 0, y: 0, z: 0 }, yaw: action.yaw };
+        p.move = { ...restingState(action.pos, action.yaw, p.move.pitch, p.move.crouching), jumpHeld: p.move.jumpHeld };
+        if (this.geometry !== null) {
+          // 3D: stand it on the floor under the given position (the Core sends feet positions near a floor).
+          const at = settle(this.geometry, action.pos, p.move.crouching, this.tuning.movement);
+          p.move = roundMove({ ...p.move, pos: at.pos, onGround: at.onGround });
+        }
         teleported.add(p.id);
         // A LIVE pawn that is moved re-plans from where it lands.
         if (p.ai !== null) p.ai = { ...p.ai, path: [], pathIndex: 0, dest: null, holdYaw: null };
@@ -953,7 +990,7 @@ export class Sim2DHost implements IHost {
         p.armor = Math.max(0, action.armor);
         p.helmet = action.helmet;
         p.alive = p.hp > 0;
-        if (!p.alive) p.move = { ...p.move, vel: { x: 0, y: 0, z: 0 } };
+        if (!p.alive) p.move = { ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } };
         return;
       }
       case 'give': {
@@ -1040,7 +1077,7 @@ function spawnPawn(r: RosterEntry): PawnState {
   return {
     id: r.id,
     team: r.team,
-    move: { pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0, crouching: false },
+    move: restingState({ x: 0, y: 0, z: 0 }),
     hp: SPAWN_HP,
     armor: 0,
     helmet: false,
@@ -1078,6 +1115,7 @@ function pawnObs(p: PawnState, sees: readonly PlayerId[]): PawnObs {
     weapon: p.weapon,
     ammo,
     crouching: p.move.crouching,
+    onGround: p.move.onGround,
     sees: [...sees],
   };
 }
@@ -1092,5 +1130,32 @@ function roundVec(v: Vec3): Vec3 {
 
 /** State as the session log stores it (6 decimals), so snapshots and logs reproduce it exactly. */
 function roundMove(s: MoveState): MoveState {
-  return { pos: roundVec(s.pos), vel: roundVec(s.vel), yaw: roundNumber(s.yaw), pitch: roundNumber(s.pitch), crouching: s.crouching };
+  return {
+    pos: roundVec(s.pos),
+    vel: roundVec(s.vel),
+    yaw: roundNumber(s.yaw),
+    pitch: roundNumber(s.pitch),
+    crouching: s.crouching,
+    onGround: s.onGround,
+    jumpHeld: s.jumpHeld,
+    stamina: roundNumber(s.stamina),
+  };
+}
+
+/** collideMove's wall check in 3D: a horizontal hull trace at the pawn's height (every point counts as walkable). */
+class HullClamp implements CollisionNav {
+  constructor(
+    private readonly g: MapGeometry,
+    private readonly z: number,
+    private readonly hull: { readonly halfWidth: number; readonly height: number },
+  ) {}
+
+  isWalkable(): boolean {
+    return true;
+  }
+
+  clampMove(from: NavPoint, to: NavPoint): Vec3 {
+    const t = this.g.traceBox({ x: from.x, y: from.y, z: this.z }, { x: to.x, y: to.y, z: this.z }, this.hull);
+    return { x: t.endX, y: t.endY, z: this.z };
+  }
 }

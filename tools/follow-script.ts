@@ -19,8 +19,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { canonicalize, stableStringify, type PawnInput, type PlayerId, type Tuning, type WeaponId } from '../src/contracts/index';
 import { EventSchedule, ReplayCore, RoundModel } from '../src/core/index';
-import { NavWalkQuery } from '../src/sim2d/index';
-import type { Session } from '../src/app/index';
+import { walkQueryOf, type Session } from '../src/app/index';
 import { FollowAim } from './follow-aim';
 import {
   DEFAULT_SEED,
@@ -60,7 +59,7 @@ export class FollowDriver implements HumanDriver {
     // B2/B3 only: the shadow decides cart's input as a puppet; B4's triggers would only act on its own (unused) pawns.
     const model = new RoundModel(data.round);
     const schedule = new EventSchedule(data.round);
-    this.shadow = new ReplayCore(model, schedule, tuning, seed, new NavWalkQuery(data.nav), { divergence: false });
+    this.shadow = new ReplayCore(model, schedule, tuning, seed, walkQueryOf(data), { divergence: false });
     this.shadow.control({ type: 'start' });
     this.aim = new FollowAim(data.round, model, schedule, data.tuning, this.shadow.script.plan, id);
   }

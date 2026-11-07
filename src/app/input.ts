@@ -7,7 +7,8 @@
  *   turns it into forward/side relative to the pawn's yaw, using the movement convention
  *   (docs/movement.md): forward = (cos yaw, sin yaw), +side = strafe right = yaw − 90° = (sin yaw, −cos yaw).
  * - The mouse sets yaw: the pawn faces the cursor in world coordinates (yawToward).
- * - Shift = WALK, Ctrl or C = DUCK, left button = ATTACK, right button = ATTACK2, R = RELOAD, E = USE.
+ * - Shift = WALK, Ctrl or C = DUCK, Space = JUMP (G3; held, it jumps once: the movement wants a fresh press, as CS2
+ *   with sv_autobunnyhopping 0), left button = ATTACK, right button = ATTACK2, R = RELOAD, E = USE.
  * - 1–5 select a weapon slot. That is not a PawnInput button: the app turns the request into a
  *   `set_weapon` action for the human pawn through the Session's small action queue
  *   (Session.requestWeaponSlot). In CS2 the human switches weapons natively, so these never go
@@ -24,6 +25,7 @@ export interface HeldControls {
   readonly right: boolean;
   readonly walk: boolean;
   readonly duck: boolean;
+  readonly jump: boolean;
   readonly attack: boolean;
   readonly attack2: boolean;
   readonly use: boolean;
@@ -39,6 +41,7 @@ export const NO_CONTROLS: HeldControls = {
   right: false,
   walk: false,
   duck: false,
+  jump: false,
   attack: false,
   attack2: false,
   use: false,
@@ -65,6 +68,7 @@ const KEY_BINDINGS: ReadonlyMap<string, Binding> = new Map<string, Binding>([
   ['ControlLeft', { kind: 'hold', control: 'duck' }],
   ['ControlRight', { kind: 'hold', control: 'duck' }],
   ['KeyC', { kind: 'hold', control: 'duck' }],
+  ['Space', { kind: 'hold', control: 'jump' }],
   ['KeyR', { kind: 'hold', control: 'reload' }],
   ['KeyE', { kind: 'hold', control: 'use' }],
   ['Digit1', { kind: 'slot', slot: 1 }],
@@ -131,6 +135,7 @@ export function buttonsFor(c: HeldControls): Button[] {
   if (c.use) b.push('USE');
   if (c.duck) b.push('DUCK');
   if (c.walk) b.push('WALK');
+  if (c.jump) b.push('JUMP');
   if (c.reload) b.push('RELOAD');
   return sortButtons(b);
 }
