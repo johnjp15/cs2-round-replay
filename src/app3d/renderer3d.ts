@@ -46,6 +46,8 @@ import type { PlayerId, Team, Vec3, WeaponId } from '../contracts/index';
 import type { Effect } from '../app/effects';
 import { cameraEuler, toThree } from './coords';
 import type { WorldTile } from './world-mesh';
+import { ViewmodelRig, WorldWeapons } from './viewmodels/rig';
+import type { VmAnim } from './viewmodels/pose';
 
 export const TEAM_COLOR: { readonly [K in Team]: number } = { T: 0xe8a33a, CT: 0x4f86d9 };
 const SKY = 0xb9cad6;
@@ -65,6 +67,8 @@ export interface DrawPawn {
   readonly tag: boolean;
   /** Not drawn (the pawn whose eyes the camera is at). */
   readonly hidden: boolean;
+  /** A1: the held weapon (its world model in the right hand; dropped beside the body when dead). */
+  readonly weapon?: WeaponId;
 }
 
 export interface DrawTracer {
@@ -88,7 +92,7 @@ export interface DrawFrame {
   readonly effects: readonly Effect[];
   readonly bomb: { readonly pos: Vec3; readonly planted: boolean } | null;
   /** First-person viewmodel: the held weapon and the time since the last shot (s), or null (spectating). */
-  readonly viewmodel: { readonly weapon: WeaponId; readonly sinceShot: number } | null;
+  readonly viewmodel: { readonly weapon: WeaponId; readonly sinceShot: number; readonly anim?: VmAnim | null; readonly team?: Team } | null;
   readonly nowMs: number;
 }
 
@@ -121,7 +125,6 @@ interface PawnView {
   readonly bodyMat: MeshBasicMaterial;
 }
 
-const WEAPON_COLOR: Partial<Record<WeaponId, number>> = { ak47: 0x6b4a2b, m4a4: 0x2e3338, awp: 0x3d4a33, ssg08: 0x3b4a3a, deagle: 0x8a8d90, glock: 0x2b2b2b, knife: 0x9aa3ad, c4: 0x7a2a22, smoke: 0x9aa3ad, flash: 0xd8d8c8, he: 0x4b5d33, molotov: 0xb5651d };
 
 export class Renderer3D {
   readonly renderer: WebGLRenderer;
@@ -137,10 +140,9 @@ export class Renderer3D {
   private readonly fires: Mesh[] = [];
   private readonly nades: Mesh[] = [];
   private readonly bomb: Mesh;
-  private readonly vm: Group;
-  private readonly vmGun: Mesh;
-  private readonly vmGunMat: MeshBasicMaterial;
-  private readonly flash: Mesh;
+  /** A1: the procedural viewmodels (src/app3d/viewmodels) and the world models on the players. */
+  readonly viewmodels = new ViewmodelRig();
+  private readonly worldWeapons = new WorldWeapons();
   private readonly canvas: HTMLCanvasElement;
   private readonly size = new Vector2();
   /** Triangles drawn in the last frame (stats). */
@@ -210,17 +212,8 @@ export class Renderer3D {
     this.bomb = new Mesh(new BoxGeometry(12, 6, 8), new MeshBasicMaterial({ color: 0xd8322c }));
     this.bomb.visible = false;
     this.scene.add(this.bomb);
-    // Viewmodel: a box gun at the lower right, its muzzle flash, drawn after the world with its own depth.
-    this.vm = new Group();
-    this.vmGunMat = new MeshBasicMaterial({ color: 0x6b4a2b });
-    this.vmGun = new Mesh(new BoxGeometry(0.045, 0.055, 0.42), this.vmGunMat);
-    this.vmGun.position.set(0.17, -0.17, -0.42);
-    const grip = new Mesh(new BoxGeometry(0.04, 0.1, 0.05), new MeshBasicMaterial({ color: 0x2a2a2a }));
-    grip.position.set(0.17, -0.24, -0.32);
-    this.flash = new Mesh(new SphereGeometry(0.05, 8, 6), new MeshBasicMaterial({ color: 0xffe9a0 }));
-    this.flash.position.set(0.17, -0.15, -0.65);
-    this.vm.add(this.vmGun, grip, this.flash);
-    this.vmScene.add(this.vm);
+    // Viewmodel (A1): the held weapon with hands, drawn after the world with its own depth.
+    this.vmScene.add(this.viewmodels.root);
   }
 
   resize(): void {
@@ -263,11 +256,9 @@ export class Renderer3D {
       this.vmCamera.fov = f.viewmodelFovDeg;
       this.vmCamera.updateProjectionMatrix();
     }
-    if (f.viewmodel !== null) {
-      this.vmGunMat.color.setHex(WEAPON_COLOR[f.viewmodel.weapon] ?? 0x555555);
-      const kick = Math.max(0, 1 - f.viewmodel.sinceShot / 0.08);
-      this.vm.position.set(0, kick * 0.01, kick * 0.04);
-      this.flash.visible = f.viewmodel.sinceShot < 0.035 && f.viewmodel.weapon !== 'knife' && !['c4', 'smoke', 'flash', 'he', 'molotov'].includes(f.viewmodel.weapon);
+    const vm = f.viewmodel;
+    this.viewmodels.update(vm === null ? null : (vm.anim ?? { weapon: vm.weapon, sinceShot: vm.sinceShot, cycle: 0.1, reload: null, deploy: null, swing: null, plant: null, primed: false, thrown: null, speed: 0, time: 0 }), vm?.team ?? 'CT');
+    if (vm !== null && this.viewmodels.root.visible) {
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
     }
@@ -284,6 +275,7 @@ export class Renderer3D {
       if (v === undefined) continue;
       v.group.visible = !p.hidden;
       if (p.hidden) continue;
+      if (p.weapon !== undefined) this.worldWeapons.update(p.id, v.group, p.weapon, p.alive, p.crouching, p.pitch);
       const [x, y, z] = toThree(p.pos.x, p.pos.y, p.pos.z);
       v.group.position.set(x, y, z);
       // Group yaw: local −z (the visor's forward) along the Source yaw.

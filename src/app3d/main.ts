@@ -34,6 +34,7 @@ import { MIRAGE_RADAR } from './coords';
 import { Hud3D } from './hud3d';
 import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
+import { A1Mount } from './audio/mount';
 import { RadarSampler, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
 import {
   DEFAULT_ZOOM_RATIO,
@@ -166,6 +167,8 @@ class App3D {
   private readonly world: MapGeometry;
   private readonly seed: number;
   private readonly renderer: Renderer3D;
+  /** A1: sound (Web Audio, CS2's sound events) and the first-person weapon's animation (src/app3d/audio/mount.ts). */
+  private readonly a1: A1Mount;
   private readonly hud: Hud3D;
   private readonly controls: ControlsDom;
   private readonly loop: FixedLoop;
@@ -222,6 +225,8 @@ class App3D {
     this.session = this.newSession(human);
     this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), resolution);
     this.hud = new Hud3D(radar, MIRAGE_RADAR);
+    this.a1 = new A1Mount(world, data.tuning, document.getElementById('bar'));
+    this.a1.vmState = () => this.renderer.viewmodels.last;
     this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
     this.scene = this.ready(this.session);
     this.controls = new ControlsDom(canvas, {
@@ -346,6 +351,7 @@ class App3D {
     }
     this.tracers = this.tracers.filter((t) => tick - t.tick < TRACER_TICKS);
     this.scene.ingest(o, act, h.activeEffects());
+    this.a1.tick(o, h, s.human);
   }
 
   private takeControl(): void {
@@ -513,7 +519,9 @@ class App3D {
       if (p !== null && p.weapon !== this.zoomWeapon) this.setZoom(p.weapon, 0);
       this.look = turnView(this.look, mouse.dx, mouse.dy, effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio));
       // The bullets leave along the firing angles: the view plus the aim punch (zero until H2's recoil, view-cs2.ts).
-      s.setHumanInput(fpsInput(s.human as PlayerId, this.controls.controls(), firingAngles(this.look, this.aimPunch())));
+      const inp = fpsInput(s.human as PlayerId, this.controls.controls(), firingAngles(this.look, this.aimPunch()));
+      s.setHumanInput(inp);
+      this.a1.input(inp, p, this.scene.cur.tick, this.scene.cur.round.bomb.state === 'planted');
     } else if (this.camMode === 'free') {
       this.look = turnView(this.look, mouse.dx, mouse.dy, this.sensitivity);
       this.freePos = flyStep(this.freePos, this.look, this.controls.controls(), dt / 1000, FREE_SPEED);
@@ -602,6 +610,7 @@ class App3D {
         human: p.id === human,
         tag: p.alive && (watchingTeam === null || watchingTeam === undefined || p.team === watchingTeam),
         hidden: (firstPerson || this.camMode === 'pov') && p.id === viewId && p.alive,
+        weapon: p.weapon,
       };
     });
     const rt = this.scene.renderTick(alpha);
@@ -613,6 +622,7 @@ class App3D {
     const b = o.round.bomb;
     const bomb = b.pos !== null && b.state !== 'carried' ? { pos: b.pos, planted: b.state === 'planted' } : null;
     const weapon: WeaponId | null = firstPerson && humanPawn !== null ? humanPawn.weapon : null;
+    const vmAnim = this.a1.frame({ eye, yaw, pitch, listener: firstPerson ? human : this.camMode === 'free' ? null : viewId, firstPerson: firstPerson ? humanPawn : null, renderTick: rt, zoom: this.zoom, nowMs: exact ? o.tick * TICK_MS : now });
     const r0 = performance.now();
     this.lastCamera = { eye: { ...eye }, yaw, pitch, viewId };
     this.renderer.render({
@@ -625,7 +635,7 @@ class App3D {
       tracers,
       effects: this.scene.effects,
       bomb,
-      viewmodel: weapon === null || this.zoom > 0 ? null : { weapon, sinceShot: exact ? 1 : (now - this.lastHumanShotMs) / 1000 },
+      viewmodel: weapon === null || this.zoom > 0 ? null : { weapon, sinceShot: exact ? 1 : (now - this.lastHumanShotMs) / 1000, anim: exact && vmAnim !== null ? { ...vmAnim, sinceShot: 1e6 } : vmAnim, team: humanPawn?.team ?? 'CT' },
       nowMs: now,
     });
     const r1 = performance.now();

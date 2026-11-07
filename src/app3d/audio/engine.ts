@@ -187,7 +187,7 @@ export class AudioEngine implements SoundSink {
       const layers: Layer[] = [];
       const add = (name: string, child: boolean): void => {
         const ev = MANIFEST.events[name];
-        if (ev === undefined) return;
+        if (ev === undefined || (child && ev.files.length === 0)) return;
         layers.push({ ev, buffers: [buf], real: false, childLowpass: child ? 2500 : AUDIO_TUNING.occlusion.openLowpassHz });
         if (!child) for (const c of ev.children) add(c, true);
       };

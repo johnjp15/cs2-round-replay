@@ -198,7 +198,7 @@ export class SoundDirector {
             const fr = RELOAD_STAGES[gun];
             for (const st of RELOAD_STAGE_IDS) {
               const f = fr[st];
-              if (f !== undefined && GUN_SOUNDS[gun].stages[st] !== undefined) this.pending.push({ tick: this.tickNow + Math.max(1, Math.round(f * sec * TICKS_PER_SEC)), id: `reload.${gun}.${st}`, pawn: p.id });
+              if (f !== undefined && GUN_SOUNDS[gun].stages[st] !== undefined) this.pending.push({ tick: this.tickNow - 1 + Math.max(1, Math.round(f * sec * TICKS_PER_SEC)), id: `reload.${gun}.${st}`, pawn: p.id });
             }
             return;
           }

@@ -182,9 +182,7 @@
    "defined": "vo/announcer/game_sounds_cs2_classic.vsndevts"
   },
   "BaseExplosionEffect.Sound": {
-   "files": [
-    "sounds/common/explosions/explo_gas_can_01.vsnd"
-   ],
+   "files": [],
    "volume": 1,
    "pitch": 1,
    "pitchRandom": [
@@ -8588,7 +8586,6 @@
   }
  },
  "files": {
-  "sounds/common/explosions/explo_gas_can_01.vsnd_c": -1,
   "sounds/items/weapon_hegrenade_throw.vsnd_c": 6720,
   "sounds/music/valve_cs2_01/bombplanted.vsnd_c": 672574,
   "sounds/music/valve_cs2_01/lostround.vsnd_c": 174977,
@@ -8905,5 +8902,8 @@
   "sounds/weapons/usp/usp_sliderelease_01.vsnd_c": 6112,
   "sounds/weapons/weapon_zoom_out_03.vsnd_c": 95488
  },
- "missing": []
+ "missing": [],
+ "absent": [
+  "sounds/common/explosions/explo_gas_can_01.vsnd_c"
+ ]
 }

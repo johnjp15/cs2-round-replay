@@ -49,6 +49,8 @@ export interface Manifest {
   readonly files: Readonly<Record<string, number>>;
   /** Event names the table asks for that CS2 doesn't have (should be empty). */
   readonly missing: readonly string[];
+  /** Files events name that pak01 doesn't contain (dead references in CS2's data); dropped from the events. */
+  readonly absent: readonly string[];
 }
 
 function walk(dir: string): string[] {
@@ -121,6 +123,7 @@ export function buildManifest(checkout: string, names: readonly string[]): Manif
   }
   const events: Record<string, ManifestEvent> = {};
   const missing: string[] = [];
+  const absent = new Set<string>();
   const queue = [...names];
   while (queue.length > 0) {
     const name = queue.shift() as string;
@@ -130,7 +133,9 @@ export function buildManifest(checkout: string, names: readonly string[]): Manif
       missing.push(name);
       continue;
     }
-    const ev = manifestEvent(def, (all.get(name) as { file: string }).file);
+    const raw = manifestEvent(def, (all.get(name) as { file: string }).file);
+    const ev = sizes.size === 0 ? raw : { ...raw, files: raw.files.filter((f) => sizes.has(`${f}_c`)) };
+    for (const f of raw.files) if (sizes.size > 0 && !sizes.has(`${f}_c`)) absent.add(`${f}_c`);
     events[name] = ev;
     queue.push(...ev.children);
   }
@@ -146,7 +151,7 @@ export function buildManifest(checkout: string, names: readonly string[]): Manif
   }
   const sorted = Object.fromEntries(Object.entries(events).sort(([a], [b]) => (a < b ? -1 : 1)));
   const sortedFiles = Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : 1)));
-  return { source: { repo: 'SteamDatabase/GameTracking-CS2', commit, date }, events: sorted, files: sortedFiles, missing: missing.sort() };
+  return { source: { repo: 'SteamDatabase/GameTracking-CS2', commit, date }, events: sorted, files: sortedFiles, missing: missing.sort(), absent: [...absent].sort() };
 }
 
 function main(): void {
@@ -162,7 +167,7 @@ function main(): void {
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(m, null, 1) + '\n');
   const bytes = Object.values(m.files).reduce((a, b) => a + Math.max(0, b), 0);
-  console.log(`${Object.keys(m.events).length} events, ${Object.keys(m.files).length} files (${(bytes / 1024).toFixed(0)} KB in pak01), missing: ${m.missing.join(', ') || 'none'} → ${out}`);
+  console.log(`${Object.keys(m.events).length} events, ${Object.keys(m.files).length} files (${(bytes / 1024).toFixed(0)} KB in pak01), missing: ${m.missing.join(', ') || 'none'}, absent files: ${m.absent.join(', ') || 'none'} → ${out}`);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) main();

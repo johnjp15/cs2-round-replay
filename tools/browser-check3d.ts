@@ -16,7 +16,9 @@
  *     is 1×; the mouse turns the view by exactly counts × 1.25 × 0.022° (pointer-lock deltas through the page's
  *     automation hook, since a headless page can't lock the pointer); aims at Lokier's head, clicks mouse 1 and checks
  *     the shot was fired (the HUD's ammo drops, a tracer); screenshot (f) first person;
- *  4. fails on page errors, console errors or requests to other origins.
+ *  4. A1 (tools/browser-check3d-a1.ts): audio starts on a click, firing schedules a sound, the AK reload animation
+ *     runs for its reload time; viewmodel screenshots (docs/img/app3d-viewmodel-*.jpg);
+ *  5. fails on page errors, console errors or requests to other origins.
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
  */
 import { createServer, type Server } from 'node:http';
@@ -25,15 +27,16 @@ import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cpus, loadavg } from 'node:os';
 import { chromium, type Browser, type Page } from 'playwright-core';
+import { a1Checks } from './browser-check3d-a1';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
-const PORT = 4180;
-const ORIGIN = `http://127.0.0.1:${PORT}`;
-
 function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(name);
   return i >= 0 ? (process.argv[i + 1] ?? fallback) : fallback;
 }
+/** `--port <n>` or BROWSER_CHECK_PORT (another session may hold 4180). */
+const PORT = Number(arg('--port', process.env['BROWSER_CHECK_PORT'] ?? '4180'));
+const ORIGIN = `http://127.0.0.1:${PORT}`;
 const SINGLE = process.argv.includes('--single');
 const OUT = resolve(ROOT, arg('--out', 'docs/img'));
 const SECONDS = Number(arg('--seconds', '4'));
@@ -232,6 +235,8 @@ async function main(): Promise<void> {
     shots.push(await shot(p, 'f-first-person'));
     report['screenshots'] = shots.map((x) => x.replace(ROOT + '/', ''));
     await p.close();
+    // 5. A1: sound and the viewmodels.
+    await a1Checks(browser, { open: (w, h) => open(browser, w, h, problems), seek, out: OUT, root: ROOT }, problems, report);
   } finally {
     await browser.close();
     server.close();
