@@ -7,7 +7,8 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 ## Overnight log (PT)
 - 05:27 check-in #1: four agents (V0 parity, X1 map, Ctrl+W, audio) and later two more (weapons integration, barely's stairs) turned out to have been stopped by the client-side interrupts around 04:27–04:38; all six relaunched on their branches/worktrees (nothing lost; everything committed was pushed).
 - 05:59 merged **#31** (radar CS2 rules + toggle, first-person spectating with HUD and crosshair, SPECTATING panel; radar timings from the CS:GO source) and **#30** (movement fixes vs CS2: sub-1 u/s zeroing, 1.1× take-off clamp, 0.25 air accel while rising slowly, MoveOptions for scoped speed/tagging, sub-tick split helper; every golden digest moved, kills/plant/defuse unchanged). Both **live** (Pages f7323b9).
-- Agents told to merge main and regenerate fixtures: G6 sight, G7 bots, V2 view fit. Next check-in 06:13.
+- Agents told to merge main and regenerate fixtures: G6 sight, G7 bots, V2 view fit.
+- 06:16 check-in #2: 11 agents active and pushing. PR #32 (round-end stutter: the HUD re-parsed the whole 4,500-line session log every frame after round end, 150–250 ms + 9 MB garbage per frame; now parsed incrementally and cached) is green but conflicts with #31's HUD changes — its agent is merging main; merge + deploy at the next check-in. Next check-in 07:01.
 
 ## Operating rules John set
 - Merge PRs without asking (2026-11-05). Fable orchestrates; Opus 5.5 agents do the expensive work (2026-11-07 02:02). Permission to read anything on any website (04:26). John's messages are not stop requests; agents stopped by client-side interrupts get resumed.
