@@ -14,7 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 72b58704 (G3's 3D)
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 63bd3d86 (M1's movement fixes)
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
@@ -160,11 +160,11 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `72b58704` |
-| `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `e5b887cf` |
-| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `9a995ab4` |
-| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `b1b09042` |
-| `round-cart-takeover.jsonl.gz` | G4: watching until 15 s, then cart is the human and stands still (`--takeover 15 --until 24`), ticks 0–1536 (1,537 lines): lines 0–959 are the golden master's; line 960 has `human: cart`, the 11 `unblock_damage` and the takeover log; Lokier outlives (21.80 s), barely kills him and rejoins (23.17 s) | 376,829 | (see manifest) | `a3163f9d` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `63bd3d86` |
+| `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `72d1547f` |
+| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `fb19a2fa` |
+| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `6cd197f2` |
+| `round-cart-takeover.jsonl.gz` | G4: watching until 15 s, then cart is the human and stands still (`--takeover 15 --until 24`), ticks 0–1536 (1,537 lines): lines 0–959 are the golden master's; line 960 has `human: cart`, the 11 `unblock_damage` and the takeover log; Lokier outlives (21.80 s), barely kills him and rejoins (23.17 s) | 376,829 | (see manifest) | `e1131654` |
 | `round-cart-takeover.walk.jsonl.gz` | Its walk oracle: 15,042 calls, and barely's rejoin path queries | 173,793 | | `2eea8a21` |
 | `manifest.json` | One entry per fixture | 2,111 | | |
 
@@ -305,6 +305,12 @@ tested (no WebKit here).
 
 ## History
 
+- M1 (movement vs CS2, `docs/movement.md` "M1 fixes"): every fixture moves (no-human `72b58704` → `63bd3d86`, cart-idle
+  `9a995ab4` → `fb19a2fa`, cart-takeover `a3163f9d` → `e1131654`, walk oracles `e5b887cf` → `72d1547f`, `b1b09042` →
+  `6cd197f2`; the rejoin-off never-peeks run `7ca637e5` → `4dc88459`). `tools/fixture-diff.ts`: positions and velocities
+  differ from tick 283 (the first tick a ground speed ends under 1 u/s, now zeroed), the acts follow them; every damage,
+  death, plant and defuse event is at the same tick in all three fixtures (bomb positions move by < 0.00001 units), and
+  the no-human round still ends CT defuse at tick 4274, 0.72 s left ("Played it like the tape").
 - G5 (recorded duels of the human): every golden fixture is byte-identical (no-human `72b58704`, cart-idle
   `9a995ab4`, cart-takeover `a3163f9d`; walk oracles too; `npm run fixtures:update` reports "nothing changed"): nobody
   is ever in a recorded duel in them (no human; cart standing in Back Alley; cart standing in the Apartments from 15 s,
