@@ -116,6 +116,23 @@ export interface ReplayTuning {
    * the human sees it goes LIVE, and the human inside it is on script (sightings of him are as recorded).
    */
   offCourseUnits: number;
+  /**
+   * G7: the human is "the recording" (on script: a puppet that sees him doesn't diverge) while he is within
+   * offCourseUnits of where his recording has him at some tick within this long (seconds) of now, earlier or later. A
+   * human never matches the tape's timing exactly; beyond this he is off script for every bot that sees him.
+   */
+  onCourseDriftSec: number;
+  /**
+   * G7: a scheduled encounter (Lokier's hit on cart at the window) is time-shifted only when the shooter first sees the
+   * human at its spot within this long (seconds) of the recorded sighting, earlier or later; outside it the encounter is
+   * cancelled and the sighting is a real fight.
+   */
+  encounterWindowSec: number;
+  /**
+   * G7: within this distance (units, 2D) a recorded pair (expectedSightingWindowSec) explains a bot seeing an off-script
+   * enemy only if that enemy is about where the tape has him (humanSpotToleranceUnits); face to face elsewhere it fights.
+   */
+  closeRangeUnits: number;
   /** Two solid pawns are in contact (body block) within 2 × collision.pawnRadius + this (units, 2D). */
   contactSlackUnits: number;
   /** A puppet held in contact (slower than standSpeedThreshold) this long (seconds) while off course is body-blocked. */
@@ -715,6 +732,9 @@ const REPLAY_KEYS = [
   'humanSpotToleranceUnits',
   'routeThinUnits',
   'offCourseUnits',
+  'onCourseDriftSec',
+  'encounterWindowSec',
+  'closeRangeUnits',
   'contactSlackUnits',
   'blockedSec',
   'dwellUnits',
@@ -1046,6 +1066,8 @@ function checkReplay(r: ReplayTuning): ReplayTuning {
   for (const k of ['rejoinHorizonSec', 'rejoinRetrySec'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
   if (!(r.rejoinSpeedFactor > 0 && r.rejoinSpeedFactor <= 1)) throw new TuningError(`replay.rejoinSpeedFactor: must be in (0, 1], got ${r.rejoinSpeedFactor}`);
   for (const k of ['jumpWindowSec', 'jumpReachUnits'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
+  // G7: the drift and the encounter window are seconds >= 0 (0: exactly the recording's tick).
+  for (const k of ['onCourseDriftSec', 'encounterWindowSec', 'closeRangeUnits'] as const) if (!(r[k] >= 0)) throw new TuningError(`replay.${k}: must be >= 0, got ${r[k]}`);
   return r;
 }
 

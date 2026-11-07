@@ -1,13 +1,29 @@
 {
   "name": "block-sp4rtan",
-  "description": "cart plays his recording to 57 s, then (teleported) stands on B site in sp4rtan's way to the bomb, looking at him, and never fires. The recording has the two in sight of each other on B from 58.6 s, so the sighting is no divergence; but cart is an enemy and solid, and the body block pushes sp4rtan off his track while cart watches: sp4rtan goes LIVE (blocked).",
+  "description": "cart plays his recording to 57 s, then (teleported) stands on B site in sp4rtan's way to the bomb, looking at him, and never fires. The recording has the two in sight of each other on B from 58.6 s, but with cart in Shop: face to face somewhere else, within closeRangeUnits, that recorded pair doesn't cover it (G7), so sp4rtan sees an enemy the tape doesn't have there and fights (LIVE: sighting). Before G7 he stood REPLAY with cart in view until the body block made him LIVE (blocked) at 59.16 s.",
   "human": "cart",
   "seed": 1,
   "until": 64,
   "steps": [
-    {"do": "followRecording", "until": 57.0},
-    {"do": "teleport", "pos": [-2070, 440], "yaw": 130},
-    {"do": "aimAt", "id": "sp4rtan"},
-    {"do": "holdStill", "until": 64}
+    {
+      "do": "followRecording",
+      "until": 57.0
+    },
+    {
+      "do": "teleport",
+      "pos": [
+        -2070,
+        440
+      ],
+      "yaw": 130
+    },
+    {
+      "do": "aimAt",
+      "id": "sp4rtan"
+    },
+    {
+      "do": "holdStill",
+      "until": 64
+    }
   ]
 }
