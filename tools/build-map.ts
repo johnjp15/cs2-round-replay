@@ -516,7 +516,12 @@ export function staleFiles(b: MapBuild): string[] {
       continue;
     }
     const have = new Uint8Array(readFileSync(p));
-    if (path.endsWith('height.png')) {
+    if (path === CLIPS_MANIFEST_PATH) {
+      // Mirage's clips manifest records data/round.json's SHA-256 as the seeds' source; other agents edit the round
+      // (data fixes) without moving its start positions, so that one hash doesn't count (the binary does).
+      const norm = (b: Uint8Array): string => new TextDecoder().decode(b).replace(/("file": "data\/round\.json",\s*"sha256": ")[0-9a-f]{64}"/, '$1"');
+      if (norm(have) !== norm(bytes)) out.push(path);
+    } else if (path.endsWith('height.png')) {
       if (sha256(decodePngRgba(have).rgba) !== sha256(decodePngRgba(bytes).rgba)) out.push(path);
     } else if (sha256(have) !== sha256(bytes)) out.push(path);
   }

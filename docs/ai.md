@@ -156,6 +156,16 @@ round shows it).
 | Defuse in progress that can't finish (F) | zwomp (no kit) defusing with 9.5 s left goes LIVE: `defuse_stop` at once, runs, 1,857 units out at the blast, 100 HP |
 | In the round (`tests/scenarios.test.ts`, F) | `flank-sp4rtan`: donk and barely, LIVE after the T win, survive the explosion (donk 1,826 units out, barely 1,564 units out on 74 HP; he went LIVE 5.7 s before it) instead of dying in it |
 
+## Map knowledge (H3)
+
+The AI asks a `MapNav` (`src/sim2d/map-nav.ts`) for everything about the map: walkability, paths, straight walks, the
+bomb sites (`inBombsite`, `bombsitePoint`), the spawns (`spawnCentre`, for the hold facing) and the blast escape. On
+Mirage's recorded round it is the 2020 grid (`legacyMapNav`: the place names as before; behaviour, scenario outcomes
+and golden digests unchanged). In free play it is CS2's nav of any map with the map package's facts (docs/nav.md
+"CS2 nav"), and there the AI also jumps the nav's jump links, ducks through its crouch areas and jumps while unsticking.
+Free play's roles and plan: docs/scenarios.md. The hosts take either (`Sim3DHost(nav: NavMesh | MapNav, …)`,
+`Sim2DHost(…, aiNav)`).
+
 ## What B4 needs to know
 
 - **Unblock first.** B3 sends `block_damage` for every pair of REPLAY enemies and for each puppet on itself. When a

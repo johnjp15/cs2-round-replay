@@ -949,7 +949,7 @@ class App3D {
     }
     const mode = firstPerson ? `You: ${human} · Esc frees the mouse` : human !== null ? `You: ${human} (dead) · spectating` : 'Watching';
     const canTake = human === null && s.takeControlBlocked(this.takeTarget()) === null && !this.touchOnly;
-    const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake);
+    const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake, this.takeTarget() ?? 'cart');
     const r = this.renderer.renderer.domElement;
     // The crosshair sits where the next bullet goes (off centre only with a punch; clientHeight read only then).
     const off = (firstPerson || specPov) && !scoped && (aim.yaw !== yaw || aim.pitch !== pitch) ? aimOffsetPx({ yaw, pitch }, aim, vfovDeg, r.clientHeight) : { x: 0, y: 0 };
