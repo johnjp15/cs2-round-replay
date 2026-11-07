@@ -24,7 +24,7 @@
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
  */
 import tuningJson from '../../data/tuning.json';
-import { parseMapId, type Observe, type PlayerId, type Team, type Vec3, type WeaponId } from '../contracts/index';
+import { parseMapId, type Observe, type PlayerId, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { FixedLoop, TICK_MS } from '../app/loop';
 import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
@@ -39,9 +39,9 @@ import { PlayGuard } from '../app/play-guard';
 import { anglesTo, poseHitboxes } from '../engine/hitboxes';
 import { sim3dHostFactory, worldMesh, type Sim3DHost } from '../sim3d/index';
 import type { MapGeometry } from '../sim2d/index';
-import { loadAssets3d } from './assets3d';
+import { loadAssets3d, loadFreePlayAssets3d, scenarioList } from './assets3d';
+import { freePlay3d, mountScenarioPickers, pickScenario, recording3d, type Scenario3d } from './scenarios3d';
 import { ControlsDom } from './controls-dom';
-import { MIRAGE_RADAR } from './coords';
 import { Hud3D } from './hud3d';
 import { runBench } from './bench3d';
 import { FPS_PRESETS, FrameDriver, parseFpsLimit, type FpsLimit } from './frame-driver';
@@ -205,7 +205,11 @@ function rgbaOf(img: HTMLImageElement): RgbaImage {
 }
 
 class App3D {
-  private readonly data: SessionData;
+  /** The recording's data (null in free play: H3's Scenario3d builds the session). */
+  private readonly data: SessionData | null;
+  /** H3: the scenario this page plays (the recorded round by default), its map and its free-play session factory. */
+  private readonly h3: Scenario3d;
+  private readonly tuning: Tuning;
   private readonly world: MapGeometry;
   private readonly seed: number;
   private readonly renderer: Renderer3D;
@@ -295,8 +299,13 @@ class App3D {
   private summaryLine: string | null = null;
   private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; takeoverSpec: HTMLButtonElement | null; camera: HTMLButtonElement; radar: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
-  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number | null, lowLatency: boolean | null, render: Uint8Array | null = null) {
+  constructor(data: SessionData | null, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number | null, lowLatency: boolean | null, render: Uint8Array | null, h3: Scenario3d) {
     this.data = data;
+    this.h3 = h3;
+    const tuning = data?.tuning ?? h3.tuning;
+    if (tuning === null) throw new Error('App3D: no tuning');
+    this.tuning = tuning;
+    this.followed = human ?? h3.playable ?? this.followed;
     this.world = world;
     this.seed = seed;
     this.sensitivity = sensitivity ?? DEFAULT_SENSITIVITY;
@@ -308,11 +317,11 @@ class App3D {
     const rgba = rgbaOf(radar);
     const art = floorArt(rgba);
     // X1: a map package with its own render mesh (?map=mirage-2020) draws that; else the collision mesh coloured from the radar.
-    const tiles = render === null ? buildWorldTiles(world, new RadarSampler(art, MIRAGE_RADAR), MIRAGE_RADAR, rgba).tiles : buildRenderTiles(decodeRenderMesh(render));
+    const tiles = render === null ? buildWorldTiles(world, new RadarSampler(art, h3.radar), h3.radar, rgba).tiles : buildRenderTiles(decodeRenderMesh(render));
     this.session = this.newSession(human);
     this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), { resolution: this.resScale, desynchronized: this.lowLatency });
-    this.hud = new Hud3D(radar, MIRAGE_RADAR);
-    this.a1 = new A1Mount(world, data.tuning, document.getElementById('bar'));
+    this.hud = new Hud3D(radar, h3.radar);
+    this.a1 = new A1Mount(world, this.tuning, document.getElementById('bar'));
     this.a1.vmState = () => this.renderer.viewmodels.last;
     this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
     this.scene = this.ready(this.session);
@@ -359,6 +368,7 @@ class App3D {
       radar: el('radar-rules', HTMLButtonElement),
       speeds: [...document.querySelectorAll<HTMLButtonElement>('button[data-speed]')],
     };
+    mountScenarioPickers(el('bar', HTMLElement), h3);
     this.wire();
     this.updateControls();
     window.__cs2sim3d = {
@@ -448,8 +458,11 @@ class App3D {
   }
 
   private newSession(human: PlayerId | null): Session {
-    // U2: any player can be taken over (Session's default takeable: all); cart is the default (C, the cart button).
-    return new Session({ ...this.data, seed: this.seed, human, host: sim3dHostFactory(this.world) });
+    if (this.h3.makeSession !== null) return this.h3.makeSession(human);
+    if (this.data === null) throw new Error('App3D: no recording to play');
+    // U2: any player can be taken over (anyPlayable, as in H3's free play); cart (the recording's playable pawn) is the
+    // default: C and the cart button.
+    return new Session({ ...this.data, seed: this.seed, human, playable: this.h3.playable ?? 'cart', anyPlayable: true, host: sim3dHostFactory(this.world) });
   }
 
   private playing(): boolean {
@@ -571,7 +584,7 @@ class App3D {
     const t = this.scene.pawn(id);
     if (me === null || t === null) return this.look;
     const eye = { x: me.pos.x, y: me.pos.y, z: me.pos.z + (me.crouching ? 46 : 64) };
-    const head = (poseHitboxes(t, this.data.tuning.damage)[0] as { a: Vec3 }).a;
+    const head = (poseHitboxes(t, this.tuning.damage)[0] as { a: Vec3 }).a;
     const a = anglesTo(eye, head);
     this.look = { yaw: wrapYaw(a.yaw), pitch: a.pitch };
     return this.look;
@@ -942,7 +955,11 @@ class App3D {
       this.summaryCache.invalidate();
       this.summaryLine = null;
     } else {
-      if (over) {
+      if (over && this.h3.makeSession !== null) {
+        // H3: free play has no recording to compare with: the round's result.
+        const why = { elimination: 'elimination', bomb_exploded: 'the bomb', bomb_defused: 'the defuse', time: 'time' }[o.round.reason ?? 'time'];
+        summary = `${o.round.winner ?? '?'} win by ${why} at ${(o.round.endTick / 64).toFixed(2)} s<small>${this.h3.current.title} · Restart to play it again.</small>`;
+      } else if (over) {
         // A test render (exact) parses what is left at once.
         const sum = this.summaryCache.get(s.model, s.log(), `${o.round.endTick}|${this.scene.deaths.size}|${human ?? ''}`, exact ? Infinity : undefined);
         summary = sum === null ? null : `${sum.headline}<small>Restart to watch again, or take control of someone earlier.</small>`;
@@ -1204,10 +1221,23 @@ async function boot(): Promise<void> {
     const resParam = params.get('res');
     const res = resParam === null ? NaN : Number(resParam);
     const lowParam = params.get('lowlatency');
-    const a = await loadAssets3d(parseMapId(params.get('map')));
-    const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
-    const world = worldMesh(a.world3d.geometry);
-    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : null, lowParam === null ? null : lowParam !== '0', a.render);
+    const sensOut = Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null;
+    const resOut = Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : null;
+    const lowOut = lowParam === null ? null : lowParam !== '0';
+    // H3: the scenario (?scenario=, default the recorded round) and its map (?map=, default the scenario's).
+    const scenarios = scenarioList();
+    const sc = pickScenario(scenarios, params.get('scenario'));
+    const map = params.get('map') === null ? sc.map : parseMapId(params.get('map'));
+    if (sc.recording === null) {
+      const fa = await loadFreePlayAssets3d(map);
+      const f = freePlay3d(sc, map, fa, tuningJson, scenarios);
+      new App3D(null, f.world, fa.radar, sc.seed, startHuman(params.get('human')) ?? sc.human, sensOut, resOut, lowOut, null, f.scen);
+    } else {
+      const a = await loadAssets3d(map);
+      const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
+      const world = worldMesh(a.world3d.geometry);
+      new App3D(data, world, a.radar, seed, startHuman(params.get('human')), sensOut, resOut, lowOut, a.render, recording3d(sc, map, scenarios));
+    }
     status.hidden = true;
     if (params.get('bench') !== null) void runBench(params);
   } catch (err) {

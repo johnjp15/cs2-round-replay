@@ -16,7 +16,41 @@ import tracksUrl from '../../data/geometry/mirage-tracks.json?url';
 import radarUrl from '../../data/source/cs2/de_mirage.png';
 import type { World3dFiles } from '../app/session';
 import { packageUrl, packageWorldUrls } from '../app/map-packages';
-import { DEFAULT_MAP, mapPackagePaths, type MapId } from '../contracts/index';
+import { DEFAULT_MAP, mapPackagePaths, parseScenario, type MapId, type Scenario } from '../contracts/index';
+
+/** H3: every scenario (data/scenarios/*.json, docs/scenarios.md), parsed, by name. Tiny JSON: bundled. */
+const SCENARIO_JSON = import.meta.glob<unknown>('../../data/scenarios/*.json', { eager: true, import: 'default' });
+
+/** H3: the scenarios this page can play (the normal build: all of them). */
+export function scenarioList(): Scenario[] {
+  return Object.keys(SCENARIO_JSON)
+    .sort()
+    .map((k) => parseScenario(SCENARIO_JSON[k], (k.split('/').pop() ?? k).replace(/\.json$/, '')));
+}
+
+/** H3: what free play needs of a map package (docs/scenarios.md): its facts, CS2 nav, collision mesh and radar. */
+export interface FreePlayAssets3d {
+  readonly info: unknown;
+  readonly nav: unknown;
+  readonly geometry: Uint8Array;
+  readonly clips: Uint8Array;
+  readonly radar: HTMLImageElement;
+}
+
+/** H3: a map package's free-play files (fetched next to the page). */
+export async function loadFreePlayAssets3d(map: MapId): Promise<FreePlayAssets3d> {
+  const p = mapPackagePaths(map);
+  if (p.info === null || p.nav === null) throw new Error(`map package "${map}" has no nav.json / map.json`);
+  const w = map === DEFAULT_MAP ? { geometry: geometryUrl, clips: clipsUrl } : packageWorldUrls(map);
+  const [info, nav, geometry, clips, radar] = await Promise.all([
+    fetchJson(packageUrl(p.info, map)),
+    fetchJson(packageUrl(p.nav, map)),
+    fetchBytes(w.geometry),
+    fetchBytes(w.clips),
+    loadImage(p.radar === null ? radarUrl : packageUrl(p.radar, map)),
+  ]);
+  return { info, nav, geometry, clips, radar };
+}
 
 export interface PageAssets3d {
   readonly round: unknown;

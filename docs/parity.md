@@ -108,6 +108,10 @@ The baseline is deterministic for the same data and code: the harness is (`docs/
 (same frames, deterministic OpenCV calls, fixed templates). Changing the detector changes the truth: regenerate the
 baseline in the same commit and say so.
 
+### Baseline history
+
+- **T1 (#36), refreshed in G7b**: barely's position checks at 35 s and 37.5–44.5 s (2D: 34 checks, watch 17 and follow 17; 3D: the same 17 in watch) went pass → fail. The truth there is the video's radar dot, and in that window the radar shows the level overlap John pointed out (the dot reads as the Tunnel / underpass stairs, but barely never went down them). The sim now follows T1's corrected track, which stays on Catwalk, so these checks measure the radar's ambiguity, not a sim error. The tool has no per-check exclusion, so the baselines were refreshed (`--update-baseline`). Nothing else moved: 0 fixed, 0 other regressions.
+
 ## The 3D mode
 
 `--app 3d` (`npm run parity:3d`) builds and serves `dist-3d/` (H1's `npm run build:3d`) on the same port and drives

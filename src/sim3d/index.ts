@@ -1,6 +1,6 @@
 /** Sim3D (H1): the 3D engine/host (IHost); may import src/contracts, src/engine and src/sim2d. docs/sim3d.md. */
 import type { Tuning } from '../contracts/index';
-import { MapGeometry, decodeGeometry, type NavMesh, type RosterEntry, type Sim2DOptions, type Sim2DVision } from '../sim2d/index';
+import { MapGeometry, decodeGeometry, type MapNav, type NavMesh, type RosterEntry, type Sim2DOptions, type Sim2DVision } from '../sim2d/index';
 import { Sim3DHost } from './host';
 
 export { Sim3DHost } from './host';
@@ -10,7 +10,8 @@ export type { Shot3, ShotPawn } from './hitscan';
 
 /** What the Session's host factory passes (src/app/session.ts `HostParts`, structurally). */
 export interface Sim3DHostParts {
-  readonly nav: NavMesh;
+  /** The Mirage 2020 grid, or H3: any map's CS2 nav. */
+  readonly nav: NavMesh | MapNav;
   readonly tuning: Tuning;
   readonly roster: readonly RosterEntry[];
   readonly options: Sim2DOptions;

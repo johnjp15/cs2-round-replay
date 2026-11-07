@@ -24,7 +24,8 @@
 import tuningJson from '../../data/tuning.json';
 import { isPlayerId, parseMapId, type PlayerId, type RoundSummary } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
-import { loadAssets } from './assets';
+import { loadAssets, loadFreePlayNav, scenarioList } from './assets';
+import { DEFAULT_SCENARIO_2D, freePlay2d } from './scenarios';
 import type { Camera } from './camera';
 import { CameraInput } from './camera-dom';
 import type { EffectsSource } from './effects';
@@ -186,7 +187,8 @@ class App {
     overlays: HTMLButtonElement[];
   };
 
-  constructor(data: SessionData, radar: HTMLImageElement, seed: number, human: PlayerId | null, height: HTMLImageElement | null = null) {
+  /** @param makeSession H3: free play's session factory (null: the recorded round's Session). */
+  constructor(data: SessionData, radar: HTMLImageElement, seed: number, human: PlayerId | null, height: HTMLImageElement | null = null, makeSession: ((seed: number, human: PlayerId | null) => Session) | null = null) {
     this.data = data;
     this.radar = radar;
     this.height = height;
@@ -207,7 +209,7 @@ class App {
     this.renderer = new Renderer(canvas, radar, data.round);
     this.hud = new Hud(data.round, () => this.toggle('panel'));
     this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
-    this.session = new Session({ ...this.data, seed: this.seed, human: this.human });
+    this.session = makeSession !== null ? makeSession(this.seed, this.human) : new Session({ ...this.data, seed: this.seed, human: this.human });
     this.scene = this.ready(this.session);
     const m = this.session.model;
     this.span = timelineSpanTicks(
@@ -716,9 +718,17 @@ async function boot(): Promise<void> {
     const params = new URLSearchParams(window.location.search);
     const seedParam = Number(params.get('seed') ?? '1');
     const seed = Number.isInteger(seedParam) ? seedParam : 1;
-    const a = await loadAssets(parseMapId(params.get('map')));
+    // H3: ?scenario= (default the recorded round); free play on Mirage (docs/scenarios.md).
+    const name = params.get('scenario') ?? DEFAULT_SCENARIO_2D;
+    const sc = scenarioList().find((q) => q.name === name);
+    if (sc === undefined) throw new Error(`unknown scenario "${name}" (this page has: ${scenarioList().map((q) => q.name).join(', ')})`);
+    const a = await loadAssets(params.get('map') === null && sc.recording === null ? 'mirage-cs2' : parseMapId(params.get('map') ?? sc.map));
     const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
-    new App(data, a.radar, seed, startHuman(params.get('human')), a.height);
+    if (sc.recording === null) {
+      const n = await loadFreePlayNav(sc.map);
+      const f = freePlay2d(data, sc, n.info, n.nav);
+      new App(f.data, a.radar, sc.seed, startHuman(params.get('human')) ?? sc.human, a.height, f.makeSession);
+    } else new App(data, a.radar, seed, startHuman(params.get('human')), a.height);
     status.hidden = true;
   } catch (err) {
     status.textContent = `Could not start: ${err instanceof Error ? err.message : String(err)}`;

@@ -317,6 +317,16 @@ What CS2 does natively vs what the module models (docs/weapons.md):
 | Wall penetration | engine traces with surface properties | `penetrate` with the host's `SolidQuery` (no materials on our mesh) |
 | Tagging, hit punch | engine | `applyHit` (unverified model) |
 
+**Bots compensate recoil (B1, docs/weapons.md "Bots and puppets compensate recoil").** CS2 adds the aim punch to the
+bullet on the server, exactly as the module does, so a CS2 server plugin driving bots must do what our hosts do: before
+the bot's usercmd of a firing tick, set its view angles to the desired aim − the punch offset of that shot
+(`m_aimPunchAngle` × `weapon_recoil_scale` (2 in CS:GO; the module fits 1.884 for CS2), read from the pawn after the
+previous tick, decayed one tick as `nextShotPunch` does, or read once the engine has decayed it). Nothing else changes:
+the plugin never writes punch into the angles itself. In the simulators: the LIVE AI gets the offset as
+`AiSelf.aimPunch` and aims its view at target − punch; a puppet's drawn bullet is fired from its scripted view − punch
+(its outcome stays the tape's). For puppets on a real server, the Core's scripted aim is the target and the plugin
+applies the same subtraction when it sets the view.
+
 The port does **not** reimplement these: the C# Core only issues inputs (aim, ATTACK, RELOAD) and reads events, so the
 module's numbers matter for the simulators and for comparing a 3D run with a CS2 run, not for the plugin. Port care if
 the module is ever transcribed: `ValveUniformRandom` uses 32-bit int maths and float32 (`Math.fround` → `float`); the

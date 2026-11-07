@@ -37,6 +37,7 @@ import {
   parseRound,
   parseTracks3d,
   parseTuning,
+  roundNumber,
   toReplayTrace,
   type Act,
   type Action,
@@ -56,6 +57,7 @@ import {
 import { CheckpointStore, EventSchedule, ReplayCore, RoundModel, autoCheckpointId, checkpointInterval, tickOf, type Checkpoint, type RoundClock } from '../core/index';
 import {
   HullWalkQuery,
+  hullLineClear,
   MapGeometry,
   NavMesh,
   NavWalkQuery,
@@ -72,8 +74,15 @@ import {
   type Sim2DOptions,
   type Sim2DVision,
 } from '../sim2d/index';
+import type { MapNav } from '../sim2d/map-nav';
 import { weaponForSlot, type WeaponSlot } from './input';
 import type { SightQuery } from './scene';
+
+/**
+ * H3: the map nav a session runs on: the Mirage 2020 grid (NavMesh: the 2D host, the recorded round's AI and puppets)
+ * or any map's CS2 nav (a MapNav: src/engine/nav/cs2-nav.ts; free play in the 3D host).
+ */
+export type SessionNav = NavMesh | MapNav;
 
 /** The pawn a human plays unless told otherwise. */
 export const DEFAULT_HUMAN: PlayerId = 'cart';
@@ -126,7 +135,7 @@ export interface CoreParts {
   readonly schedule: EventSchedule;
   readonly tuning: Tuning;
   readonly seed: number;
-  readonly nav: NavMesh;
+  readonly nav: SessionNav;
   /** G3: the movement mesh, or null with 2D movement. */
   readonly geometry?: MapGeometry | null;
 }
@@ -142,7 +151,7 @@ export type SessionHost = Pick<Sim2DHost, keyof Sim2DHost>;
 
 /** H1: what a host is built from (the arguments Sim2DHost's constructor takes). */
 export interface HostParts {
-  readonly nav: NavMesh;
+  readonly nav: SessionNav;
   readonly tuning: Tuning;
   readonly roster: readonly RosterEntry[];
   readonly options: Sim2DOptions;
@@ -154,6 +163,7 @@ export type HostFactory = (parts: HostParts) => SessionHost;
 
 /** The host every session uses unless told otherwise: the 2D app's Sim2DHost. */
 export function defaultHost(p: HostParts): SessionHost {
+  if (!(p.nav instanceof NavMesh)) throw new Error('Sim2DHost: the 2D host runs on the Mirage nav grid only (H3: other maps play in the 3D host)');
   return new Sim2DHost(p.nav, p.tuning, p.roster, p.options, p.vision, p.geometry);
 }
 
@@ -161,9 +171,18 @@ export function defaultHost(p: HostParts): SessionHost {
  * The WalkQuery the app's Core uses: with 3D movement (G3) the hull sweep on the movement mesh (`HullWalkQuery`), so
  * puppets steer around the walls they actually collide with; otherwise the nav mesh's (B2). Paths are the nav's either way.
  */
-export function walkQueryOf(p: { readonly nav: NavMesh; readonly geometry?: MapGeometry | null; readonly tuning: Tuning }): WalkQuery {
+export function walkQueryOf(p: { readonly nav: SessionNav; readonly geometry?: MapGeometry | null; readonly tuning: Tuning }): WalkQuery {
   const g = p.geometry ?? null;
-  return g === null ? new NavWalkQuery(p.nav) : new HullWalkQuery(g, p.nav, p.tuning.movement.stepSize);
+  const nav = p.nav;
+  if (nav instanceof NavMesh) return g === null ? new NavWalkQuery(nav) : new HullWalkQuery(g, nav, p.tuning.movement.stepSize);
+  // H3: a CS2 nav: lines by a hull sweep on the movement mesh when there is one, else the nav's; paths by the nav.
+  return {
+    isWalkableLine: (a, b) => (g === null ? nav.segmentWalkable(a, b) : hullLineClear(g, a, b, p.tuning.movement.stepSize)),
+    pathLength: (a, b) => {
+      const path = nav.path(a, b);
+      return path === null ? null : roundNumber(NavMesh.pathLength(path));
+    },
+  };
 }
 
 /** The Core every session uses unless told otherwise: puppets steer with `walkQueryOf` (B2, G3). */
@@ -174,7 +193,7 @@ export function defaultCore(p: CoreParts): ReplayCore {
 export interface SessionConfig {
   /** Parsed `data/round.json` (parseRound). */
   readonly round: RoundData;
-  readonly nav: NavMesh;
+  readonly nav: SessionNav;
   readonly tuning: Tuning;
   readonly seed: number;
   /** The sight mask (C4); without it (or null) the engine uses the nav mesh's line of sight. */
@@ -198,6 +217,8 @@ export interface SessionConfig {
    * recorded duels exist for every player (docs/core.md "Takeover").
    */
   readonly takeable?: 'all' | readonly PlayerId[];
+  /** H3 (free play) / U2: the watching player may take control of any living pawn (= `takeable: 'all'`). Default false. */
+  readonly anyPlayable?: boolean;
   /** Builds the Core (default: defaultCore). For tests, benchmarks and Core variants. */
   readonly core?: CoreFactory;
   /** H1: builds the engine (default: defaultHost, the 2D app's Sim2DHost; the 3D app passes Sim3DHost's). */
@@ -272,7 +293,7 @@ export interface SessionSnapshot {
 
 export class Session {
   readonly round: RoundData;
-  readonly nav: NavMesh;
+  readonly nav: SessionNav;
   /** G3: the movement mesh, or null (2D movement). */
   readonly geometry: MapGeometry | null;
   readonly tuning: Tuning;
@@ -281,6 +302,8 @@ export class Session {
   readonly playable: PlayerId | null;
   /** U2: the pawns takeControl(id) may hand to the player (SessionConfig.takeable), in roster order. */
   readonly takeable: readonly PlayerId[];
+  /** H3 / U2: every pawn may be taken over (takeable is the whole roster). */
+  readonly anyPlayable: boolean;
   readonly model: RoundModel;
   readonly schedule: EventSchedule;
   /** For inspection (renderer, tests); drive the session through its own methods. */
@@ -338,8 +361,9 @@ export class Session {
     this.schedule = new EventSchedule(config.round);
     const roster: RosterEntry[] = this.model.players.map((p) => ({ id: p.id, team: p.team }));
     // U2: every pawn by default; a session that names its playable pawn (and no takeable) keeps to it, as before U2.
-    const takeable = config.takeable ?? (this.playable === null ? [] : config.playable !== undefined ? [this.playable] : 'all');
+    const takeable = config.takeable ?? (config.anyPlayable === true ? 'all' : this.playable === null ? [] : config.playable !== undefined ? [this.playable] : 'all');
     this.takeable = takeable === 'all' ? roster.map((r) => r.id) : roster.map((r) => r.id).filter((id) => takeable.includes(id));
+    this.anyPlayable = this.takeable.length === roster.length;
     this.geometry = config.geometry ?? null;
     const makeHost = config.host ?? defaultHost;
     this.host = makeHost({
