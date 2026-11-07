@@ -112,9 +112,10 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
       expect(Math.abs((got as number) / 64 - recordedSec), `${recordedSec} s`).toBeLessThanOrEqual(tolSec);
     };
     near(bombTick(run, 'planted'), 27.52, 1.0);
-    // T1: barely, LIVE from 40.30 s (he hears sp4rtan kill cart), now holds Catwalk, not the underpass beneath it, and
-    // sees Zwomp walking up it on his inferred route: a real kill at 2650 (41.41 s), 2.8 s before the tape's.
-    near(kill(run, 'barely', 'zwomp'), 41.41, 0.1);
+    // G7c: barely, LIVE from 40.27 s (sp4rtan's gunfire at cart) on his corrected Catwalk spot (T1), no longer sees
+    // Zwomp: Zwomp's unobserved approach is re-guessed out of Catwalk's sight until 42.2 s, barely rejoins at 42.48 s,
+    // and the scripted kill lands on the tape's tick (T1 alone: a real kill at 2650, 41.41 s).
+    near(kill(run, 'barely', 'zwomp'), 44.2, 0.1);
     near(kill(run, 'sp4rtan', 'donk'), 50.35, 0.3);
     near(kill(run, 'sp4rtan', 'barely'), 58.85, 0.3);
     near(bombTick(run, 'defused'), 66.8, 0.5);
@@ -123,12 +124,10 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     // wall in CS2) and goes round the B-site box the recording walks through: G1's plant shift starts his USE 7 ticks
     // after the recorded 1555, so the bomb is planted at 1768 (27.63 s, recorded 27.52 s).
     expect([bombTick(run, 'planted'), kill(run, 'barely', 'zwomp'), kill(run, 'sp4rtan', 'donk'), kill(run, 'sp4rtan', 'barely'), bombTick(run, 'defuse_start'), bombTick(run, 'defused')]).toEqual([
-      1768, 2650, 3222, 3766, 3955, 4275,
+      1768, 2829, 3222, 3766, 3955, 4275,
     ]);
-    const z = (run.entries[2650] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === 'barely' && ev.victim === 'zwomp');
-    expect(z?.type === 'damage' ? z.scripted : null, 'barely -> zwomp (LIVE)').toBe(false);
-    // ... and the others are the scripted ones (B3), not LIVE fights.
-    for (const [a, v, k] of [['sp4rtan', 'donk', 3222], ['sp4rtan', 'barely', 3766]] as const) {
+    // ... all of them the scripted ones (B3), not LIVE fights.
+    for (const [a, v, k] of [['barely', 'zwomp', 2829], ['sp4rtan', 'donk', 3222], ['sp4rtan', 'barely', 3766]] as const) {
       const d = (run.entries[k] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === a && ev.victim === v);
       expect(d?.type === 'damage' ? d.scripted : null, `${a} -> ${v}`).toBe(true);
     }
