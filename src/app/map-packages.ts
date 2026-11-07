@@ -5,7 +5,7 @@
  */
 import { mapPackagePaths, type MapId } from '../contracts/index';
 
-const PACKAGE_URLS = import.meta.glob<string>('../../data/maps/*/*.{bin,json}', { query: '?url', import: 'default', eager: true });
+const PACKAGE_URLS = import.meta.glob<string>('../../data/maps/*/*.{bin,json,png}', { query: '?url', import: 'default', eager: true });
 
 /** The URL of a package file (repo-relative path), or an error naming what's missing. */
 export function packageUrl(path: string, map: MapId): string {
@@ -14,8 +14,9 @@ export function packageUrl(path: string, map: MapId): string {
   return url;
 }
 
-/** The 3D world's file URLs of a non-default package. */
+/** The 3D world's file URLs of a non-default package (H3: `tracks` is '' for a package without a recording). */
 export function packageWorldUrls(map: MapId): { geometry: string; clips: string; tracks: string } {
   const p = mapPackagePaths(map);
-  return { geometry: packageUrl(p.geometry, map), clips: packageUrl(p.clips, map), tracks: packageUrl(p.tracks, map) };
+  const tracks = PACKAGE_URLS[`../../${p.tracks}`] ?? '';
+  return { geometry: packageUrl(p.geometry, map), clips: packageUrl(p.clips, map), tracks };
 }

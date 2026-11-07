@@ -105,7 +105,7 @@ describe('input scripts', () => {
 
 describe('harness', () => {
   it('parses the CLI options', () => {
-    expect(parseCliArgs([])).toEqual({ human: null, takeover: null, script: null, until: 'end', seed: 1, out: null, scenario: null, untilGiven: false, map: null });
+    expect(parseCliArgs([])).toEqual({ human: null, takeover: null, script: null, until: 'end', seed: 1, out: null, scenario: null, untilGiven: false, map: null, game: null });
     expect(parseCliArgs(['--human', 'cart', '--script', 'x.json', '--until', '20', '--seed', '7', '--out', 'o'])).toEqual({
       human: 'cart',
       takeover: null,
@@ -116,11 +116,15 @@ describe('harness', () => {
       scenario: null,
       untilGiven: true,
       map: null,
+      game: null,
     });
     expect(parseCliArgs(['--scenario', 's.json'])).toMatchObject({ scenario: 's.json', human: null, untilGiven: false });
+    // H3: --game picks a data/scenarios/ scenario; it excludes the human-bot scripts.
+    expect(parseCliArgs(['--game', 'dust2-5v5']).game).toBe('dust2-5v5');
+    expect(() => parseCliArgs(['--game', 'dust2-5v5', '--scenario', 's.json'])).toThrow(/--game/);
     // X1: --map picks a map package (docs/maps.md).
     expect(parseCliArgs(['--map', 'mirage-2020']).map).toBe('mirage-2020');
-    expect(() => parseCliArgs(['--map', 'dust2'])).toThrow(/unknown map package/);
+    expect(() => parseCliArgs(['--map', 'dust3'])).toThrow(/unknown map package/);
     expect(() => parseCliArgs(['--scenario', 's.json', '--human', 'cart', '--script', 'x.json'])).toThrow(/exclude/);
     expect(() => parseCliArgs(['--script', 'x.json'])).toThrow(/needs --human/);
     expect(() => parseCliArgs(['--human', 'bob'])).toThrow(/--human/);

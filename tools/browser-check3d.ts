@@ -26,7 +26,10 @@
  *     screenshots app3d-spectate-*.jpg;
  *  5. A1 (tools/browser-check3d-a1.ts): audio starts on a click, firing schedules a sound, the AK reload animation
  *     runs for its reload time; viewmodel screenshots (docs/img/app3d-viewmodel-*.jpg);
- *  6. fails on page errors, console errors or requests to other origins.
+ *  6. H3 (normal build only): the Scenario / Map pickers list the scenarios; `?scenario=dust2-5v5` (free play on CS2's
+ *     Dust II) loads, plays at 4× for a few seconds with the bots moving, E takes over the spectated pawn; screenshots
+ *     app3d-freeplay-dust2-*.jpg;
+ *  7. fails on page errors, console errors or requests to other origins.
  * Port: `--port <n>` or CHECK3D_PORT (default 4180).
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
  */
@@ -130,6 +133,30 @@ async function rate(page: Page, speed: number): Promise<{ fps: number; tps: numb
 }
 
 type Mark = { id: string; team: string; kind: string; alpha: number };
+
+/** H3: the scenario pickers and free play on de_dust2 (normal build). */
+async function freePlayChecks(browser: Browser, problems: string[]): Promise<Record<string, unknown>> {
+  const page = await open(browser, 1280, 720, problems, '?scenario=dust2-5v5');
+  const options = await page.$$eval('#set-scenario option', (os) => os.map((o) => (o as HTMLOptionElement).value));
+  const maps = await page.$$eval('#set-map option', (os) => os.map((o) => (o as HTMLOptionElement).value));
+  if (!options.includes('dust2-5v5') || !options.includes('mirage-sp4rtan-1v3')) problems.push(`free play: scenario picker lists ${options.join(', ')}`);
+  const shot0 = await shot(page, 'freeplay-dust2-start');
+  const p0 = await page.evaluate(() => window.__cs2sim3d?.session().host.observe().pawns.map((p) => ({ id: p.id, x: p.pos.x, y: p.pos.y })) ?? []);
+  await page.click('#start');
+  await page.click('button[data-speed="4"]');
+  await page.waitForFunction(() => (window.__cs2sim3d?.stats().tick ?? 0) >= 64 * 8, null, { timeout: 120_000 });
+  const p1 = await page.evaluate(() => window.__cs2sim3d?.session().host.observe().pawns.map((p) => ({ id: p.id, x: p.pos.x, y: p.pos.y })) ?? []);
+  const moved = p1.filter((q, i) => Math.hypot(q.x - (p0[i]?.x ?? q.x), q.y - (p0[i]?.y ?? q.y)) > 200).length;
+  if (moved < 8) problems.push(`free play: only ${moved} of 10 bots moved more than 200 units in 8 s`);
+  const shot1 = await shot(page, 'freeplay-dust2-8s');
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => window.__cs2sim3d?.session().human !== null, null, { timeout: 10_000 }).catch(() => problems.push('free play: E did not take over the spectated pawn'));
+  const human = await page.evaluate(() => window.__cs2sim3d?.session().human ?? null);
+  await page.waitForTimeout(500);
+  const shot2 = await shot(page, 'freeplay-dust2-takeover');
+  await page.close();
+  return { scenarios: options, maps, movedAfter8s: moved, human, shots: [shot0, shot1, shot2] };
+}
 
 /** U1: the radar's CS2 rules, first-person spectating (HUD, crosshair, panel) and the spectator controls. */
 async function spectateChecks(browser: Browser, problems: string[], shots: string[]): Promise<Record<string, unknown>> {
@@ -428,6 +455,7 @@ async function main(): Promise<void> {
     report['screenshots'] = shots.map((x) => x.replace(ROOT + '/', ''));
     // 5. A1: sound and the viewmodels.
     await a1Checks(browser, { open: (w, h) => open(browser, w, h, problems), seek, out: OUT, root: ROOT }, problems, report);
+    if (!SINGLE) report['freePlay'] = await freePlayChecks(browser, problems);
   } finally {
     await browser.close();
     server.close();
