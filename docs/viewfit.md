@@ -146,20 +146,24 @@ pass (pass 5 of `tools/snap-tracks.ts`) moved cart up to 108 u to compensate. V2
    by the least amount, forward along his view yaw (−136.7°) at half the cost of sideways (≤ 64 u), that opens both
    scripted hits' eye-to-band lines with a margin (± 2 u, the band 4 u lower, and the victim crouched, since the
    puppet's button plan crouches slow stretches). Result: **cart (+22.6, −92.7) + 104 u forward / 56 u left → (−15,
-   −123) from his snapped track; Lokier (+41, −44)**, tapered over 0.8 s at both ends. 35 samples (cart 17.5–19.5 s,
-   Lokier 17.5–18.8 s), each listed in `data/source/view-fit.json` `positions` and in `docs/round-data.md`.
-4. Re-snapped: pass 5 then finds the duel in sight and **leaves it alone** (it now moves only eradicate 12.5–12.7 s, up
-   to 33 u, and donk 49.9–50.1 s, up to 6 u).
+   −123) from his snapped track; Lokier (+41, −44)**, tapered over 0.8 s at both ends.
+4. **The approach** (17.4–17.9 s, past the first window, where the recording's sighting of Lokier starts at 17.45 s):
+   each 10 Hz frame's own fitted offset (median of 3; the fit is strong there, scores 0.8–1.0, offsets (0…13, −51…−70)),
+   plus per frame the least move (same rule) that opens the eye-to-head line both ways to Lokier.
+   43 samples in all (cart 16.6–19.5 s, Lokier 17.5–18.8 s), each listed in `data/source/view-fit.json` `positions` and
+   in `docs/round-data.md`; the kill / damage event positions at 18.5 / 18.8 s move with them.
+5. Re-snapped: pass 5 then finds the duel (17.45–18.8 s) in sight and **leaves it alone** (it now moves only eradicate
+   12.5–12.7 s, up to 33 u, and donk 49.9–50.1 s, up to 6 u).
 
 | check | before (G6 pass 5 on main) | before (recorded, no pass 5) | after (V2) |
 | --- | --- | --- | --- |
 | eye-to-head line cart ↔ Lokier, 18.2–18.8 s (`--check`) | – | 0 % of ticks open | **100 %** |
 | lokier → cart 73, chest, 18.50 s | through geometry (audit tick 1184) | blocked | **open** (no audit line) |
 | cart → lokier kill, head, 18.80 s | through geometry (audit tick 1203) | blocked | **open** (no audit line) |
-| cart's displacement from the recording | up to 108 u (pass 5) | 0 | up to 124 u (fit 28 u + 104 u depth) |
+| cart's displacement from the recording | up to 106 u (pass 5, 17.0–19.3 s) | 0 | up to 124 u (fit 28 u + 104 u depth) |
 
-G6's no-human audit now lists 7 lines instead of 9: ticks 1184 and 1203 are gone; 32, 816, 1142, 2829, 3194, 3206 and
-3766 remain (`npx tsx tools/scenario-outcomes.ts nohuman`).
+G6's no-human audit now lists 6 lines instead of main's 8: ticks 1184 and 1203 are gone; 32, 816, 1142, 3194, 3206 and
+3766 remain (`npx tsx tools/scenario-outcomes.ts nohuman`; T1 already removed 2829).
 
 **Not refined** (`refine: false`): donk ↔ Sp4rtaN (49.9–50.35 s: donk's view at his missed AWP shot is 24.6° from
 Sp4rtaN's recorded spot, which is radar-observed from 49.9 s, so moving Sp4rtaN onto it would contradict the radar; the
@@ -187,6 +191,20 @@ before; scripted aim overrides the recorded view during engagements):
 ![video | the 3D app through the player's eyes](img/viewfit-app3d.jpg)
 
 The 3D host's FOV check for `sees` uses the yaw only (as 2D's, `src/sim3d/sight.ts`), so pitch changes no `sees`.
+
+## What the positions changed in the tests
+
+| test | before (main) | now | why |
+| --- | --- | --- | --- |
+| `golden-round` snaps | cart 1392 | cart 1394 | he leaves the window duel from the fitted spot |
+| `sim3d-golden` audit ticks | 32, 816, 1142, 1184, 1203, 3194, 3206, 3766 | without 1184, 1203 | the window duel is in sight |
+| `duels`, `scenarios` (miss-lokier-shop) first sight of cart | 1138 | **1133** (17.70 s) | Lokier sees cart through the first window at his fitted spot (the recording's sighting starts at 17.45 s) |
+| plant in never-peeks, cart-dies, cart-goes-a, miss-lokier-shop, idle takeovers | 1768 | 1769 (0.84 s on the bomb) | barely's LIVE kill of the outlived Lokier, at Lokier's fitted spot, is a tick later |
+| `duel-perfect-aim` scenario | stops at 18.0 s | stops at **18.25 s** | at 18.0 s cart is between the windows, out of sight; at 18.25 s he is at the second window: his first shot (before 18.52 s) would hit, the kill lands on 18.80 s, nobody goes LIVE (the test is unchanged) |
+| `takeover-duel` scenario | aim, hold at the 18.0 s spot | aim, **walk to the second window** (−1777, 679), hold, fire at 18.7 s | the duel rule as before: the hit lands on 1184, cart's own shots resolve like the tape (kill on 1203), the round is the tape |
+| `smoke-window` scenario | smoke at (−1700, 790), spot (−1712, 700), step west to (−1900, 740) | smoke at (−1750, 790), spot (−1777, 679), step west to (−1930, 720) | the same story on the fitted geometry: hidden in the smoke at the spot, seen when he steps west along the window wall (20.09 s), the hit 1 s later, cart kills Lokier, nobody LIVE |
+| `takeover` T = 17.6 / 18 (idle) | Lokier's hit on the idle cart at 1266 / 1184 | **no hit; Lokier goes LIVE** (1345 / 1183) | idle at 17.6 s cart stands at the first window, 208 u from the hit's spot (> 192); idle at 18.0 s he is between the windows when the hit is due, out of sight. The block cart > lokier at T = 18 is still issued (the duel gate, not geometry). The idle rounds' later events are re-baselined (T = 18: barely survives, the LIVE defuse at 4299) |
+| `rejoin` never-peeks | 0.828 s left, digest 93e0dc15 (rejoin off) | 0.844 s, 68ec22fb | the plant a tick later |
 
 ## Known limits
 
