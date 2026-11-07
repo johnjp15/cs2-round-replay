@@ -6,6 +6,7 @@ export type {
   MovementTuning,
   ReplayTuning,
   WeaponTuning,
+  WeaponModelTuning,
   BombTuning,
   GrenadeTuning,
   DamageTuning,
