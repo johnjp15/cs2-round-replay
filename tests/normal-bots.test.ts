@@ -229,14 +229,19 @@ describe('window-2s-early: tape-like play up to 2 s ahead of the recording', () 
     expect(early.length).toBeGreaterThan(0);
     const enc = encounterLogs(run);
     expect(enc.some((t) => / in sight at the spot at tick /.test(t))).toBe(true);
-    expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'damage' && ev.attacker === 'lokier' && ev.victim === 'cart' && ev.scripted && ev.amount === 73))).toBe(true);
+    // D1 (John 13:10): his real headshot kills Lokier at 18.47 s, before the scripted 73 is due (18.50 s): it never lands.
+    expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'damage' && ev.attacker === 'lokier' && ev.victim === 'cart'))).toBe(false);
+    expect(enc.some((t) => / over at tick \d+, lokier is dead/.test(t))).toBe(true);
   });
 
-  it.skipIf(!MESH_SIGHT)('cart kills Lokier in the recorded duel; then the round is the tape (outcome printed)', () => {
+  it.skipIf(!MESH_SIGHT)('cart kills Lokier in the recorded duel; then the round is on script: CT defuse (outcome printed)', () => {
     const kill = deaths(run.entries).find((d) => d.victim === 'lokier');
     expect(kill).toMatchObject({ attacker: 'cart', headshot: true });
     console.log(`[window-2s-early] ${headline(run)}; encounter: ${encounterLogs(run).join(' | ')}; kills: ${killTicks(run).join(', ')}`);
-    expect(headline(run)).toMatch(/^Played it like the tape/);
+    // D1: his real kill comes before Lokier's hit, so cart keeps 100 HP and survives sp4rtan's post-round shot (2 kills
+    // changed: Lokier early, no post-round kill); before D1 the duel held the kill to its tick ("Played it like the tape").
+    expect(headline(run)).toMatch(/^(Played it like the tape|Same result, different round): CT defuse, 0\.72 s left/);
+    expect(liveSwitches(run.entries)).toEqual([]);
   });
 
   it('the react invariant holds', () => {
@@ -285,6 +290,11 @@ describe('kill-lokier-early: cart fights Lokier from the window 4 s early; the s
 
   it('the react invariant holds', () => {
     expect(reactViolations(run, tuning)).toEqual([]);
+  });
+
+  it('D1: a kill outside the recorded duel (14.6 s, before Lokier sees him at the window): no duel, G7/G8 decide the rest, and the round ends by the rules', () => {
+    expect(logs.filter((t) => t.startsWith('duel cart -> lokier'))).toEqual([]);
+    expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'round_end'))).toBe(true);
   });
 });
 
