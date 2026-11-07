@@ -25,6 +25,7 @@ import { summarize, tickOf } from '../core/index';
 import { FixedLoop, RateMeter, TICK_MS } from '../app/loop';
 import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
 import { Session, parseSessionData, type SessionData } from '../app/session';
+import { SummaryCache } from '../app/run-entries';
 import { weaponName } from '../app/hud-model';
 import { startHuman, takeoverButtonView } from '../app/takeover';
 import { anglesTo, poseHitboxes } from '../engine/hitboxes';
@@ -223,6 +224,10 @@ class App3D {
   private seekResume: Phase | null = null;
   /** Smoothed per-frame costs (ms): the ticks, the whole draw, the WebGL render call, the HUD. */
   private cost = { sim: 0, draw: 0, render: 0, hud: 0 };
+  /** P1: the end-of-round summary, computed once (run-entries.ts). */
+  private readonly summaryCache = new SummaryCache();
+  /** The last summary line shown (kept while a refresh catches up). */
+  private summaryLine: string | null = null;
   private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; radar: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
   constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number) {
@@ -751,6 +756,21 @@ class App3D {
     });
     const r1 = performance.now();
     const over = o.round.phase === 'over' && o.round.endTick !== null && o.tick > o.round.endTick + 128;
+    // P1: the summary line once per (round end, deaths), from log entries parsed a few per frame since the round
+    // ended (run-entries.ts); it used to be summarize(model, log) on every frame (~200 ms each).
+    let summary: string | null = null;
+    if (o.round.phase !== 'over') {
+      this.summaryCache.invalidate();
+      this.summaryLine = null;
+    } else {
+      if (over) {
+        // A test render (exact) parses what is left at once.
+        const sum = this.summaryCache.get(s.model, s.log(), `${o.round.endTick}|${this.scene.deaths.size}|${human ?? ''}`, exact ? Infinity : undefined);
+        summary = sum === null ? null : `${sum.headline}<small>Restart to watch again, or take control of cart earlier.</small>`;
+        if (sum !== null) this.summaryLine = summary;
+        else summary = this.summaryLine;
+      } else this.summaryCache.warm(s.log());
+    }
     const mode = firstPerson ? `You: ${human} · Esc frees the mouse` : human !== null ? `You: ${human} (dead) · spectating` : 'Watching';
     const canTake = human === null && s.canTakeControl && !this.touchOnly;
     const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake);
@@ -773,7 +793,7 @@ class App3D {
       spectate: spec,
       hit: exact || this.lastHit === null ? null : { ageMs: now - this.lastHit.ms, head: this.lastHit.head },
       perf: `${this.fpsMeter.rate(now).toFixed(0)} fps · ${this.tpsMeter.rate(now).toFixed(0)} ticks/s · ${this.loop.speed}×`,
-      summary: over ? `${summarize(s.model, s.log()).headline}<small>Restart to watch again, or take control of cart earlier.</small>` : null,
+      summary: over ? summary : null,
       tick: o.tick,
       nowMs: now,
     });
