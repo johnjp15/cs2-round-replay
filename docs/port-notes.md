@@ -149,3 +149,24 @@ for tests would need:
 - **Not restorable in CS2** (and not in 2D's resync either): velocity, grenades in flight and active smokes / fires, a plant or defuse in progress, weapon timers, flashes, the bots' memory. `CheckpointHazards` marks checkpoints taken mid-plant / mid-defuse so the driver skips them.
 - **Loadout ledger** (`loadout.ts`, in the Core snapshot): items sorted ordinally (stable for duplicate grenades), a gun `give` replaces its entry, a grenade / c4 / defuser `give` adds one. `releaseWindowTicks` = `Math.Ceiling((max(fuseSec, molotovFuseSec, throwRange / throwSpeed) + 1) * 64 − 1e-9)`; releases are a list (oldest first) filtered by `tick − release.tick <= window` at each pop.
 - **Summary** (`summary.ts`): a pure function of `RoundModel` and the log lines. Times are formatted by `fixed2` (`c = Math.Floor(Math.Abs(x) * 100 + 0.5)`, sign only if `c > 0`, then `c / 100` and two digits of `c % 100`), never `ToString("F2")`. Kill matching: for each recorded kill in file order, the first unused run death of that victim; rows sorted by (recorded tick, else run tick), then recorded order, then death order. `aliveSec` and the RMS skip tick 0 (its observe predates the setup). The RMS uses `RoundModel.TrackAtTick` and `Math.Sqrt` (exact).
+
+## 3D movement (G3)
+
+- **The CS2 engine moves the pawns.** The 2D sim's `stepMove3d` is Source's `PlayerMove` on the CS2 collision mesh so
+  that the sim and CS2 agree; the CS2 adapter doesn't port it: bots move under CS2's own movement from the
+  `PawnInput` the Core sends. `PawnObs.onGround` is `m_hGroundEntity` being valid; `vel.z` and `pos.z` come from the
+  pawn as they are.
+- **JUMP.** A `JUMP` in a pawn's input on tick k is `IN_JUMP` in that bot's `CUserCmd` for tick k (the button for
+  one tick is a fresh press; CS2 jumps on the press, `sv_autobunnyhopping 0`). Crouch jumps: `IN_DUCK` held with it.
+  CS2's sub-tick input lets a human jump between ticks; bots get whole ticks, as here.
+- **Snapped tracks.** The Core plays `data/geometry/mirage-tracks.json` (the recording snapped onto CS2 Mirage) in
+  both: apply it to the round (`applyTracks3d`) before building the RoundModel, so the C# Core and the TS Core see the
+  same positions. The snap tool (`tools/snap-tracks.ts`) stays offline in TypeScript.
+- **WalkQuery** in CS2: `isWalkableLine` should be a hull trace (`TraceHull` with the standing hull, lifted a step,
+  or level when walking off a ledge), as `hullLineClear`; `pathLength` the CS2 nav's path length with its drop and
+  jump links.
+- **CS2 Mirage vs the 2020 recording** (what the snapping and the tests found): the drop under the B Apartments window
+  is a wall in CS2 (a 20-unit-high window sill further east, x −1803 … −1767, needs a jump); a B-site box and an A-site
+  box stand where the recording walks; the Apartments floor is raised 32 units at x ≈ −1550; B short's corridor and
+  the underpass are one above the other where the 2020 nav switches between them; the recording's z on T ramp is a
+  floor 80 above CS2's. The CS2 build is 2000942 (`data/source/cs2/PROVENANCE.md`).

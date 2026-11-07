@@ -11,23 +11,21 @@
  *   npm run clips:extract                     # the first line
  *
  * Method (docs/geometry.md, "Player clips"):
- * 1. Stand levels (`standLevels`: walkable surface tops under a 32 × 32 footprint where the standing or crouched hull
- *    fits) at every 5-unit radar pixel within 64 units of a CS2 nav polygon.
- * 2. A level is **allowed** when the CS2 nav has a polygon at its height there: one at the point within NAV_EXACT_DZ
- *    (box tops, where the decimated mesh is up to ~40 off the nav), or one within NAV_NEAR_RADIUS within NAV_NEAR_DZ
- *    (the nav is eroded by Recast's agent radius and sits ~4 above the mesh). Reached by a walk (|Δz| ≤ 18) it is also
- *    allowed with a nav polygon within WALK_RADIUS at WALK_DZ (floor strips by walls that the nav erodes more).
- * 3. Flood from the ten start positions (each moved to the nearest allowed level within 64 units) through allowed
- *    levels only, by walking, dropping (to the highest level at or below a step, if the hull fits above it) and
- *    jumping (up to JUMP_UP, if the crouched hull fits raised to the upper level). A forbidden level an edge reaches is
- *    a **frontier** level: a wall top, ledge, roof or out-of-map floor a pawn could get onto.
- * 4. Under each frontier level, every walkable triangle the hull rests on is cut into PIECE_CELL-unit world cells;
- *    every piece whose own surface the nav doesn't cover (NAV_EXACT_DZ at the point, SURFACE_RADIUS at SURFACE_DZ) gets
- *    a prism: its polygon extruded straight up by CLIP_HEIGHT, or to just under the ceiling above it. Side walls that
- *    two pieces share (same edge, same top) are left out. Allowed floors are never covered, so the prisms only stand
- *    where the hull would rest on a forbidden surface: a pawn beside a low wall isn't pushed away from it.
- * 5. Validate: flood the merged mesh (world + clips) with no nav filter at all and count reachable levels the nav
- *    doesn't allow (the manifest's `validation`).
+ * 1. Surface pieces: every walkable world triangle cut to `pieceCell`-unit world cells (`Pieces`). A piece is
+ *    **allowed** when the CS2 nav has a polygon at its height there: one at the point within `navExactDz`, or one
+ *    within `navNearRadius` (probed every `navProbe` units) within `navNearDz` (`NavCover`: the nav is eroded by
+ *    Recast's agent radius and sits a few units off the decimated mesh). A stand level is allowed when the pieces the
+ *    hull rests on are (`Pieces.allowsLevel`).
+ * 2. Flood (`floodLevels`) from the ten start positions (each moved to the nearest allowed level) through allowed
+ *    stand levels at every 5-unit radar pixel within `maskGrow` of a CS2 nav polygon, by walking (up a step), dropping
+ *    (to the highest level at or below a step) and jumping (up to `jumpUp`, with the crouched hull's headroom). A
+ *    forbidden level an edge reaches is a **frontier** level: a wall top, ledge, roof or out-of-map floor.
+ * 3. Under each frontier level, every forbidden piece the hull rests on gets a prism: its polygon extruded straight up
+ *    by `clipHeight`, or to `ceilingGap` under the ceiling above it (`clipPieces`, `prismMesh`; side walls two pieces
+ *    share are left out). Allowed floors are never covered, so a pawn beside a low wall isn't pushed away from it.
+ * 4. Repeat on the world merged with the prisms so far (`maxRounds` at most) until no new frontier is reached.
+ * 5. Validate: flood the merged mesh with no nav filter (the same seeds) and count reachable stand levels outside
+ *    the prisms that the nav doesn't allow (the manifest's `validation`).
  *
  * Deterministic: pixel order, FIFO flood, sorted pieces, sorted vertices and triangles; integer quantization (1/8).
  */

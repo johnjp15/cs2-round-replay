@@ -149,3 +149,32 @@ The section is part of the `Tuning` type (`Tuning.nav`, validated by `parseTunin
 | 6 | CT Spawn | 15 | Scaffolding | 24 | Truck |
 | 7 | Catwalk | 16 | Shop | 25 | Tunnel |
 | 8 | Connector | 17 | Side Alley | 26 | Tunnel Stairs |
+
+## 3D (G3)
+
+**Drop portals.** `portalBetween` also links two areas that share an edge when the second is lower than the first by
+more than `stepHeight` and at most `nav.dropHeight` (200) at the edge's ends and middle: a one-way drop off a ledge
+(the Balcony to B site). The 2D mesh had none (the rejoin planner over-estimated any way
+back down).
+
+**3D hooks** (`NavMesh.with3d(nav3dFor(geometry, stepSize))`, `src/sim2d/walk-query.ts`), used whenever the session
+has the 3D world:
+
+- Each **drop portal** is tested every 8 units along it: a standing hull, free on the CS2 floor 20 or 32 units inside
+  the upper area, must walk off toward a point as far inside the lower one in a straight line (`hullLineClear`) and
+  land on the lower area's floor (not on a higher CS2 floor over it). The portal shrinks to the longest run of such
+  points, or is dropped. This removes the 2020 drop under the B Apartments window (a wall in CS2), and the landing
+  check stops a gap drop (below) from B short's corridor into the underpass under it (CS2 has floor there: a LIVE
+  pawn steered at it stuck against the wall).
+- **Gap drops**: a drop the 2020 nav lacks, to a lower area within 64 units across a gap (a ledge's lip, a railing's
+  thin 2020 areas), tested the same way: the Balcony's west end down to B site is one.
+- A portal's **crossing point** (its midpoint, where paths go) is moved along the portal to the nearest spot where a
+  standing hull fits on the CS2 floor when the midpoint is in a CS2 wall (`freeMidpoint`).
+- **Path smoothing** pulls forward to the furthest corridor point a hull gets to in a straight line on the CS2 mesh
+  (never past the furthest one the 2D test allows); `segmentWalkable` is the 2D test and the hull line. Hull-line
+  answers are cached by their exact endpoints (pure, so the cache changes no result).
+
+Level portals are otherwise kept as the 2020 nav has them (narrowing them all to where a hull crosses cost 0.6 s at
+start-up and left the 2020 areas that miss CS2's corridors no better). 5 of the 1,089 areas reachable from the spawns
+are no longer reachable (they are inside CS2 props). Building the 3D nav takes about 0.25 s (Node). Paths cost about
+0.7 ms each once warm (2D: 0.4 ms).

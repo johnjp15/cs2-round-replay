@@ -1,4 +1,9 @@
-# 2D movement model and Sim2DHost (`src/sim2d/movement.ts`, `src/sim2d/host.ts`)
+# Movement model and Sim2DHost (`src/sim2d/movement.ts`, `src/sim2d/host.ts`)
+
+**G3:** with the 3D world loaded (the app and every harness and test run since G3), pawns move in 3D on CS2 Mirage's
+collision mesh with Source's movement (`stepMove3d`, "3D movement" below): they jump, fall, climb stairs and stand on
+boxes, and the 2D view shows height. The ground-only model (`stepMove`) below is still what a session without the 3D
+world uses, and on flat ground the 3D model moves exactly as it does (tested).
 
 Source-style ground movement at 64 Hz, close enough to CS2 that tuning found in the 2D sim carries
 over to the CS2 plugin and back. The movement functions are pure (`MoveState` in, `MoveState` out), and
@@ -202,10 +207,92 @@ for (;;) {
   across JS engines. Node and the browser normally agree after the 6-decimal rounding, but this is not
   proven for V8 vs. JavaScriptCore.
 
+## 3D movement (G3, `stepMove3d`)
+
+Source's `CGameMovement::PlayerMove` / `FullWalkMove` (Source SDK 2013, `game/shared/gamemovement.cpp`; CS2 keeps
+the structure) on `MapGeometry` (G2's CS2 collision mesh merged with the player clips, `docs/geometry.md`). The
+standing hull is 32 × 32 × 72, crouched 32 × 32 × 54; every trace is a swept box with Source's 1/32 skin
+(`traceBox`). Per tick (`MoveState` has `pos`, `vel` (with z), `onGround`, `crouching`, `jumpHeld`, `stamina`):
+
+1. Look; stamina recovers (`staminaRecoveryRate` per second); the fall speed is −vel.z if airborne.
+2. Duck (instant, as `stepMove`): DUCK crouches. In the air the feet tuck up by `airDuckLift` (the hull shrinks from
+   the top on the ground, from the bottom in the air, as in Source); releasing stands up when the standing hull fits.
+3. Jump (`CheckJumpButton`): a **fresh** JUMP press (`jumpHeld` false) on the ground sets vel.z = `jumpImpulse`.
+   CS2 takes off precisely (the sub-tick jump update): no half tick of gravity before the first move, so the apex is
+   impulse² / 2g = 57.0 units at 64 Hz too and the jump lands on tick 48 from flat ground (tested: apex 56.9975).
+   Holding JUMP jumps once (`sv_autobunnyhopping 0`).
+4. On the ground: friction, the stamina slowdown (speed × (staminaMax − stamina) / staminaMax), ground acceleration
+   exactly as `stepMove`, then `WalkMove`: a straight move if it isn't blocked, else `StepMove` (the better of the
+   plain slide and up `stepSize` → move → down), then `StayOnGround`. In the air: `AirAccelerate` (the wish speed
+   for the acceleration capped at `airMaxWishSpeed`, the full wish speed for the add) and `TryPlayerMove` (4 bumps,
+   up to 5 clip planes, `ClipVelocity` with overbounce 1) between two half steps of gravity.
+5. `CategorizePosition`: on the ground if a trace 2 units down hits a surface with normal z ≥ `standableNormal`
+   while vel.z ≤ 140 (`NON_JUMP_VELOCITY`); the pawn is put on it. A landing (airborne → ground) gives `landSpeed`
+   (the fall speed), fall damage (below) and the landing stamina cost (`staminaLandCost` × landSpeed, capped at
+   `staminaMax`).
+
+**Fall damage** (`fallDamageFor`): none below `fallSafeSpeed` (580 u/s, a drop of about 222 units with the 2-unit
+ground check: tested 222 → 0, 223 → 3 HP); above it `floor((speed − 580) × 100 / (1024 − 580) × fallDamageScale)`
+(`PLAYER_MAX_SAFE_FALL_SPEED`, `PLAYER_FATAL_FALL_SPEED` in Source's `shareddefs.h`: 1024 u/s is lethal). The host
+applies it as world damage (`hurt(null, …, 'generic')`); a landing faster than `landSoundSpeed` makes a sound.
+
+**Stairs on the decimated mesh.** G2's mesh is vertex-clustered on an 8-unit grid, so stair risers lean and their
+tops can slope into the next tread. `standsOn` (the ground test) also accepts a floor 8 units up within 4 units of the
+hull's edge (`STEP_EDGE_UP`, `STEP_EDGE_MARGIN`), so a pawn walks up and down the Tunnel Stairs instead of being
+launched off a leaning riser (tested). A pawn that starts inside the mesh (a teleport, a snap, a restore) is moved to
+the nearest free spot by `unstick` (rings of offsets out to 32 units, ±18 up and down), as Source's `CheckStuck`.
+
+**Playable space.** Players stand only where CS2's own nav mesh says they can: the player clips (`docs/geometry.md`
+"Player clips") cover wall tops, roofs, ledges and out-of-map floors a pawn could reach by walking, dropping or
+jumping. B-site and A-site boxes, the Catwalk and the Balcony are nav-covered, so pawns stand on them (tested: a jump
+onto the B-site west ledge lands at −126.6; the clips stop a jump onto the wall top at (−1379, −1040)).
+
+### Constants (`data/tuning.json` → `movement`)
+
+| Key | Value | Source |
+| --- | ---: | --- |
+| `gravity` | 800 | CS2 `sv_gravity` default |
+| `jumpImpulse` | 301.99338 | CS2 `sv_jump_impulse` default (= √(2 × 800 × 57), Source's `GAMEMOVEMENT_JUMP_HEIGHT` 57) |
+| `airAccelerate` | 12 | CS2 `sv_airaccelerate` default |
+| `airMaxWishSpeed` | 30 | CS2 `sv_air_max_wishspeed` default (Source's hard-coded 30 in `AirAccelerate`) |
+| `maxVelocity` | 3500 | CS2 `sv_maxvelocity` default |
+| `stepSize` | 18 | CS2 `sv_stepsize` default |
+| `standableNormal` | 0.7 | Source `gamemovement.cpp` (a surface with normal z ≥ 0.7 is ground) |
+| `staminaMax` | 80 | CS2 `sv_staminamax` default |
+| `staminaLandCost` | 0.05 | CS2 `sv_staminalandcost` default (the cost formula, cost × land speed, is **estimated**) |
+| `staminaRecoveryRate` | 60 | CS2 `sv_staminarecoveryrate` default |
+| `fallSafeSpeed` | 580 | Source `PLAYER_MAX_SAFE_FALL_SPEED` |
+| `fallFatalSpeed` | 1024 | Source `PLAYER_FATAL_FALL_SPEED` |
+| `fallDamageScale` | 1 | CS2 `sv_falldamage_scale` default |
+| `landSoundSpeed` | 260 | **estimated** (Source plays a land sound above about 260 u/s fall speed; tunable) |
+| `airDuckLift` | 9 | **estimated** (half the 18-unit hull difference, as Source's in-air duck; tunable) |
+
+Fixed in code from Source: the 2-unit ground check, `NON_JUMP_VELOCITY` 140, 4 bumps, 5 clip planes, overbounce 1, the
+1/32 trace skin (G2), the hulls. The convar defaults are CS2's (`cvarlist`; the values match the CS:GO / CS2 defaults
+documented by command references such as [csdb.gg](https://csdb.gg/commands/server/sv_gravity)); they were not
+re-measured in a live CS2 session for this task. Algorithms: Source SDK 2013's `gamemovement.cpp` (CS2's movement is
+a descendant; the sub-tick changes are only the precise take-off and the input timing, which a 64 Hz sim without
+sub-tick input ignores).
+
+### Sight, aim and sound in 3D
+
+`sees` still comes from the 2D sight mask (`docs/vision.md`) with its level check, now on the real z. Eye and aim
+heights use the pawn's real z (feet + `damage.eyeHeight` standing, + `damage.crouchEyeHeight` crouched; the hit bands
+from the feet), so an airborne or crouched pawn is aimed at where it is. Not modelled: jump inaccuracy (CS2's spread while airborne; scripted shots don't jump), and sight is not traced
+against the CS2 mesh (G2 "Sight at eye height" has the data for that).
+
+### Tests (`tests/movement3d.test.ts`)
+
+CS2 values; jump apex 56.9975 and landing on tick 48 with the parabola in between; one jump per press; the air wish
+cap; a ceiling 100 up stops the rise at 28; on flat ground the 3D model equals `stepMove` tick for tick; up and down
+the Tunnel Stairs; a wall stop at 100 − 16 − skin and a 45° slide along a wall; a jump onto the B-site west ledge; a
+crouch jump clears a ledge a plain jump doesn't; the clips keep a jump off a wall top; walking off the Balcony (no
+damage); fall damage at 222 / 223 units, large and fatal falls; the landing slowdown and its recovery.
+
 ## Not modelled yet (differences from CS2)
 
-Jumping, air movement and falling; stamina and landing slowdown; tagging (slowdown when hit); scoped
-speeds (AWP 100); crouch transition time (crouch is instant); surface friction; sub-tick input; step-up
-and ledges (z just follows the nav floor). Whether WALK and DUCK stack in CS2 is to be checked. The player
+Tagging (slowdown when hit); scoped speeds (AWP 100); crouch transition time (crouch is instant); surface friction;
+sub-tick input; ladders (Mirage's two: the nav has no ladder links and the 3D world treats them as walls); surfing and
+bunny-hop speed gain beyond what the air acceleration gives; jump inaccuracy. Whether WALK and DUCK stack in CS2 is to be checked. The player
 hull is implicit against the world (nav areas are player-centre space); between pawns it is a 16-unit circle
 (C3, `docs/combat.md`, "Collision").
