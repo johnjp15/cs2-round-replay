@@ -1,8 +1,9 @@
 # Browser app (`src/app`, `index.html`)
 
-One static page (Vite build, no framework, no runtime dependencies) that replays the round in 2D: a
-human plays `cart` with keyboard and mouse, Core replays the other nine. Everything runs client-side;
-the only requests are the page's own assets.
+One static page (Vite build, no framework, no runtime dependencies) that replays the round in 2D. It starts
+**watching**: all ten replay and the round plays exactly as recorded. At any moment the player can **take control of
+cart** (the button or E) and play him with keyboard and mouse from there while Core replays the other nine (G4,
+"Takeover" below). Everything runs client-side; the only requests are the page's own assets.
 
 ![Spectating at 20 s with the recorded-tracks overlay (headless Chrome, 1280×860)](img/app-spectate-tracks.jpg)
 
@@ -19,6 +20,7 @@ the only requests are the page's own assets.
 | `scene.ts` | `Scene`: what is drawn, built tick by tick (previous/current observe, statuses, kill feed, tracers, effects, pops, bomb, round end, Core logs); interpolation helpers. | no |
 | `camera.ts` | Zoom, pan, follow, clamp; the camera → `View`. | no |
 | `effects.ts` | `Effect` / `EffectsSource`; smokes, fires, flying grenades, pops and tracers as drawing primitives. | no |
+| `takeover.ts` | G4: who plays at load (`startHuman`), the "Take control of cart" button's view (`takeoverButtonView`) and the status card's note (`youNote`). | no |
 | `hud-model.ts` | Mode badges, weapon names, view toggles, the clock / bomb timer and score (reads C3's `observe.round` when present), the status card; where a pawn label goes clear of the HUD (`chooseLabelSpot`) and a LIVE pawn's AI line (`aiDebugLine`) (F). | no |
 | `style.ts` | Palette and fonts shared by the canvas and the HUD (index.html mirrors them as CSS variables). | no |
 | `input-dom.ts` | Thin listener layer: which bound keys and buttons are held, cursor position. | yes |
@@ -49,6 +51,7 @@ requestAnimationFrame(now)
 ```ts
 const data = parseSessionData(roundJson, navJson, tuningJson, visJson);   // values or text; visJson (the sight mask) may be null
 const s = new Session({ ...data, seed: 1 });                       // human: 'cart' (default) or null; the seed also seeds the LIVE AI
+const w = new Session({ ...data, seed: 1, human: null });          // G4: watching; w.takeControl() hands cart over at any tick
 s.step();                                                          // tick 0: Core sets the round up
 s.setHumanInput(humanInput('cart', held, yaw));                    // used every tick until replaced
 s.requestWeaponSlot(3);                                            // knife, on the next step
@@ -69,10 +72,25 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
     for them.
   - `checkpoint {id}`, `rewind {id}`, `seek {t}` (B5): `checkpoint()`, `rewind()`, `seek()` below. Driver work,
     not logged (a resync rewind logs the `rewind` it sends the Core).
+  - `take_control {id}` (G4): `takeControl(id)` below. Engine work, not logged, not sent to the Core.
   - `restart`: `Session.restart()`.
   - A control Core rejects (speed ≤ 0) throws and is not logged; so does `speed` without the speed capability.
 - **Human input.** `setHumanInput(input | null)` forwards to `Sim2DHost.setHumanInput`; the input
-  persists until replaced. `null` hands cart back to Core. It throws while spectating.
+  persists until replaced. `null` means no input: the pawn stands still (the Core sends the human's pawn nothing). It
+  throws while spectating or watching.
+- **G4: takeover** (`docs/core.md` "Takeover"). `SessionConfig.human` is who plays from the start (`cart` by default,
+  null = watching) and `playable` the pawn a watching player may take over (default `cart`). `human` is a getter: the
+  pawn controlled now, null while watching. `takeControl(id = playable)` hands the pawn to the human from the next
+  step on: `Sim2DHost.setHuman` before the next observe, which therefore names him; the pawn keeps everything the
+  puppet had (position, velocity, view, weapon, HP, items) and stands still until `setHumanInput`. Not logged (the log
+  shows it as `observe.human` changing). `takeControlBlocked(id)` says why not (already controlled, not the playable
+  pawn, `cart is dead`, a seek running, a resync pending) and `canTakeControl` is its boolean; after the round end it
+  is allowed while cart lives. `takeoverTick` is the tick he took control from (0 from the start). The takeover is
+  part of the run: checkpoints store who controlled cart and since when, a rewind to one before the takeover is
+  watching again (exact: the host snapshot has `human`; resync: the Session calls `setHuman(null)` before the resync
+  step) and keeps the takeover on the tape, so a forward seek replays it on its tick, before his inputs; the first
+  live step drops it. `restart()` returns to the start (watching, if built so). A session snapshot (version 2) has
+  `human` and `takeoverTick`; `restore` accepts one whose human is null, the start's or the playable pawn.
 - **Weapon slots (app-side action queue).** Keys 1–5 call `requestWeaponSlot(slot)`. On the next step
   each queued press becomes `set_weapon {id: human, weapon}` (`weaponForSlot`, against the host's
   inventory). It is appended after Core's actions in the Act given to the host.
@@ -108,7 +126,8 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
 - **Core factory.** `SessionConfig.core` (default `defaultCore`) builds the Core from
   `{model, schedule, tuning, seed, nav}`. If B2 adds a nav-based `WalkQuery` parameter to
   `ReplayCore`, `defaultCore` is the one line to change.
-- `human: null` (spectate) puts `human: null` in every observe, and Core drives all ten pawns.
+- `human: null` (spectate / watch) puts `human: null` in every observe until a takeover, and Core drives all ten
+  pawns: never taking control is the golden master byte for byte (`tests/takeover.test.ts`).
 
 ## Game loop (`loop.ts`)
 
@@ -133,7 +152,7 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
 | Shift | WALK |
 | Ctrl or C | DUCK |
 | Space | JUMP (G3; held, it jumps once: a fresh press each jump, as CS2 with `sv_autobunnyhopping 0`; a tap shorter than a frame is latched until the next frame reads the keys) |
-| R / E | RELOAD / USE |
+| R / E | RELOAD / USE while playing. **E while watching: take control of cart** (G4; CS2's own key for taking over a spectated bot) |
 | 1 2 3 4 5 | Primary, pistol, knife, grenades (repeat to cycle), C4 (app-side `set_weapon`, see above) |
 | F | Follow cart (the camera centres on him; from the full map it zooms to 3×) |
 | G | Ghost: cart's recorded position now, as a hollow outline (on by default) |
@@ -171,18 +190,38 @@ It doesn't pause anything: the post-round kill (69.4 s) still happens behind it 
 lands. Escape, × or Keep watching close it; the **Summary** button (enabled once the round is over) brings it
 back. A rewind to before the round end closes it.
 
-**Controls bar:** Start (from the ready state), Pause/Resume, Restart (back to ready), Summary (B5), speed
+**Controls bar:** Start (from the ready state), Pause/Resume, Restart (back to ready, watching), Summary (B5), speed
 0.25/0.5/1/2/4×, the view toggles Follow / Ghost / Tracks / Panel / Height (the F, G, T, Tab and H keys, as
-buttons for touch), Spectate (rebuilds the session with `human: null` or `cart` and returns to ready),
-Download log (JSONL), Download trace (JSON). Downloads are `Blob` URLs. Tab toggles the panel only
+buttons for touch), **Take control of cart** (G4, below; it replaced D1's Spectate button, which rebuilt the
+session with or without a human), Download log (JSONL), Download trace (JSON). Downloads are `Blob` URLs. Tab toggles the panel only
 while focus is on the page, so it still moves focus inside the controls bar.
 
 **Touch (iPhone):** there are no touch controls for the human (on-screen joystick and fire button are
-out of scope; so no jump button either). Touch-only devices (`(hover: none) and (pointer: coarse)`) start in spectate mode, and
-the controls bar works by tapping; drag, pinch and double-tap move the camera. In landscape on a phone
+out of scope; so no jump button either). Touch-only devices (`(hover: none) and (pointer: coarse)`) watch, like every
+device at load, and their Take control button stays disabled ("Playing needs a keyboard and mouse"); the controls bar
+works by tapping; drag, pinch and double-tap move the camera. In landscape on a phone
 the bar moves to a column on the right.
 
-**URL parameters:** `?seed=<int>` (default 1) and `?human=cart|none` (overrides the touch default).
+**URL parameters:** `?seed=<int>` (default 1) and `?human=cart` (play cart from the start, tick 0; `none` or absent:
+watching).
+
+**Takeover (G4)**, `docs/core.md` "Takeover". The page starts watching on every device (`startHuman`: `?human=` absent
+or `none`): nobody controls cart, his card says "watching · E: take control", and a run nobody takes over is the
+golden master byte for byte ("Played it like the tape: CT defuse, 0.72 s left"; `tests/takeover.test.ts` runs the
+page's session config to the end). **Take control of cart** or **E** (only while watching; once playing E is USE)
+calls `Session.takeControl()`: from the next tick cart is yours, exactly where and how the puppet left him (moving,
+aiming, holding whatever he held), and the HUD switches to "YOU" (the badge, "you" on the card, the button reads
+"You: cart" and stays pressed). Allowed in the ready state (from tick 1), while running or paused, and after the round
+end while cart lives; disabled while seeking and once cart is dead (69.41 s on the tape; the tooltip says why).
+Taking control at another speed drops it to **1×** (nobody plays at 4×; the speed buttons still work, so 0.5× or 2×
+are a click away); the `speed` control is logged on the takeover tick, after the untouched prefix. The camera is not
+changed (the spectate view or F's follow, which follows cart either way). **Restart** returns to watching; a rewind
+(`[`, −5 s, −10 s, the timeline) to before the takeover is watching again too, and a forward seek through it replays it
+(the tape). The tape and checkpoints carry it ("Session" above).
+
+![Watching at 10 s, 4× (headless Chrome, 1280×860): "watching · E: take control"](img/app-watching.jpg)
+
+![A second later: Take control of cart; the speed dropped to 1×, cart is YOU, the button reads "You: cart"](img/app-takeover.jpg)
 
 ## Loading and bundle
 
@@ -347,8 +386,8 @@ Chromium from `PLAYWRIGHT_BROWSERS_PATH`, `npx playwright-core install chromium`
 Screenshots and downloads go to `logs/browser-check/` (gitignored). Results in headless Chromium
 153.0.8010.12 on this VM:
 
-- **(a) Ready** (`a-desktop-ready`): the radar, ten pawns on their start spots, clock 1:39, tick 1.
-  **After Start:** 1:36 after about 3 s (tick ≈ 194).
+- **(a) Ready** (`a-desktop-ready`): the radar, ten pawns on their start spots, clock 1:39, tick 1, watching (G4);
+  E takes control of cart there (from tick 1). **After Start:** 1:36 after about 3 s (tick ≈ 194).
 - **Human:** with the mouse east of cart, holding S for 1 s moves him 211 units south with x unchanged
   (screen-relative), and he faces the cursor. Key 3 switches to the knife. Both downloads work: a log of
   ~290 lines is about 1.1 MB, and its trace is 11.6 KB.
@@ -372,7 +411,7 @@ Screenshots and downloads go to `logs/browser-check/` (gitignored). Results in h
   his dot, out from under the clock.
 - **(g) Desktop 900×700 at 12.8 s** (F, `g-desktop-narrow-killfeed`): the kill feed (2 rows) moves below the scoreboard
   (rows from y 84; the scoreboard ends at y 78) instead of covering its right end; 0 labels overlap the HUD.
-- **(h) LIVE AI in the panel** (F, `h-desktop-live-aidebug`, cart idle in Back Alley, tracks on): at 1:17 Lokier
+- **(h) LIVE AI in the panel** (F, `h-desktop-live-aidebug`, `?human=cart`, cart idle in Back Alley, tracks on): at 1:17 Lokier
   (outlived) and barely (sees him) are LIVE; their panel lines read "reacting · target lokier (out of sight) · plant →
   (−1873, 396)" and "reacting · target barely · hold", and their paths show on the map.
 - **Determinism:** the spectate log from Chrome has the same digest as a Node run of the same length,
@@ -392,6 +431,13 @@ Screenshots and downloads go to `logs/browser-check/` (gitignored). Results in h
   its Rewind 10 s goes back 10 s and closes it. Spectating: "Played it like the tape: CT defuse, 0.72 s left"
   (`e2-desktop-summary-spectate`). Phone (390×844, touch): −5 s by tap, and the summary as a bottom sheet
   (`f-phone-summary`). `summarize()` of a 4,000-line log takes ~80 ms in the page.
+- **(i) G4: takeover** (`--only takeover` runs just this): the default page watches at 4×; at 10 s (`i-desktop-watching`)
+  "Take control of cart" at tick 700: speed 1×, the button "You: cart", the card "you" (`i2-desktop-takeover`, after
+  S held 0.8 s); the page's log before tick 700 has the digest of the Node no-human run with the page's `speed`
+  control (`336b2945`); `[` lands on tick 604, watching again, and E takes control again (tick 606); Restart is
+  watching; after a seek to 69.6 s (cart dead) the button is disabled ("Not now: cart is dead.") and E does nothing.
+  The pages that play cart from the start (c, the jump, h, e) load `?human=cart`; the phone (d) watches with the
+  button disabled.
 - No console errors, and no requests outside the page's origin.
 
 ![End-of-round summary, desktop: cart left idle changes history (headless Chrome, 1280×860)](img/app-summary-desktop.jpg)

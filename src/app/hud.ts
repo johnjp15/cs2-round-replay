@@ -29,6 +29,8 @@ export interface HudFrame {
   readonly human: PlayerId | null;
   /** Whose status the bottom-left card shows (cart). */
   readonly you: PlayerId;
+  /** G4: the note beside its name (`you`, `watching · E: take control`; takeover.ts `youNote`); absent: you / spectating. */
+  readonly youNote?: string;
   /** ready / running / paused. */
   readonly phase: 'ready' | 'running' | 'paused';
   readonly speed: number;
@@ -277,7 +279,7 @@ export class Hud {
     this.attr(this.you, 'data-team', y.team);
     this.attr(this.you, 'data-band', y.alive ? y.band : 'dead');
     this.text(this.youName, y.id);
-    this.text(this.youNote, f.human === y.id ? 'you' : f.human === null ? 'spectating' : '');
+    this.text(this.youNote, f.youNote ?? (f.human === y.id ? 'you' : f.human === null ? 'spectating' : ''));
     this.text(this.youHp, String(y.hp));
     this.text(this.youArmor, String(y.armor));
     this.text(this.youWeapon, y.alive ? y.weapon : 'Dead');

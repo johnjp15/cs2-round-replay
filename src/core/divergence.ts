@@ -29,8 +29,11 @@ import { secTicks, type PawnMode, type ScriptPlan, type ScriptedEvents } from '.
 // Triggers
 // ---------------------------------------------------------------------------
 
-/** What switched a pawn to LIVE (`PawnStatus.trigger`). */
-export const TRIGGER_KINDS = ['damage', 'sighting', 'gunfire', 'outlived', 'blocked', 'encounter'] as const;
+/**
+ * What switched a pawn to LIVE (`PawnStatus.trigger`). G4: `released`: the human let go of his pawn mid-round without
+ * a rewind (CS2: the player left; the bot plays on), so it goes on as a LIVE bot (docs/core.md "Takeover").
+ */
+export const TRIGGER_KINDS = ['damage', 'sighting', 'gunfire', 'outlived', 'blocked', 'encounter', 'released'] as const;
 export type TriggerKind = (typeof TRIGGER_KINDS)[number];
 
 export interface TriggerHit {
@@ -358,6 +361,12 @@ export interface EncounterState {
   shotTick: number | null;
   /** True while the `block_damage` shooter → victim sent with the scripted shot is in force. */
   blocked: boolean;
+  /**
+   * G4: while nobody controls the victim (`observe.human` null: he is a puppet), the first tick the shooter (REPLAY)
+   * saw him within `humanSpotToleranceUnits` of the spot, else null. Only noted, nothing acts on it; a takeover before
+   * the hit starts the encounter as seen from this tick (`Divergence.takeover`).
+   */
+  puppetSightTick: number | null;
 }
 
 function bandOf(hitgroup: string): AimBand {
@@ -586,7 +595,7 @@ export interface DivergenceState {
 }
 
 function initialDivergenceState(encounters: readonly EncounterPlan[]): DivergenceState {
-  return { encounters: encounters.map((e) => ({ key: e.key, phase: 'waiting', seenTick: null, shotTick: null, blocked: false })), contacts: [] };
+  return { encounters: encounters.map((e) => ({ key: e.key, phase: 'waiting', seenTick: null, shotTick: null, blocked: false, puppetSightTick: null })), contacts: [] };
 }
 
 /**
@@ -621,7 +630,8 @@ export class Divergence {
       encounters: this.encounters.map((e) => {
         const q = s.encounters.find((x) => x.key === e.key);
         if (q === undefined) throw new Error(`Divergence.restore: no state for ${e.key}`);
-        return { key: q.key, phase: q.phase, seenTick: q.seenTick, shotTick: q.shotTick, blocked: q.blocked };
+        // Snapshots from before G4 have no puppet sight.
+        return { key: q.key, phase: q.phase, seenTick: q.seenTick, shotTick: q.shotTick, blocked: q.blocked, puppetSightTick: q.puppetSightTick ?? null };
       }),
       contacts: s.contacts.map((c) => ({ id: c.id, sinceTick: c.sinceTick, behind: c.behind, stalledSince: c.stalledSince })),
     };
@@ -703,7 +713,12 @@ export class Divergence {
    * dies or the shooter leaves REPLAY. Returns the shooter's LIVE switch when the gate fails.
    */
   private encounterStep(p: EncounterPlan, s: EncounterState, o: Observe, modes: readonly PawnMode[], hits: readonly TriggerHit[], script: ScriptedEvents, out: Action[]): TriggerHit | null {
-    if (s.phase === 'done' || o.human !== p.victim) return null;
+    if (s.phase === 'done') return null;
+    if (o.human === null) {
+      this.notePuppetSight(p, s, o, modes);
+      return null;
+    }
+    if (o.human !== p.victim) return null;
     const r = this.tuning.replay;
     const tick = o.tick;
     const sh = pawnOf(o, p.shooter);
@@ -780,6 +795,80 @@ export class Divergence {
       out.push({ type: 'damage', attacker: p.shooter, victim: p.victim, amount: d.amount, armor: d.armor ?? 0, hitgroup: d.hitgroup, weapon: d.weapon, lethal: false });
     }
     return null;
+  }
+
+  /**
+   * G4: nobody controls the victim yet (he is a puppet, `observe.human` null): note the first tick the shooter (REPLAY)
+   * sees him within `humanSpotToleranceUnits` of the spot. State only: nothing is sent, so the run stays the
+   * no-human one; a takeover before the hit starts from it (`takeover`).
+   */
+  private notePuppetSight(p: EncounterPlan, s: EncounterState, o: Observe, modes: readonly PawnMode[]): void {
+    if (s.phase !== 'waiting' || s.puppetSightTick !== null) return;
+    const sh = pawnOf(o, p.shooter);
+    const vi = pawnOf(o, p.victim);
+    if (sh === undefined || vi === undefined || !sh.alive || !vi.alive || modeOf(modes, p.shooter) !== 'REPLAY') return;
+    if (sh.sees.includes(p.victim) && dist2(vi.pos, p.spot) <= this.tuning.replay.humanSpotToleranceUnits) s.puppetSightTick = o.tick;
+  }
+
+  /**
+   * G4: `o.human` took control of his pawn on this tick, mid-round (a puppet until now; nothing of an encounter of his
+   * has been sent). Each of his encounters still waiting becomes active the way it would be had he played the puppet's
+   * moves from the round start (docs/core.md "Takeover"):
+   * - its shooter dead or not REPLAY: over;
+   * - this tick is past the recorded hit's emission tick (B3 sent the hit to the puppet; it has landed): `fired` on
+   *   the recorded ticks (no time shift), so the duel at the spot after the hit is the recording's (sightings there
+   *   owned, the human's fire at the shooter recorded fire);
+   * - otherwise as at the setup: the recorded shot and aim not decided yet are suppressed (an aim already running goes
+   *   on to its end) and the shooter holds the angle on the spot from the recorded aim's start; then `seen` from the
+   *   puppet sight if the shooter already saw him at the spot (the hit due `encounterDelaySec` after that sight, but at
+   *   least one latency from now, with the run-time aim from now), else `waiting`.
+   * Called before `step` on the takeover tick; appends one log line per encounter to `out`.
+   */
+  takeover(o: Observe, modes: readonly PawnMode[], script: ScriptedEvents, out: Action[]): void {
+    const r = this.tuning.replay;
+    const tick = o.tick;
+    const li = r.inputLatencyTicks;
+    const la = r.actionLatencyTicks;
+    const lead = li > la ? li : la;
+    for (let i = 0; i < this.encounters.length; i++) {
+      const p = this.encounters[i] as EncounterPlan;
+      const s = this.st.encounters[i] as EncounterState;
+      if (p.victim !== o.human || s.phase !== 'waiting') continue;
+      const what = `encounter ${p.shooter} -> ${p.victim}`;
+      const sh = pawnOf(o, p.shooter);
+      if (sh === undefined || !sh.alive || modeOf(modes, p.shooter) !== 'REPLAY') {
+        s.phase = 'done';
+        out.push({ type: 'log', level: 'info', text: `${what}: none after the takeover at tick ${tick}, ${p.shooter} is ${sh?.alive === true ? 'LIVE' : 'dead'}` });
+        continue;
+      }
+      if (tick > p.damage.tick - la) {
+        s.phase = 'fired';
+        s.seenTick = p.recordedSightTick;
+        s.shotTick = p.damage.tick;
+        out.push({ type: 'log', level: 'info', text: `${what}: the recorded hit (${p.damage.amount} hp) landed on tick ${p.damage.tick}, before the takeover at tick ${tick}` });
+        continue;
+      }
+      for (const k of p.fireKeys) script.suppress(k);
+      for (const k of p.aimKeys) script.suppress(k);
+      script.addHold({ key: `hold:${p.key}`, id: p.shooter, point: bandPoint(p.spot, false, p.band, this.tuning.damage), fromTick: p.holdFromTick, toTick: null });
+      const sight = s.puppetSightTick;
+      if (sight === null) {
+        out.push({ type: 'log', level: 'info', text: `${what}: active from the takeover at tick ${tick}, waiting for ${p.shooter} to see ${p.victim} at the spot` });
+        continue;
+      }
+      const delay = secTicks(r.encounterDelaySec);
+      const due = sight + (delay > lead ? delay : lead);
+      const shotTick = due > tick + lead ? due : tick + lead;
+      s.phase = 'seen';
+      s.seenTick = sight;
+      s.shotTick = shotTick;
+      script.addEngagement({ key: `aim:${p.key}`, shooter: p.shooter, target: p.victim, band: p.band, fromTick: tick, toTick: shotTick - li });
+      out.push({
+        type: 'log',
+        level: 'info',
+        text: `${what}: ${p.victim} in sight at the spot since tick ${sight} (${tenthsText(sight - p.recordedSightTick, true)} s against the recording), before the takeover at tick ${tick}; scripted hit due at tick ${shotTick}`,
+      });
+    }
   }
 
   /**

@@ -34,6 +34,7 @@ Copy this file for a run and fill it in; keep this template blank. One run log p
 | P6 visibility cost | | | |
 | P7 round start (A) | | clock route: | |
 | P7 bomb timings (B) | | plant input: | |
+| P8 takeover (G4) | | restriction / release route: | |
 
 ## P0 — coordinate check
 
@@ -168,6 +169,17 @@ Smoke lifetime ____ s · Molotov ____ s
 | defuse with kit | USE | — | — | — | | | |
 | defuse without kit | USE | — | — | — | | | |
 | defuse abort | USE | — | — | — | — | | — |
+
+## P8 — takeover (G4)
+
+| Variant | run | position jump (u) | velocity / view continuous | E → `bot_takeover` (ticks) | → player input moves pawn (ticks) | injector fights player (ticks) | result |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| a (unlocked) | 1 | | | | | — | |
+| b (lock kept) | 1 | | | | | | |
+
+Restriction route that blocks donk and keeps cart: ____. Release route: ____ (ticks until the bot drives the pawn
+again: ____; pawn alive and in place: ____). Second takeover in the round: as is / after clearing the flags /
+impossible.
 
 ## Proposed `data/tuning.json` changes
 

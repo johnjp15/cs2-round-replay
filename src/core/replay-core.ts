@@ -10,6 +10,7 @@
 import {
   PLAYER_IDS,
   Rng,
+  isPlayerId,
   toJsonValue,
   type Act,
   type Action,
@@ -29,7 +30,7 @@ import {
   type WalkQuery,
 } from '../contracts/index';
 import { RoundClock, TICK_RATE } from './clock';
-import { Divergence, type DivergenceState } from './divergence';
+import { Divergence, liveGoal, type DivergenceState } from './divergence';
 import { REJOIN_TRIGGER, Rejoin, type RejoinState } from './rejoin';
 import { copyLoadouts, initialLoadouts, noteActions, noteObserve, releaseWindowTicks, type LoadoutState } from './loadout';
 import { PuppetController, PuppetTrack, roundYaw, type PuppetState } from './puppet';
@@ -38,6 +39,12 @@ import type { RoundModel } from './round-model';
 import type { EventSchedule } from './schedule';
 import { ScriptedEvents, type ScriptState } from './scripted';
 import { startActions, startYaw } from './start-state';
+
+/**
+ * G4: the status trigger of a pawn the human let go of mid-round (it goes LIVE; docs/core.md "Takeover"). One of
+ * `TRIGGER_KINDS`.
+ */
+export const RELEASED_TRIGGER = 'released';
 
 /** Per-pawn status bookkeeping. */
 interface PawnState {
@@ -86,6 +93,11 @@ interface ReplayCoreState {
    * the next step resyncs the engine to its observe first (`resyncActions`). The checkpoint id, else null.
    */
   resync: string | null;
+  /**
+   * G4: `observe.human` as of the last step (null before the first). A later step whose observe names another human is
+   * a takeover (or a release): `humanChanged`.
+   */
+  human: PlayerId | null;
 }
 
 export class ReplayCore implements ICore {
@@ -185,6 +197,12 @@ export class ReplayCore implements ICore {
       s.resync = null;
     }
 
+    // G4: the player took control of a pawn (or let go of one) since the last step. Only after a setup, and not on the
+    // setup step: its blocks and encounters already follow the human its observe names (a takeover at tick 0 is a
+    // human from the start). Before any start the Core sends nothing.
+    if (!s.setupThisStep && s.startTick !== null && o.human !== s.human) this.humanChanged(o, s.human, actions);
+    s.human = o.human;
+
     // B4: the triggers and the scheduled encounters (not on the setup step: that observe predates the setup).
     if (this.divergenceOn && !s.setupThisStep) {
       for (const h of this.divergence.step(o, s.pawns, this.references(o.tick), this.script, actions)) {
@@ -255,7 +273,62 @@ export class ReplayCore implements ICore {
         checkId(c.type, c.id);
         this.state.resync = c.id;
         return;
+      // G4: engine and driver work (the engine hands the pawn to the human); the Core learns of the takeover from
+      // `observe.human` on the next step (humanChanged), the same way it would on a CS2 server, where nothing sends it.
+      case 'take_control':
+        if (!isPlayerId(c.id)) throw new Error(`take_control: expected a player id, got ${JSON.stringify(c.id)}`);
+        return;
     }
+  }
+
+  /**
+   * G4, docs/core.md "Takeover": `o.human` is not the last step's human (`prev`).
+   * - Released: `prev` is alive and no longer the human (CS2: the player left and the bot plays on; the 2D app never
+   *   does this, a rewind restores the Core instead): with divergence on it goes LIVE (trigger `released`, its blocks
+   *   stay lifted) with its regular goal, and G1 brings it back to its tape once calm.
+   * - Taken over: `o.human` was a puppet until now and is the human from this tick on (status HUMAN, no Core input,
+   *   nothing scripted for it: B3 checks `observe.human` every tick). Its B3 damage blocks are lifted (`unblock_damage`
+   *   for its self pair, then both directions with every enemy whose own blocks aren't lifted, dead ones included, as
+   *   a LIVE switch does), so its fights are real; then a `log` line, and (divergence on) its scheduled encounters
+   *   become active (`Divergence.takeover`). The pawn keeps what the engine has: position, velocity, view, weapon, HP.
+   */
+  private humanChanged(o: Observe, prev: PlayerId | null, actions: Action[]): void {
+    const s = this.state;
+    const tick = o.tick;
+    if (prev !== null && this.divergenceOn) {
+      const was = o.pawns.find((p) => p.id === prev);
+      if (was !== undefined && was.alive) {
+        this.setPawnMode(prev, 'LIVE', tick, RELEASED_TRIGGER);
+        this.script.noteLive(prev, tick);
+        this.rejoin?.noteLive(prev, tick, RELEASED_TRIGGER);
+        const goal = liveGoal(this.model, prev, o, this.tuning);
+        actions.push({ type: 'set_mode', id: prev, mode: 'LIVE', goal });
+        actions.push({ type: 'log', level: 'info', text: `${prev} LIVE: released by the human at tick ${tick}; goal ${goal.role}, ${goal.route.length} waypoint${goal.route.length === 1 ? '' : 's'}` });
+      }
+    }
+    const h = o.human;
+    if (h === null) return;
+    const me = s.pawns.find((p) => p.id === h);
+    if (me === undefined) return;
+    let lifted = 0;
+    if (!me.blocksLifted) {
+      const team = this.model.player(h).team;
+      actions.push({ type: 'unblock_damage', attacker: h, victim: h });
+      lifted++;
+      for (const y of PLAYER_IDS) {
+        if (y === h || this.model.player(y).team === team) continue;
+        if (s.pawns.find((p) => p.id === y)?.blocksLifted === true) continue;
+        actions.push({ type: 'unblock_damage', attacker: h, victim: y });
+        actions.push({ type: 'unblock_damage', attacker: y, victim: h });
+        lifted += 2;
+      }
+    }
+    // A LIVE span it may have had ends here (nothing in its plan applies to the human anyway).
+    this.script.noteRejoin(h, tick);
+    const obs = o.pawns.find((p) => p.id === h);
+    const what = obs === undefined ? 'not observed' : obs.alive ? `${obs.hp} hp, ${obs.weapon}` : 'dead';
+    actions.push({ type: 'log', level: 'info', text: `takeover: ${h} is the human from tick ${tick} (${what}); ${lifted} damage block${lifted === 1 ? '' : 's'} lifted` });
+    if (this.divergenceOn) this.divergence.takeover(o, s.pawns, this.script, actions);
   }
 
   /**
@@ -356,6 +429,8 @@ export class ReplayCore implements ICore {
         return { id, mode: p.mode, since: p.since, trigger: p.trigger, everLive, blocksLifted: p.blocksLifted ?? everLive };
       }),
       resync: st.resync ?? null,
+      // Snapshots from before G4 don't have it: the human is the pawn whose status is HUMAN (the human never changed then).
+      human: st.human !== undefined ? st.human : (st.pawns.find((p) => p.mode === 'HUMAN')?.id ?? null),
     };
     // Snapshots from before B5 have no ledger: start it empty (a resync from one gives knives only).
     this.loadout = d.loadout === undefined ? initialLoadouts(this.model) : copyLoadouts(d.loadout);
@@ -463,6 +538,7 @@ function initialState(): ReplayCoreState {
     speed: 1,
     pawns: PLAYER_IDS.map((id) => ({ id, mode: 'REPLAY' as Mode, since: 0, trigger: null, everLive: false, blocksLifted: false })),
     resync: null,
+    human: null,
   };
 }
 
