@@ -117,6 +117,14 @@ const JUMP_HEADROOM = 72 + 57;
 /** reroute: how far ahead along the new way (× a run-speed step) and how finely (units) a sample looks for its recorded position. */
 const REROUTE_AHEAD = 2;
 const REROUTE_PROBE = 2;
+/**
+ * levelFlips: the longest stretch (samples, 20 s) a recording may spend on the wrong one of two overlapping floors,
+ * how far from a sample the floor it left may be (units: radar positions are off by up to ~60 in places), and the
+ * grid that search uses.
+ */
+const FLIP_MAX_SAMPLES = 200;
+const FLIP_RADIUS = 128;
+const FLIP_GRID = 8;
 /** detour: the highest drop it walks off (below sv_falldamage's 222). */
 const DETOUR_DROP = 216;
 const DETOUR_STEPS: readonly [number, number][] = [
@@ -253,6 +261,7 @@ export class Snapper {
   private readonly wide = searchOffsets(SNAP_PARAMS.wideRadius);
   private readonly repair = searchOffsets(SNAP_PARAMS.repairRadius).filter(([dx, dy]) => dx % SNAP_PARAMS.repairGrid === 0 && dy % SNAP_PARAMS.repairGrid === 0);
   private readonly followOffsets = searchOffsets(SNAP_PARAMS.followRadius);
+  private readonly flipOffsets = searchOffsets(FLIP_RADIUS).filter(([dx, dy]) => dx % FLIP_GRID === 0 && dy % FLIP_GRID === 0);
 
   constructor(
     private readonly g: MapGeometry,
@@ -261,6 +270,19 @@ export class Snapper {
     /** For jump edges in `astar` (`reroute`); null = no jumps. */
     private readonly m: MovementTuning | null = null,
   ) {}
+
+  /**
+   * The nearest allowed standing spot to (x, y) within `radius` (on a FLIP_GRID grid, nearest first) with a level
+   * within zWindow of z; null if none.
+   */
+  nearestStand(x: number, y: number, z: number, radius: number): { x: number; y: number; z: number } | null {
+    for (const [dx, dy] of this.flipOffsets) {
+      if (dx * dx + dy * dy > radius * radius) break;
+      const lv = this.levels(x + dx, y + dy, z, SNAP_PARAMS.zWindow)[0];
+      if (lv !== undefined) return { x: x + dx, y: y + dy, z: lv };
+    }
+    return null;
+  }
 
   /** Allowed stand levels at (x, y) within `window` of z where the standing hull fits, nearest first. */
   levels(x: number, y: number, z: number, window: number): number[] {
@@ -631,6 +653,66 @@ export function reachTicks(g: MapGeometry, m: MovementTuning, a: { x: number; y:
   return null;
 }
 
+/** A stretch of a recording on the wrong one of two overlapping floors (`levelFlips`): samples from..to − 1. */
+export interface LevelFlip {
+  readonly from: number;
+  readonly to: number;
+  /** The floor the recording left and comes back to (the sample before `from`). */
+  readonly z: number;
+  readonly dzIn: number;
+  readonly dzOut: number;
+}
+
+/**
+ * Pass 0 (`levelFlips`): the recording's z is the 2020 nav's floor under the radar dot's (x, y), so where two floors
+ * overlap (Catwalk over the underpass, the Apartments over the Tunnel Stairs) a dot near the edge of one can pick up
+ * the other: z jumps by more than levelChange in one sample step and jumps back later, while x/y goes on as before.
+ * A stretch i .. j − 1 is such a flip when
+ *
+ * - the steps into i and into j each change z by more than levelChange, in opposite directions, j − i ≤
+ *   FLIP_MAX_SAMPLES, and z[j] is back within levelChange of z[i − 1];
+ * - the floor it left (within zWindow of z[i − 1]) is within FLIP_RADIUS of every sample of the stretch on CS2 Mirage
+ *   (the dot never left the overlap);
+ * - neither change of floor is a way a hull can go (`astar` with drops and jumps, as `detour` bounds it, finds no
+ *   way from the nearest standing spot on one floor to the other's): a real flight of stairs, drop or jump between the
+ *   samples is left alone.
+ *
+ * Such a stretch keeps its x/y and takes z[i − 1] (pass 1 then snaps it onto that floor).
+ */
+export function levelFlips(snapper: Snapper, rec: readonly { x: number; y: number; z: number }[]): LevelFlip[] {
+  const out: LevelFlip[] = [];
+  const lc = SNAP_PARAMS.levelChange;
+  const way = (p: { x: number; y: number; z: number }, q: { x: number; y: number; z: number }): boolean => {
+    const a = snapper.nearestStand(p.x, p.y, p.z, SNAP_PARAMS.searchRadius);
+    const b = snapper.nearestStand(q.x, q.y, q.z, SNAP_PARAMS.searchRadius);
+    if (a === null || b === null) return false;
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    return snapper.astar(a, b, Math.max(d * DETOUR_MAX_RATIO, d + DETOUR_SLACK), REROUTE_MAX_NODES, true) !== null;
+  };
+  for (let i = 1; i < rec.length; i++) {
+    const a = rec[i - 1] as { x: number; y: number; z: number };
+    const dzIn = (rec[i] as { z: number }).z - a.z;
+    if (Math.abs(dzIn) <= lc) continue;
+    let j = -1;
+    for (let k = i + 1; k < rec.length && k - i <= FLIP_MAX_SAMPLES; k++) {
+      if (Math.abs((rec[k] as { z: number }).z - (rec[k - 1] as { z: number }).z) > lc) {
+        j = k;
+        break;
+      }
+    }
+    if (j < 0) continue;
+    const dzOut = (rec[j] as { z: number }).z - (rec[j - 1] as { z: number }).z;
+    if (Math.sign(dzOut) === Math.sign(dzIn) || Math.abs((rec[j] as { z: number }).z - a.z) > lc) continue;
+    let under = true;
+    for (let k = i; k < j && under; k++) under = snapper.nearestStand((rec[k] as { x: number }).x, (rec[k] as { y: number }).y, a.z, FLIP_RADIUS) !== null;
+    if (!under) continue;
+    if (way(a, rec[i] as { x: number; y: number; z: number }) || way(rec[j - 1] as { x: number; y: number; z: number }, rec[j] as { x: number; y: number; z: number })) continue;
+    out.push({ from: i, to: j, z: a.z, dzIn, dzOut });
+    i = j;
+  }
+  return out;
+}
+
 export interface SnapProducts {
   readonly text: string;
   readonly data: Tracks3d;
@@ -672,11 +754,22 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
   let repaired = 0;
   let detoured = 0;
   const gaps: string[] = [];
+  const flips: string[] = [];
   const snappedBy = new Map<PlayerId, SnappedSample[]>();
   const unconnectedBefore = new Map<PlayerId, number>();
   for (const id of PLAYER_IDS) {
-    const tr = round.tracks[id];
-    if (tr === undefined) continue;
+    const tr0 = round.tracks[id];
+    if (tr0 === undefined) continue;
+    // Pass 0: stretches where the recording's z flipped to the other of two overlapping floors (`levelFlips`) go back
+    // on the floor they left.
+    const fl = levelFlips(snapper, tr0.samples);
+    const onFlip = (k: number): LevelFlip | undefined => fl.find((f) => k >= f.from && k < f.to);
+    const tr = fl.length === 0 ? tr0 : { ...tr0, samples: tr0.samples.map((q, k) => ({ ...q, z: onFlip(k)?.z ?? q.z })) };
+    for (const f of fl) {
+      const s0 = tr0.samples[f.from] as { t: number };
+      const s1 = tr0.samples[f.to - 1] as { t: number };
+      flips.push(`${id} ${s0.t.toFixed(1)}–${s1.t.toFixed(1)} s (${f.to - f.from} samples): dz ${f.dzIn.toFixed(0)} in, ${f.dzOut >= 0 ? '+' : ''}${f.dzOut.toFixed(0)} out; kept on z ${f.z}`);
+    }
     // Pass 1: each sample on its own (nearest allowed spot, preferring one in a clear line from the previous).
     // A run of floorRun samples or more that pass 1 leaves on another floor than the recording's (it found no way to
     // the recording's floor near by) starts afresh on the recording's floor: a discontinuity unless pass 3 finds a way.
@@ -844,6 +937,9 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
     `snapped ${data.stats.samples} samples: ${counts.ok} ok (no move in x/y), ${counts.moved} moved ≤ 16, ${counts.far} moved 16–64, ${counts.impossible} moved further or not at all (no spot within 64)`,
     `horizontal moves: ${hist(moves, [4, 8, 16, 32, 48, 64])}`,
     `z changes: ${hist(zMoves, [1, 4, 8, 16, 32, 96])}`,
+    '',
+    `level flips (the recording on the other of two overlapping floors, put back on the floor it left; ${flips.length}):`,
+    ...flips.map((x) => `  ${x}`),
     '',
     `consecutive samples not in a clear hull line: ${totalUnconnected} (${repaired} more repaired by re-placing the samples around them, ${detoured} of those by a detour):`,
     ...gaps.map((x) => `  ${x}`),

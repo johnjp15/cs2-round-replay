@@ -10,7 +10,7 @@
  * faster than its weapon allows around a rejoin; the minimum LIVE time and the calm window hold; a pawn without tape
  * (outlived) stays LIVE; a rejoined pawn's scripted events after the rejoin run; cycles; snapshots mid-approach;
  * determinism; the switch off reproduces B4 byte for byte; nobody leaves the tape in the golden round, so nothing of
- * this runs there (no path query, digest 150f77b4 since G6's sight and aim on the CS2 mesh; 63bd3d86 after M1's movement fixes, 72b58704 at G3, e9a228d9 before G3's 3D movement).
+ * this runs there (no path query, digest 7168c0a5 since T1's level flips; 150f77b4 after G6's sight and aim on the CS2 mesh; 63bd3d86 after M1's movement fixes, 72b58704 at G3, e9a228d9 before G3's 3D movement).
  */
 import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, SessionLog, canonicalize, parseTuning, replay, stableStringify, type LogEntry, type Observe, type PlayerId } from '../src/contracts/index';
@@ -112,7 +112,9 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
       expect(Math.abs((got as number) / 64 - recordedSec), `${recordedSec} s`).toBeLessThanOrEqual(tolSec);
     };
     near(bombTick(run, 'planted'), 27.52, 1.0);
-    near(kill(run, 'barely', 'zwomp'), 44.2, 0.5);
+    // T1: barely, LIVE from 40.30 s (he hears sp4rtan kill cart), now holds Catwalk, not the underpass beneath it, and
+    // sees Zwomp walking up it on his inferred route: a real kill at 2650 (41.41 s), 2.8 s before the tape's.
+    near(kill(run, 'barely', 'zwomp'), 41.41, 0.1);
     near(kill(run, 'sp4rtan', 'donk'), 50.35, 0.3);
     near(kill(run, 'sp4rtan', 'barely'), 58.85, 0.3);
     near(bombTick(run, 'defused'), 66.8, 0.5);
@@ -121,10 +123,12 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     // wall in CS2) and goes round the B-site box the recording walks through: G1's plant shift starts his USE 7 ticks
     // after the recorded 1555, so the bomb is planted at 1768 (27.63 s, recorded 27.52 s).
     expect([bombTick(run, 'planted'), kill(run, 'barely', 'zwomp'), kill(run, 'sp4rtan', 'donk'), kill(run, 'sp4rtan', 'barely'), bombTick(run, 'defuse_start'), bombTick(run, 'defused')]).toEqual([
-      1768, 2829, 3222, 3766, 3955, 4275,
+      1768, 2650, 3222, 3766, 3955, 4275,
     ]);
-    // ... and they are the scripted ones (B3), not LIVE fights.
-    for (const [a, v, k] of [['barely', 'zwomp', 2829], ['sp4rtan', 'donk', 3222], ['sp4rtan', 'barely', 3766]] as const) {
+    const z = (run.entries[2650] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === 'barely' && ev.victim === 'zwomp');
+    expect(z?.type === 'damage' ? z.scripted : null, 'barely -> zwomp (LIVE)').toBe(false);
+    // ... and the others are the scripted ones (B3), not LIVE fights.
+    for (const [a, v, k] of [['sp4rtan', 'donk', 3222], ['sp4rtan', 'barely', 3766]] as const) {
       const d = (run.entries[k] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === a && ev.victim === v);
       expect(d?.type === 'damage' ? d.scripted : null, `${a} -> ${v}`).toBe(true);
     }
@@ -237,9 +241,9 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
 });
 
 describe('nobody leaves the tape: rejoin never runs', () => {
-  it('golden no-human round: no rejoin line, no path query, digest 150f77b4 (G6; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
+  it('golden no-human round: no rejoin line, no path query, digest 7168c0a5 (T1; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
     const g = runHarness(data, { ...NO_HUMAN, recordWalk: true });
-    expect(logDigest(g.log)).toBe('150f77b4');
+    expect(logDigest(g.log)).toBe('7168c0a5');
     expect(g.paths).toEqual([]);
     expect(coreLogs(g.entries).some((l) => / (rejoin|REPLAY): /.test(l.text))).toBe(false);
   });

@@ -19,17 +19,16 @@ describe('aimAtLanding', () => {
     expect(r.detonation?.pos).toEqual(a.landing);
     expect(JSON.stringify(aimAtLanding(base, target, world, cfg))).toBe(JSON.stringify(a));
   });
-  it("cart's B-site smoke: onto the Market window, and the best try at V0's measured landing", () => {
+  it("cart's B-site smoke: onto the Market window, and onto V0's measured landing", () => {
     const world = new MirageWorld();
     const u = recordedUtility()[6];
     if (u === undefined || u.landing === null) throw new Error('no landing');
     const stand = freeStand(u.throwPos, world);
     const base = { type: 'smoke' as const, thrower: 'cart', team: 'T' as const, eye: { x: stand.x, y: stand.y, z: stand.z + t.eyeHeight }, velocity: { x: 0, y: 0, z: 0 } };
     expect(aimAtLanding(base, MARKET_WINDOW_FRONT, world, cfg).error).toBeLessThan(30);
-    // V0's counter spot is behind solid wall on the CS2 mesh (docs/grenades.md): the best throw stays ~90 away.
+    // V0's measured spot (re-measured in V0b: the Shop floor just inside the window) is reachable within its uncertainty.
     const v0 = aimAtLanding(base, u.landing, world, cfg);
     expect(v0.landing).not.toBeNull();
-    expect(v0.error).toBeGreaterThan(u.landing.uncertainty);
-    expect(v0.error).toBeLessThan(130);
+    expect(v0.error).toBeLessThan(u.landing.uncertainty);
   });
 });

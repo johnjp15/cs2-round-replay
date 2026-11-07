@@ -8,4 +8,6 @@ logs/
 *.log
 .DS_Store
 .vite/
+__pycache__/
+*.pyc
 local/

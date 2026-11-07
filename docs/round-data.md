@@ -139,6 +139,7 @@ Not copied: the page's `nav` and `places` (the nav mesh is task A3's `data/mirag
 - **Yaw:** only for Ts while on camera (eradicate, cart, donk, barely). There is no CT yaw, and most players have no yaw at t = 0.
 - **Shots:** exact times only for shots seen on the ammo HUD of the spectated player, plus a few audio-confirmed first shots. Off-camera sprays are counts over a time window, and kill-feed-only kills don't say how many shots were fired.
 - **Resampled samples:** a few tens of grid samples per affected track are interpolated (see above), so they can differ by a few units from where the player really was.
+- **Level flips:** `z` is the 2020 nav floor under the radar dot, so where floors overlap it can be the wrong one. barely 35.1–44.7 s is on the underpass / Tunnel Stairs in `round.json` (dz −198 in, +154 out) but was on Catwalk; `round.json` keeps the source as is and `tools/snap-tracks.ts` pass 0 (`levelFlips`, `docs/geometry.md` "barely 33–48 s") corrects it in `data/geometry/mirage-tracks.json`, which is what the hosts use.
 
 ## Grenade landings and the plant spot (V0, measured on the video)
 
@@ -155,8 +156,34 @@ first-person view that shows it. The demo draws grenade trajectories as yellow l
 | 8.8 | donk | flash | `null` | | not on camera (pops behind eradicate; he is not blinded) |
 | 17.8 | barely | HE | `null` | | not resolved: cart's POV 17.8-20.3 s looks out of the Apartments window at B; no detonation in view, no damage row |
 | 19.2 | donk | molotov | `null` | | not resolved: no fire in cart's views of B 19.4-22.5 s; trajectory lines in view at 20.0 s but no end point |
-| 25.8 | cart | smoke | (−2035, −305, −94) | 35 | cart throws from the B side into the Market window (POV 25.8-27.3 s, the trajectory line enters the window); from inside Shop 29.5-31 s the line ends on the counter just inside the window and the cloud fills the window. The counter top on the CS2 mesh is z −94 at x −2040…−1990, y ≤ −294, right behind the window (x −2066…−2026 in the wall at y −248…−264). It blocks the window, as John remembers, and does not land deeper inside Market |
+| 25.8 | cart | smoke | (−1885, −320, −166) | 45 | cart throws from the B side (−2059, 88) into the Market window. In his POV at 26.3–27.2 s the trajectory line passes through the window opening and disappears, descending, behind its east (left-in-view) jamb, so it comes down on the Shop floor just inside and east of the opening. From inside Shop (29.6–30.2 s) the cloud fills the window. It blocks the window, as John remembers, and does not land deep inside Market. H5's `aimAtLanding` reaches it from cart's spot (6–19 u at (−1890, −310) / (−1880, −350); pitch about −5°, yaw −66°, half strength). Corrected in V0b: the first measurement, (−2035, −305, −94) on the counter, was about one window width too far west, behind solid wall on the CS2 mesh |
 | 29.8 | barely | smoke | `null` | | not resolved: its trajectory line is in barely's POV 32.2-33.4 s, but without his view angles (V2) the end point can't be placed |
+
+**The Market window is the same in 2020 and on the CS2 mesh** (V0b, after H5 #41 found the first landing unreachable).
+On the CS2 mesh the wall between B and Shop has its face at y −264, with the window open over x −1946…−1890 (sill z −126,
+lintel −14); the door is the full-height gap at x −2356…−2292. In the video:
+- cart's own track crosses the wall line at (−1962, −264) at 28.5 s and is inside Shop at (−1959, −314) by 28.8 s. He
+  climbs through the window, not the door, within the radar's ±25 u of the mesh's opening.
+- At 26.3 s, from (−1965, 2) facing the wall, the opening is straight ahead.
+
+So the first measurement's x was wrong, not the map: the counter at x −2040…−1980 is inside Shop, west of the window,
+behind the wall from the B side.
+
+**The other recorded throws (H5's question: do the throw spots and aims fit the frames?).** None of their landings is on
+camera (table above), and the recording has no yaw for cart, snarlbot or donk at 4.8–8.8 s (only eradicate's own),
+so the aims are not data: H5's assumed targets are all that exists. The throw spots are the throwers' radar dots on
+eradicate's POV radar (±10–20 u). On the CS2 mesh:
+- **cart at 4.8 s** (Back Alley, (−468, 924, −80)): the recorded z is 64 u above the mesh floor (−144) under a roof
+  136 u above his eye. He is clear only towards yaw 0–90° (east and north-east, 320–400 u). Every other direction is
+  20–60 u from a wall, so a throw "west down the approach" hits the wall in front of him.
+- **snarlbot at 5.6 and 7.8 s** (Palace Alley, (718, −1274) and (700, −1300)): open sky, clear 400 u only towards yaw
+  270° (south) and 150–260 u east and south-east. Throws towards the north (yaw 0–45°) hit the wall 50–96 u away.
+- **donk at 8.8 s** (Back Alley, (−180, 623, −77)): open sky, clear west and south-west (yaw 135–225°, 400 u), with a wall
+  36–51 u away to the north-east. eradicate's view at 8.8–10 s shows no pop and he is not blinded. A pop 86 u above the
+  Apartments roof is therefore not contradicted, but nothing in the frames confirms it either.
+
+If H5's throws from these spots bounce back at every pitch, the assumed yaw points into the near wall. Aim along the
+clear directions above, or treat the spots as ±20 u and step out to the free side (H5's free-stand search).
 
 **The plant spot** (John: "planted behind the cylinder stack, aka planted for catwalk"). Measured: **(−1981, 305, −160) ± 25 u**,
 the centre of the planted C4 icon on the spectator radar from 27.6 s to the defuse (and of the carried C4 icon while
