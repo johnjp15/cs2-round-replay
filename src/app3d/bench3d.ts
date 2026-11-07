@@ -25,7 +25,7 @@ interface MemoryInfo {
 
 export interface BenchScenarioResult {
   readonly name: string;
-  readonly driver: 'raf' | 'uncapped';
+  readonly driver: 'raf' | 'uncapped' | 'loop';
   readonly report: PerfReport;
   readonly wallMs: number;
   /** Frames per second the driver actually ran (frames / wall time). */
@@ -53,7 +53,7 @@ declare global {
 
 interface Scenario {
   readonly name: string;
-  readonly driver: 'raf' | 'uncapped';
+  readonly driver: 'raf' | 'uncapped' | 'loop';
   /** Set up (seek, camera, speed) before the frames. */
   setup(api: Api): void;
   /** Before each frame (e.g. mouse movement). */
@@ -81,6 +81,11 @@ const SCENARIOS: readonly Scenario[] = [
   {
     name: 'watch-1x-uncapped',
     driver: 'uncapped',
+    setup: (a) => watch(a, 1),
+  },
+  {
+    name: 'watch-1x-loop',
+    driver: 'loop',
     setup: (a) => watch(a, 1),
   },
   {
@@ -185,13 +190,28 @@ async function runScenario(api: Api, sc: Scenario, frames: number): Promise<Benc
   };
   let t0 = 0;
   if (sc.driver === 'raf') {
-    perf.driver('raf');
+    perf.driver('vsync');
     while (i < warm + n) {
       if (i === warm) t0 = performance.now();
       sc.perFrame?.(api, i);
       await nextFrame();
       record();
     }
+    perf.driver('page');
+  } else if (sc.driver === 'loop') {
+    // The page's own uncapped loop (frame-driver.ts): what "Uncapped" in the settings runs.
+    const counted = perf.onFrame;
+    await new Promise<void>((resolve) => {
+      perf.onFrame = (): void => {
+        counted?.();
+        if (i === warm) t0 = performance.now();
+        record();
+        if (i >= warm + n) resolve();
+        else sc.perFrame?.(api, i);
+      };
+      perf.driver('uncapped');
+    });
+    perf.driver('page');
   } else {
     perf.driver('manual');
     let clock = performance.now();
@@ -203,7 +223,7 @@ async function runScenario(api: Api, sc: Scenario, frames: number): Promise<Benc
       record();
       await nextTask();
     }
-    perf.driver('raf');
+    perf.driver('page');
   }
   const wallMs = performance.now() - t0;
   const info = perf.info();

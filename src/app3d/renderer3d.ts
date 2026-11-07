@@ -44,12 +44,14 @@ import {
 } from 'three';
 import type { PlayerId, Team, Vec3, WeaponId } from '../contracts/index';
 import type { Effect } from '../app/effects';
-import { cameraEuler, toThree } from './coords';
 import type { WorldTile } from './world-mesh';
 
 export const TEAM_COLOR: { readonly [K in Team]: number } = { T: 0xe8a33a, CT: 0x4f86d9 };
 const SKY = 0xb9cad6;
 const MAX_TRACERS = 96;
+const TRACER_T = [1, 0.86, 0.45] as const;
+const TRACER_CT = [0.7, 0.85, 1] as const;
+const TRACER_SKY = [0.73, 0.79, 0.84] as const;
 
 /** One pawn as drawn this frame (interpolated). */
 export interface DrawPawn {
@@ -121,6 +123,23 @@ interface PawnView {
   readonly bodyMat: MeshBasicMaterial;
 }
 
+/** P1: how the renderer is made (docs/app3d.md "Performance"). */
+export interface RendererOptions {
+  /** Render scale × the device pixel ratio (capped at 1.5): 0.25–2. */
+  readonly resolution?: number;
+  /**
+   * A low-latency (`desynchronized`) WebGL context: Chrome can show the canvas without waiting for the compositor
+   * (lower latency, may tear); browsers without it ignore the flag.
+   */
+  readonly desynchronized?: boolean;
+}
+
+/** Device pixel ratios above this are not rendered (the canvas would cost 4× the pixels at DPR 2 for little gain). */
+export const MAX_DPR = 1.5;
+
+/** Weapons with no muzzle flash. */
+const NO_FLASH: ReadonlySet<WeaponId> = new Set(['knife', 'c4', 'smoke', 'flash', 'he', 'molotov'] as WeaponId[]);
+
 const WEAPON_COLOR: Partial<Record<WeaponId, number>> = { ak47: 0x6b4a2b, m4a4: 0x2e3338, awp: 0x3d4a33, ssg08: 0x3b4a3a, deagle: 0x8a8d90, glock: 0x2b2b2b, knife: 0x9aa3ad, c4: 0x7a2a22, smoke: 0x9aa3ad, flash: 0xd8d8c8, he: 0x4b5d33, molotov: 0xb5651d };
 
 export class Renderer3D {
@@ -145,14 +164,22 @@ export class Renderer3D {
   private readonly size = new Vector2();
   /** Triangles drawn in the last frame (stats). */
   drawnTriangles = 0;
+  /** Whether the context is really `desynchronized` (the browser may not support it). */
+  readonly desynchronized: boolean;
+  private readonly humanTint = new Color();
+  private tracersDrawn = -1;
 
-  constructor(canvas: HTMLCanvasElement, tiles: readonly WorldTile[], floorArt: { readonly width: number; readonly height: number; readonly data: Uint8ClampedArray }, roster: readonly { id: PlayerId; team: Team }[], resolution = 1) {
+  constructor(canvas: HTMLCanvasElement, tiles: readonly WorldTile[], floorArt: { readonly width: number; readonly height: number; readonly data: Uint8ClampedArray }, roster: readonly { id: PlayerId; team: Team }[], options: RendererOptions = {}) {
     this.canvas = canvas;
     // Colours are sRGB values used as they are (baked per vertex, the radar texture, the team colours): no linear workflow.
     ColorManagement.enabled = false;
-    this.renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+    // P1: our own context so it can be `desynchronized`; opaque (the sky fills it), no MSAA, no stencil.
+    const attrs: WebGLContextAttributes & { desynchronized?: boolean } = { alpha: false, antialias: false, depth: true, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: false, desynchronized: options.desynchronized === true };
+    const context = canvas.getContext('webgl2', attrs);
+    this.desynchronized = context !== null && (context.getContextAttributes() as (WebGLContextAttributes & { desynchronized?: boolean }) | null)?.desynchronized === true;
+    this.renderer = context === null ? new WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }) : new WebGLRenderer({ canvas, context, antialias: false, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = LinearSRGBColorSpace;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5) * resolution);
+    this.setResolution(options.resolution ?? 1);
     this.renderer.autoClear = false;
     this.camera = new PerspectiveCamera(74, 1, 4, 12000);
     this.camera.rotation.order = 'YXZ';
@@ -223,6 +250,12 @@ export class Renderer3D {
     this.vmScene.add(this.vm);
   }
 
+  /** Render scale (0.25–2) × the device pixel ratio capped at MAX_DPR. */
+  setResolution(scale: number): void {
+    const k = Math.min(2, Math.max(0.25, Number.isFinite(scale) ? scale : 1));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_DPR) * k);
+  }
+
   resize(): void {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
@@ -238,10 +271,9 @@ export class Renderer3D {
 
   render(f: DrawFrame): void {
     this.resize();
-    const [cx, cy, cz] = toThree(f.eye.x, f.eye.y, f.eye.z);
-    this.camera.position.set(cx, cy, cz);
-    const e = cameraEuler(f.yaw, f.pitch);
-    this.camera.rotation.set(e.x, e.y, 0);
+    // toThree / cameraEuler inline (coords.ts): no per-frame arrays.
+    this.camera.position.set(f.eye.x, f.eye.z, -f.eye.y);
+    this.camera.rotation.set((-f.pitch * Math.PI) / 180, ((f.yaw - 90) * Math.PI) / 180, 0);
     if (this.camera.fov !== f.fovDeg) {
       this.camera.fov = f.fovDeg;
       this.camera.updateProjectionMatrix();
@@ -252,8 +284,7 @@ export class Renderer3D {
     if (f.bomb === null) this.bomb.visible = false;
     else {
       this.bomb.visible = true;
-      const [bx, by, bz] = toThree(f.bomb.pos.x, f.bomb.pos.y, f.bomb.pos.z + 3);
-      this.bomb.position.set(bx, by, bz);
+      this.bomb.position.set(f.bomb.pos.x, f.bomb.pos.z + 3, -f.bomb.pos.y);
       (this.bomb.material as MeshBasicMaterial).color.setHex(f.bomb.planted && Math.floor(f.nowMs / 400) % 2 === 0 ? 0xff6a5a : 0xb0221c);
     }
     this.renderer.clear();
@@ -267,7 +298,7 @@ export class Renderer3D {
       this.vmGunMat.color.setHex(WEAPON_COLOR[f.viewmodel.weapon] ?? 0x555555);
       const kick = Math.max(0, 1 - f.viewmodel.sinceShot / 0.08);
       this.vm.position.set(0, kick * 0.01, kick * 0.04);
-      this.flash.visible = f.viewmodel.sinceShot < 0.035 && f.viewmodel.weapon !== 'knife' && !['c4', 'smoke', 'flash', 'he', 'molotov'].includes(f.viewmodel.weapon);
+      this.flash.visible = f.viewmodel.sinceShot < 0.035 && !NO_FLASH.has(f.viewmodel.weapon);
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
     }
@@ -284,8 +315,7 @@ export class Renderer3D {
       if (v === undefined) continue;
       v.group.visible = !p.hidden;
       if (p.hidden) continue;
-      const [x, y, z] = toThree(p.pos.x, p.pos.y, p.pos.z);
-      v.group.position.set(x, y, z);
+      v.group.position.set(p.pos.x, p.pos.z, -p.pos.y);
       // Group yaw: local −z (the visor's forward) along the Source yaw.
       v.group.rotation.set(0, ((p.yaw - 90) * Math.PI) / 180, 0);
       if (p.alive) {
@@ -294,7 +324,7 @@ export class Renderer3D {
         v.body.rotation.set(0, 0, 0);
         v.body.position.set(0, 0, 0);
         v.bodyMat.color.setHex(TEAM_COLOR[p.team]);
-        if (p.human) v.bodyMat.color.lerp(new Color(0xffffff), 0.25);
+        if (p.human) v.bodyMat.color.lerp(this.humanTint.setHex(0xffffff), 0.25);
         v.visor.visible = true;
         const eye = p.crouching ? 46 : 64;
         v.visor.position.set(0, eye, -9);
@@ -315,17 +345,24 @@ export class Renderer3D {
 
   private drawTracers(ts: readonly DrawTracer[]): void {
     const n = Math.min(MAX_TRACERS, ts.length);
+    const P = this.tracerPos;
+    const C = this.tracerCol;
     for (let i = 0; i < n; i++) {
       const t = ts[i] as DrawTracer;
-      const a = toThree(t.from.x, t.from.y, t.from.z);
-      const b = toThree(t.to.x, t.to.y, t.to.z);
-      this.tracerPos.set(a, i * 6);
-      this.tracerPos.set(b, i * 6 + 3);
+      const o = i * 6;
+      P[o] = t.from.x;
+      P[o + 1] = t.from.z;
+      P[o + 2] = -t.from.y;
+      P[o + 3] = t.to.x;
+      P[o + 4] = t.to.z;
+      P[o + 5] = -t.to.y;
       const k = 1 - t.age;
-      const c = t.team === 'T' ? [1, 0.86, 0.45] : [0.7, 0.85, 1];
-      const sky = [0.73, 0.79, 0.84];
-      for (let j = 0; j < 2; j++) for (let q = 0; q < 3; q++) this.tracerCol[i * 6 + j * 3 + q] = (sky[q] as number) + ((c[q] as number) - (sky[q] as number)) * k;
+      const c = t.team === 'T' ? TRACER_T : TRACER_CT;
+      for (let q = 0; q < 3; q++) C[o + q] = C[o + 3 + q] = (TRACER_SKY[q] as number) + ((c[q] as number) - (TRACER_SKY[q] as number)) * k;
     }
+    // Upload only when something is (or was) drawn: an idle frame touches no buffers.
+    if (n === 0 && this.tracersDrawn === 0) return;
+    this.tracersDrawn = n;
     this.tracerGeom.setDrawRange(0, n * 2);
     (this.tracerGeom.getAttribute('position') as BufferAttribute).needsUpdate = true;
     (this.tracerGeom.getAttribute('color') as BufferAttribute).needsUpdate = true;
@@ -341,29 +378,35 @@ export class Renderer3D {
   }
 
   private drawEffects(effects: readonly Effect[], nowMs: number): void {
-    const smokes = effects.filter((e) => e.phase === 'smoke');
-    const fires = effects.filter((e) => e.phase === 'fire');
-    const flying = effects.filter((e) => e.phase === 'flying');
-    this.pool(this.smokes, () => new Mesh(new SphereGeometry(1, 16, 10), new MeshBasicMaterial({ color: 0xc9cfd4, transparent: true, opacity: 0.93 })), smokes.length);
-    smokes.forEach((e, i) => {
-      const m = this.smokes[i] as Mesh;
-      const [x, y, z] = toThree(e.pos.x, e.pos.y, e.pos.z);
-      m.position.set(x, y + e.radius * 0.45, z);
-      m.scale.set(e.radius, e.radius * 0.75, e.radius);
-    });
-    this.pool(this.fires, () => new Mesh(new CylinderGeometry(1, 1, 6, 20), new MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.85 })), fires.length);
-    fires.forEach((e, i) => {
-      const m = this.fires[i] as Mesh;
-      const [x, y, z] = toThree(e.pos.x, e.pos.y, e.pos.z);
-      m.position.set(x, y + 3, z);
-      const flicker = 1 + 0.06 * Math.sin(nowMs / 60 + i);
-      m.scale.set(e.radius * flicker, 1 + 2 * Math.abs(Math.sin(nowMs / 90 + i)), e.radius * flicker);
-    });
-    this.pool(this.nades, () => new Mesh(new SphereGeometry(3, 8, 6), new MeshBasicMaterial({ color: 0x3a4a2a })), flying.length);
-    flying.forEach((e, i) => {
-      const m = this.nades[i] as Mesh;
-      const [x, y, z] = toThree(e.pos.x, e.pos.y, e.pos.z);
-      m.position.set(x, y, z);
-    });
+    // One pass, no per-frame arrays: count by phase, grow the pools, place.
+    let ns = 0;
+    let nf = 0;
+    let nn = 0;
+    for (const e of effects) {
+      if (e.phase === 'smoke') ns++;
+      else if (e.phase === 'fire') nf++;
+      else if (e.phase === 'flying') nn++;
+    }
+    this.pool(this.smokes, () => new Mesh(new SphereGeometry(1, 16, 10), new MeshBasicMaterial({ color: 0xc9cfd4, transparent: true, opacity: 0.93 })), ns);
+    this.pool(this.fires, () => new Mesh(new CylinderGeometry(1, 1, 6, 20), new MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.85 })), nf);
+    this.pool(this.nades, () => new Mesh(new SphereGeometry(3, 8, 6), new MeshBasicMaterial({ color: 0x3a4a2a })), nn);
+    let is = 0;
+    let fi = 0;
+    let ni = 0;
+    for (const e of effects) {
+      if (e.phase === 'smoke') {
+        const m = this.smokes[is++] as Mesh;
+        m.position.set(e.pos.x, e.pos.z + e.radius * 0.45, -e.pos.y);
+        m.scale.set(e.radius, e.radius * 0.75, e.radius);
+      } else if (e.phase === 'fire') {
+        const i = fi++;
+        const m = this.fires[i] as Mesh;
+        m.position.set(e.pos.x, e.pos.z + 3, -e.pos.y);
+        const flicker = 1 + 0.06 * Math.sin(nowMs / 60 + i);
+        m.scale.set(e.radius * flicker, 1 + 2 * Math.abs(Math.sin(nowMs / 90 + i)), e.radius * flicker);
+      } else if (e.phase === 'flying') {
+        (this.nades[ni++] as Mesh).position.set(e.pos.x, e.pos.z, -e.pos.y);
+      }
+    }
   }
 }

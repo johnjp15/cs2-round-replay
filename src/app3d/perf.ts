@@ -213,9 +213,51 @@ export function displayHz(medianIntervalMs: number): number {
   return err < 0.04 ? best : Math.round(hz);
 }
 
-/** The HUD's headroom meter line: "1.6 ms · 625 fps-eq · 120 fps · display 120 Hz". */
-export function meterText(frameMs: number, presentedFps: number, hz: number, extra = ''): string {
+/**
+ * The HUD's headroom meter: "1.60 ms · 625 fps-eq · 2400 fps uncapped · display 120 Hz (120 shown)". The main-thread
+ * ms per frame (median) and its fps-equivalent (what the page could sustain), the rate the loop runs at and its
+ * limit, the display's refresh and the frames it can actually show (min of the two: the vsync cap made visible).
+ */
+export function meterText(frameMs: number, loopFps: number, hz: number, limit: string): string {
   const eq = frameMs > 0 ? Math.min(99999, Math.round(1000 / frameMs)) : 0;
   const ms = frameMs < 10 ? frameMs.toFixed(2) : frameMs.toFixed(1);
-  return `${ms} ms · ${eq} fps-eq · ${presentedFps.toFixed(0)} fps${hz > 0 ? ` · display ${hz} Hz` : ''}${extra}`;
+  const shown = hz > 0 ? Math.min(loopFps, hz) : loopFps;
+  return `${ms} ms · ${eq} fps-eq · ${loopFps.toFixed(0)} fps ${limit}${hz > 0 ? ` · display ${hz} Hz (${shown.toFixed(0)} shown)` : ''}`;
+}
+
+/**
+ * Events per second over the last ~1 s in 10 fixed buckets (no allocation, O(1) per add: the page adds every frame,
+ * and at thousands of frames per second src/app/loop.ts RateMeter's arrays would grow and shift).
+ */
+export class BucketRate {
+  private readonly buckets = new Float64Array(10);
+  private readonly bucketMs: number;
+  /** Index (in buckets since the epoch) of the current bucket, or null before the first reading. */
+  private cur: number | null = null;
+
+  constructor(windowMs = 1000) {
+    this.bucketMs = windowMs / 10;
+  }
+
+  add(nowMs: number, count = 1): void {
+    const c = this.roll(nowMs);
+    this.buckets[c % 10] = (this.buckets[c % 10] as number) + count;
+  }
+
+  /** Events per second over the 9 complete buckets before the current one. */
+  rate(nowMs: number): number {
+    const c = this.roll(nowMs);
+    let sum = 0;
+    for (let i = 1; i < 10; i++) sum += this.buckets[(c - i) % 10] as number;
+    return (sum * 1000) / (9 * this.bucketMs);
+  }
+
+  private roll(nowMs: number): number {
+    const b = Math.floor(nowMs / this.bucketMs) + 10;
+    if (this.cur === null) this.cur = b;
+    // Clear the buckets entered since the last call (at most all ten).
+    for (let k = this.cur + 1; k <= b && k <= this.cur + 10; k++) this.buckets[k % 10] = 0;
+    if (b > this.cur) this.cur = b;
+    return this.cur;
+  }
 }

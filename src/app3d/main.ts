@@ -22,7 +22,7 @@
 import tuningJson from '../../data/tuning.json';
 import type { Observe, PlayerId, Team, Vec3, WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
-import { FixedLoop, RateMeter, TICK_MS } from '../app/loop';
+import { FixedLoop, TICK_MS } from '../app/loop';
 import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
 import { Session, parseSessionData, type SessionData } from '../app/session';
 import { SummaryCache } from '../app/run-entries';
@@ -36,7 +36,8 @@ import { ControlsDom } from './controls-dom';
 import { MIRAGE_RADAR } from './coords';
 import { Hud3D } from './hud3d';
 import { runBench } from './bench3d';
-import { FrameProbe } from './perf';
+import { FPS_PRESETS, FrameDriver, parseFpsLimit, type FpsLimit } from './frame-driver';
+import { BucketRate, FrameProbe, Ring, displayHz, meterText } from './perf';
 import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
@@ -145,8 +146,11 @@ const SETTINGS_KEY = 'cs2-sim3d-settings';
 /** P1: what the bench (bench3d.ts) drives. */
 export interface PerfHooks {
   readonly probe: FrameProbe;
-  /** 'raf': the normal requestAnimationFrame loop; 'manual': the loop stops and the caller runs frames with `step`. */
-  driver(mode: 'raf' | 'manual'): void;
+  /**
+   * 'manual': the page's loop stops and the caller runs frames with `step`; an FPS limit: the page's loop with that
+   * limit ('vsync': requestAnimationFrame); 'page': the page's loop with the user's setting.
+   */
+  driver(mode: 'manual' | 'page' | FpsLimit): void;
   /** Run one frame now (manual driver). */
   step(now: number): void;
   /** Called after every frame (both drivers). */
@@ -199,8 +203,23 @@ class App3D {
   private readonly hud: Hud3D;
   private readonly controls: ControlsDom;
   private readonly loop: FixedLoop;
-  private readonly fpsMeter = new RateMeter(1000);
-  private readonly tpsMeter = new RateMeter(1000);
+  private readonly fpsMeter = new BucketRate(1000);
+  private readonly tpsMeter = new BucketRate(1000);
+  /** P1: the frame loop (frame-driver.ts) and its settings: the FPS limit, the low-latency canvas, the render scale. */
+  private readonly driver: FrameDriver;
+  private fpsLimit: FpsLimit = 'uncapped';
+  private lowLatency = false;
+  private resScale = 1;
+  /** requestAnimationFrame intervals (ms): the display's refresh, whatever the loop does. */
+  private readonly vsync = new Ring(120);
+  private readonly vsyncScratch = new Float64Array(120);
+  private lastVsync: number | null = null;
+  /** The tick and time of the last HUD update. */
+  private hudTick = -1;
+  private hudAt = -1e9;
+  /** The headroom meter line, rebuilt at 4 Hz. */
+  private meter = '';
+  private meterAt = -1e9;
   private readonly touchOnly = isTouchOnly();
   /** CS2 settings: sensitivity, zoom_sensitivity_ratio, viewmodel_fov (the settings fields; localStorage). */
   private sensitivity: number;
@@ -246,7 +265,6 @@ class App3D {
   /** P1: per-frame phase timings (perf.ts). */
   private readonly probe = new FrameProbe(600);
   private probing = false;
-  private driverMode: 'raf' | 'manual' = 'raf';
   private hooks: PerfHooks | null = null;
   /** P1: the end-of-round summary, computed once (run-entries.ts). */
   private readonly summaryCache = new SummaryCache();
@@ -254,18 +272,21 @@ class App3D {
   private summaryLine: string | null = null;
   private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; radar: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
-  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number) {
+  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number | null, lowLatency: boolean | null) {
     this.data = data;
     this.world = world;
     this.seed = seed;
     this.sensitivity = sensitivity ?? DEFAULT_SENSITIVITY;
     this.loadSettings(sensitivity !== null);
+    if (resolution !== null) this.resScale = resolution;
+    if (lowLatency !== null) this.lowLatency = lowLatency;
+    this.driver = new FrameDriver((now) => this.runFrame(now), this.fpsLimit);
     const canvas = el('view', HTMLCanvasElement);
     const rgba = rgbaOf(radar);
     const art = floorArt(rgba);
     const { tiles } = buildWorldTiles(world, new RadarSampler(art, MIRAGE_RADAR), MIRAGE_RADAR, rgba);
     this.session = this.newSession(human);
-    this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), resolution);
+    this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), { resolution: this.resScale, desynchronized: this.lowLatency });
     this.hud = new Hud3D(radar, MIRAGE_RADAR);
     this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
     this.scene = this.ready(this.session);
@@ -354,7 +375,25 @@ class App3D {
         state: () => this.testState(),
       },
     };
-    requestAnimationFrame(this.frame);
+    this.driver.start();
+    requestAnimationFrame(this.onVsync);
+  }
+
+  /** P1: one rAF per display refresh, only to measure it (the frames come from the driver). */
+  private readonly onVsync = (t: number): void => {
+    if (this.lastVsync !== null && t - this.lastVsync < 250) this.vsync.push(t - this.lastVsync);
+    this.lastVsync = t;
+    requestAnimationFrame(this.onVsync);
+  };
+
+  /** The headroom meter (docs/app3d.md "Performance"): main-thread ms per frame, its fps-equivalent, the loop's rate, the display. */
+  private meterLine(now: number): string {
+    if (now - this.meterAt < 250 && now >= this.meterAt) return this.meter;
+    this.meterAt = now;
+    const hz = displayHz(this.vsync.median(this.vsyncScratch));
+    const limit = this.driver.mode === 'uncapped' ? 'uncapped' : this.driver.mode === 'vsync' ? 'vsync' : `cap ${String(this.driver.limit)}`;
+    this.meter = `${meterText(this.probe.medianFrameMs(), this.fpsMeter.rate(now), hz, limit)} · ${this.tpsMeter.rate(now).toFixed(0)} ticks/s · ${this.loop.speed}×`;
+    return this.meter;
   }
 
   private host(s: Session = this.session): Sim3DHost {
@@ -638,12 +677,6 @@ class App3D {
     for (const sb of b.speeds) sb.setAttribute('aria-pressed', String(Number(sb.dataset['speed']) === this.loop.speed));
   }
 
-  private readonly frame = (now: number): void => {
-    if (this.driverMode !== 'raf') return;
-    this.runFrame(now);
-    requestAnimationFrame(this.frame);
-  };
-
   private runFrame(now: number): void {
     this.probe.begin(performance.now());
     this.probing = true;
@@ -686,10 +719,12 @@ class App3D {
     const hooks: PerfHooks = {
       probe: this.probe,
       driver: (mode) => {
-        const was = this.driverMode;
-        this.driverMode = mode;
         this.lastFrame = null;
-        if (mode === 'raf' && was !== 'raf') requestAnimationFrame(this.frame);
+        if (mode === 'manual') this.driver.stop();
+        else {
+          this.driver.limit = mode === 'page' ? this.fpsLimit : mode;
+          this.driver.start();
+        }
       },
       step: (now) => this.runFrame(now),
       onFrame: null,
@@ -848,7 +883,13 @@ class App3D {
     // The crosshair sits where the next bullet goes (off centre only with a punch; clientHeight read only then).
     const off = (firstPerson || specPov) && !scoped && (aim.yaw !== yaw || aim.pitch !== pitch) ? aimOffsetPx({ yaw, pitch }, aim, vfovDeg, r.clientHeight) : { x: 0, y: 0 };
     const radarTeam = firstPerson ? (humanPawn?.team ?? null) : viewTeam;
-    this.hud.update({
+    // P1: the HUD (DOM) at most once per sim tick or every 15.6 ms, not on every frame of an uncapped loop.
+    const hudDue = exact || o.tick !== this.hudTick || now - this.hudAt >= TICK_MS || now < this.hudAt;
+    if (hudDue) {
+      this.hudTick = o.tick;
+      this.hudAt = now;
+    }
+    if (hudDue) this.hud.update({
       scene: this.scene,
       clock: s.clock,
       viewer: viewId,
@@ -862,7 +903,7 @@ class App3D {
       radar: { tracker: this.radar, team: radarTeam, rules: this.radarRules },
       spectate: spec,
       hit: exact || this.lastHit === null ? null : { ageMs: now - this.lastHit.ms, head: this.lastHit.head },
-      perf: `${this.fpsMeter.rate(now).toFixed(0)} fps · ${this.tpsMeter.rate(now).toFixed(0)} ticks/s · ${this.loop.speed}×`,
+      perf: this.meterLine(now),
       summary: over ? summary : null,
       tick: o.tick,
       nowMs: now,
@@ -949,7 +990,10 @@ class App3D {
   /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
   private loadSettings(sensFromUrl: boolean): void {
     try {
-      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string };
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatency?: boolean; res?: number };
+      this.fpsLimit = parseFpsLimit(j.fps);
+      if (typeof j.lowLatency === 'boolean') this.lowLatency = j.lowLatency;
+      if (typeof j.res === 'number' && Number.isFinite(j.res)) this.resScale = clamp(j.res, 0.25, 2);
       if (j.radar === 'cs2' || j.radar === 'all') this.radarRules = j.radar;
       if (!sensFromUrl && typeof j.sensitivity === 'number') this.sensitivity = clamp(j.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX);
       if (typeof j.zoomRatio === 'number') this.zoomRatio = clamp(j.zoomRatio, 0.01, 3);
@@ -961,7 +1005,7 @@ class App3D {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, fps: this.fpsLimit, lowLatency: this.lowLatency, res: this.resScale }));
     } catch {
       // ignore
     }
@@ -985,6 +1029,60 @@ class App3D {
     field('set-sens', () => this.sensitivity, (v) => (this.sensitivity = clamp(v, SENSITIVITY_MIN, SENSITIVITY_MAX)));
     field('set-zoom', () => this.zoomRatio, (v) => (this.zoomRatio = clamp(v, 0.01, 3)));
     field('set-vmfov', () => this.viewmodelFov, (v) => (this.viewmodelFov = clamp(v, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX)));
+    this.wirePerfSettings(field);
+  }
+
+  /** P1: the FPS limit (frame-driver.ts: presets, a custom number), the render scale and the low-latency canvas. */
+  private wirePerfSettings(field: (id: string, get: () => number, set: (v: number) => void) => void): void {
+    field('set-res', () => this.resScale, (v) => {
+      this.resScale = clamp(v, 0.25, 2);
+      this.renderer.setResolution(this.resScale);
+    });
+    const menu = document.getElementById('set-fps');
+    const custom = document.getElementById('set-fps-custom');
+    if (menu instanceof HTMLSelectElement && custom instanceof HTMLInputElement) {
+      const show = (): void => {
+        const l = this.fpsLimit;
+        const preset = typeof l !== 'number' || FPS_PRESETS.includes(l);
+        menu.value = preset ? String(l) : 'custom';
+        custom.hidden = preset;
+        custom.value = typeof l === 'number' ? String(l) : '';
+      };
+      const apply = (v: unknown): void => {
+        this.fpsLimit = parseFpsLimit(v);
+        this.driver.limit = this.fpsLimit;
+        this.saveSettings();
+        show();
+      };
+      show();
+      menu.addEventListener('change', () => {
+        if (menu.value === 'custom') {
+          custom.hidden = false;
+          custom.focus();
+        } else {
+          apply(menu.value);
+          menu.blur();
+        }
+      });
+      custom.addEventListener('change', () => {
+        apply(custom.value);
+        custom.blur();
+      });
+      // Typing a value mustn't move the player.
+      custom.addEventListener('keydown', (e) => e.stopPropagation());
+      menu.addEventListener('keydown', (e) => e.stopPropagation());
+    }
+    const low = document.getElementById('set-lowlat');
+    if (low instanceof HTMLInputElement) {
+      low.checked = this.lowLatency;
+      low.title += this.renderer.desynchronized ? ' (on now)' : this.lowLatency ? ' (not supported by this browser)' : '';
+      low.addEventListener('change', () => {
+        this.lowLatency = low.checked;
+        this.saveSettings();
+        // The context's attributes are fixed when it is made: reload to apply.
+        window.location.reload();
+      });
+    }
   }
 
   private stats(): App3DStats {
@@ -1023,11 +1121,13 @@ async function boot(): Promise<void> {
     const seed = Number.isInteger(seedParam) ? seedParam : 1;
     const sensParam = params.get('sens');
     const sens = sensParam === null ? NaN : Number(sensParam);
-    const res = Number(params.get('res') ?? '1');
+    const resParam = params.get('res');
+    const res = resParam === null ? NaN : Number(resParam);
+    const lowParam = params.get('lowlatency');
     const a = await loadAssets3d();
     const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
     const world = worldMesh(a.world3d.geometry);
-    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : 1);
+    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : null, lowParam === null ? null : lowParam !== '0');
     status.hidden = true;
     if (params.get('bench') !== null) void runBench(params);
   } catch (err) {
