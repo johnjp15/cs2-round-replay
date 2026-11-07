@@ -238,6 +238,11 @@ export function vmPose(a: VmAnim, m: WeaponModel, out: VmPose): VmPose {
     out.progress = p;
     return out;
   }
+  // W2: the knife at rest breathes (a slow 0.4 Hz rise and fall), held low right with the blade up and in.
+  if (m.kind === 'knife') {
+    out.y += Math.sin(a.time * 2 * Math.PI * 0.4) * 0.18;
+    out.rx += Math.sin(a.time * 2 * Math.PI * 0.4 + 0.6) * 0.012;
+  }
   if (m.kind === 'knife' && a.swing !== null && a.swingKind === 'stab' && a.swing < STAB_SEC) {
     // Wind back and up (0–0.22 s), thrust forward (to 0.36 s), hold, recover by 1.0 s.
     const p = a.swing / STAB_SEC;

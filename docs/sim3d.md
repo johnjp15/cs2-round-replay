@@ -76,7 +76,7 @@ logged (`script: scripted hit through geometry`, `combatLog()`), as in 2D.
 
 ## Results (headless, `npm run harness3d`, seed 1)
 
-- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `b63192a9`, the 2D golden master's (K1; `7168c0a5` at T1; `150f77b4` at G6; `a2883aa0` before #30, `cbb335eb` between #30 and G6; H2b's weapon mechanics leave it byte-identical: puppets' outcomes are traced along their scripted view, and nobody is mechanical in a run nobody plays); kills on 32, 794, 816, 1142, 1203,
+- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `9a994b97`, the 2D golden master's (K1; `9f07df0b` at W2's pistols; `7168c0a5` at T1; `150f77b4` at G6; `a2883aa0` before #30, `cbb335eb` between #30 and G6; H2b's weapon mechanics leave it byte-identical: puppets' outcomes are traced along their scripted view, and nobody is mechanical in a run nobody plays); kills on 32, 794, 816, 1142, 1203,
   2829, 3222, 3766, 4442 (all nine, the recording's), every damage event identical to the 2D golden master's, plant
   1761, defuse 3955 → 4275, "Played it like the tape: CT defuse, 0.72 s left". Against the 2D golden master
   (`fixtures/golden/round-nohuman`, `tools/fixture-diff.ts`): since G6 **identical in every line**, `sees` included
@@ -106,6 +106,27 @@ logged (`script: scripted hit through geometry`, `combatLog()`), as in 2D.
 - **Takeover at 30 s**: the first 1,920 lines are the watching run's, byte for byte; line 1,920 names cart the human.
 - Cost: ≈ 0.93 ms per tick in Node for the whole step (Core, host, log), as the 2D host (1.0 ms); ≈ 39 sight
   segments per tick.
+
+## World items (W2, `src/sim3d/items.ts`)
+
+Guns lying in the world: in the host's state and snapshot (`items`, `nextItemSeq`; so checkpoints, rewind and seek
+carry them), never in `observe()` (CS2's observe has none). `Sim3DHost.worldItems()` is what the renderer draws (the
+viewmodel geometry at world scale, on its side: `WorldItemMeshes`, src/app3d/viewmodels/rig.ts).
+
+| Rule | Value | Source |
+| --- | --- | --- |
+| Death drop | the most valuable gun (weapon-table price; tie: primary); the C4 drops as before (bomb.ts); grenades, defuser stay | `mp_death_drop_gun` default 1 = "their best" ([totalcsgo](https://totalcsgo.com/commands/mpdeathdropgun)) |
+| Death drop start | eye − 12 units, the pawn's velocity | Source SDK 2013 `CBaseCombatCharacter::Weapon_Drop` (`Weapon_ShootPosition() - Vector(0,0,12)`) |
+| G (`DROP` button, its press) | the active gun, 400 u/s along the view; the best weapon left is drawn. Not the knife, grenades or C4 | `Weapon_Drop`: `BodyDirection3D() * 400` for players |
+| Flight | `sv_gravity` 800, a 4×4×4 box swept on the world mesh; a floor (n·z ≥ 0.7) stops it, a wall keeps 30 % of the bounce | gravity: CS2 default; box and bounce assumed |
+| E (`USE` press) | the gun within 80 units of the eye, ≥ 0.8 dot off the view, in plain sight, nearest the view line; a full slot swaps (the old gun is thrown as by G); the new gun is drawn. Not while a CT could defuse | Source SDK 2013 `PLAYER_USE_RADIUS 80.f` (baseplayer_shared.h), `CBasePlayer::FindUseEntity` (`dot < 0.8` skipped) |
+| Touch | a gun within the standing hull (16 + 2 units half width, 72 high) whose slot (1 primary, 2 pistol) is empty is picked up, not drawn; not one the pawn itself dropped in the last 64 ticks | CS2 weapon touch (walk-over pickup into an empty slot); hull 32 × 72; the 1 s delay is assumed |
+| Who picks up | the human only. A puppet's recorded pickup (`give`, Sp4rtaN's AK-47 at 19.6 s) takes the nearest gun of that kind within 256 units off the floor | the tape |
+
+Not done: grenade world items (CS2 drops the held grenade on death, `mp_death_drop_grenade`; picking them up would
+follow the grenade limits), G on the C4 (bomb.ts would give it straight back to its T), the defuser drop. The loadout
+ledger (src/core/loadout.ts) learns a picked-up gun when it is held; a gun the human drops stays in its ledger entry
+(Observe shows no drops), which only matters to a resync rewind (CS2), not to this host's exact snapshots.
 
 ## The CS2 port
 

@@ -8,11 +8,13 @@
  */
 import { BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, Euler, Matrix4, Quaternion, Vector3 } from 'three';
 
-export type Shape = 'box' | 'cyl' | 'cylx' | 'cylz' | 'sphere';
+export type Shape = 'box' | 'cyl' | 'cylx' | 'cylz' | 'sphere' | 'taper';
 
 /**
  * One part: shape, colour, size (box: w, h, l; cyl: radius, length, segments), centre, rotation (radians, XYZ).
- * `cyl` runs along y, `cylx` along x, `cylz` along z.
+ * `cyl` runs along y, `cylx` along x, `cylz` along z. W2 `taper`: a box (w, h, l) whose front face (−z) is
+ * `frontW` × `frontH` and shifted `frontY` up: size [w, h, l, frontH, frontW = w, frontY = 0] (a blade's point, 12
+ * triangles).
  */
 export interface Part {
   readonly s: Shape;
@@ -36,6 +38,21 @@ function primitive(p: Part): BufferGeometry {
       return new CylinderGeometry(z[0], z[3] ?? z[0], z[1], Math.round(z[2] ?? 8)).rotateZ(Math.PI / 2);
     case 'cylz':
       return new CylinderGeometry(z[0], z[3] ?? z[0], z[1], Math.round(z[2] ?? 8)).rotateX(Math.PI / 2);
+    case 'taper': {
+      const g = new BoxGeometry(z[0], z[1], z[2]);
+      const w = z[0] as number;
+      const h = z[1] as number;
+      const fh = (z[3] ?? h) / h;
+      const fw = (z[4] ?? w) / w;
+      const fy = z[5] ?? 0;
+      const a = g.getAttribute('position') as BufferAttribute;
+      for (let i = 0; i < a.count; i++) {
+        if (a.getZ(i) >= 0) continue;
+        a.setX(i, a.getX(i) * fw);
+        a.setY(i, a.getY(i) * fh + fy);
+      }
+      return g;
+    }
     case 'sphere': {
       const g = new CylinderGeometry(z[0] as number, z[0] as number, (z[0] as number) * 1.6, 8);
       return g;
@@ -84,7 +101,7 @@ export function mergeParts(parts: readonly Part[]): BufferGeometry {
   const out = new BufferGeometry();
   out.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
   out.setAttribute('color', new BufferAttribute(new Float32Array(col), 3));
-  out.computeBoundingSphere();
+  if (pos.length > 0) out.computeBoundingSphere();
   return out;
 }
 

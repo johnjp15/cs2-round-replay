@@ -53,7 +53,10 @@ as tooltips. src/app3d/hotkeys3d.ts, hotkeys-dom.ts; kept in the settings (`hotk
 **E** or the button takes control of cart from that tick (the speed drops to 1×; the pointer is locked): mouse look,
 W / S forward / back and A / D strafe relative to the view (CS2's), Space jump, Ctrl or C duck, Shift walk, mouse 1
 fire / throw, mouse 2 scope (the input's ATTACK2: the scope is the engine's, H2b: levels and FOVs from
-data/weapons.json, scoped accuracy and speed, a reload or a bolt cycle drops it), R reload, 1–5 weapon slots (as the 2D app), E use (plant, defuse). Esc frees the mouse. Dead,
+data/weapons.json, scoped accuracy and speed, a reload or a bolt cycle drops it), R reload, 1–5 weapon slots (as the 2D app: 1 primary, 2 pistol, 3 knife, 4 grenades, 5 C4; the HUD lists the
+carried ones above the ammo, the held one bright), E use (plant, defuse, W2: pick up the gun looked at within 80 units,
+swapping a full slot; walking over a gun whose slot is empty picks it up), G drop the active gun (docs/sim3d.md "World
+items"). Esc frees the mouse. Dead,
 the camera spectates again (your living teammates first, as CS2 competitive's mp_forcecamera 1). G (drop) is not implemented: the engine has no dropped weapons yet (H4).
 
 W1 additions (CS2's default binds):
@@ -233,7 +236,30 @@ USP-S (suppressor), P2000, knife, C4 (bricks, keypad, display), HE, flashbang, s
   0.52 / 0.78 of 2.5 s), knife slash (0.4 s), C4 plant (lowered, keypad tapping), grenade pin pulled and arm back while
   primed, the throw. Scoped: hidden. Walking bob.
 - **World models**: every other player's held weapon in its right hand (the same models, one merged mesh), swapped
-  when the weapon changes; on death it lies on the floor beside the body (the dropped weapon).
+  when the weapon changes. W2: a dead player's gun is a world item (docs/sim3d.md "World items"), drawn by
+  `WorldItemMeshes` on its side where it landed; the body's hand model is hidden.
+- **Hands (W2, `rig.ts` armParts)**: per class. Rifles and snipers: the right glove wraps the pistol grip (thumb over
+  the top, index on the trigger), its forearm (`forearm`: a glove cuff then the sleeve, a box along wrist → elbow)
+  runs back to the lower right out of view; the left glove cups the handguard from below (fingers up the far side,
+  thumb on the near side) with its forearm down to the lower left (it follows the mag in a reload). Pistols: the
+  right hand on the grip, the left wrapped round it from the left, forearms to both lower corners. Knife and grenades:
+  the right hand only (CS2's one-handed idle). C4: both hands under the brick. Before W2 the forearms were rotated
+  boxes whose wrist ends didn't meet the hands (the left sleeve floated beside the AK).
+- **Knife (W2)**: CS2's default knife at 11.8 in (30 cm): a 6.6 in drop-point blade (bright edge bevel rising to the
+  point, dark fuller, polished spine), a steel guard, a 4.3 in grip with four wrap rings and a pommel; ~250 triangles
+  (`taper` in parts.ts gives the point). Idle: low on the right, point up and in toward the crosshair, edge turned
+  down-left, a slow 0.4 Hz breathing bob. Hooks for W1: `VmAnim.stab` / `VmAnim.inspect` (seconds since started)
+  give the pose phases `stab` and `inspect` (placeholder motions in `pose.ts`; W1 fills the sequencing).
+
+Before / after W2 (`tools/viewmodel-shots.ts`, the lower-right part of a 1280×720 view, T sleeves):
+
+| | before | after |
+| --- | --- | --- |
+| AK-47 | ![](img/w2-vm-ak47-before.jpg) | ![](img/w2-vm-ak47-after.jpg) |
+| USP-S | ![](img/w2-vm-usps-before.jpg) | ![](img/w2-vm-usps-after.jpg) |
+| Knife | ![](img/w2-vm-knife-before.jpg) | ![](img/w2-vm-knife-after.jpg) |
+| HE | ![](img/w2-vm-he-before.jpg) | ![](img/w2-vm-he-after.jpg) |
+
 
 ![AK-47](img/app3d-viewmodel-ak47-idle.jpg)
 ![AK-47 mid-reload, mag out](img/app3d-viewmodel-ak47-reload.jpg)

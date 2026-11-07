@@ -9,6 +9,9 @@
  */
 import { DEFAULT_KEY_MAP, NO_CONTROLS, blocksShortcut, bindingForKey, bindingForMouseButton, type Binding, type HeldControl, type HeldControls, type WeaponSlot } from '../app/input';
 
+/** W2: the 3D page's own held keys on top of the shared map: G drops the active gun (CS2's default `drop` key). */
+const PAGE_KEYS: ReadonlyMap<string, Binding> = new Map<string, Binding>([['KeyG', { kind: 'hold', control: 'drop' }]]);
+
 export interface ControlsHooks {
   /** A weapon slot press (1–5). */
   onSlot(slot: WeaponSlot): void;
@@ -51,7 +54,7 @@ export class ControlsDom {
         this.release();
         return;
       }
-      const b = bindingForKey(e.code, this.map);
+      const b = bindingForKey(e.code, this.map) ?? PAGE_KEYS.get(e.code) ?? null;
       // Bound keys never scroll or search; Ctrl+anything is a move while playing (Ctrl+W = crouch forward).
       if (b !== null || blocksShortcut(e, false, hooks.playing?.() ?? false, hooks.keyboardLocked?.() ?? false)) e.preventDefault();
       if (!e.repeat && hooks.onKey(e.code)) {
@@ -63,7 +66,7 @@ export class ControlsDom {
       else if (!e.repeat) hooks.onSlot(b.slot);
     });
     window.addEventListener('keyup', (e) => {
-      const b = bindingForKey(e.code, this.map);
+      const b = bindingForKey(e.code, this.map) ?? PAGE_KEYS.get(e.code) ?? null;
       if (b === null) return;
       e.preventDefault();
       if (b.kind === 'hold') this.held[b.control] = false;
