@@ -296,7 +296,7 @@ class App {
   private landSeek(): void {
     const s = this.session;
     if (s.speed !== this.loop.speed) s.control({ type: 'speed', x: this.loop.speed });
-    this.scene = new Scene(s.observe(), s.lastAct, this.effects(s).activeEffects(), s.nav);
+    this.scene = new Scene(s.observe(), s.lastAct, this.effects(s).activeEffects(), s.tracerSight());
     this.phase = this.seekResume ?? this.phase;
     this.seekResume = null;
     this.loop.reset();
@@ -362,7 +362,7 @@ class App {
     this.phase = 'ready';
     this.loop.paused = true;
     this.loop.reset();
-    return new Scene(s.observe(), s.lastAct, this.effects(s).activeEffects(), s.nav);
+    return new Scene(s.observe(), s.lastAct, this.effects(s).activeEffects(), s.tracerSight());
   }
 
   private toggle(key: OverlayKey): void {

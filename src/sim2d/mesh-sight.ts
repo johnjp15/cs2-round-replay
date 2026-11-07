@@ -110,6 +110,21 @@ export class MeshSight implements PairSight, GuardSight {
     return this.segmentClear(a.x, a.y, a.z, b.x, b.y, b.z);
   }
 
+  /**
+   * G6: how far along the segment a → b (units from a) the first sight triangle is, or null if it is clear. For the
+   * audit of scripted hits (`scriptedHitThroughGeometry`); one trace, no hint.
+   */
+  blockDistance(a: Vec3, b: Vec3): number | null {
+    this.traces++;
+    this.fullTraces++;
+    const f = this.g.traceSight(a.x, a.y, a.z, b.x, b.y, b.z);
+    if (f >= 1) return null;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dz = b.z - a.z;
+    return f * Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
+
   /** Eye height above the feet. */
   eye(crouching: boolean): number {
     return crouching ? this.options.crouchEyeHeight : this.options.eyeHeight;
@@ -259,4 +274,42 @@ export class MeshGrenadeNav implements GrenadeNav {
   effectOrigin(p: Vec3, landed: boolean): Vec3 {
     return this.mesh.effectOrigin(p, landed);
   }
+}
+
+/** A pawn as the scripted-hit audit needs it. */
+export interface AuditBody extends SightBody {
+  readonly id: string;
+}
+
+/**
+ * G6 audit (docs/vision.md "Scripted hits through geometry"): the recorded damage is the tape, so a scripted hit lands
+ * whatever the mesh says; when the attacker's eye-to-victim line (to the hit band's point, `bandHeights[hitgroup]`,
+ * chest when the band has no height) crosses a wall, the host logs it with this line (landing tick, pair, weapon,
+ * band, where the wall is, and whether any of the victim's aim points is in sight). null when the line is open. Positions are the recording's (2020 video) against the CS2
+ * mesh: each line is an engagement whose recorded positions conflict with the geometry.
+ */
+export function scriptedHitThroughGeometry(
+  mesh: MeshSight,
+  attacker: AuditBody,
+  victim: AuditBody,
+  weapon: string | null,
+  hitgroup: string,
+  bandHeights: Readonly<Record<string, number>>,
+  landingTick: number,
+  ticksPerSec: number,
+): string | null {
+  const o = mesh.options;
+  const eye = { x: attacker.pos.x, y: attacker.pos.y, z: attacker.pos.z + mesh.eye(attacker.crouching) };
+  const h = bandHeights[hitgroup] ?? o.chestHeight;
+  const band = victim.crouching ? (h * o.crouchEyeHeight) / o.eyeHeight : h;
+  const to = { x: victim.pos.x, y: victim.pos.y, z: victim.pos.z + band };
+  const wall = mesh.blockDistance(eye, to);
+  if (wall === null) return null;
+  const dx = to.x - eye.x;
+  const dy = to.y - eye.y;
+  const dz = to.z - eye.z;
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  const sec = (landingTick / ticksPerSec).toFixed(2);
+  const seen = mesh.visible(attacker, victim) ? 'another aim point in sight' : 'no aim point in sight';
+  return `script: scripted hit through geometry: ${attacker.id} -> ${victim.id} ${weapon ?? 'world'} ${hitgroup} at tick ${landingTick} (${sec} s): wall ${wall.toFixed(1)} u from ${attacker.id}'s eye, ${victim.id} ${len.toFixed(1)} u; ${seen}`;
 }

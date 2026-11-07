@@ -63,7 +63,7 @@ import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, t
 import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove3d, type MoveState, type MoveStep } from '../sim2d/movement';
 import type { NavMesh, NavPoint } from '../sim2d/nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from '../sim2d/round';
-import { MeshGrenadeNav, MeshSight, meshSightOptionsFromTuning } from '../sim2d/mesh-sight';
+import { MeshGrenadeNav, MeshSight, meshSightOptionsFromTuning, scriptedHitThroughGeometry } from '../sim2d/mesh-sight';
 import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning } from '../sim2d/vision';
 import type { AiDebug, BlockedPair, CombatLogLine, HostNote, InventoryItem, PawnState, RosterEntry, Sim2DOptions, Sim2DVision } from '../sim2d/host';
 import { traceShot3, type Shot3, type ShotPawn } from './hitscan';
@@ -706,7 +706,17 @@ export class Sim3DHost implements IHost {
     const victim = this.pawn(a.victim);
     if (victim === null) return this.note('action', 'damage', 'unknown pawn', a);
     if (!victim.alive) return this.note('action', 'damage', 'victim is dead', a);
+    this.auditScriptedHit(a, victim);
     this.hurt(a.attacker, victim, a.weapon, a.hitgroup, Math.max(0, a.amount), Math.max(0, a.armor), true, a.lethal);
+  }
+
+  /** G6: a scripted gun hit whose eye-to-victim line crosses a wall of the mesh goes to the combat log (docs/vision.md). */
+  private auditScriptedHit(a: DamageAction, victim: PawnState): void {
+    const shooter = a.attacker === null ? null : this.pawn(a.attacker);
+    if (shooter === null || !shooter.alive || a.weapon === null || gunStats(a.weapon, this.tuning) === null) return;
+    const body = (p: PawnState) => ({ id: p.id, pos: p.move.pos, crouching: p.move.crouching });
+    const line = scriptedHitThroughGeometry(this.meshSight, body(shooter), body(victim), a.weapon, a.hitgroup, this.tuning.damage.bandHeights, this.tickNo + 1, TICKS_PER_SEC);
+    if (line !== null) this.combat.push({ tick: this.tickNo + 1, text: line });
   }
 
   /**
