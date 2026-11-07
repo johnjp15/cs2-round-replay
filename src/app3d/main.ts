@@ -4,27 +4,30 @@
  * loop (src/app/loop.ts) from requestAnimationFrame and draws the Three.js view (renderer3d.ts) and the HUD
  * (hud3d.ts).
  *
- * The page starts **watching** (nobody controls cart; the round plays as recorded) with a spectator camera: third
- * person behind the followed pawn (cart), first person through its eyes, or free fly (V cycles; Z / X pick another
- * player). E or "Take control of cart" hands him to the player from that tick on (a speed other than 1× drops to 1×):
+ * The page starts **watching** (nobody controls cart; the round plays as recorded) with CS2's spectator camera
+ * (U1, spectate.ts): first person through the followed pawn's eyes (cart) with its viewmodel, HUD and crosshair,
+ * third person, or free fly (V cycles; mouse 1 / Space next player, mouse 2 previous; Z / X too), the spectator
+ * panel, and the radar under CS2's spotting rules (radar3d.ts; the panel toggle shows everyone). E or "Take control of cart" hands him to the player from that tick on (a speed other than 1× drops to 1×):
  * first-person camera at his eye (64 standing, 46 crouched), pointer-lock mouse look, WASD, Space, Ctrl, Shift,
  * mouse 1, R, 1–5, E (input3d.ts). Dead, the camera goes back to spectating. Restart watches again.
  *
  * The view is CS2's (view-cs2.ts, with sources): mouse counts × sensitivity × m_yaw / m_pitch (0.022°), no
  * acceleration; FOV 90° horizontal at 4:3, hor+ on wider screens (vertical ≈ 73.74°); scoped FOVs and the zoomed
  * sensitivity (mouse 2 with the AWP / SSG 08); viewmodel_fov 60 in its own camera; the eye eases between 64 and 46
- * through a duck. Bullets leave along view + aim punch × recoilScale + the inaccuracy cone (the host's H2 weapon
- * mechanics); the camera follows 45 % of the recoil plus the screen shake and the crosshair moves to where the bullets go.
+ * through a duck. Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b);
+ * the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
+ * shake, and the crosshair sits where the next bullet goes.
  *
  * URL parameters: `?seed=<int>` (default 1), `?human=cart` plays cart from the start, `?sens=<CS2 sensitivity>`
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
  */
 import tuningJson from '../../data/tuning.json';
-import type { PlayerId, Vec3, WeaponId } from '../contracts/index';
+import type { Observe, PlayerId, Team, Vec3, WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { FixedLoop, RateMeter, TICK_MS } from '../app/loop';
 import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
 import { Session, parseSessionData, type SessionData } from '../app/session';
+import { weaponName } from '../app/hud-model';
 import { startHuman, takeoverButtonView } from '../app/takeover';
 import { anglesTo, poseHitboxes } from '../engine/hitboxes';
 import { sim3dHostFactory, worldMesh, type Sim3DHost } from '../sim3d/index';
@@ -34,16 +37,18 @@ import { ControlsDom } from './controls-dom';
 import { MIRAGE_RADAR } from './coords';
 import { Hud3D } from './hud3d';
 import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
+import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
+import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
 import { RadarSampler, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
 import {
   DEFAULT_ZOOM_RATIO,
-  VIEW_RECOIL_TRACKING,
   SENSITIVITY_MAX,
   SENSITIVITY_MIN,
   VIEWMODEL_FOV,
   VIEWMODEL_FOV_MAX,
   VIEWMODEL_FOV_MIN,
+  VIEW_RECOIL_TRACKING,
   duckStep,
   effectiveSensitivity,
   eyeHeightFor,
@@ -51,8 +56,8 @@ import {
 } from './view-cs2';
 
 type Phase = 'ready' | 'running' | 'paused';
+/** The spectator camera (spectate.ts): pov = first person through the followed pawn's eyes (the default). */
 export type CameraMode = 'follow' | 'pov' | 'free';
-const CAMERA_MODES: readonly CameraMode[] = ['follow', 'pov', 'free'];
 /** Tracers last this long (ticks of round time). */
 const TRACER_TICKS = 10;
 /** Third-person camera: distance behind and height above the followed pawn's eye (units). */
@@ -97,6 +102,12 @@ declare global {
       /** The camera's FOVs and the CS2 settings in use. */
       view: () => { vfov: number; hfov: number; aspect: number; viewmodelVfov: number; sensitivity: number; effectiveSensitivity: number; zoom: number; raw: boolean };
       camera: (mode: CameraMode, id?: PlayerId) => void;
+      /** U1: spectate the next (1) or previous (−1) player, as mouse 1 / mouse 2 do. */
+      spectate: (dir: 1 | -1) => PlayerId;
+      /** U1: the radar's rules ('cs2': CS2's spotting; 'all': everyone), as the panel toggle. */
+      radarRules: (rules?: RadarRules) => RadarRules;
+      /** U1: what the radar shows now (the viewer's team view), for the checks. */
+      radar: () => { team: Team | null; marks: RadarMark[] };
       /** Free camera at a Source position with these angles. */
       fly: (x: number, y: number, z: number, yaw: number, pitch: number) => void;
       /** Seek to video second t (run ahead or rewind with the Session's seek). */
@@ -175,21 +186,26 @@ class App3D {
   private viewmodelFov = VIEWMODEL_FOV;
   /** Scope level of the human's weapon (0 = unscoped) and the weapon it is for. */
   private zoom = 0;
+  private zoomWeapon: string | null = null;
   /** H2b: the scoped FOV (4:3 degrees) of the current zoom level, from the host's weapon table. */
   private zoomFov4x3 = 90;
-  /** H2b: share of the recoil the camera follows (CS:GO `view_recoil_tracking`, default 0.45; a setting, 0–1). */
+  /**
+   * H2b: share of the recoil the camera follows (CS:GO `view_recoil_tracking`, default 0.45; the "Recoil tracking"
+   * setting, 0–1): 0 = the screen stays still and only the crosshair climbs; 1 = the camera follows the bullets.
+   */
   private recoilTracking = VIEW_RECOIL_TRACKING;
-  /** H2b: the crosshair follows the recoil to where the bullets go (CS2 "Follow recoil"); off = centred. */
-  private followRecoil = false;
-  /** H2b: crosshair minus camera angles (degrees) of the last first-person frame. */
-  private crosshairDeg = { yaw: 0, pitch: 0 };
-  private zoomWeapon: string | null = null;
   /** The camera's duck amount (0..1, view-cs2.ts duckStep). */
   private duck = 0;
   private session: Session;
   private scene: Scene;
   private phase: Phase = 'ready';
-  private camMode: CameraMode = 'follow';
+  private camMode: CameraMode = 'pov';
+  /** U1: the radar (CS2's spotting per team, radar3d.ts) and its rules (the panel toggle; localStorage). */
+  private readonly radar = new RadarTracker();
+  private radarRules: RadarRules = 'cs2';
+  /** U1: kills this round per player (the spectator panel) and when each player last fired (their viewmodel). */
+  private kills = new Map<PlayerId, number>();
+  private readonly lastShotMs = new Map<PlayerId, number>();
   private followed: PlayerId = 'cart';
   /** The human's view (mouse look), or the spectator's orbit / free-fly view. */
   private look: Look = { yaw: 0, pitch: 0 };
@@ -212,7 +228,7 @@ class App3D {
   private seekResume: Phase | null = null;
   /** Smoothed per-frame costs (ms): the ticks, the whole draw, the WebGL render call, the HUD. */
   private cost = { sim: 0, draw: 0, render: 0, hud: 0 };
-  private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; speeds: HTMLButtonElement[] };
+  private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; radar: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
   constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number) {
     this.data = data;
@@ -234,9 +250,11 @@ class App3D {
         if (this.playing()) this.session.requestWeaponSlot(slot);
       },
       onKey: (code) => this.onKey(code),
-      onFire: () => undefined,
-      // H2b: mouse 2 reaches the host as ATTACK2 (the input's buttons); the host's weapon mechanics own the scope.
-      onAttack2: () => undefined,
+      onFire: () => this.spectateClick(1),
+      // H2b: while playing, mouse 2 reaches the host as ATTACK2 (the input's buttons): the host owns the scope.
+      onAttack2: () => {
+        if (!this.playing()) this.spectateClick(-1);
+      },
     });
     this.wireSettings();
     this.buttons = {
@@ -245,6 +263,7 @@ class App3D {
       restart: el('restart', HTMLButtonElement),
       takeover: el('takeover', HTMLButtonElement),
       camera: el('camera', HTMLButtonElement),
+      radar: el('radar-rules', HTMLButtonElement),
       speeds: [...document.querySelectorAll<HTMLButtonElement>('button[data-speed]')],
     };
     this.wire();
@@ -263,6 +282,19 @@ class App3D {
         this.camMode = mode;
         if (id !== undefined) this.followed = id;
         this.updateControls();
+      },
+      spectate: (dir) => {
+        this.spectateStep(dir);
+        return this.followed;
+      },
+      radarRules: (rules) => {
+        if (rules !== undefined) this.setRadarRules(rules);
+        return this.radarRules;
+      },
+      radar: () => {
+        const team = this.radarTeam();
+        const o = this.scene.cur;
+        return { team, marks: team === null ? this.radar.marks(o, 'T', 'all') : this.radar.marks(o, team, this.radarRules) };
       },
       fly: (x, y, z, yaw, pitch) => {
         this.camMode = 'free';
@@ -320,6 +352,9 @@ class App3D {
     this.loop.reset();
     this.tracers = [];
     const sc = new Scene(s.observe(), s.lastAct, this.host(s).activeEffects(), null);
+    this.radar.reset(s.observe());
+    this.kills = new Map();
+    this.lastShotMs.clear();
     const cart = sc.pawn(this.followed);
     if (cart !== null) this.orbit = { yaw: 0, pitch: 12 };
     if (s.human !== null && cart !== null) this.look = { yaw: cart.yaw, pitch: cart.pitch };
@@ -336,11 +371,14 @@ class App3D {
       const p = o.pawns.find((q) => q.id === shot.shooter);
       if (p === undefined) continue;
       this.tracers.push({ from: shot.from, to: shot.to, team: p.team, tick });
+      this.lastShotMs.set(shot.shooter, performance.now());
       if (shot.shooter === s.human) {
         this.humanShots++;
         this.lastHumanShotMs = performance.now();
       }
     }
+    this.radar.ingest(o);
+    this.countKills(o);
     for (const e of o.events) {
       if (e.type === 'damage' && e.attacker !== null && e.attacker === s.human && !e.scripted) {
         this.humanHits++;
@@ -399,6 +437,7 @@ class App3D {
     while (p !== null && !p.done && performance.now() - t0 < 12) p = s.advanceSeek(16);
     if (p === null || p.done) {
       this.scene = new Scene(s.observe(), s.lastAct, this.host().activeEffects(), null);
+      this.afterJump();
       this.tracers = [];
       this.phase = this.seekResume ?? 'paused';
       this.seekResume = null;
@@ -419,8 +458,71 @@ class App3D {
     return this.look;
   }
 
-  private alivePawns(): PlayerId[] {
-    return this.scene.cur.pawns.filter((p) => p.alive).map((p) => p.id);
+  /** Who mouse 1 / 2 cycle through: the human's living teammates when dead (CS2 competitive), else everyone alive. */
+  private spectateTargets(): PlayerId[] {
+    const h = this.session.human;
+    const team = h === null ? null : (this.scene.pawn(h)?.team ?? null);
+    return spectatable(this.scene.cur.pawns, team);
+  }
+
+  /** Nobody controlled, or the human dead: the spectator camera, panel and controls. */
+  private spectating(): boolean {
+    const h = this.session.human;
+    return h === null || this.scene.pawn(h)?.alive !== true;
+  }
+
+  private spectateStep(dir: 1 | -1): void {
+    this.followed = cycleTarget(this.spectateTargets(), this.followed, dir);
+    if (this.camMode === 'free') this.camMode = 'pov';
+    this.updateControls();
+  }
+
+  /**
+   * Mouse 1 (dir 1) / mouse 2 (−1) while spectating. In third person and free fly the mouse turns the camera, so the
+   * click that grabs the pointer only grabs it (not on touch screens or in first person, where the mouse is unused).
+   */
+  private spectateClick(dir: 1 | -1): void {
+    if (!this.spectating()) return;
+    if (this.camMode !== 'pov' && !this.controls.locked && !this.touchOnly) return;
+    this.spectateStep(dir);
+  }
+
+  /** The team whose radar view is shown: the human's, else the spectated player's (null: none). */
+  private radarTeam(): Team | null {
+    const h = this.session.human;
+    const id = h !== null && this.scene.pawn(h)?.alive === true ? h : this.followed;
+    return this.scene.pawn(id)?.team ?? null;
+  }
+
+  private setRadarRules(rules: RadarRules): void {
+    this.radarRules = rules;
+    this.saveSettings();
+    this.updateControls();
+  }
+
+  /** After a seek: the radar starts over (nothing spotted yet) and the kills are recounted from the log. */
+  private afterJump(): void {
+    this.radar.reset(this.session.observe());
+    this.lastShotMs.clear();
+    this.kills = new Map();
+    for (const line of this.session.log().lines()) {
+      if (!line.includes('"type":"death"')) continue;
+      try {
+        this.countKills((JSON.parse(line) as { observe: Observe }).observe);
+      } catch {
+        // A malformed line: skip it.
+      }
+    }
+  }
+
+  /** Enemy kills in this tick's death events. */
+  private countKills(o: Observe): void {
+    for (const e of o.events) {
+      if (e.type !== 'death' || e.attacker === null || e.attacker === e.victim) continue;
+      const a = o.pawns.find((p) => p.id === e.attacker);
+      const v = o.pawns.find((p) => p.id === e.victim);
+      if (a !== undefined && v !== undefined && a.team !== v.team) this.kills.set(a.id, (this.kills.get(a.id) ?? 0) + 1);
+    }
   }
 
   private onKey(code: string): boolean {
@@ -430,7 +532,7 @@ class App3D {
       return true;
     }
     if (code === 'KeyV' && !this.playing()) {
-      this.camMode = CAMERA_MODES[(CAMERA_MODES.indexOf(this.camMode) + 1) % CAMERA_MODES.length] as CameraMode;
+      this.camMode = nextSpectateMode(this.camMode);
       if (this.camMode === 'free') {
         const p = this.scene.pawn(this.followed);
         if (p !== null) this.freePos = { x: p.pos.x, y: p.pos.y, z: p.pos.z + 120 };
@@ -440,12 +542,12 @@ class App3D {
       return true;
     }
     if ((code === 'KeyZ' || code === 'KeyX') && !this.playing()) {
-      const alive = this.alivePawns();
-      if (alive.length > 0) {
-        const i = alive.indexOf(this.followed);
-        const n = code === 'KeyX' ? 1 : -1;
-        this.followed = alive[(Math.max(0, i) + n + alive.length) % alive.length] as PlayerId;
-      }
+      this.spectateStep(code === 'KeyX' ? 1 : -1);
+      return true;
+    }
+    // CS2's spectator: Space = next player (in free fly Space flies up).
+    if (code === 'Space' && this.spectating() && this.camMode !== 'free') {
+      this.spectateStep(1);
       return true;
     }
     if (code === 'KeyP') {
@@ -478,6 +580,7 @@ class App3D {
     on(b.restart, () => this.restart());
     on(b.takeover, () => this.takeControl());
     on(b.camera, () => this.onKey('KeyV'));
+    on(b.radar, () => this.setRadarRules(this.radarRules === 'cs2' ? 'all' : 'cs2'));
     for (const sb of b.speeds) {
       on(sb, () => {
         this.loop.speed = Number(sb.dataset['speed']);
@@ -499,9 +602,13 @@ class App3D {
     b.takeover.title = v.title;
     b.takeover.setAttribute('aria-pressed', String(v.pressed));
     const cam = b.camera.querySelector('span');
-    const camText = this.playing() ? 'Camera: first person' : `Camera: ${this.camMode === 'pov' ? 'eyes' : this.camMode}`;
+    const camText = this.playing() ? 'Camera: first person' : `Camera: ${this.camMode === 'pov' ? '1st person' : this.camMode === 'follow' ? '3rd person' : 'free'}`;
     if (cam !== null && cam.textContent !== camText) cam.textContent = camText;
     b.camera.disabled = this.playing();
+    const radarLabel = b.radar.querySelector('span');
+    const radarText = this.radarRules === 'cs2' ? 'Radar: CS2 rules' : 'Radar: show everyone';
+    if (radarLabel !== null && radarLabel.textContent !== radarText) radarLabel.textContent = radarText;
+    b.radar.setAttribute('aria-pressed', String(this.radarRules === 'all'));
     for (const sb of b.speeds) sb.setAttribute('aria-pressed', String(Number(sb.dataset['speed']) === this.loop.speed));
   }
 
@@ -514,10 +621,10 @@ class App3D {
     if (this.playing()) {
       const p = this.scene.pawn(s.human as PlayerId);
       // H2b: the scope is the host's (src/engine/weapons; FOVs from data/weapons.json).
-      const av = this.host().aimView(s.human as PlayerId, this.look);
-      if (p !== null && (p.weapon !== this.zoomWeapon || av.zoom !== this.zoom)) this.setZoom(p.weapon, av.zoom, av.fov4x3);
+      const av = this.aimView(s.human as PlayerId, this.look);
+      if (p !== null) this.setZoom(p.weapon, av.zoom, av.fov4x3);
       this.look = turnView(this.look, mouse.dx, mouse.dy, effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio));
-      // H2b: the input carries the plain view; the host adds the aim punch × recoilScale and the inaccuracy cone.
+      // H2b: the input carries the plain view; the host adds the aim punch × weapon_recoil_scale and the inaccuracy cone.
       s.setHumanInput(fpsInput(s.human as PlayerId, this.controls.controls(), this.look));
     } else if (this.camMode === 'free') {
       this.look = turnView(this.look, mouse.dx, mouse.dy, this.sensitivity);
@@ -548,8 +655,8 @@ class App3D {
     if (!firstPerson) {
       const f = this.scene.pawn(this.followed);
       if (f === null || !f.alive) {
-        const next = this.alivePawns()[0];
-        if (next !== undefined && this.camMode !== 'free' && f !== null && this.scene.deaths.has(f.id) && this.scene.cur.tick - (this.scene.deaths.get(f.id) ?? 0) > 128) this.followed = next;
+        const targets = this.spectateTargets();
+        if (targets.length > 0 && this.camMode !== 'free' && f !== null && this.scene.deaths.has(f.id) && this.scene.cur.tick - (this.scene.deaths.get(f.id) ?? 0) > 128) this.followed = cycleTarget(targets, f.id, 1);
       }
     }
     if (!firstPerson && this.zoom !== 0) this.setZoom('', 0);
@@ -565,20 +672,28 @@ class App3D {
     let eye: Vec3;
     let yaw: number;
     let pitch: number;
+    /** First person through a spectated pawn's eyes (alive): its view, crosshair and scope as it sees them. */
+    const specPov = !firstPerson && this.camMode === 'pov' && vo !== null && vo.alive;
+    let aim = { yaw: 0, pitch: 0 };
+    let specFov = 90;
+    let specZoom = 0;
     if (firstPerson || this.camMode === 'pov') {
       eye = vp === null ? this.freePos : { x: vp.x, y: vp.y, z: vp.z + this.eyeZ };
       if (firstPerson) {
-        // H2b: the camera follows 45 % of the recoil plus the screen shake; the crosshair sits where the bullets go.
-        const av = this.host().aimView(human as PlayerId, this.look, this.recoilTracking);
-        yaw = av.camera.yaw;
-        pitch = av.camera.pitch;
-        // The crosshair is the camera's aim (screen centre) like CS2's default; with "follow recoil" on it moves to
-        // where the bullets go (cl_crosshair_recoil).
-        this.crosshairDeg = this.followRecoil ? { yaw: av.crosshair.yaw - av.camera.yaw, pitch: av.crosshair.pitch - av.camera.pitch } : { yaw: 0, pitch: 0 };
+        // H2b: the camera follows `recoilTracking` (view_recoil_tracking, default 0.45) of the recoil plus the screen
+        // shake; the crosshair sits where the next bullet goes (view + aim punch × 2).
+        const v = this.aimView(human as PlayerId, this.look);
+        yaw = v.camera.yaw;
+        pitch = v.camera.pitch;
+        aim = v.crosshair;
       } else {
         const prevPitch = this.scene.prev?.pawns.find((p) => p.id === viewId)?.pitch ?? vo?.pitch ?? 0;
-        yaw = vp?.yaw ?? 0;
-        pitch = prevPitch + ((vo?.pitch ?? 0) - prevPitch) * alpha;
+        const v = this.spectatedView(viewId, { yaw: vp?.yaw ?? 0, pitch: prevPitch + ((vo?.pitch ?? 0) - prevPitch) * alpha });
+        yaw = v.camera.yaw;
+        pitch = v.camera.pitch;
+        aim = v.crosshair;
+        specFov = v.fov4x3;
+        specZoom = v.zoom;
       }
     } else if (this.camMode === 'follow' && vp !== null) {
       yaw = lerpAngle(vp.yaw, vp.yaw + this.orbit.yaw, 1);
@@ -597,7 +712,9 @@ class App3D {
       yaw = this.look.yaw;
       pitch = this.look.pitch;
     }
-    const watchingTeam = human === null ? null : this.scene.pawn(human)?.team;
+    // Name tags: the viewer's living teammates; an enemy only while the viewer sees it (never through walls).
+    const viewTeam = vo?.team ?? null;
+    const viewSees = vo?.alive === true ? vo.sees : [];
     const pawns: DrawPawn[] = this.scene.cur.pawns.map((p) => {
       const pose = this.scene.pose(p.id, alpha);
       return {
@@ -609,7 +726,7 @@ class App3D {
         crouching: p.crouching,
         alive: p.alive,
         human: p.id === human,
-        tag: p.alive && (watchingTeam === null || watchingTeam === undefined || p.team === watchingTeam),
+        tag: p.alive && p.id !== viewId && (p.team === viewTeam || viewSees.includes(p.id)),
         hidden: (firstPerson || this.camMode === 'pov') && p.id === viewId && p.alive,
       };
     });
@@ -621,7 +738,10 @@ class App3D {
     const o = this.scene.cur;
     const b = o.round.bomb;
     const bomb = b.pos !== null && b.state !== 'carried' ? { pos: b.pos, planted: b.state === 'planted' } : null;
-    const weapon: WeaponId | null = firstPerson && humanPawn !== null ? humanPawn.weapon : null;
+    const weapon: WeaponId | null = firstPerson && humanPawn !== null ? humanPawn.weapon : specPov ? vo.weapon : null;
+    const scoped = firstPerson ? this.zoom > 0 : specPov && specZoom > 0;
+    const sinceShot = exact ? 1 : (now - (firstPerson ? this.lastHumanShotMs : (this.lastShotMs.get(viewId) ?? -1e9))) / 1000;
+    const vfovDeg = verticalFov(firstPerson ? this.currentFov4x3() : specPov ? specFov : 90);
     const r0 = performance.now();
     this.lastCamera = { eye: { ...eye }, yaw, pitch, viewId };
     this.renderer.render({
@@ -629,30 +749,36 @@ class App3D {
       eye,
       yaw,
       pitch,
-      fovDeg: verticalFov(firstPerson ? this.currentFov4x3() : 90),
+      fovDeg: vfovDeg,
       viewmodelFovDeg: verticalFov(this.viewmodelFov),
       tracers,
       effects: this.scene.effects,
       bomb,
-      viewmodel: weapon === null || this.zoom > 0 ? null : { weapon, sinceShot: exact ? 1 : (now - this.lastHumanShotMs) / 1000 },
+      viewmodel: weapon === null || scoped ? null : { weapon, sinceShot },
       nowMs: now,
     });
     const r1 = performance.now();
     const over = o.round.phase === 'over' && o.round.endTick !== null && o.tick > o.round.endTick + 128;
-    const mode = firstPerson
-      ? `You: ${human} · Esc frees the mouse`
-      : human !== null
-        ? `${human} is dead · spectating ${this.followed} · V camera · Z / X player`
-        : `Watching · ${this.camMode === 'free' ? 'free camera' : this.followed} · ${s.canTakeControl && !this.touchOnly ? 'E: take control of cart · ' : ''}V camera · Z / X player`;
+    const mode = firstPerson ? `You: ${human} · Esc frees the mouse` : human !== null ? `You: ${human} (dead) · spectating` : 'Watching';
+    const canTake = human === null && s.canTakeControl && !this.touchOnly;
+    const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake);
+    const r = this.renderer.renderer.domElement;
+    // The crosshair sits where the next bullet goes (off centre only with a punch; clientHeight read only then).
+    const off = (firstPerson || specPov) && !scoped && (aim.yaw !== yaw || aim.pitch !== pitch) ? aimOffsetPx({ yaw, pitch }, aim, vfovDeg, r.clientHeight) : { x: 0, y: 0 };
+    const radarTeam = firstPerson ? (humanPawn?.team ?? null) : viewTeam;
     this.hud.update({
       scene: this.scene,
       clock: s.clock,
       viewer: viewId,
       human,
       at: { x: eye.x, y: eye.y, yaw },
-      mode: this.phase === 'ready' && human === null ? 'Press Start to watch, or E to play cart' : mode,
-      crosshair: firstPerson && this.zoom === 0,
-      crosshairPx: firstPerson ? this.crosshairPixels() : { x: 0, y: 0 },
+      mode: this.phase === 'ready' && human === null ? 'Watching · press Start, or E to play cart' : mode,
+      modeKind: firstPerson ? 'you' : human !== null ? 'dead' : 'watching',
+      crosshair: (firstPerson || specPov) && !scoped,
+      crosshairAt: { x: Math.round(off.x * 2) / 2, y: Math.round(off.y * 2) / 2 },
+      scope: scoped,
+      radar: { tracker: this.radar, team: radarTeam, rules: this.radarRules },
+      spectate: spec,
       hit: exact || this.lastHit === null ? null : { ageMs: now - this.lastHit.ms, head: this.lastHit.head },
       perf: `${this.fpsMeter.rate(now).toFixed(0)} fps · ${this.tpsMeter.rate(now).toFixed(0)} ticks/s · ${this.loop.speed}×`,
       summary: over ? `${summarize(s.model, s.log()).headline}<small>Restart to watch again, or take control of cart earlier.</small>` : null,
@@ -672,6 +798,7 @@ class App3D {
     if (!Number.isInteger(tick) || tick < 0) throw new Error(`seekTick: bad tick ${tick}`);
     if (tick !== s.tick) s.seek(tick / 64);
     this.scene = new Scene(s.observe(), s.lastAct, this.host().activeEffects(), null);
+    this.afterJump();
     this.tracers = [];
     if (this.phase === 'ready') this.phase = 'paused';
     this.loop.reset();
@@ -704,18 +831,20 @@ class App3D {
   }
 
   /**
-   * H2b: the crosshair's offset from the screen centre (CSS pixels) for the angle between the bullets' direction and
-   * the camera (CS2 `cl_crosshair_recoil true`): + x right, + y down.
+   * U1: the first-person view of a spectated pawn looking along `view`: the camera angles, where its crosshair is (the
+   * next bullet's direction) and its scope, from the host's weapon mechanics once it has them (H2b's
+   * `Sim3DHost.aimView`), else its view with no punch and no scope.
    */
-  private crosshairPixels(): { x: number; y: number } {
-    const c = this.renderer.camera;
-    const el = this.renderer.renderer.domElement;
-    const h = el.clientHeight || el.height;
-    const w = el.clientWidth || el.width;
-    const tv = Math.tan((c.fov * Math.PI) / 360);
-    const th = tv * c.aspect;
-    const r = Math.PI / 180;
-    return { x: roundPx((-Math.tan(this.crosshairDeg.yaw * r) / th) * (w / 2)), y: roundPx((Math.tan(this.crosshairDeg.pitch * r) / tv) * (h / 2)) };
+  private spectatedView(id: PlayerId, view: { yaw: number; pitch: number }): { camera: { yaw: number; pitch: number }; crosshair: { yaw: number; pitch: number }; zoom: number; fov4x3: number } {
+    return this.aimView(id, view);
+  }
+
+  /**
+   * H2b: camera, crosshair and scope of `id` looking along `view`, from the host's weapon mechanics
+   * (`Sim3DHost.aimView`) with the player's recoil-tracking setting.
+   */
+  private aimView(id: PlayerId, view: { yaw: number; pitch: number }): { camera: { yaw: number; pitch: number }; crosshair: { yaw: number; pitch: number }; zoom: number; fov4x3: number } {
+    return this.host().aimView(id, view, this.recoilTracking);
   }
 
   /** The view's FOV now (4:3 degrees): 90, or the scoped FOV of the human's weapon (the host's, from data/weapons.json). */
@@ -723,11 +852,11 @@ class App3D {
     return this.zoomWeapon === null || this.zoom === 0 ? 90 : this.zoomFov4x3;
   }
 
+  /** The human's scope level and its FOV (the overlay is the HUD's: HudFrame.scope). */
   private setZoom(weapon: string, level: number, fov4x3 = 90): void {
     this.zoomWeapon = weapon;
     this.zoom = level;
     this.zoomFov4x3 = level === 0 ? 90 : fov4x3;
-    document.getElementById('scope')?.toggleAttribute('hidden', level === 0);
   }
 
   private viewInfo(): { vfov: number; hfov: number; aspect: number; viewmodelVfov: number; sensitivity: number; effectiveSensitivity: number; zoom: number; raw: boolean } {
@@ -739,14 +868,22 @@ class App3D {
   /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
   private loadSettings(sensFromUrl: boolean): void {
     try {
-      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; recoilTracking?: number; followRecoil?: boolean };
-      if (typeof j.recoilTracking === 'number') this.recoilTracking = clamp(j.recoilTracking, 0, 1);
-      if (typeof j.followRecoil === 'boolean') this.followRecoil = j.followRecoil;
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; recoilTracking?: number };
+      if (j.radar === 'cs2' || j.radar === 'all') this.radarRules = j.radar;
       if (!sensFromUrl && typeof j.sensitivity === 'number') this.sensitivity = clamp(j.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX);
+      if (typeof j.recoilTracking === 'number' && Number.isFinite(j.recoilTracking)) this.recoilTracking = clamp(j.recoilTracking, 0, 1);
       if (typeof j.zoomRatio === 'number') this.zoomRatio = clamp(j.zoomRatio, 0.01, 3);
       if (typeof j.viewmodelFov === 'number') this.viewmodelFov = clamp(j.viewmodelFov, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX);
     } catch {
       // No storage (private mode): defaults.
+    }
+  }
+
+  private saveSettings(): void {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking }));
+    } catch {
+      // ignore
     }
   }
 
@@ -759,11 +896,7 @@ class App3D {
         const v = Number(input.value);
         if (Number.isFinite(v)) set(v);
         input.value = String(get());
-        try {
-          this.saveSettings();
-        } catch {
-          // ignore
-        }
+        this.saveSettings();
         input.blur();
       });
       // Typing a value mustn't move the player.
@@ -773,27 +906,6 @@ class App3D {
     field('set-zoom', () => this.zoomRatio, (v) => (this.zoomRatio = clamp(v, 0.01, 3)));
     field('set-vmfov', () => this.viewmodelFov, (v) => (this.viewmodelFov = clamp(v, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX)));
     field('set-tracking', () => this.recoilTracking, (v) => (this.recoilTracking = clamp(v, 0, 1)));
-    const follow = document.getElementById('set-follow');
-    if (follow instanceof HTMLInputElement) {
-      follow.checked = this.followRecoil;
-      follow.addEventListener('change', () => {
-        this.followRecoil = follow.checked;
-        try {
-          this.saveSettings();
-        } catch {
-          // ignore
-        }
-        follow.blur();
-      });
-      follow.addEventListener('keydown', (e) => e.stopPropagation());
-    }
-  }
-
-  private saveSettings(): void {
-    localStorage.setItem(
-      SETTINGS_KEY,
-      JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, recoilTracking: this.recoilTracking, followRecoil: this.followRecoil }),
-    );
   }
 
   private stats(): App3DStats {
@@ -845,7 +957,3 @@ async function boot(): Promise<void> {
 }
 
 void boot();
-
-function roundPx(v: number): number {
-  return Math.round(v * 10) / 10;
-}

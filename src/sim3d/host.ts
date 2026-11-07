@@ -60,27 +60,30 @@ import {
   armsContext,
   cameraAngles,
   crosshairAngles,
+  damageAfterHitgroup,
   freshArms,
   maxSpeedOf,
   parseWeaponTable,
   trackArms,
   trackShot,
+  weaponDef,
   type Angle2,
   type ArmsContext,
   type ArmsState,
   type Motion,
+  type SolidQuery,
 } from '../engine/weapons/index';
 import { freshAiState, roleOf, stepAi, type AiOther } from '../sim2d/ai';
 import { applyBombAction, bombFromObs, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from '../sim2d/bomb';
 import { collideMove, type CollisionNav, type Obstacle } from '../sim2d/collision';
 import type { MapGeometry } from '../sim2d/geometry';
 import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeOutcome } from '../sim2d/grenades';
-import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove3d, type MoveState, type MoveStep } from '../sim2d/movement';
+import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove3d, type MoveOptions, type MoveState, type MoveStep } from '../sim2d/movement';
 import type { NavMesh, NavPoint } from '../sim2d/nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from '../sim2d/round';
 import { GrenadeSight, Sight, sightOptionsFromTuning } from '../sim2d/vision';
 import type { AiDebug, BlockedPair, CombatLogLine, HostNote, InventoryItem, PawnState, RosterEntry, Sim2DOptions, Sim2DVision } from '../sim2d/host';
-import { traceShot3, type Shot3, type ShotPawn } from './hitscan';
+import { meshSolidQuery, traceShot3, type Shot3, type ShotPawn } from './hitscan';
 import { MeshSight3 } from './sight';
 import {
   armorDamage,
@@ -188,6 +191,8 @@ export class Sim3DHost implements IHost {
   private readonly armsCtx: ArmsContext | null;
   /** H2: per pawn (pawn order). */
   private arms: ArmsState[] = [];
+  /** H2b: the solids along a bullet on the world mesh, for wall penetration (built on first use). */
+  private solids: SolidQuery | null = null;
 
   /**
    * @param options score before the round and the round clock at tick 0; default 0 – 0 and `tuning.round.timeSec`.
@@ -599,7 +604,7 @@ export class Sim3DHost implements IHost {
       const from = p.move.pos;
       const lockedInput = input === null ? null : { ...input, forward: 0, side: 0, buttons: input.buttons.filter((b) => b !== 'JUMP') };
       const base: MoveState = isLocked ? { ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } } : p.move;
-      const step: MoveStep = stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, this.movementFor(p, input), TICK_DT);
+      const step: MoveStep = stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT, this.moveOptionsFor(p, input));
       let next = step.state;
       if (!isLocked) {
         const obstacles = this.solidFor(p, next);
@@ -644,19 +649,33 @@ export class Sim3DHost implements IHost {
   }
 
   /**
-   * H2: the movement tuning for a pawn: the human's and LIVE pawns' run speed is the weapon mechanics' cap (scoped
-   * AWP 100, tagging, Negev firing); puppets (REPLAY) keep the table's speeds so they follow their tracks as before.
+   * H2b: true when a pawn plays by the weapon mechanics (its bullets' outcome comes from spread, recoil and
+   * penetration; its speed from the weapon's max speed and tagging): the human while controlled and LIVE pawns.
+   * Puppets (REPLAY) keep their recorded outcomes: scripted damage is the truth, their tracks the table's speeds.
    */
-  private movementFor(p: PawnState, input: PawnInput | null): Tuning['movement'] {
-    const m = this.tuning.movement;
+  private mechanical(p: PawnState): boolean {
+    return this.armsCtx !== null && !(p.mode === 'REPLAY' && !(p.id === this.human && this.humanInput !== null));
+  }
+
+  private static readonly NO_MOVE_OPTIONS: MoveOptions = {};
+
+  /**
+   * H2b: the movement options (src/sim2d/movement.ts `MoveOptions`, M1) of a mechanical pawn: `runSpeed` = the held
+   * weapon's max speed in its mode (CS2 m_flMaxSpeed: AWP 100 scoped; × attackMovespeedFactor while firing, e.g.
+   * the Negev), `velocityModifier` = tagging. Left out where they equal the table's run speed / 1, so a pawn nothing
+   * slows moves exactly as before.
+   */
+  private moveOptionsFor(p: PawnState, input: PawnInput | null): MoveOptions {
     const ctx = this.armsCtx;
-    if (ctx === null || (p.mode === 'REPLAY' && !(p.id === this.human && this.humanInput !== null))) return m;
+    if (ctx === null || !this.mechanical(p)) return Sim3DHost.NO_MOVE_OPTIONS;
     const a = this.arms[this.pawnIndex(p.id)];
-    if (a === undefined) return m;
-    const cap = maxSpeedOf(ctx, a, input !== null && input.buttons.includes('ATTACK'));
-    const base = m.runSpeedByWeapon[p.weapon];
-    if (base === undefined || Math.abs(cap - base) < 1e-9) return m;
-    return { ...m, runSpeedByWeapon: { ...m.runSpeedByWeapon, [p.weapon]: roundNumber(cap) } };
+    if (a === undefined) return Sim3DHost.NO_MOVE_OPTIONS;
+    const run = roundNumber(maxSpeedOf(ctx, { ...a, velocityModifier: 1 }, input !== null && input.buttons.includes('ATTACK')));
+    const base = this.tuning.movement.runSpeedByWeapon[p.weapon];
+    const o: { runSpeed?: number; velocityModifier?: number } = {};
+    if (base === undefined || Math.abs(run - base) > 1e-9) o.runSpeed = run;
+    if (a.velocityModifier < 1) o.velocityModifier = a.velocityModifier;
+    return o.runSpeed === undefined && o.velocityModifier === undefined ? Sim3DHost.NO_MOVE_OPTIONS : o;
   }
 
   /** H2: a pawn's weapon mechanics state (recoil, punch, scope, tagging), or null (unknown pawn or no weapon model). */
@@ -712,7 +731,9 @@ export class Sim3DHost implements IHost {
     if (step.fired && gun !== null) {
       this.outbox.push({ type: 'shot', shooter: p.id, weapon: p.weapon });
       this.sound(p, 'shot');
-      // H2: the bullet leaves along view + aim punch × recoilScale + the inaccuracy / spread cone (seeded per shooter and tick).
+      // H2: the bullet leaves along view + aim punch × recoilScale + the inaccuracy / spread cone (seeded per shooter
+      // and tick). H2b: the human's and LIVE pawns' bullets land there and may go through walls; a puppet's bullet is
+      // drawn there but its outcome is traced along its scripted view exactly as before (scripted damage is the truth).
       let dir: Vec3 | null = null;
       if (ctx !== null && ai >= 0) {
         const rng = new Rng(this.aiSeed).fork(`spread:${p.id}:${t}`);
@@ -720,11 +741,19 @@ export class Sim3DHost implements IHost {
         this.arms[ai] = r.state;
         dir = r.shot.pellets[0] ?? null;
       }
-      const shot = traceShot3(shotPawn(p), this.pawns.map((q) => shotPawn(q)), this.meshSight.geometry(), this.tuning.damage, dir);
-      this.shotsOut.push(shot);
+      const world = this.meshSight.geometry();
+      const targets = this.pawns.map((q) => shotPawn(q));
+      const mech = ctx !== null && this.mechanical(p);
+      const pen = mech && ctx !== null ? { weapon: weaponDef(ctx.table, this.armsWeapon(p.weapon)), query: (this.solids ??= meshSolidQuery(world)), model: ctx.model } : null;
+      const shot = mech ? traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir, pen) : traceShot3(shotPawn(p), targets, world, this.tuning.damage);
+      this.shotsOut.push(mech || dir === null ? shot : traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir));
       if (shot.victim !== null && shot.hitgroup !== null) {
         const victim = this.pawn(shot.victim) as PawnState;
-        const dmg = bulletDamage(gun, shot.distance, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
+        // Open air: the 2D table's damage (as before); through a wall: the damage penetration left, then hitgroup and armor.
+        const dmg =
+          shot.penDamage !== undefined && pen !== null
+            ? damageAfterHitgroup(pen.weapon, shot.penDamage, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage)
+            : bulletDamage(gun, shot.distance, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
         // G5: the human's bullet on a blocked pair (a recorded duel, docs/core.md): report where it would have hit.
         if (p.id === this.human && this.isBlocked(p.id, victim.id)) this.outbox.push({ type: 'blocked_hit', attacker: p.id, victim: victim.id, weapon: p.weapon, hitgroup: shot.hitgroup });
         // H2: tagging and hit punch for a hit that lands (not on a blocked pair, so the recording's runs are unchanged).
