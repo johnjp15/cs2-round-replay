@@ -2,9 +2,8 @@
  * H1: first-person controls (pure part, tested in Node; the DOM listeners are in controls-dom.ts). docs/app3d.md
  * "Controls".
  *
- * - The mouse turns the view (pointer lock): yaw −= dx × sensitivity, pitch += dy × sensitivity (Source: pitch
- *   positive = down; moving the mouse up looks up), pitch clamped to ±89 (CS2's cl_pitchup / cl_pitchdown).
- *   Sensitivity is CS2's: degrees per mouse count = m_yaw (0.022) × sensitivity (default 2.0).
+ * - The mouse turns the view (pointer lock) exactly as CS2 does: view-cs2.ts `applyMouse` (yaw −= m_yaw × dx ×
+ *   sensitivity, pitch += m_pitch × dy × sensitivity, ±89°, no acceleration or smoothing; default sensitivity 1.25).
  * - WASD move relative to the view, as in CS2: W forward, S back, A strafe left, D strafe right (PawnInput forward /
  *   side are relative to the yaw: side positive = right); a diagonal is normalized.
  * - Buttons as the 2D app (src/app/input.ts): Shift WALK, Ctrl / C DUCK, Space JUMP, mouse 1 ATTACK (fire, throw),
@@ -13,10 +12,9 @@
 import { roundNumber, type PawnInput, type PlayerId } from '../contracts/index';
 import { buttonsFor, type HeldControls } from '../app/input';
 
-/** CS2's m_yaw / m_pitch: degrees per mouse count at sensitivity 1. */
-export const M_YAW = 0.022;
-export const DEFAULT_SENSITIVITY = 2;
-export const PITCH_LIMIT = 89;
+import { DEFAULT_SENSITIVITY, applyMouse } from './view-cs2';
+
+export { DEFAULT_SENSITIVITY } from './view-cs2';
 
 export interface Look {
   readonly yaw: number;
@@ -31,8 +29,7 @@ export function wrapYaw(a: number): number {
 
 /** The view after a mouse move of (dx, dy) counts (pointer-lock movementX / movementY). */
 export function turnView(look: Look, dx: number, dy: number, sensitivity = DEFAULT_SENSITIVITY): Look {
-  const k = M_YAW * sensitivity;
-  return { yaw: wrapYaw(look.yaw - dx * k), pitch: Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, look.pitch + dy * k)) };
+  return applyMouse(look, dx, dy, sensitivity);
 }
 
 /** forward / side (−1..1, view-relative, side positive = right) for the held WASD keys. */

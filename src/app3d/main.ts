@@ -10,8 +10,13 @@
  * first-person camera at his eye (64 standing, 46 crouched), pointer-lock mouse look, WASD, Space, Ctrl, Shift,
  * mouse 1, R, 1–5, E (input3d.ts). Dead, the camera goes back to spectating. Restart watches again.
  *
+ * The view is CS2's (view-cs2.ts, with sources): mouse counts × sensitivity × m_yaw / m_pitch (0.022°), no
+ * acceleration; FOV 90° horizontal at 4:3, hor+ on wider screens (vertical ≈ 73.74°); scoped FOVs and the zoomed
+ * sensitivity (mouse 2 with the AWP / SSG 08); viewmodel_fov 60 in its own camera; the eye eases between 64 and 46
+ * through a duck. Bullets leave along the firing angles (view + aim punch × 2; the punch is zero until H2's recoil).
+ *
  * URL parameters: `?seed=<int>` (default 1), `?human=cart` plays cart from the start, `?sens=<CS2 sensitivity>`
- * (default 2), `?fov=<deg>` (horizontal-ish vertical FOV of the camera, default 74).
+ * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
  */
 import tuningJson from '../../data/tuning.json';
 import type { PlayerId, Vec3, WeaponId } from '../contracts/index';
@@ -30,6 +35,23 @@ import { Hud3D } from './hud3d';
 import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
 import { RadarSampler, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
+import {
+  DEFAULT_ZOOM_RATIO,
+  SENSITIVITY_MAX,
+  SENSITIVITY_MIN,
+  VIEWMODEL_FOV,
+  VIEWMODEL_FOV_MAX,
+  VIEWMODEL_FOV_MIN,
+  ZERO_PUNCH,
+  cameraAngles,
+  duckStep,
+  effectiveSensitivity,
+  eyeHeightFor,
+  firingAngles,
+  nextZoom,
+  verticalFov,
+  zoomFov,
+} from './view-cs2';
 
 type Phase = 'ready' | 'running' | 'paused';
 export type CameraMode = 'follow' | 'pov' | 'free';
@@ -75,6 +97,8 @@ declare global {
       setLook: (yaw: number, pitch: number) => void;
       /** Mouse counts as under pointer lock (automation: headless pages can't lock). */
       mouse: (dx: number, dy: number) => void;
+      /** The camera's FOVs and the CS2 settings in use. */
+      view: () => { vfov: number; hfov: number; aspect: number; viewmodelVfov: number; sensitivity: number; effectiveSensitivity: number; zoom: number; raw: boolean };
       camera: (mode: CameraMode, id?: PlayerId) => void;
       /** Free camera at a Source position with these angles. */
       fly: (x: number, y: number, z: number, yaw: number, pitch: number) => void;
@@ -85,6 +109,12 @@ declare global {
       debug: () => Renderer3D;
     };
   }
+}
+
+const SETTINGS_KEY = 'cs2-sim3d-settings';
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
 }
 
 function el<T extends HTMLElement>(id: string, type: new () => T): T {
@@ -120,8 +150,15 @@ class App3D {
   private readonly fpsMeter = new RateMeter(1000);
   private readonly tpsMeter = new RateMeter(1000);
   private readonly touchOnly = isTouchOnly();
-  private readonly sensitivity: number;
-  private readonly fov: number;
+  /** CS2 settings: sensitivity, zoom_sensitivity_ratio, viewmodel_fov (the settings fields; localStorage). */
+  private sensitivity: number;
+  private zoomRatio = DEFAULT_ZOOM_RATIO;
+  private viewmodelFov = VIEWMODEL_FOV;
+  /** Scope level of the human's weapon (0 = unscoped) and the weapon it is for. */
+  private zoom = 0;
+  private zoomWeapon: string | null = null;
+  /** The camera's duck amount (0..1, view-cs2.ts duckStep). */
+  private duck = 0;
   private session: Session;
   private scene: Scene;
   private phase: Phase = 'ready';
@@ -138,6 +175,8 @@ class App3D {
   private humanShots = 0;
   private humanHits = 0;
   private eyeZ = 64;
+  private lastView: PlayerId | null = null;
+  private lastDraw: number | null = null;
   private lastFrame: number | null = null;
   private frames = 0;
   private seekResume: Phase | null = null;
@@ -145,12 +184,12 @@ class App3D {
   private cost = { sim: 0, draw: 0, render: 0, hud: 0 };
   private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
-  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number, fov: number, resolution: number) {
+  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number) {
     this.data = data;
     this.world = world;
     this.seed = seed;
-    this.sensitivity = sensitivity;
-    this.fov = fov;
+    this.sensitivity = sensitivity ?? DEFAULT_SENSITIVITY;
+    this.loadSettings(sensitivity !== null);
     const canvas = el('view', HTMLCanvasElement);
     const rgba = rgbaOf(radar);
     const art = floorArt(rgba);
@@ -166,7 +205,12 @@ class App3D {
       },
       onKey: (code) => this.onKey(code),
       onFire: () => undefined,
+      onAttack2: () => {
+        const p = this.session.human === null ? null : this.scene.pawn(this.session.human);
+        if (this.playing() && p !== null) this.setZoom(p.weapon, nextZoom(p.weapon, this.zoomWeapon === p.weapon ? this.zoom : 0));
+      },
     });
+    this.wireSettings();
     this.buttons = {
       start: el('start', HTMLButtonElement),
       pause: el('pause', HTMLButtonElement),
@@ -186,6 +230,7 @@ class App3D {
         this.look = { yaw: wrapYaw(yaw), pitch: Math.max(-89, Math.min(89, pitch)) };
       },
       mouse: (dx, dy) => this.controls.addMouse(dx, dy),
+      view: () => this.viewInfo(),
       camera: (mode, id) => {
         this.camMode = mode;
         if (id !== undefined) this.followed = id;
@@ -417,8 +462,11 @@ class App3D {
     const mouse = this.controls.takeMouse();
     const s = this.session;
     if (this.playing()) {
-      this.look = turnView(this.look, mouse.dx, mouse.dy, this.sensitivity);
-      s.setHumanInput(fpsInput(s.human as PlayerId, this.controls.controls(), this.look));
+      const p = this.scene.pawn(s.human as PlayerId);
+      if (p !== null && p.weapon !== this.zoomWeapon) this.setZoom(p.weapon, 0);
+      this.look = turnView(this.look, mouse.dx, mouse.dy, effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio));
+      // The bullets leave along the firing angles: the view plus the aim punch (zero until H2's recoil, view-cs2.ts).
+      s.setHumanInput(fpsInput(s.human as PlayerId, this.controls.controls(), firingAngles(this.look, this.aimPunch())));
     } else if (this.camMode === 'free') {
       this.look = turnView(this.look, mouse.dx, mouse.dy, this.sensitivity);
       this.freePos = flyStep(this.freePos, this.look, this.controls.controls(), dt / 1000, FREE_SPEED);
@@ -452,20 +500,25 @@ class App3D {
         if (next !== undefined && this.camMode !== 'free' && f !== null && this.scene.deaths.has(f.id) && this.scene.cur.tick - (this.scene.deaths.get(f.id) ?? 0) > 128) this.followed = next;
       }
     }
+    if (!firstPerson && this.zoom !== 0) this.setZoom('', 0);
     const viewId = firstPerson ? (human as PlayerId) : this.followed;
     const vp = this.scene.pose(viewId, alpha);
     const vo = this.scene.pawn(viewId);
     const crouch = vo?.crouching ?? false;
-    const wantEye = crouch ? 46 : 64;
-    this.eyeZ += (wantEye - this.eyeZ) * Math.min(1, 0.35);
+    if (this.lastView !== viewId) this.duck = crouch ? 1 : 0;
+    this.lastView = viewId;
+    this.duck = duckStep(this.duck, crouch, Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000));
+    this.lastDraw = now;
+    this.eyeZ = eyeHeightFor(this.duck);
     let eye: Vec3;
     let yaw: number;
     let pitch: number;
     if (firstPerson || this.camMode === 'pov') {
       eye = vp === null ? this.freePos : { x: vp.x, y: vp.y, z: vp.z + this.eyeZ };
       if (firstPerson) {
-        yaw = this.look.yaw;
-        pitch = this.look.pitch;
+        const cam = cameraAngles(this.look, this.aimPunch());
+        yaw = cam.yaw;
+        pitch = cam.pitch;
       } else {
         const prevPitch = this.scene.prev?.pawns.find((p) => p.id === viewId)?.pitch ?? vo?.pitch ?? 0;
         yaw = vp?.yaw ?? 0;
@@ -519,11 +572,12 @@ class App3D {
       eye,
       yaw,
       pitch,
-      fovDeg: this.fov,
+      fovDeg: verticalFov(firstPerson ? this.currentFov4x3() : 90),
+      viewmodelFovDeg: verticalFov(this.viewmodelFov),
       tracers,
       effects: this.scene.effects,
       bomb,
-      viewmodel: weapon === null ? null : { weapon, sinceShot: (now - this.lastHumanShotMs) / 1000 },
+      viewmodel: weapon === null || this.zoom > 0 ? null : { weapon, sinceShot: (now - this.lastHumanShotMs) / 1000 },
       nowMs: now,
     });
     const r1 = performance.now();
@@ -540,7 +594,7 @@ class App3D {
       human,
       at: { x: eye.x, y: eye.y, yaw },
       mode: this.phase === 'ready' && human === null ? 'Press Start to watch, or E to play cart' : mode,
-      crosshair: firstPerson,
+      crosshair: firstPerson && this.zoom === 0,
       hit: this.lastHit === null ? null : { ageMs: now - this.lastHit.ms, head: this.lastHit.head },
       perf: `${this.fpsMeter.rate(now).toFixed(0)} fps · ${this.tpsMeter.rate(now).toFixed(0)} ticks/s · ${this.loop.speed}×`,
       summary: over ? `${summarize(s.model, s.log()).headline}<small>Restart to watch again, or take control of cart earlier.</small>` : null,
@@ -550,6 +604,64 @@ class App3D {
     const r2 = performance.now();
     this.cost.render = this.cost.render * 0.95 + (r1 - r0) * 0.05;
     this.cost.hud = this.cost.hud * 0.95 + (r2 - r1) * 0.05;
+  }
+
+  /** The human's aim punch (degrees): zero until H2's recoil is wired in (H4). */
+  private aimPunch(): { yaw: number; pitch: number } {
+    return ZERO_PUNCH;
+  }
+
+  /** The view's FOV now (4:3 degrees): 90, or the scoped FOV of the human's weapon. */
+  private currentFov4x3(): number {
+    return this.zoomWeapon === null ? 90 : zoomFov(this.zoomWeapon, this.zoom);
+  }
+
+  private setZoom(weapon: string, level: number): void {
+    this.zoomWeapon = weapon;
+    this.zoom = level;
+    document.getElementById('scope')?.toggleAttribute('hidden', level === 0);
+  }
+
+  private viewInfo(): { vfov: number; hfov: number; aspect: number; viewmodelVfov: number; sensitivity: number; effectiveSensitivity: number; zoom: number; raw: boolean } {
+    const c = this.renderer.camera;
+    const hfov = (2 * Math.atan(Math.tan((c.fov * Math.PI) / 360) * c.aspect) * 180) / Math.PI;
+    return { vfov: c.fov, hfov, aspect: c.aspect, viewmodelVfov: this.renderer.viewmodelFov(), sensitivity: this.sensitivity, effectiveSensitivity: effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio), zoom: this.zoom, raw: this.controls.raw };
+  }
+
+  /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
+  private loadSettings(sensFromUrl: boolean): void {
+    try {
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number };
+      if (!sensFromUrl && typeof j.sensitivity === 'number') this.sensitivity = clamp(j.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX);
+      if (typeof j.zoomRatio === 'number') this.zoomRatio = clamp(j.zoomRatio, 0.01, 3);
+      if (typeof j.viewmodelFov === 'number') this.viewmodelFov = clamp(j.viewmodelFov, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX);
+    } catch {
+      // No storage (private mode): defaults.
+    }
+  }
+
+  private wireSettings(): void {
+    const field = (id: string, get: () => number, set: (v: number) => void): void => {
+      const input = document.getElementById(id);
+      if (!(input instanceof HTMLInputElement)) return;
+      input.value = String(get());
+      input.addEventListener('change', () => {
+        const v = Number(input.value);
+        if (Number.isFinite(v)) set(v);
+        input.value = String(get());
+        try {
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov }));
+        } catch {
+          // ignore
+        }
+        input.blur();
+      });
+      // Typing a value mustn't move the player.
+      input.addEventListener('keydown', (e) => e.stopPropagation());
+    };
+    field('set-sens', () => this.sensitivity, (v) => (this.sensitivity = clamp(v, SENSITIVITY_MIN, SENSITIVITY_MAX)));
+    field('set-zoom', () => this.zoomRatio, (v) => (this.zoomRatio = clamp(v, 0.01, 3)));
+    field('set-vmfov', () => this.viewmodelFov, (v) => (this.viewmodelFov = clamp(v, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX)));
   }
 
   private stats(): App3DStats {
@@ -586,13 +698,13 @@ async function boot(): Promise<void> {
     const params = new URLSearchParams(window.location.search);
     const seedParam = Number(params.get('seed') ?? '1');
     const seed = Number.isInteger(seedParam) ? seedParam : 1;
-    const sens = Number(params.get('sens') ?? String(DEFAULT_SENSITIVITY));
-    const fov = Number(params.get('fov') ?? '74');
+    const sensParam = params.get('sens');
+    const sens = sensParam === null ? NaN : Number(sensParam);
     const res = Number(params.get('res') ?? '1');
     const a = await loadAssets3d();
     const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
     const world = worldMesh(a.world3d.geometry);
-    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? sens : DEFAULT_SENSITIVITY, Number.isFinite(fov) && fov > 30 && fov < 130 ? fov : 74, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : 1);
+    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : 1);
     status.hidden = true;
   } catch (err) {
     status.textContent = `Could not start: ${err instanceof Error ? err.message : String(err)}`;

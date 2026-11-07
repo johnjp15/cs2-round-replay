@@ -11,6 +11,8 @@ export interface ControlsHooks {
   onKey(code: string): boolean;
   /** Mouse 1 went down (with pointer lock or not). */
   onFire(): void;
+  /** Mouse 2 went down (the scope). */
+  onAttack2(): void;
 }
 
 export class ControlsDom {
@@ -44,6 +46,7 @@ export class ControlsDom {
       if (b !== null && b.kind === 'hold') {
         this.held[b.control] = true;
         if (b.control === 'attack') hooks.onFire();
+        if (b.control === 'attack2') hooks.onAttack2();
       }
       if (document.pointerLockElement !== element) void this.lock();
     });
@@ -59,11 +62,29 @@ export class ControlsDom {
     });
   }
 
-  /** Ask for pointer lock (it needs a user gesture; failures are ignored: the mouse then doesn't turn the view). */
+  /** Whether the last lock got raw (unadjusted) mouse movement. */
+  raw = false;
+
+  /**
+   * Ask for pointer lock (it needs a user gesture; failures are ignored: the mouse then doesn't turn the view). First
+   * with `unadjustedMovement: true` (Chromium: raw counts, the OS pointer acceleration bypassed, like CS2's raw input),
+   * else plain (Safari and Firefox ignore or reject the option: their deltas are the OS-accelerated pointer's pixels;
+   * with acceleration off and 1:1 scaling one pixel is one count).
+   */
   async lock(): Promise<void> {
+    const el = this.element as HTMLElement & { requestPointerLock(o?: { unadjustedMovement?: boolean }): Promise<void> | void };
     try {
-      const r = this.element.requestPointerLock() as unknown;
+      const r = el.requestPointerLock({ unadjustedMovement: true }) as unknown;
       if (r instanceof Promise) await r;
+      this.raw = true;
+      return;
+    } catch {
+      // Not supported (NotSupportedError) or not allowed now: try without.
+    }
+    try {
+      const r = el.requestPointerLock() as unknown;
+      if (r instanceof Promise) await r;
+      this.raw = false;
     } catch {
       // Not allowed now (no gesture, or the user pressed Esc a moment ago).
     }

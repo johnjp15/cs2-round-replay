@@ -81,7 +81,9 @@ export interface DrawFrame {
   readonly eye: Vec3;
   readonly yaw: number;
   readonly pitch: number;
+  /** Vertical FOVs (degrees) of the world camera and the viewmodel camera (view-cs2.ts verticalFov). */
   readonly fovDeg: number;
+  readonly viewmodelFovDeg: number;
   readonly tracers: readonly DrawTracer[];
   readonly effects: readonly Effect[];
   readonly bomb: { readonly pos: Vec3; readonly planted: boolean } | null;
@@ -257,6 +259,10 @@ export class Renderer3D {
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
     this.drawnTriangles = this.renderer.info.render.triangles;
+    if (this.vmCamera.fov !== f.viewmodelFovDeg) {
+      this.vmCamera.fov = f.viewmodelFovDeg;
+      this.vmCamera.updateProjectionMatrix();
+    }
     if (f.viewmodel !== null) {
       this.vmGunMat.color.setHex(WEAPON_COLOR[f.viewmodel.weapon] ?? 0x555555);
       const kick = Math.max(0, 1 - f.viewmodel.sinceShot / 0.08);
@@ -265,6 +271,11 @@ export class Renderer3D {
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
     }
+  }
+
+  /** The viewmodel camera's vertical FOV (degrees). */
+  viewmodelFov(): number {
+    return this.vmCamera.fov;
   }
 
   private drawPawns(f: DrawFrame): void {
