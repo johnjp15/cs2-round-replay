@@ -6,7 +6,7 @@
  * render tick (fractional), so the animation is smooth and `test.render()` is exact.
  */
 import type { PawnObs } from '../../contracts/index';
-import type { VmAnim } from './pose';
+import { INSPECT_SEC, type VmAnim } from './pose';
 
 const TICKS_PER_SEC = 64;
 const NEVER = -1e9;
@@ -37,6 +37,9 @@ export class VmTracker {
   private reloadEnd: number | null = null;
   private lastShot = NEVER;
   private swingTick = NEVER;
+  private swingKind: 'slash' | 'stab' = 'slash';
+  private swingLeft = false;
+  private inspectTick = NEVER;
   private plantTick: number | null = null;
   private primed = false;
   private thrownTick = NEVER;
@@ -50,6 +53,9 @@ export class VmTracker {
     this.reloadEnd = null;
     this.lastShot = NEVER;
     this.swingTick = NEVER;
+    this.swingKind = 'slash';
+    this.swingLeft = false;
+    this.inspectTick = NEVER;
     this.plantTick = null;
     this.primed = false;
     this.thrownTick = NEVER;
@@ -71,6 +77,7 @@ export class VmTracker {
       this.reloadEnd = null;
       this.primed = false;
       this.thrownTick = NEVER;
+      this.inspectTick = NEVER;
     } else if (timers !== null && timers.deployEndTick > this.deployEnd + 1e-6 && timers.deployEndTick > tick) {
       // Re-deployed (the same weapon taken out again).
       this.deployStart = at;
@@ -91,8 +98,21 @@ export class VmTracker {
     return { primed: primedNow };
   }
 
-  swing(tick: number): void {
+  /** A knife attack at `tick` (W1: the host's swings; slashes alternate direction, as CS's m_swingLeft). */
+  swing(tick: number, kind: 'slash' | 'stab' = 'slash'): void {
+    if (kind === 'slash') this.swingLeft = this.swingKind === 'slash' && tick - this.swingTick < 64 ? !this.swingLeft : false;
     this.swingTick = tick;
+    this.swingKind = kind;
+  }
+
+  /** W1: F (+lookatweapon) at `tick`: the inspect starts (again). */
+  inspect(tick: number): void {
+    this.inspectTick = tick;
+  }
+
+  /** W1: stop an inspect (the scope, a takeover). */
+  cancelInspect(): void {
+    this.inspectTick = NEVER;
   }
 
   /** Seconds since the last swing at `tick` (rate limit). */
@@ -111,13 +131,20 @@ export class VmTracker {
     const s = (a: number): number => (rt - a) / TICKS_PER_SEC;
     const deploy = this.deployStart > NEVER && rt < this.deployEnd ? { t: s(this.deployStart), dur: (this.deployEnd - this.deployStart) / TICKS_PER_SEC } : null;
     const reload = this.reloadEnd !== null && rt < this.reloadEnd ? { t: Math.max(0, s(this.reloadStart)), dur: (this.reloadEnd - this.reloadStart) / TICKS_PER_SEC } : null;
+    // W1: an inspect plays until anything else starts after it (a shot, a swing, a deploy, a reload, a throw, the pin).
+    const i = this.inspectTick;
+    const cut = i <= NEVER || this.lastShot >= i || this.swingTick >= i || this.deployStart >= i || this.reloadStart >= i || this.thrownTick >= i || this.primed || deploy !== null || reload !== null || this.plantTick !== null;
+    const inspect = cut || s(i) >= INSPECT_SEC ? null : Math.max(0, s(i));
     return {
       weapon: this.weapon,
       sinceShot: this.lastShot > NEVER ? Math.max(0, s(this.lastShot)) : 1e6,
       cycle: cycleSec,
       reload,
       deploy,
-      swing: this.swingTick > NEVER && s(this.swingTick) < 1 ? Math.max(0, s(this.swingTick)) : null,
+      swing: this.swingTick > NEVER && s(this.swingTick) < 1.1 ? Math.max(0, s(this.swingTick)) : null,
+      swingKind: this.swingKind,
+      swingLeft: this.swingLeft,
+      inspect,
       plant: this.plantTick === null ? null : Math.max(0, s(this.plantTick)),
       primed: this.primed,
       thrown: this.thrownTick > NEVER && s(this.thrownTick) < 1 ? Math.max(0, s(this.thrownTick)) : null,
