@@ -31,6 +31,7 @@ import {
 } from '../contracts/index';
 import { RoundClock, TICK_RATE } from './clock';
 import { Divergence, liveGoal, type DivergenceState } from './divergence';
+import { HumanDuels, type DuelState } from './duels';
 import { REJOIN_TRIGGER, Rejoin, type RejoinState } from './rejoin';
 import { copyLoadouts, initialLoadouts, noteActions, noteObserve, releaseWindowTicks, type LoadoutState } from './loadout';
 import { PuppetController, PuppetTrack, roundYaw, type PuppetState } from './puppet';
@@ -124,6 +125,8 @@ export class ReplayCore implements ICore {
   readonly divergenceOn: boolean;
   /** G1: LIVE → REPLAY (null without a WalkQuery, without divergence or with `{rejoin: false}`). */
   readonly rejoin: Rejoin | null;
+  /** G5: the human's recorded duels (with divergence on; dormant while nobody plays). */
+  readonly duels: HumanDuels;
   private state: ReplayCoreState;
   /** B5: the loadout ledger (src/core/loadout.ts), for resync rewinds. In the snapshot. */
   private loadout: LoadoutState;
@@ -143,6 +146,7 @@ export class ReplayCore implements ICore {
     this.divergence = new Divergence(model, schedule, this.script.plan, tuning);
     this.divergenceOn = options === null || options.divergence;
     this.rejoin = walk === null || !this.divergenceOn || options?.rejoin === false ? null : new Rejoin(model, schedule, tuning, this.divergence, this.script, walk);
+    this.duels = new HumanDuels(model, this.script.plan, this.divergence.encounters, tuning);
     this.state = initialState();
     this.loadout = initialLoadouts(model);
   }
@@ -170,6 +174,7 @@ export class ReplayCore implements ICore {
       this.script.reset();
       this.divergence.reset();
       this.rejoin?.reset();
+      this.duels.reset();
       if (this.divergenceOn) this.divergence.setup(o, this.script);
       for (const a of this.script.blockActions(o, s.pawns)) actions.push(a);
     }
@@ -222,6 +227,8 @@ export class ReplayCore implements ICore {
           if (c !== null && obs !== undefined) c.state.yaw = roundYaw(obs.yaw);
         }
       }
+      // G5: the human's recorded duels (after this tick's switches, so a target that just went LIVE is out of it).
+      this.duels.step(o, s.pawns, this.divergence.encounters, this.divergence.state.encounters, actions);
     }
 
     this.scheduledActions(o, actions);
@@ -358,13 +365,14 @@ export class ReplayCore implements ICore {
     return out;
   }
 
-  /** B4 encounter blocks in force (the scripted hit's block_damage shooter → human, not yet lifted). */
+  /** B4 encounter blocks in force (the scripted hit's block_damage shooter → human, not yet lifted), then G5's duel blocks (human → target). */
   private standingBlocks(): StandingBlock[] {
     const out: StandingBlock[] = [];
     const st = this.divergence.state.encounters;
     this.divergence.encounters.forEach((e, i) => {
       if (st[i]?.blocked === true) out.push({ attacker: e.shooter, victim: e.victim });
     });
+    for (const b of this.duels.standingBlocks()) out.push(b);
     return out;
   }
 
@@ -406,13 +414,13 @@ export class ReplayCore implements ICore {
     const puppets: PuppetState[] = this.puppets === null ? [] : this.puppets.map((c) => c.state);
     return {
       kind: 'core',
-      data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets, script: this.script.state, divergence: this.divergence.state, loadout: this.loadout, rejoin: this.rejoin?.state ?? [] }),
+      data: toJsonValue({ seed: this.rng.seed, state: this.state, puppets, script: this.script.state, divergence: this.divergence.state, loadout: this.loadout, rejoin: this.rejoin?.state ?? [], duels: this.duels.state }),
     };
   }
 
   restore(snap: CoreSnapshot): void {
     if (snap.kind !== 'core') throw new Error('ReplayCore.restore: not a core snapshot');
-    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[]; script: ScriptState; divergence: DivergenceState; loadout?: LoadoutState; rejoin?: RejoinState[] };
+    const d = snap.data as unknown as { seed: number; state: ReplayCoreState; puppets: PuppetState[]; script: ScriptState; divergence: DivergenceState; loadout?: LoadoutState; rejoin?: RejoinState[]; duels?: DuelState[] };
     if (d.seed !== this.rng.seed) throw new Error(`ReplayCore.restore: snapshot seed ${d.seed} != core seed ${this.rng.seed}`);
     const st = d.state;
     this.state = {
@@ -440,6 +448,8 @@ export class ReplayCore implements ICore {
     this.divergence.restore(d.divergence);
     // Snapshots from before G1 have no rejoin state: LIVE pawns then start their calm clock afresh.
     this.rejoin?.restore(d.rejoin ?? []);
+    // Snapshots from before G5 have no duels: they start afresh.
+    this.duels.restore(d.duels ?? []);
     if (this.rejoin !== null) {
       for (const p of this.state.pawns) if (p.mode === 'LIVE' && !this.rejoin.state.some((r) => r.id === p.id)) this.rejoin.noteLive(p.id, p.since, p.trigger ?? 'unknown');
     }
