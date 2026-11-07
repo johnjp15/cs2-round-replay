@@ -14,13 +14,24 @@ npm run dev        # then open http://localhost:5173
 Press **Start** and the round plays exactly as recorded. **Take control of cart** (or E) at any moment and you
 play him from there: WASD moves relative to the screen (W = up on the map), the mouse aims, click fires,
 Shift walks, Ctrl or C crouches, Space jumps, R reloads, E uses, and 1–5 switch weapons; Restart (or a rewind to
-before it) is watching again. The bar under the map has Pause, Restart, speed 0.25–4×, the view toggles, Take
+before it) is watching again. Cart never fires by himself once you play him, but his recorded duels resolve like the
+tape when you shoot in them: fire at Lokier from the Apartments window and he dies on the tape's 18.80 s, while
+anywhere else your bullets are real ([`docs/core.md`](docs/core.md) "Recorded duels of the human"). The bar under the map has Pause, Restart, speed 0.25–4×, the view toggles, Take
 control of cart and the log/trace downloads (`?human=cart` plays him from the start).
 F follows cart, G shows his recorded position (the ghost), T everyone's recorded path, Tab the status
 panel; the wheel zooms, dragging pans and a double-click shows the whole map.
 On a phone you watch (there are no touch controls for playing). To serve the static build, run `npm run build && npm run preview`
 (http://localhost:4173). To try it on a phone on the same network, run `npm run dev -- --host` and open
 the Network URL it prints. Details: [`docs/app.md`](docs/app.md).
+
+## The 3D sim (H1)
+
+A second app, the same round in first person on CS2's own Mirage geometry: `npm run dev:3d`, `npm run build:3d`,
+`npm run build:single:3d` (the page for `johnjp15.github.io/cs2/sim3d/`), `npm run harness3d` (the round headless in
+the 3D engine), `npm run check:browser:3d`. It starts watching (third person, a player's eyes, or a free camera; V,
+Z / X); E takes control of cart: mouse look with CS2's sensitivity and FOV, WASD, Space, Ctrl, Shift, mouse 1 / 2,
+R, 1–5, E. Engine: [`docs/sim3d.md`](docs/sim3d.md); app: [`docs/app3d.md`](docs/app3d.md); plan:
+[`docs/sim3d-plan.md`](docs/sim3d-plan.md).
 
 ## Layout
 
@@ -29,6 +40,9 @@ the Network URL it prints. Details: [`docs/app.md`](docs/app.md).
 | `src/contracts/` | Shared types, seeded PRNG (`rng.ts`), tuning loader (`tuning.ts`). Imports nothing else from `src/`. |
 | `src/core/` | Engine-agnostic replay brain (ICore). May import only `src/contracts`. No `Date` / `Math.random`. |
 | `src/sim2d/` | 2D top-down engine/host (IHost). May import only `src/contracts`. |
+| `src/engine/` | H1+: pure CS2 mechanics any host can use (hitboxes; H2: weapons). May import only `src/contracts`. |
+| `src/sim3d/` | H1: the 3D engine/host (Sim3DHost: 3D hitscan, hitboxes, mesh sight). May import `src/contracts`, `src/engine`, `src/sim2d`. |
+| `src/app3d/`, `sim3d/index.html` | H1: the 3D page (Three.js view, first-person controls, HUD). May import anything. |
 | `src/app/` | Browser app: `Session` driver, 64 Hz loop, input mapping, canvas renderer, HUD and camera; `main.ts` is the page entry. May import anything. |
 | `index.html` | Page entry for Vite. |
 | `data/` | Round data and `tuning.json` (all tunable numbers). |

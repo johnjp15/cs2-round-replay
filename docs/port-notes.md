@@ -123,7 +123,7 @@ for tests would need:
 
 - **Pure triggers**: `damageTrigger`, `sightingTrigger`, `gunfireTrigger`, `outlivedTrigger`, `blockedTrigger` take the Observe, the modes at the start of the tick and plain data; port them as static methods. Pawns are visited in `PLAYER_IDS` order and the first trigger in table order wins; switches are applied after all pawns are checked (a cascade takes a tick).
 - **Distances and branches**: 2D `Math.Sqrt` distances and dot products only (IEEE-exact); `offCourseUnits`, `contactSlackUnits`, hearing range and the spot tolerance compare with `<=` / `>` as written. The contact's starting drift is rounded to 6 decimals (`roundNumber`) before it is stored. No trig.
-- **Ticks**: windows and delays are `secTicks` (`Math.Floor(sec * 64 + 0.5)`); the encounter's shot tick is `seenTick + max(secTicks(encounterDelaySec), max(inputLatencyTicks, actionLatencyTicks))`.
+- **Ticks**: windows and delays are `secTicks` (`Math.Floor(sec * 64 + 0.5)`); the encounter's shot tick is `seenTick + max(secTicks(encounterDelaySec), max(inputLatencyTicks, actionLatencyTicks))`, except (G5, `encounterShotTick`) when the human is on course at `seenTick` (`onCourse`: 2D distance to `RoundModel.TrackAtTick` ≤ `offCourseUnits`) and the recorded hit tick ≥ `seenTick + lead`: then the recorded hit tick.
 - **Log texts** use only integers, ids and tenths of seconds from integer tick arithmetic (`intText` = `Math.Floor(x + 0.5)`; `tenthsText(ticks)` = `Math.Floor(|ticks| * 10 / 64 + 0.5)` split into `a.b`, sign explicit). No `ToString("F1")`.
 - **Sightings**: `RoundModel.sightings[].by` is resolved from the free text by splitting the lowercase string at anything but `a-z0-9` and keeping the words that are player ids, in `PLAYER_IDS` order (`Regex.Split(by.ToLowerInvariant(), "[^a-z0-9]+")`).
 - **RDP route thinning** uses an explicit stack of index pairs (push a, best, best, b; pop b then a); the furthest point wins, on a tie the first (strict `>` against the tolerance).
@@ -205,14 +205,85 @@ for tests would need:
   within `humanSpotToleranceUnits` of the spot. At the takeover tick k: shooter dead / not REPLAY → `done`; `k >
   hitTick − actionLatencyTicks` → `fired` with `seenTick = recordedSightTick`, `shotTick = hitTick`; else suppress the
   recorded fire and aim keys (`Suppress` only pre-decides undecided ones), add the hold, and if `puppetSightTick` is set:
-  `seen`, `seenTick = puppetSightTick`, `shotTick = max(seenTick + max(secTicks(encounterDelaySec), lead), k + lead)`
+  `seen`, `seenTick = puppetSightTick`, `shotTick = max(encounterShotTick(seenTick, puppetSightOnCourse), k + lead)`
   with `lead = max(inputLatencyTicks, actionLatencyTicks)`, and the run-time engagement from k to `shotTick −
-  inputLatencyTicks`; otherwise `waiting`.
+  inputLatencyTicks`; otherwise `waiting`. G5: `puppetSightOnCourse` (bool; absent in old snapshots = false) is noted
+  with `puppetSightTick` (`onCourse` of the puppet then).
 - **Driver (the plugin's Session)**: record the takeover tick with the run (a checkpoint stores the human and the
   takeover tick next to the Core snapshot). A rewind to a checkpoint whose human is null undoes it (release, above);
   the takeover stays on the tape for a forward seek (2D only: CS2 can't seek ahead). The automatic checkpoint on the
   takeover tick is taken after it (before the step), so it keeps the human.
 
+## 3D host (H1: src/sim3d, src/engine/hitboxes.ts)
+
+What the 3D host does that the CS2 server provides natively (so the C# adapter drops it, docs/sim3d.md):
+
+| Sim3DHost | CS2 |
+| --- | --- |
+| Source movement on the collision mesh (`stepMove3d`, shared with 2D) | the engine's player movement (usercmds) |
+| per-pawn yaw + pitch from the input | usercmd view angles (`QAngle`, pitch + = down: the same convention) |
+| hitboxes (`HITBOXES`: a fixed rest pose sized to the hull) | the model's animated hitbox set |
+| 3D hitscan: eye ray, nearest of mesh and hitboxes, `bulletDamage` | `FireBullets` / `TraceAttack` with the weapon's spread, recoil and penetration |
+| `sees`: eye → head / chest / sides / legs traces on the world mesh, FOV, flash, smoke | `UTIL_TraceLine` (MASK_VISIBLE) eye to the same points, the same FOV / flash / smoke tests |
+| hearing: sound events as in 2D | game events (`player_footstep`, `weapon_fire`) |
+| the camera, FOV, sensitivity, aim punch display (src/app3d) | the client |
+
+Port care: `rayCapsule` / `raySphere` are plain + − × ÷ and sqrt in a fixed order (IEEE exact in C#); the poses use
+`Math.cos` / `Math.sin` of the yaw (use `Math.Cos` / `Math.Sin` on doubles; results can differ in the last bit
+between runtimes, which only matters for a ray grazing a capsule's surface). The Core is untouched: a run nobody plays
+gives the same acts in both hosts (tests/sim3d-golden.test.ts), so the 2D golden fixtures stay the Core's oracle.
+
+## Recorded duels of the human (src/core/duels.ts, G5)
+
+- **Plan** (`BuildDuels`, once, from the `ScriptPlan` and the encounters): for each engagement of the default human
+  (`plan.EngagementsOf(human)`, plan order) at an enemy: its fire items (same shooter and target, inside the
+  engagement), the recorded shot ticks (their `RecordedTicks`, else `ShotTicks`, sorted) and the puppet's landing ticks
+  (`ShotTicks`, sorted), the damage entries of the human on the target with `tick − inputLatencyTicks` inside the
+  engagement (the outcome), and the encounter with that target as shooter whose `damage.tick − inputLatencyTicks` is
+  inside it (the anchor). `cycleTicks = tapSpacing(cycleTicksOf(gun))` = `Math.Max(2, Math.Ceiling(64 * 60 / rpm −
+  1e-9))` (AK 7). The spot: the anchor's `spot`, else `TrackPosAt(model, human, (first + last) / 2)` (integer division
+  of the shot ticks, `Math.Floor`) with each coordinate rounded to 6 decimals.
+- **Order in the step**: after `Rejoin.Step` (modes after this tick's switches), before B3's `ScheduledActions`;
+  duels in plan order. Per duel: (re)arm; then his `shot` / `blocked_hit` events of this observe, in emission order,
+  only if the duel's block was in force (`blocked` from the previous Act); then the spray check on tick `K −
+  actionLatencyTicks`; then the scripted `damage` on `dueTick − actionLatencyTicks`; then over / the block. Action order
+  in the Act: the scheduling `log`, the `damage`, then `log` (in the duel) + `block_damage`, or `unblock_damage` + the
+  over `log`.
+- **Integer rules**: K = `hit.tick + shift`; a report at tick k (≥ `firstShotTick + shift − cycleTicks`) with `k ≤ K −
+  la` sets `aimedTick = k`, later ones schedule `dueTick = k + la`; on `k == K − la` with `aimedTick` set and
+  `lastShotTick ≥ K − cycleTicks`, `dueTick = K`. A non-lethal hit is clamped as B3's (`amount < hp ? amount : hp − 1`).
+  No floating point but the spot's distance (`Math.Sqrt` of a 2D squared distance, `≤ humanSpotToleranceUnits`).
+- **A mid-spray takeover** inherits the puppet's shots: at arming, if B3's decision of any of the duel's fire items is
+  `true`, every puppet landing tick `< k` and `≥ firstShotTick + shift − cycleTicks` sets `aimedTick` and
+  `lastShotTick` (the last such wins).
+- **State** (`DuelState`, a list in plan order, in the Core snapshot; absent = afresh): `Shift`, `FromTick`, `ToTick`,
+  `StartedTick`, `DueTick`, `AimedTick`, `LastShotTick` (nullable ints), `Blocked`, `Done` (bools), `Next`, `Shots`
+  (ints). `ReplayCore.StandingBlocks` appends the duels' blocks (human → target) after the encounters' for a resync.
+- **Log texts** (`duel cart -> lokier: …`) use ids, integers and `tenthsText` (the shift) only.
+- **CS2**: see `docs/cs2-adapter.md` (`blocked_hit` in the ObsEvent table). The plugin's `OnTakeDamage` filter is the
+  same one as for B3's blocks; for a blocked pair whose attacker is the human's pawn it also queues a `blocked_hit`
+  with the hit group, and the kill comes back as an ordinary scripted `damage` (attacker cart, `ak47`, `head`, lethal),
+  applied with the same machinery as every other scripted damage (`TakeDamage` with an AK-47 headshot, or Route 3 with
+  the `player_death` rewrite: `Headshot` true).
+
+## Weapon mechanics (src/engine/weapons, H2)
+
+What CS2 does natively vs what the module models (docs/weapons.md):
+
+| Mechanic | In CS2 (the C# Core on a server) | In the module (2D / 3D hosts) |
+| --- | --- | --- |
+| Weapon stats | `weapons.vdata` (the same file `data/weapons.json` is built from) | `parseWeaponTable`; ids map to CS2 classes via `className` (`m4a4` = `weapon_m4a1`) |
+| Fire rate, reload, deploy, zoom, burst | the weapon entity | `stepArms`; CS2 is sub-tick, the module is per tick |
+| Spread, inaccuracy, recoil, aim punch | engine, seeded by the usercmd's random seed | `fireShot` with the Core's seeded RNG; recoil tables from `m_nRecoilSeed` (`ValveUniformRandom`, NR ran1); constants in `weapons._engine` |
+| Damage, armor, hitgroups | `OnTakeDamage` on real hitboxes | `damageAfterHitgroup` (identical to sim2d) |
+| Wall penetration | engine traces with surface properties | `penetrate` with the host's `SolidQuery` (no materials on our mesh) |
+| Tagging, hit punch | engine | `applyHit` (unverified model) |
+
+The port does **not** reimplement these: the C# Core only issues inputs (aim, ATTACK, RELOAD) and reads events, so the
+module's numbers matter for the simulators and for comparing a 3D run with a CS2 run, not for the plugin. Port care if
+the module is ever transcribed: `ValveUniformRandom` uses 32-bit int maths and float32 (`Math.fround` → `float`); the
+recoil table must use float, the rest doubles; state numbers are rounded to 6 decimals like the other engines; RNG draw
+order per shot is r1, θ1, then r2, θ2 per pellet.
 ## Grenades (`src/engine/grenades`, H5; docs/grenades.md)
 
 What CS2 provides natively, so the port does not run this module on a CS2 server:

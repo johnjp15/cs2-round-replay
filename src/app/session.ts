@@ -54,7 +54,24 @@ import {
   type WalkQuery,
 } from '../contracts/index';
 import { CheckpointStore, EventSchedule, ReplayCore, RoundModel, autoCheckpointId, checkpointInterval, tickOf, type Checkpoint, type RoundClock } from '../core/index';
-import { HullWalkQuery, MapGeometry, NavMesh, NavWalkQuery, Sim2DHost, nav3dFor, VisMask, combineMeshes, decodeGeometry, navOptionsFromTuning, visOptionsFromTuning, type HostNote, type PawnState, type RosterEntry } from '../sim2d/index';
+import {
+  HullWalkQuery,
+  MapGeometry,
+  NavMesh,
+  NavWalkQuery,
+  Sim2DHost,
+  nav3dFor,
+  VisMask,
+  combineMeshes,
+  decodeGeometry,
+  navOptionsFromTuning,
+  visOptionsFromTuning,
+  type HostNote,
+  type PawnState,
+  type RosterEntry,
+  type Sim2DOptions,
+  type Sim2DVision,
+} from '../sim2d/index';
 import { weaponForSlot, type WeaponSlot } from './input';
 
 /** The pawn a human plays unless told otherwise. */
@@ -116,6 +133,30 @@ export interface CoreParts {
 export type CoreFactory = (parts: CoreParts) => ReplayCore;
 
 /**
+ * H1: the engine a Session drives: Sim2DHost's public surface (observe / apply / tick, setHuman, setHumanInput,
+ * snapshots, the debug queries). `Sim3DHost` (src/sim3d) has the same surface, so the Session's host-agnostic driver
+ * logic (checkpoints, takeover, the input tape) serves both apps unchanged.
+ */
+export type SessionHost = Pick<Sim2DHost, keyof Sim2DHost>;
+
+/** H1: what a host is built from (the arguments Sim2DHost's constructor takes). */
+export interface HostParts {
+  readonly nav: NavMesh;
+  readonly tuning: Tuning;
+  readonly roster: readonly RosterEntry[];
+  readonly options: Sim2DOptions;
+  readonly vision: Sim2DVision;
+  readonly geometry: MapGeometry | null;
+}
+
+export type HostFactory = (parts: HostParts) => SessionHost;
+
+/** The host every session uses unless told otherwise: the 2D app's Sim2DHost. */
+export function defaultHost(p: HostParts): SessionHost {
+  return new Sim2DHost(p.nav, p.tuning, p.roster, p.options, p.vision, p.geometry);
+}
+
+/**
  * The WalkQuery the app's Core uses: with 3D movement (G3) the hull sweep on the movement mesh (`HullWalkQuery`), so
  * puppets steer around the walls they actually collide with; otherwise the nav mesh's (B2). Paths are the nav's either way.
  */
@@ -151,6 +192,8 @@ export interface SessionConfig {
   readonly playable?: PlayerId | null;
   /** Builds the Core (default: defaultCore). For tests, benchmarks and Core variants. */
   readonly core?: CoreFactory;
+  /** H1: builds the engine (default: defaultHost, the 2D app's Sim2DHost; the 3D app passes Sim3DHost's). */
+  readonly host?: HostFactory;
   /**
    * B5: turn host capabilities off (they are and-ed with the host's): `{snapshot: false}` makes rewinds resync the
    * engine as on a CS2 server (tests); `{seek: false}` refuses forward seeks; `{speed: false}` the speed control.
@@ -231,7 +274,7 @@ export class Session {
   readonly model: RoundModel;
   readonly schedule: EventSchedule;
   /** For inspection (renderer, tests); drive the session through its own methods. */
-  readonly host: Sim2DHost;
+  readonly host: SessionHost;
   readonly core: ReplayCore;
   private sessionLog = new SessionLog();
   private pending: Control[] = [];
@@ -285,14 +328,15 @@ export class Session {
     this.schedule = new EventSchedule(config.round);
     const roster: RosterEntry[] = this.model.players.map((p) => ({ id: p.id, team: p.team }));
     this.geometry = config.geometry ?? null;
-    this.host = new Sim2DHost(
-      config.nav,
-      config.tuning,
+    const makeHost = config.host ?? defaultHost;
+    this.host = makeHost({
+      nav: config.nav,
+      tuning: config.tuning,
       roster,
-      { score: config.round.meta.score, roundTimeSec: config.round.meta.clock0 },
-      { mask: config.vision ?? null, seed: config.seed },
-      this.geometry,
-    );
+      options: { score: config.round.meta.score, roundTimeSec: config.round.meta.clock0 },
+      vision: { mask: config.vision ?? null, seed: config.seed },
+      geometry: this.geometry,
+    });
     this.host.setHuman(this.humanNow);
     const makeCore = config.core ?? defaultCore;
     this.core = makeCore({ model: this.model, schedule: this.schedule, tuning: config.tuning, seed: config.seed, nav: config.nav, geometry: this.geometry });
