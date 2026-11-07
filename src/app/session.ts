@@ -72,6 +72,7 @@ import {
   type Sim2DOptions,
   type Sim2DVision,
 } from '../sim2d/index';
+import { Cs2Smokes } from '../sim3d/smokes';
 import { weaponForSlot, type WeaponSlot } from './input';
 import type { SightQuery } from './scene';
 
@@ -90,6 +91,8 @@ export interface SessionData {
   readonly geometry?: MapGeometry | null;
   /** G3: `round.json` as recorded (before snapping); the same object as `round` without a 3D world. */
   readonly recorded?: RoundData;
+  /** S1: the world mesh alone (no player clips): what grenades fly through. Null without a 3D world. */
+  readonly world?: MapGeometry | null;
 }
 
 /**
@@ -114,10 +117,12 @@ export function parseSessionData(roundJson: unknown, navJson: unknown, tuningJso
   const vision = vis === null ? null : VisMask.fromJson(vis, visOptionsFromTuning(tuning.ai));
   const recorded = parseRound(roundJson);
   if (world3d === null) return { round: recorded, nav, tuning, vision, geometry: null, recorded };
-  const geometry = new MapGeometry(combineMeshes(decodeGeometry(world3d.geometry), decodeGeometry(world3d.clips)));
+  const worldMesh = decodeGeometry(world3d.geometry);
+  const geometry = new MapGeometry(combineMeshes(worldMesh, decodeGeometry(world3d.clips)));
+  const world = new MapGeometry(worldMesh);
   // Paths (the LIVE AI, G1's pathLength) only through portals a hull can cross on the CS2 mesh.
   const nav3d = nav.with3d(nav3dFor(geometry, tuning.movement.stepSize));
-  return { round: applyTracks3d(recorded, parseTracks3d(world3d.tracks)), nav: nav3d, tuning, vision, geometry, recorded };
+  return { round: applyTracks3d(recorded, parseTracks3d(world3d.tracks)), nav: nav3d, tuning, vision, geometry, recorded, world };
 }
 
 /** What a Core is built from. */
@@ -148,13 +153,18 @@ export interface HostParts {
   readonly options: Sim2DOptions;
   readonly vision: Sim2DVision;
   readonly geometry: MapGeometry | null;
+  /** S1: the world mesh without player clips (grenades), or null: then the movement mesh. */
+  readonly world?: MapGeometry | null;
 }
 
 export type HostFactory = (parts: HostParts) => SessionHost;
 
 /** The host every session uses unless told otherwise: the 2D app's Sim2DHost. */
 export function defaultHost(p: HostParts): SessionHost {
-  return new Sim2DHost(p.nav, p.tuning, p.roster, p.options, p.vision, p.geometry);
+  // S1: with the CS2 mesh, smokes fly and bloom on the CS2 grenade engine (src/sim3d/smokes.ts), as in the 3D app.
+  const g = p.world ?? p.geometry;
+  const smokes = g === null ? null : new Cs2Smokes(g, p.tuning.grenades.cs2, p.tuning.damage.eyeHeight, p.tuning.damage.crouchEyeHeight);
+  return new Sim2DHost(p.nav, p.tuning, p.roster, p.options, p.vision, p.geometry, smokes);
 }
 
 /**
@@ -181,6 +191,8 @@ export interface SessionConfig {
   readonly vision?: VisMask | null;
   /** G3: the movement mesh for 3D movement (SessionData.geometry); without it (or null) the nav's 2D movement. */
   readonly geometry?: MapGeometry | null;
+  /** S1: the world mesh without clips (SessionData.world), for grenades; default: the movement mesh. */
+  readonly world?: MapGeometry | null;
   /**
    * The pawn the human plays from the start: `cart` by default, or null to watch (all ten pawns replay until the
    * player takes control of `playable`, G4).
@@ -337,6 +349,7 @@ export class Session {
       options: { score: config.round.meta.score, roundTimeSec: config.round.meta.clock0 },
       vision: { mask: config.vision ?? null, seed: config.seed },
       geometry: this.geometry,
+      world: config.world ?? null,
     });
     this.host.setHuman(this.humanNow);
     const makeCore = config.core ?? defaultCore;

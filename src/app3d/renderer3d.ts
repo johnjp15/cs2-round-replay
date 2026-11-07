@@ -27,6 +27,8 @@ import {
   LinearFilter,
   LineBasicMaterial,
   LineSegments,
+  InstancedMesh,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   NoColorSpace,
@@ -153,6 +155,9 @@ export class Renderer3D {
   private readonly tracerPos = new Float32Array(MAX_TRACERS * 6);
   private readonly tracerCol = new Float32Array(MAX_TRACERS * 6);
   private readonly smokes: Mesh[] = [];
+  /** S1: the volumetric smokes' voxels (one instanced puff per voxel), grown as needed. */
+  private smokeCells: InstancedMesh | null = null;
+  private readonly cellMatrix = new Matrix4();
   private readonly fires: Mesh[] = [];
   private readonly nades: Mesh[] = [];
   private readonly bomb: Mesh;
@@ -386,18 +391,22 @@ export class Renderer3D {
     let ns = 0;
     let nf = 0;
     let nn = 0;
+    let nc = 0;
     for (const e of effects) {
-      if (e.phase === 'smoke') ns++;
+      if (e.phase === 'smoke' && e.cells !== undefined) nc += e.cells.length;
+      else if (e.phase === 'smoke') ns++;
       else if (e.phase === 'fire') nf++;
       else if (e.phase === 'flying') nn++;
     }
     this.pool(this.smokes, () => new Mesh(new SphereGeometry(1, 16, 10), new MeshBasicMaterial({ color: 0xc9cfd4, transparent: true, opacity: 0.93 })), ns);
     this.pool(this.fires, () => new Mesh(new CylinderGeometry(1, 1, 6, 20), new MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.85 })), nf);
     this.pool(this.nades, () => new Mesh(new SphereGeometry(3, 8, 6), new MeshBasicMaterial({ color: 0x3a4a2a })), nn);
+    this.drawSmokeCells(effects, nc);
     let is = 0;
     let fi = 0;
     let ni = 0;
     for (const e of effects) {
+      if (e.phase === 'smoke' && e.cells !== undefined) continue;
       if (e.phase === 'smoke') {
         const m = this.smokes[is++] as Mesh;
         m.position.set(e.pos.x, e.pos.z + e.radius * 0.45, -e.pos.y);
@@ -412,5 +421,42 @@ export class Renderer3D {
         (this.nades[ni++] as Mesh).position.set(e.pos.x, e.pos.z, -e.pos.y);
       }
     }
+  }
+
+  /**
+   * S1: a volumetric smoke (the CS2 engine's flood-filled voxels, docs/grenades.md) as one grey puff per voxel, sized
+   * by its density: puffs swell in as the cloud grows (cost distance over 1.2 s) and shrink away in the 2 s fade, so the
+   * cloud fills the room it popped in and stops at walls, as the engine's sight test does.
+   */
+  private drawSmokeCells(effects: readonly Effect[], n: number): void {
+    if (n === 0) {
+      if (this.smokeCells !== null) this.smokeCells.count = 0;
+      return;
+    }
+    if (this.smokeCells === null || this.smokeCells.instanceMatrix.count < n) {
+      if (this.smokeCells !== null) {
+        this.scene.remove(this.smokeCells);
+        this.smokeCells.dispose();
+      }
+      const cap = Math.max(1024, 1 << Math.ceil(Math.log2(n)));
+      this.smokeCells = new InstancedMesh(new SphereGeometry(1, 8, 6), new MeshBasicMaterial({ color: 0xc9cfd4, transparent: true, opacity: 0.92 }), cap);
+      this.smokeCells.frustumCulled = false;
+      this.scene.add(this.smokeCells);
+    }
+    const im = this.smokeCells;
+    const m = this.cellMatrix;
+    let k = 0;
+    for (const e of effects) {
+      if (e.phase !== 'smoke' || e.cells === undefined) continue;
+      const half = (e.cellSize ?? 20) * 0.78;
+      for (const c of e.cells) {
+        const r = half * (0.35 + 0.65 * Math.min(1, Math.max(0, c.d)));
+        m.makeScale(r, r, r);
+        m.setPosition(c.x, c.z, -c.y);
+        im.setMatrixAt(k++, m);
+      }
+    }
+    im.count = k;
+    im.instanceMatrix.needsUpdate = true;
   }
 }
