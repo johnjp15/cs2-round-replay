@@ -32,11 +32,12 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
 - **HUD**: score and round clock (the bomb timer once planted, red; green while defusing), the bomb line (carrier,
   planted, who is defusing and how long is left, defused), the kill feed, the radar minimap (the CS2 radar around the
   camera, every pawn as a dot, the view cone), the team panel (HP bar, mode: REPLAY / LIVE / YOU), HP / armor and
-  weapon / ammo of the pawn being viewed, the mode line, fps and ticks/s, and the end-of-round summary line 2 s after
-  the round end. While spectating: the spectator panel and an edge vignette (below).
+  weapon / ammo of the pawn being viewed, the mode line, the headroom meter (Performance, below), and the
+  end-of-round summary line 2 s after the round end. While spectating: the spectator panel and an edge vignette (below).
 - **Bar**: Start, Pause, Restart, Take control of cart (E), Camera (V), Radar (CS2 rules / show everyone), speed
-  0.25–4×, and the settings (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov, and **Recoil tracking**; these
-  and the radar toggle are kept in localStorage, `cs2-sim3d-settings`).
+  0.25–4×, the settings (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov, and **Recoil tracking**), and FPS
+  limit, Res (render scale) and Low latency (Performance, below). These and the radar toggle are kept in localStorage,
+  `cs2-sim3d-settings`.
 
 ## Controls
 
@@ -225,6 +226,95 @@ renders twice in two browsers and compares: identical).
 Example: `const t = window.__cs2sim3d.test; t.freeze(true); t.seekTick(1184); t.eyes('cart'); t.render();` then
 screenshot `#view`. The other hooks (`stats`, `session`, `takeControl`, `aimAt`, `mouse`, `camera`, `fly`, `seek`,
 `view`, `summary`) are the browser check's.
+
+## Performance (P1)
+
+The goal is CS2-like smoothness on an Apple M-series Mac: **at most 2 ms of main-thread time per frame** (500+ fps
+capability), **at most 0.5 ms per sim tick**, and the mouse applied to the view at render time from the newest input.
+
+**The frame loop** (`frame-driver.ts`, the **FPS** setting):
+
+- **Uncapped** (the default): frames run back to back, each in its own task. It uses MessageChannel, so there's no
+  4 ms timer clamp, and input and rendering still happen between frames. It runs as fast as the main thread allows
+  and keeps one CPU core busy, like an uncapped game.
+- **60 / 120 / 144 / 240 / 360 / 500 / Custom** (20–1000): paced to that rate. The loop sleeps until about 1.5 ms
+  before the frame is due, then spins on tasks. If it falls more than one frame behind it drops that debt rather
+  than bursting to catch up.
+- **VSync**: `requestAnimationFrame`, one frame per display refresh. It uses the least power.
+- A hidden tab always falls back to rAF, which the browser stops, so a background tab doesn't burn a core.
+
+**The browser realities:**
+
+- A browser shows at most one frame per display refresh. The compositor presents the newest frame at each vsync
+  and drops the rest. So at "2400 fps uncapped" on a 120 Hz display you still *see* 120 frames a second, but each
+  of them was drawn from mouse input at most ~0.4 ms old instead of up to a whole refresh old. That's the
+  latency win, the same reason CS2 players run uncapped.
+- **Low latency** (`desynchronized: true` on the WebGL context; reloads the page) lets Chrome put the canvas on
+  screen without waiting for the compositor. Latency is lower, but frames may tear. Safari and Firefox ignore it;
+  the setting's tooltip says whether it is active.
+- The sim is the same in every mode. `FixedLoop` (src/app/loop.ts) runs the 64 Hz ticks that the elapsed time owes,
+  so 256 ticks a second at 4×, whatever the frame rate.
+
+**Input:**
+
+- Mouse movement comes from `pointerrawupdate` where the browser has it (Chromium on https or localhost), otherwise
+  from `mousemove`. Either way it is under pointer lock with raw counts in Chrome (`unadjustedMovement`).
+- `pointerrawupdate` fires at the mouse's own rate rather than once per display frame.
+- Each frame takes the counts accumulated since the previous frame, turns the view, sends the human's input to the
+  sim, and draws with that view. The camera never waits for a 64 Hz tick.
+
+**The meter** (the HUD's perf line, updated 4 times a second):
+
+`1.60 ms · 625 fps-eq · 2400 fps uncapped · display 120 Hz (120 shown) · 64 ticks/s · 1×`
+
+| field | what it means |
+| --- | --- |
+| `1.60 ms` | The median main-thread time of the page's own frame work, over the last 600 frames: input, sim ticks, scene, Three.js render calls, HUD. The browser's compositing and the GPU are not in it. |
+| `625 fps-eq` | 1000 / that time: the frame rate this machine's main thread could sustain if nothing capped it. This is the "500+ fps" number. |
+| `2400 fps uncapped` | The rate the loop actually ran over the last second, and its limit mode. |
+| `display 120 Hz (120 shown)` | The display's refresh, measured from rAF intervals, and the most frames it can show: the lower of the loop rate and the refresh. This is the vsync cap, made visible. |
+
+**The renderer** (`renderer3d.ts`):
+
+- Unlit, baked colours: `MeshBasicMaterial`, colours per vertex. No shadows, no post-processing, no MSAA.
+- An opaque WebGL2 context with `powerPreference: 'high-performance'`.
+- The device pixel ratio is capped at 1.5, times **Res** (0.25–2).
+- The static world is two draw calls: the tiles of world-mesh.ts are joined once at start-up. ~73k triangles are
+  trivial for any GPU, and the 40 culled per-tile draws cost more CPU than they saved. Nothing is uploaded per frame
+  except the tracer buffer, and only while there are tracers.
+- Pawns and effects come from fixed pools.
+- No per-frame allocations in the render path.
+- The HUD's DOM is updated at most once per sim tick or every 15.6 ms, and only nodes whose text changed are
+  written (hud3d.ts). The minimap is redrawn at 10 Hz.
+
+**The summary at the round end** (src/app/run-entries.ts, both apps):
+
+- `summarize(model, log)` takes ~150–250 ms on a whole round. About 90 % of that is parsing the session log's JSON
+  lines.
+- The 3D page used to call it on every frame from 2 s after the round end: 12 fps-equivalent and ~9 MB of garbage a
+  frame (PR #32).
+- Now the log is parsed a few lines per frame (2 ms budget) once the round is over, and the summary is computed
+  once per (round end, deaths) on the parsed entries.
+
+**The bench** (`?bench=1`, `bench3d.ts`; `npm run build:3d && npm run bench:3d`, Playwright on port 4182, one page
+load per scenario):
+
+- **Output:** per-phase p50 / p95 / p99 frame times, the fps-equivalent, the sim's ms per tick, draw calls and JS
+  heap allocated per frame.
+- **Scenarios:**
+  - `watch-1x-raf`: the vsync loop.
+  - `watch-1x-loop`: the page's own uncapped driver.
+  - `watch-{1,4}x-uncapped` and `fp-1x-uncapped`: frames back to back from the bench, with a mouse sweep in first
+    person.
+  - `watch-1x-480hz`: a synthetic 480 Hz clock, so many frames per tick, which is what an uncapped loop does on a
+    fast machine.
+  - `inround-5s-120hz` and `postend-5s-120hz`: 5 s of round time at a synthetic 120 Hz before and after
+    `round_end`, the round-end regression.
+- **Opening it in Chrome or Safari** on a Mac (`…/sim3d/?bench=1`) runs it there and shows the table over the view.
+- **`--dir <build>`** benches another build, for before/after comparisons.
+- **Committed results:** docs/perf/.
+- **In the sandbox** WebGL is software (lavapipe) on two shared cores, usually with other agents' test suites on
+  them. There the phase times are the numbers to compare. The "ran fps" there is bounded by the software GPU.
 
 ## Browser check
 
