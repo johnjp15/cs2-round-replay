@@ -17,6 +17,8 @@ import { PLAYER_IDS, SessionLog, canonicalize, replay, stableStringify, type Dam
 import { ReplayCore, tickOf } from '../src/core/index';
 import { walkQueryOf } from '../src/app/index';
 import { FOLLOW_SCRIPT, playScript } from '../tools/follow-script';
+import { checkSees, clearAimPoints } from '../tools/sight-check';
+import type { MapGeometry } from '../src/sim2d/index';
 import { NO_HUMAN, ROOT, coreLogs, deaths, loadHarnessData, runHarness, type HarnessRun } from '../tools/harness';
 import { HumanBot, ScenarioError, formatTimeline, liveSwitches, loadScenario, parseScenario, rejoins, timeline, type TimelineEvent } from '../tools/human-bot';
 
@@ -31,13 +33,45 @@ interface ScenarioRun {
   readonly tl: readonly TimelineEvent[];
 }
 
+/** Every scenario run of this file, for the G6 checks at the end. */
+const played: { name: string; run: HarnessRun }[] = [];
+
 function play(name: string): ScenarioRun {
   const s = loadScenario(`${ROOT}/fixtures/scenarios/${name}.json`);
   const bot = HumanBot.fromScenario(data, s);
   const run = runHarness(data, { human: s.human, driver: bot, lastTick: s.until === 'end' ? 'end' : tickOf(s.until), seed: s.seed, takeover: s.takeover === null ? null : tickOf(s.takeover) });
   const tl = timeline(run.entries);
   console.log(`[scenario ${name}] ${s.description}\n${formatTimeline(tl)}\n`);
+  played.push({ name, run });
   return { run, bot, tl };
+}
+
+/**
+ * G6: engine bullet hits whose segment (the shooter's eye to where the ray enters the victim's circle, at the hit band's
+ * height; positions, yaw and posture as the observe of the hit reports them) crosses a wall of the CS2 mesh: none.
+ */
+function hitsThroughWalls(run: HarnessRun): string[] {
+  const g = data.geometry as MapGeometry;
+  const d = tuning.damage;
+  const out: string[] = [];
+  for (const e of run.entries) {
+    for (const ev of e.observe.events) {
+      if (ev.type !== 'damage' || ev.scripted || ev.attacker === null || ev.weapon === null || tuning.weapons[ev.weapon] === undefined) continue;
+      const a = pawnAt(e, ev.attacker);
+      const v = pawnAt(e, ev.victim);
+      const rad = (a.yaw * Math.PI) / 180;
+      const cx = v.pos.x - a.pos.x;
+      const cy = v.pos.y - a.pos.y;
+      const along = cx * Math.cos(rad) + cy * Math.sin(rad);
+      const perp2 = Math.max(0, cx * cx + cy * cy - along * along);
+      const enter = cx * cx + cy * cy <= d.pawnRadius * d.pawnRadius ? 0 : along - Math.sqrt(Math.max(0, d.pawnRadius * d.pawnRadius - perp2));
+      const band = (d.bandHeights[ev.hitgroup] ?? 0) * (v.crouching ? d.crouchEyeHeight / d.eyeHeight : 1);
+      const eye = a.pos.z + (a.crouching ? d.crouchEyeHeight : d.eyeHeight);
+      const f = g.traceSight(a.pos.x, a.pos.y, eye, a.pos.x + Math.cos(rad) * enter, a.pos.y + Math.sin(rad) * enter, v.pos.z + band);
+      if (f < 1) out.push(`${e.observe.tick} ${ev.attacker}->${ev.victim} ${ev.weapon} ${ev.hitgroup}`);
+    }
+  }
+  return out;
 }
 
 const pawnAt = (e: LogEntry, id: PlayerId): Observe['pawns'][number] => e.observe.pawns.find((p) => p.id === id) as Observe['pawns'][number];
@@ -209,6 +243,12 @@ describe('1. no-op guard', () => {
     // Lokier saw cart earlier too (10.9 s, down the corridor from Truck), with cart on course: no divergence.
     expect(run.entries.some((e) => e.observe.tick < 800 && pawnAt(e, 'lokier').sees.includes('cart'))).toBe(true);
     expectUntouchedReplay(run);
+    // G6: the window duel is in sight on the CS2 mesh (the duel tracks, docs/vision.md "Recorded duels"): the encounter
+    // fires at the window, and cart's kill goes through the window, not a wall. No false sighting, no hit through a wall.
+    expect(seen).toBeGreaterThan(1117);
+    expect(seen).toBeLessThan(1117 + Math.round(tuning.replay.encounterDelaySec * 64));
+    expect(checkSees(run.entries, data.geometry as MapGeometry, tuning).blocked).toEqual([]);
+    expect(hitsThroughWalls(run)).toEqual([]);
   });
 });
 
@@ -233,9 +273,9 @@ describe('2. cart kills Lokier about 3 s late', () => {
     expect((run.entries[seen + delay] as LogEntry).observe.events.some((e) => e.type === 'shot' && e.shooter === 'lokier')).toBe(true);
     const kill = deaths(run.entries).find((d) => d.victim === 'lokier');
     expect(kill).toMatchObject({ attacker: 'cart' });
-    // G5: the kill is the recorded duel's (scripted), on the recorded kill's tick shifted with the encounter's hit
-    // (18.80 s + 2.64 s); before G5 his real headshot killed Lokier one tick earlier.
-    expect(damages(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ scripted: true, attacker: 'cart', hitgroup: 'head', tick: LOKIER_DEATH + (seen + delay - 1184) });
+    // G6: his peek spot is in sight of Lokier through the window on the CS2 mesh, so his real headshot kills him (21.42 s)
+    // with no recorded duel needed (G5 alone: the duel's scripted kill at 18.80 s + 2.64 s, the old spot behind the sill).
+    expect(damages(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ scripted: false, attacker: 'cart', hitgroup: 'head' });
     const late = ((kill?.tick ?? 0) - LOKIER_DEATH) / 64;
     console.log(`[lokier-late] seen ${seen}, scripted hit ${seen + delay}, kill ${kill?.tick} (${late.toFixed(2)} s after the recorded 18.80 s)`);
     expect(late).toBeGreaterThan(2);
@@ -410,19 +450,21 @@ describe('6. cart dies early', () => {
     console.log(`[cart-dies] encounter seen ${seen}, scripted hit ${seen + delay}, lokier LIVE ${lk?.tick} (${lk?.text}), cart killed at ${death?.tick}`);
   });
 
-  it('G1: donk (who kills Lokier) and zwomp (who heard it) rejoin; eradicate, saved by Lokier’s early death, has no tape and stays LIVE', () => {
-    // G3: barely too: on his snapped CS2 track he sees the LIVE Lokier from the Apartments at 10.7 s and is back on
-    // his tape 1.3 s later.
-    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['barely', 'donk', 'zwomp']);
-    expect(switches(run).find((s) => s.id === 'eradicate')).toMatchObject({ trigger: 'outlived' });
-    // So barely's kill of Zwomp and sp4rtan's of donk are the tape's again (B4 alone: barely killed a LIVE zwomp at
-    // 31.09 s and donk killed sp4rtan at 53.19 s); then the LIVE eradicate meets sp4rtan on B and wins: T elimination.
+  it('G1/G6: eradicate (who heard the shot) and Lokier rejoin, and Lokier kills eradicate on the tape’s tick; barely kills the outlived Lokier and rejoins', () => {
+    // G6: on the CS2 mesh nobody sees through the Apartments. Before G6, donk killed the LIVE Lokier at 11.27 s with an
+    // AWP from Back Alley through the building (John's report), which saved eradicate and ended T elimination 11 – 16.
+    expect(deaths(run.entries).some((d) => d.attacker === 'donk' && d.victim === 'lokier')).toBe(false);
+    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['eradicate', 'lokier', 'barely']);
+    expect(switches(run).find((s) => s.id === 'eradicate')).toMatchObject({ trigger: 'gunfire' });
     const ticks = deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim]);
-    expect(ticks).toContainEqual([2829, 'barely', 'zwomp']);
-    // G3: sp4rtan meets the LIVE eradicate on B earlier (49.7 s) on CS2 Mirage, so his donk kill is a LIVE one 11
-    // ticks before the tape's 3222, and eradicate kills him right after.
-    expect(ticks).toContainEqual([3211, 'sp4rtan', 'donk']);
-    expect(deaths(run.entries).find((d) => d.victim === 'sp4rtan')).toMatchObject({ attacker: 'eradicate' });
+    // Both back on their tracks (pass 5 keeps the duel in sight there), the recorded kill is the tape's again.
+    expect(ticks).toContainEqual([816, 'lokier', 'eradicate']);
+    // cart, who killed Lokier on the tape, is dead: Lokier outlives his recording, barely kills him; the rest is the tape.
+    const lk = switches(run).filter((s) => s.id === 'lokier');
+    expect(lk.map((s) => s.trigger)).toEqual(['sighting', 'outlived']);
+    expect(lk[1]?.tick).toBe(LOKIER_DEATH + GRACE);
+    expect(deaths(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ attacker: 'barely' });
+    expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER);
   });
 
   it('the round continues and every untouched puppet still replays', () => {
@@ -433,7 +475,8 @@ describe('6. cart dies early', () => {
     // sp4rtan's kill of snarlbot, barely's plant.
     const ticks = deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim]);
     for (const k of [[32, 'snarlbot', 'incredibad'], [794, 'snarlbot', 'snakelore'], [1142, 'sp4rtan', 'snarlbot']]) expect(ticks).toContainEqual(k);
-    expect(run.entries.some((e) => e.observe.tick === 1761 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
+    // G6: barely's plant is 7 ticks late (1768, the tape's 1761), as in never-peeks: he went LIVE for the outlived Lokier.
+    expect(run.entries.some((e) => e.observe.tick === 1768 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
     expectUntouchedReplay(run);
   });
 });
@@ -480,13 +523,15 @@ describe('8. smoke on Lokier’s angle', () => {
   const { run } = play('smoke-window');
 
   it('Lokier’s scheduled shot waits until cart is actually visible', () => {
-    const spot = { x: -1764, y: 800 };
+    const spot = run.core.divergence.encounters[0]?.spot as { x: number; y: number };
     const tol = tuning.replay.humanSpotToleranceUnits;
     // cart throws a smoke, and stands at his recorded spot at the recorded hit (18.50 s), unseen by Lokier.
     expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'sound' && ev.kind === 'grenade' && ev.source === 'cart' && e.observe.tick > 15 * 64))).toBe(true);
     const atSpot = run.entries.filter((e) => e.observe.tick >= 1150 && e.observe.tick <= 1250 && dist(pawnAt(e, 'cart').pos, spot) <= tol);
     expect(atSpot.length).toBeGreaterThan(50);
     for (const e of atSpot) expect(pawnAt(e, 'lokier').sees).not.toContain('cart');
+    // G6: it is the smoke that hides him: at the window, on the CS2 mesh, the two would see each other.
+    for (const e of atSpot.filter((x) => x.observe.tick % 16 === 0 && dist(pawnAt(x, 'cart').pos, { x: -1712, y: 700 }) <= 24)) expect(clearAimPoints(data.geometry as MapGeometry, tuning, pawnAt(e, 'lokier'), pawnAt(e, 'cart')).length).toBeGreaterThan(0);
     // The encounter starts on the first tick Lokier sees cart at the spot, the hit lands encounterDelaySec later.
     const seen = seenTick(run) as number;
     const firstSeen = run.entries.find((e) => e.observe.tick > 1100 && pawnAt(e, 'lokier').sees.includes('cart') && dist(pawnAt(e, 'cart').pos, spot) <= tol)?.observe.tick;
@@ -538,7 +583,8 @@ describe('10. cart misses Lokier at the window and hides in Shop (G1)', () => {
     // G5: he is in the recorded duel, but none of his shots would hit Lokier, so nothing is forced: Lokier lives.
     expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'blocked_hit'))).toBe(false);
     expect(coreLogs(run.entries).filter((l) => l.text.startsWith('duel cart -> lokier')).map((l) => l.text)).toEqual([
-      'duel cart -> lokier: in the recorded duel from tick 1126 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203',
+      // G6: from 1138 (1126 before): Lokier first sees him at the window on the CS2 mesh then.
+      'duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203',
       'duel cart -> lokier: over at tick 1217, the recorded duel is over; 0 would-hit shots blocked',
     ]);
     expect(switches(run).find((s) => s.id === 'lokier')).toMatchObject({ tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });
@@ -553,5 +599,25 @@ describe('10. cart misses Lokier at the window and hides in Shop (G1)', () => {
     expect(dist(pawnAt(last, 'cart').pos, { x: -2360, y: -642 })).toBeLessThan(48);
     expectRoundEndByRules(run);
     expectUntouchedReplay(run);
+  });
+});
+
+describe('G6: sight and bullets on the CS2 mesh, in the golden master and every scenario', () => {
+  it('no sees entry has every aim point blocked by the mesh, and no engine bullet hits through a wall (printed)', () => {
+    const g = data.geometry as MapGeometry;
+    expect(played.length).toBeGreaterThanOrEqual(10);
+    for (const { name, run } of [{ name: 'golden', run: golden }, ...played]) {
+      const c = checkSees(run.entries, g, tuning);
+      const walls = hitsThroughWalls(run);
+      console.log(`[G6 ${name}] ${c.entries} sees entries (${c.enemyEntries} enemy), ${c.blocked.length} with every aim point blocked; ${c.enemyEyeBlocked} enemy entries seen past the eye line; engine bullet hits through walls: ${walls.length}`);
+      expect([name, c.blocked.slice(0, 5)]).toEqual([name, []]);
+      expect([name, walls]).toEqual([name, []]);
+    }
+  });
+
+  it("John's case (cart-dies): donk never hits Lokier, and nobody is shot from across the Apartments", () => {
+    const run = (played.find((p) => p.name === 'cart-dies') as { run: HarnessRun }).run;
+    expect(damages(run.entries).filter((d) => d.attacker === 'donk' && d.victim === 'lokier')).toEqual([]);
+    expect(run.entries.some((e) => e.observe.tick > 0 && pawnAt(e, 'donk').sees.includes('lokier') && pawnAt(e, 'donk').pos.x > -900)).toBe(false);
   });
 });

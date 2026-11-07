@@ -3,8 +3,9 @@
  * (fixtures/scripts/cart-follows-recording.json) into Apartments and to the window over B; then he stops, aims at
  * Lokier's head hitbox (yaw and pitch from his eye to the head's centre) and fires one AK-47 bullet.
  *
- * - Aimed at the head where the line is open: the bullet enters the head hitbox and does the AK-47's headshot damage
- *   for the distance and Lokier's armor (the CS damage math, src/sim2d/weapons.ts bulletDamage).
+ * - Aimed at the head where the line is open: the bullet enters the head hitbox (an AK-47 headshot that kills, by the
+ *   CS damage math, src/sim2d/weapons.ts bulletDamage); G6: the window opens inside cart's recorded duel with Lokier
+ *   (G5), so the engine reports it as a blocked hit and the duel lands the tape's kill.
  * - The same shot 10° off in yaw misses everyone.
  * - Aimed at Lokier's head while the window wall is between them: the wall stops the bullet; no damage.
  *
@@ -83,7 +84,7 @@ function lineToHead(from: number, to: number, open: boolean): number {
 }
 
 describe('3D aim (H1)', () => {
-  const OPEN = lineToHead(1180, 1400, true);
+  const OPEN = lineToHead(1150, 1400, true);
   const run = playTo(OPEN);
 
   it('aimed at Lokier’s head through the window: the head hitbox, AK-47 headshot damage', () => {
@@ -98,11 +99,12 @@ describe('3D aim (H1)', () => {
     const gun = gunStats('ak47', data.tuning);
     if (gun === null || lokier === null) throw new Error('no ak47 / lokier');
     const want = bulletDamage(gun, shot.distance, 'head', lokier.armor, lokier.helmet, data.tuning.damage);
-    const dmg = events.find((e) => e.type === 'damage' && e.attacker === 'cart');
-    expect(dmg).toEqual({ type: 'damage', attacker: 'cart', victim: 'lokier', amount: Math.min(lokier.hp, want.health), armor: Math.min(lokier.armor, want.armor), weapon: 'ak47', hitgroup: 'head', scripted: false });
     // An AK-47 headshot kills from full HP (36 × 4, with or without a helmet).
     expect(want.health).toBeGreaterThanOrEqual(100);
-    expect(events.some((e) => e.type === 'death' && e.victim === 'lokier' && e.headshot)).toBe(true);
+    // G6: on the CS2 mesh the window opens at 17.97 s, inside cart's recorded duel with Lokier (G5, docs/core.md): the
+    // engine blocks the bullet's damage and reports where it would have hit (the duel's outcome is the tape's kill).
+    expect(events.filter((e) => e.type === 'damage' && e.attacker === 'cart')).toEqual([]);
+    expect(events.filter((e) => e.type === 'blocked_hit')).toEqual([{ type: 'blocked_hit', attacker: 'cart', victim: 'lokier', weapon: 'ak47', hitgroup: 'head' }]);
   });
 
   it('the same shot 10° off misses', () => {

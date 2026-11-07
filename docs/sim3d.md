@@ -14,9 +14,9 @@ factory (`SessionConfig.host`, default `defaultHost` = Sim2DHost; `SessionHost` 
 | Movement | Source movement on the CS2 collision mesh (world + player clips): `stepMove3d`, pawn collision with `HullClamp` | `src/sim2d/movement.ts`, `collision.ts` (G3), as Sim2DHost with a mesh |
 | View angles | per pawn `yaw` and `pitch` (MoveState; Source: pitch positive = down) from the Core's, the AI's or the human's input | as 2D (2D used pitch only to pick a band) |
 | Bullets | **3D hitscan**: a ray from the eye along the view direction, nearest of the world mesh and the hitboxes; hitgroup = the hitbox's; CS damage (`bulletDamage`) | new: `src/sim3d/hitscan.ts`, `src/engine/hitboxes.ts` |
-| Sight (`sees`) | eye → the target's head, chest, both sides, legs on the CS2 **world** mesh (no player clips), FOV, flash, smoke | new: `src/sim3d/sight.ts` (G6's MeshSight idea) |
+| Sight (`sees`), guard spot, grenade effects | G6's `MeshSight` on the CS2 **world** mesh (no player clips): eye → the target's head, chest, both sides, legs; FOV, flash, smoke (`computeSees`) | `src/sim2d/mesh-sight.ts`, `vision.ts`: the same implementation as Sim2DHost (H1's `MeshSight3` was removed with G6) |
 | Weapons, grenades, bomb, round rules, hearing | unchanged | `src/sim2d/weapons.ts`, `grenades.ts`, `bomb.ts`, `round.ts` |
-| LIVE AI | the 2D AI on the Mirage 2D nav (its line-of-sight queries on the 2D sight mask; `sees` from the 3D sight) | `src/sim2d/ai.ts` (H3 makes it generic on the CS2 nav) |
+| LIVE AI | the 2D AI on the Mirage 2D nav (`sees` and its guard-spot test on MeshSight, as in 2D) | `src/sim2d/ai.ts` (H3 makes it generic on the CS2 nav) |
 | Puppets, scripted damage, snaps, teleports | unchanged (the same snapped tracks, input plans and snaps) | the Core |
 
 Its public surface is Sim2DHost's plus `shots()` (the bullets of the last tick: eye, impact, victim, hitgroup,
@@ -27,8 +27,9 @@ Snapshots are Sim2DHost's version 5 plus `engine: 'sim3d'`.
 ### Duplication
 
 The class is a copy of Sim2DHost (its phases are private and src/sim2d is not edited while G5 / G6 work there). The
-copy differs in `currentSees`, `stepPawnWeapon` (the bullet), the constructor and the 3D-only movement branch. When
-G5 (engine hook `blocked_hit`) and G6 (MeshSight, sight snapping) merge, the same changes go into the copy; the
+copy differs in `stepPawnWeapon` (the bullet), the constructor and the 3D-only movement branch (G6: `currentSees`
+now calls the same `computeSees` on the same MeshSight as Sim2DHost). When G5 (engine hook `blocked_hit`) and G6
+(MeshSight, sight snapping) merged, the same changes went into the copy; the
 engine refactor after them (H4) folds the two hosts into one with pluggable sight and bullets.
 
 ## Hitboxes
@@ -63,28 +64,31 @@ before. docs/weapons.md "In the 3D host".
 
 ## Sight
 
-`MeshSight3` (src/sim3d/sight.ts): V sees T when V is alive and not blind, T alive, T within `ai.fovDeg / 2` of V's
-yaw (2D bearing, as the contract), no active smoke crosses the 2D segment, and one of the segments from V's eye to
-T's aim points crosses no world triangle: head (z + 63), chest (48), chest ± 12 to either side, legs (16); crouched
-× 46 / 64. Each direction is traced on its own (sight is not symmetric). Glass and bullet-pass railings aren't in the
-mesh (docs/geometry.md), so they are open. When G6's `MeshSight` lands on main, `sees` switches to it.
+G6's `MeshSight` (src/sim2d/mesh-sight.ts, `docs/vision.md`), constructed on the world mesh with
+`meshSightOptionsFromTuning`, through `computeSees` (src/sim2d/vision.ts) exactly as Sim2DHost: V sees T when V is
+alive and not blind, T alive, T within `ai.fovDeg / 2` of V's yaw, no active smoke crosses the 2D segment, and one of
+the segments from V's eye to T's aim points (head = `bandHeights.head` 64, chest 48, chest ± `ai.sightSideUnits` 12,
+legs 16; crouched × 46 / 64) crosses no world triangle. The LIVE AI's guard spot and the flash / HE effects use it too
+(`MeshGrenadeNav`); grenade throws clamp on the 2D mask as in 2D. H1's own `MeshSight3` (head at the hitbox centre,
+z + 63; no shared eye line, no hints) is gone: one implementation. Scripted hits whose eye-to-victim line is blocked are
+logged (`script: scripted hit through geometry`, `combatLog()`), as in 2D.
 
 ## Results (headless, `npm run harness3d`, seed 1)
 
-- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `cbb335eb` (`a2883aa0` before #30's movement fixes moved every pawn's floats; H2b's weapon mechanics leave it byte-identical: puppets' outcomes are traced along their scripted view, and nobody is mechanical in a run nobody plays); kills on 32, 794, 816, 1142, 1203,
+- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `150f77b4`, the 2D golden master's (G6; `a2883aa0` before #30, `cbb335eb` between #30 and G6; H2b's weapon mechanics leave it byte-identical: puppets' outcomes are traced along their scripted view, and nobody is mechanical in a run nobody plays); kills on 32, 794, 816, 1142, 1203,
   2829, 3222, 3766, 4442 (all nine, the recording's), every damage event identical to the 2D golden master's, plant
   1761, defuse 3955 → 4275, "Played it like the tape: CT defuse, 0.72 s left". Against the 2D golden master
-  (`fixtures/golden/round-nohuman`, `63bd3d86` since #30, `tools/fixture-diff.ts`): **0 acts differ**, no control, event or
-  round difference, every observed pawn field identical except `sees` (1,539 of 4,517 lines differ, only in `sees`,
-  from tick 1). Pitch is identical too (the puppets' pitch is the Core's aim, applied the same way). The Core never
-  branches on `sees` in a run nobody plays, so the mesh sight changes nothing else.
+  (`fixtures/golden/round-nohuman`, `tools/fixture-diff.ts`): since G6 **identical in every line**, `sees` included
+  (both hosts use one MeshSight; before G6, with H1's `MeshSight3` against the radar mask, 1,539 of 4,517 lines
+  differed, only in `sees`). The Core's aim reads `sees` since G6 (puppets track only what they see), so identical
+  `sees` is what keeps the 3D run on the 2D one.
 - **3D aim** (tests/sim3d-aim.test.ts): cart, the human from the start, plays his recording to the window; on the
-  first tick from 18.4 s on with an open line from his eye to Lokier's head (19.86 s with today's snapped tracks) he
-  stops, aims yaw and pitch at the head hitbox and fires: the bullet enters `head` 415.8 units away and does the
-  AK-47's headshot damage (`bulletDamage`; Lokier dies, HS). The same shot 10° off misses everyone; a shot at his head
-  while the wall is between (17.81 s) stops on the wall 222 units out. Today's tracks were snapped for the 2D sight:
-  through the window the mesh line from cart's eye to Lokier's head is blocked most of 17.6–19.7 s (G6's pass 5
-  re-snaps the tracks so every recorded duel is in sight on the mesh; after that merge the open tick moves earlier).
+  first tick from 17.97 s (1150) on with an open line from his eye to Lokier's head he stops, aims yaw and pitch at the
+  head hitbox and fires: the bullet enters `head` 512 units away (an AK-47 headshot that kills, by `bulletDamage`).
+  G6: with pass 5's tracks the window opens before cart's recorded spray, inside his recorded duel with Lokier (G5), so
+  the engine reports the hit as `blocked_hit {cart, lokier, ak47, head}` and the duel lands the tape's kill (before G6
+  the open tick was 19.86 s, after the duel). The same shot 10° off misses everyone; a shot at his head while the wall
+  is between stops on the wall.
 - **The follow-recording script** (`--human cart --script fixtures/scripts/cart-follows-recording.json`; numbers after
   G5's merge): in 2D cart kills Lokier at 18.80 s (HS) and the round "Played it like the tape" (G5's recorded duels).
   In 3D it **does not match yet**: the script's pitch is 0 (the recording has no pitch; 2D picks the hitgroup from
