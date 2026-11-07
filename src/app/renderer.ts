@@ -21,7 +21,7 @@ import type { MapTransform, PawnObs, PlayerId, RoundData, Team } from '../contra
 import type { RoundClock, RoundModel } from '../core/index';
 import { cameraView, clampCamera, followTarget, fullCamera, panBy, zoomAt, FOLLOW_ZOOM, MIN_ZOOM, type Camera, type Viewport } from './camera';
 import { effectPrimitives, popPrimitives, tracerPrimitive, unitsToPx, type BlindSource, type Primitive } from './effects';
-import { bombCarrier, chooseLabelSpot, rectsOverlap, roundStateOf, statusBadge, type AiDebugSource, type Badge, type Overlays, type ScreenRect } from './hud-model';
+import { airCue, bombCarrier, chooseLabelSpot, rectsOverlap, roundStateOf, statusBadge, type AiDebugSource, type AirCue, type Badge, type Overlays, type ScreenRect } from './hud-model';
 import { worldToRadar, worldToScreen, yawToScreenDir, type Point2, type View } from './radar';
 import type { Pose, Scene } from './scene';
 import { DISPLAY_FONT, PALETTE, teamColor } from './style';
@@ -47,6 +47,8 @@ export interface RenderFrame {
   readonly avoid?: readonly ScreenRect[];
   /** The 2D engine's LIVE AI debug view (Sim2DHost.aiDebug): with the tracks overlay, each LIVE pawn's path. */
   readonly ai?: AiDebugSource | null;
+  /** G3: the floor height under a point (feet z of a hull standing there, at or below z), or null; absent: no height cue. */
+  readonly floorZ?: ((x: number, y: number, z: number) => number | null) | null;
 }
 
 /** The pawn the follow camera and the ghost track. */
@@ -71,10 +73,10 @@ const TAU = Math.PI * 2;
 export class Renderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly radar: CanvasImageSource | null;
+  private radar: CanvasImageSource | null;
   private readonly map: MapTransform;
   private readonly colors: ReadonlyMap<PlayerId, string>;
-  private readonly cache = new RadarCache();
+  private cache = new RadarCache();
   private cam: Camera;
   private vp: Viewport = { width: 0, height: 0, margin: MARGIN };
   private viewValue: View;
@@ -98,6 +100,15 @@ export class Renderer {
     this.viewValue = cameraView(this.map, this.cam, this.vp);
     this.calm = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.resize();
+  }
+
+  /** G3: the map layer (the radar, or the height map in the same frame); redrawn from the next frame. */
+  setMapLayer(img: CanvasImageSource | null): void {
+    if (img === this.radar) return;
+    this.radar = img;
+    const rebuilds = this.cache.rebuilds;
+    this.cache = new RadarCache();
+    this.cache.rebuilds = rebuilds;
   }
 
   /** Where the radar is on the canvas (CSS px); input-dom.ts maps the mouse through it. */
@@ -212,7 +223,9 @@ export class Renderer {
       if (pose === undefined) continue;
       const badge = statusBadge(scene.statusOf(p.id)?.mode ?? null, p.id === f.human, p.alive);
       const blindFor = f.blind === null ? 0 : f.blind.blindUntilTick(p.id) - scene.cur.tick;
-      this.drawPawn(p, pose, badge, p.id === carrier, r, f.nowMs, blindFor);
+      const floor = f.floorZ === null || f.floorZ === undefined ? null : f.floorZ(pose.x, pose.y, pose.z);
+      const cue = floor === null || p.onGround ? null : airCue(pose.z - floor, v.scale / v.map.scale);
+      this.drawPawn(p, pose, badge, p.id === carrier, cue === null ? r : r * cue.scale, f.nowMs, blindFor, cue);
     }
     for (const e of scene.effects) if (e.phase === 'flying') this.prims(effectPrimitives(e, v, tick, null));
     for (const p of scene.pops) this.prims(popPrimitives(p, v, tick));
@@ -498,10 +511,17 @@ export class Renderer {
     return note;
   }
 
-  private drawPawn(p: PawnObs, pose: Pose, badge: Badge, carriesBomb: boolean, r: number, nowMs: number, blindTicks: number): void {
+  private drawPawn(p: PawnObs, pose: Pose, badge: Badge, carriesBomb: boolean, r: number, nowMs: number, blindTicks: number, cue: AirCue | null = null): void {
     const { ctx } = this;
     const s = worldToScreen(this.viewValue, pose);
     const color = teamColor(p.team);
+    if (cue !== null) {
+      // G3: in the air: its shadow on the floor below (offset as if lit from the upper left), and the disc bigger.
+      ctx.beginPath();
+      ctx.ellipse(s.x + cue.shadowDx, s.y + cue.shadowDy, r / cue.scale, (r / cue.scale) * 0.8, 0, 0, TAU);
+      ctx.fillStyle = 'rgba(2, 4, 8, 0.55)';
+      ctx.fill();
+    }
     if (blindTicks > 0) {
       // Flashed: a white bloom, fading over the last 0.75 s of the blindness.
       const k = Math.min(1, blindTicks / 48);
@@ -566,6 +586,12 @@ export class Renderer {
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(3, 5, 8, 0.6)';
     ctx.stroke();
+    if (cue !== null && cue.lighten > 0) {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, TAU);
+      ctx.fillStyle = `rgba(255, 255, 255, ${cue.lighten.toFixed(3)})`;
+      ctx.fill();
+    }
     if (badge.tone === 'human') ring(ctx, s.x, s.y, r + 3.5, PALETTE.human, 2);
     if (badge.tone === 'alert') ring(ctx, s.x, s.y, r + 3, PALETTE.live, 2.5);
     if (carriesBomb) {

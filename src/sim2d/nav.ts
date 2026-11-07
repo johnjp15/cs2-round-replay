@@ -59,7 +59,35 @@ export interface NavPortal {
 export interface Nav3d {
   crossing(from: NavArea, to: NavArea, p: NavPortal): NavPortal | null;
   line(a: Vec3, b: Vec3): boolean;
+  /** A standing hull fits on the CS2 floor near (x, y, z). */
+  free(p: Vec3): boolean;
 }
+
+/**
+ * G3: the point paths cross a portal at (its midpoint), moved along the portal to the nearest spot where a standing
+ * hull fits on the CS2 mesh when the midpoint is in a CS2 wall or prop (FREE_STEP apart, from the middle out); as it
+ * was if there is none. A path through the 2020 nav's corridor points otherwise steers a LIVE pawn into the wall a
+ * CS2 corridor has where the 2020 one hadn't (B short, the Apartments).
+ */
+function freeMidpoint(nav3d: Nav3d, from: NavArea, p: NavPortal): NavPortal {
+  const at = (x: number, y: number): Vec3 => ({ x, y, z: areaZ(from, clamp(x, from.x1, from.x2), clamp(y, from.y1, from.y2)) });
+  if (nav3d.free(at(p.mx, p.my))) return p;
+  const len = Math.hypot(p.bx - p.ax, p.by - p.ay);
+  if (len === 0) return p;
+  const ux = (p.bx - p.ax) / len;
+  const uy = (p.by - p.ay) / len;
+  for (let d = FREE_STEP; d <= len / 2 + 1e-9; d += FREE_STEP) {
+    for (const sgn of [1, -1]) {
+      const x = p.mx + ux * d * sgn;
+      const y = p.my + uy * d * sgn;
+      if (nav3d.free(at(x, y))) return { ...p, mx: x, my: y };
+    }
+  }
+  return p;
+}
+
+/** `freeMidpoint`'s search step along a portal (units). */
+const FREE_STEP = 4;
 
 /** G3 `gapDrops`: how far across a gap (units) a drop portal the 2020 nav lacks may reach. */
 const GAP_DROP_REACH = 64;
@@ -116,11 +144,11 @@ export class NavMesh {
       const out: NavPortal[] = [];
       for (const p of built) {
         const q = nav3d.crossing(a, areas[p.to] as NavArea, p);
-        if (q !== null) out.push(q);
+        if (q !== null) out.push(freeMidpoint(nav3d, a, q));
       }
       for (const p of this.gapDrops(a, built)) {
         const q = nav3d.crossing(a, areas[p.to] as NavArea, p);
-        if (q !== null) out.push(q);
+        if (q !== null) out.push(freeMidpoint(nav3d, a, q));
       }
       return out;
     });
@@ -260,12 +288,14 @@ export class NavMesh {
   // ---- segment queries -----------------------------------------------------------------------
 
   /**
-   * True if the whole segment a→b lies in walkable space. G3: with 3D hooks, if a hull can walk it on the CS2 mesh
+   * True if the whole segment a→b lies in walkable space. G3: with 3D hooks, and if a hull can walk it on the CS2 mesh
    * (heights from the nav where a point has none).
    */
   segmentWalkable(a: NavPoint, b: NavPoint): boolean {
-    if (this.nav3d !== null) return this.nav3d.line(this.withZ(a), this.withZ(b));
-    return this.walkGrid.coverage(a.x, a.y, b.x, b.y) >= 1;
+    const flat = this.walkGrid.coverage(a.x, a.y, b.x, b.y) >= 1;
+    // G3: the 2D test first (cheap, and a line the 2020 nav has no floor under is no shortcut to take), then the hull.
+    if (this.nav3d !== null) return flat && this.nav3d.line(this.withZ(a), this.withZ(b));
+    return flat;
   }
 
   private withZ(p: NavPoint): Vec3 {
@@ -373,13 +403,16 @@ export class NavMesh {
     let i = 0;
     const last = cx.length - 1;
     if (this.nav3d !== null) {
-      // G3: forward (each step a hull line on the CS2 mesh; the cost grows with the line, so short ones first).
+      // G3: forward to the furthest corridor point a hull gets to in a straight line on the CS2 mesh, short lines
+      // first (a sweep costs with its length), never past the furthest one in walkable 2D line (a cheap bound).
       const zs = chain.map((id, k) => (k === 0 ? (sa.z ?? this.zAt({ x: sa.x, y: sa.y })) : areaZ(this.areas[id] as NavArea, clamp(cx[k] as number, (this.areas[id] as NavArea).x1, (this.areas[id] as NavArea).x2), clamp(cy[k] as number, (this.areas[id] as NavArea).y1, (this.areas[id] as NavArea).y2))));
       zs.push(sb.z ?? this.zAt({ x: sb.x, y: sb.y }));
       const pt = (k: number): Vec3 => ({ x: cx[k] as number, y: cy[k] as number, z: zs[k] as number });
       while (i < last) {
+        let far = last;
+        while (far > i + 1 && this.walkGrid.coverage(cx[i] as number, cy[i] as number, cx[far] as number, cy[far] as number) < 1) far--;
         let j = i + 1;
-        while (j < last && this.nav3d.line(pt(i), pt(j + 1))) j++;
+        while (j < far && this.nav3d.line(pt(i), pt(j + 1))) j++;
         out.push(this.pos(cx[j] as number, cy[j] as number, j === last ? sb : { x: cx[j] as number, y: cy[j] as number, z: zs[j] as number }));
         i = j;
       }

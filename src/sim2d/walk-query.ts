@@ -72,6 +72,8 @@ export class HullWalkQuery implements WalkQuery {
 
 /** nav3dFor: crossing points along a portal (every this many units), and how far into each area the hull starts and ends. */
 const PORTAL_STEP = 8;
+/** A drop portal's landing check looks this far down (units; past the nav's dropHeight). */
+const LAND_SEARCH = 512;
 const PORTAL_DEPTHS: readonly number[] = [20, 32];
 
 /**
@@ -82,12 +84,25 @@ const PORTAL_DEPTHS: readonly number[] = [20, 32];
  * portal becomes the longest run of such points (its midpoint is where paths cross), or is dropped when there are
  * none. The 2020 nav knows nothing of CS2's walls at its ledges: B Apartments' window over B site, for one, is a wall
  * with a sill 20 units up (a jump) where the 2020 nav drops onto an awning; the Balcony's open edge to the west is
- * the way down. `line` is `hullLineClear` (path smoothing and `segmentWalkable`).
+ * the way down. `line` is `hullLineClear` (path smoothing and `segmentWalkable`); `free` is "a standing hull fits on
+ * the CS2 floor there" (`NavMesh` moves a portal's crossing point off CS2's walls with it).
  */
 export function nav3dFor(g: MapGeometry, step: number): Nav3d {
+  // Paths are pulled through the same portal midpoints again and again (a LIVE pawn repaths to the same goal): the
+  // answers are pure, so they are kept (by exact endpoints; a few thousand at most in a round).
+  const lines = new Map<string, boolean>();
   return {
-    line: (a, b) => hullLineClear(g, a, b, step),
+    line: (a, b) => {
+      const k = `${a.x},${a.y},${a.z},${b.x},${b.y},${b.z}`;
+      let v = lines.get(k);
+      if (v === undefined) {
+        v = hullLineClear(g, a, b, step);
+        lines.set(k, v);
+      }
+      return v;
+    },
     crossing: (from, to, p) => portalCrossing(g, step, from, to, p),
+    free: (p) => !g.hullBlocked(p.x, p.y, floorNear(g, p.x, p.y, p.z), STANDING_HULL),
   };
 }
 
@@ -131,6 +146,10 @@ function portalCrossing(g: MapGeometry, step: number, from: NavArea, to: NavArea
       // Only the start must be free: the sweep runs at the higher end's height, so a 2020 area with no CS2 floor at
       // its height (b inside something) fails the sweep or, for a drop, is fallen past.
       if (g.hullBlocked(a.x, a.y, a.z, STANDING_HULL)) continue;
+      // A drop must land on `to`'s floor: the floor under b seen from the start's height is b's, not a higher one the
+      // hull would walk on instead (a 2020 drop where CS2 has floor over the lower level).
+      const land = g.floorBelow(b.x, b.y, a.z + step, STANDING_HULL.halfWidth, 0, LAND_SEARCH);
+      if (land === null || land.z > b.z + step) continue;
       if (hullLineClear(g, a, b, step)) {
         clear = true;
         break;

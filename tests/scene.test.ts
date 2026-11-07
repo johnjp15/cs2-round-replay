@@ -80,19 +80,19 @@ describe('interpolation', () => {
   it('moves a pawn alpha of the way between ticks', () => {
     const a = CART(0, 0, 0);
     const b = CART(4, -2, 20);
-    expect(interpolatePose(a, b, 0)).toEqual({ x: 0, y: 0, yaw: 0 });
-    expect(interpolatePose(a, b, 0.5)).toEqual({ x: 2, y: -1, yaw: 10 });
-    expect(interpolatePose(a, b, 1)).toEqual({ x: 4, y: -2, yaw: 20 });
-    expect(interpolatePose(a, b, 7)).toEqual({ x: 4, y: -2, yaw: 20 });
+    expect(interpolatePose(a, b, 0)).toEqual({ x: 0, y: 0, z: 0, yaw: 0 });
+    expect(interpolatePose(a, b, 0.5)).toEqual({ x: 2, y: -1, z: 0, yaw: 10 });
+    expect(interpolatePose(a, b, 1)).toEqual({ x: 4, y: -2, z: 0, yaw: 20 });
+    expect(interpolatePose(a, b, 7)).toEqual({ x: 4, y: -2, z: 0, yaw: 20 });
   });
 
   it('snaps (no slide) across teleports, deaths and missing history', () => {
     const a = CART(0, 0, 0);
     const far = CART(SNAP_UNITS_PER_TICK + 1, 0, 90);
-    expect(interpolatePose(a, far, 0.5)).toEqual({ x: SNAP_UNITS_PER_TICK + 1, y: 0, yaw: 90 });
+    expect(interpolatePose(a, far, 0.5)).toEqual({ x: SNAP_UNITS_PER_TICK + 1, y: 0, z: 0, yaw: 90 });
     const dead = CART(2, 0, 0, { alive: false });
-    expect(interpolatePose(a, dead, 0.5)).toEqual({ x: 2, y: 0, yaw: 0 });
-    expect(interpolatePose(null, CART(3, 3, 5), 0.5)).toEqual({ x: 3, y: 3, yaw: 5 });
+    expect(interpolatePose(a, dead, 0.5)).toEqual({ x: 2, y: 0, z: 0, yaw: 0 });
+    expect(interpolatePose(null, CART(3, 3, 5), 0.5)).toEqual({ x: 3, y: 3, z: 0, yaw: 5 });
   });
 
   it('a 4× frame (four ticks) still interpolates between the last two observes', () => {
@@ -100,7 +100,7 @@ describe('interpolation', () => {
     for (let t = 2; t <= 5; t++) s.ingest(obs(t, [CART((t - 1) * 3, 0)]), act());
     expect(s.prev?.tick).toBe(4);
     expect(s.renderTick(0.5)).toBe(4.5);
-    expect(s.pose('cart', 0.5)).toEqual({ x: 10.5, y: 0, yaw: 0 });
+    expect(s.pose('cart', 0.5)).toEqual({ x: 10.5, y: 0, z: 0, yaw: 0 });
   });
 });
 

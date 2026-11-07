@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { Observe, PawnObs } from '../src/contracts/index';
 import { RoundClock } from '../src/core/index';
 import {
+  AIR_CUE_MAX_UNITS,
+  airCue,
+  heightText,
+  type AirCue,
   aiDebugLine,
   chooseLabelSpot,
   clockView,
@@ -83,11 +87,36 @@ describe('names and bands', () => {
 });
 
 describe('view toggles', () => {
-  it('F, G, T and Tab toggle follow, ghost, tracks and the panel', () => {
-    expect(['KeyF', 'KeyG', 'KeyT', 'Tab', 'KeyW', 'Digit1'].map(overlayForKey)).toEqual(['follow', 'ghost', 'tracks', 'panel', null, null]);
-    const o: Overlays = { follow: false, ghost: true, tracks: false, panel: true };
+  it('F, G, T, Tab and H toggle follow, ghost, tracks, the panel and the height map', () => {
+    expect(['KeyF', 'KeyG', 'KeyT', 'Tab', 'KeyH', 'KeyW', 'Digit1', 'Space'].map(overlayForKey)).toEqual(['follow', 'ghost', 'tracks', 'panel', 'height', null, null, null]);
+    const o: Overlays = { follow: false, ghost: true, tracks: false, panel: true, height: false };
     expect(toggleOverlay(o, 'ghost')).toEqual({ ...o, ghost: false });
     expect(toggleOverlay(toggleOverlay(o, 'tracks'), 'tracks')).toEqual(o);
+    expect(toggleOverlay(o, 'height')).toEqual({ ...o, height: true });
+  });
+});
+
+describe('G3: height cues', () => {
+  it('airCue: nothing on the floor or a step up; a shadow offset, a bigger and lighter disc in the air, capped at 120 u', () => {
+    expect(airCue(0, 0.2)).toBeNull();
+    expect(airCue(1.9, 0.2)).toBeNull();
+    const low = airCue(10, 0.2) as AirCue;
+    const apex = airCue(57, 0.2) as AirCue;
+    expect(low.shadowDx).toBeGreaterThanOrEqual(2);
+    expect(apex.shadowDx).toBeGreaterThan(low.shadowDx);
+    expect(apex.shadowDy).toBe(apex.shadowDx);
+    expect(apex.scale).toBeGreaterThan(low.scale);
+    expect(apex.lighten).toBeGreaterThan(low.lighten);
+    expect(airCue(500, 0.2)).toEqual(airCue(AIR_CUE_MAX_UNITS, 0.2));
+    expect((airCue(500, 0.2) as AirCue).scale).toBeCloseTo(1.35, 9);
+  });
+
+  it('heightText: z, and how high in the air or crouched', () => {
+    const at = (z: number, onGround: boolean, crouching = false) => ({ pos: { x: 0, y: 0, z }, onGround, crouching });
+    expect(heightText(at(-47.6, true), null)).toBe('z -48');
+    expect(heightText(at(-47.6, true, true), null)).toBe('z -48 · crouched');
+    expect(heightText(at(9.2, false), 57.2)).toBe('z 9 · +57 in the air');
+    expect(heightText(at(9.2, false), null)).toBe('z 9 · in the air');
   });
 });
 

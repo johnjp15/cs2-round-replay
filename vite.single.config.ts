@@ -1,6 +1,7 @@
 /**
  * Single-file build: `npm run build:single` writes dist-single/index.html, one self-contained page with the
- * script, the CSS, the round / nav / sight-mask JSON and the radar inlined, for the password-locked
+ * script, the CSS, the round / nav / sight-mask JSON, the radar and (G3) the 3D world (movement mesh, clips, snapped
+ * tracks, height map) inlined, for the password-locked
  * johnjp15.github.io/cs2/sim/ (docs/deploy.md). The page makes no network requests.
  *
  * - `embedAssets()` redirects main.ts's `./assets` (which fetches) to `./assets-embedded` and provides
@@ -40,6 +41,7 @@ function embedAssets(): Plugin {
     const bytes = readFileSync(data(name));
     return RAW ? bytes.toString('utf8') : gzipSync(bytes, { level: 9 }).toString('base64');
   };
+  const binary = (name: string): string => gzipSync(readFileSync(data(name)), { level: 9 }).toString('base64');
   return {
     name: 'cs2:embed-assets',
     enforce: 'pre',
@@ -50,13 +52,17 @@ function embedAssets(): Plugin {
     },
     load(id) {
       if (id !== RESOLVED_VIRTUAL) return null;
-      for (const f of ['round.json', 'mirage-nav.json', 'mirage-vismask.json', 'mirage-radar.jpg']) this.addWatchFile(data(f));
+      for (const f of ['round.json', 'mirage-nav.json', 'mirage-vismask.json', 'mirage-radar.jpg', 'geometry/mirage-geometry.bin', 'geometry/mirage-clips.bin', 'geometry/mirage-tracks.json', 'geometry/mirage-height.png']) this.addWatchFile(data(f));
       const assets = {
         encoding: RAW ? 'text' : 'gzip-base64',
         round: json('round.json'),
         nav: json('mirage-nav.json'),
         vision: json('mirage-vismask.json'),
         radar: `data:image/jpeg;base64,${readFileSync(data('mirage-radar.jpg')).toString('base64')}`,
+        geometry: binary('geometry/mirage-geometry.bin'),
+        clips: binary('geometry/mirage-clips.bin'),
+        tracks: json('geometry/mirage-tracks.json'),
+        height: `data:image/png;base64,${readFileSync(data('geometry/mirage-height.png')).toString('base64')}`,
       };
       return `export default ${JSON.stringify(assets)};`;
     },
