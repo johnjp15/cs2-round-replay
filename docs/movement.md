@@ -221,7 +221,7 @@ standing hull is 32 × 32 × 72, crouched 32 × 32 × 54; every trace is a swept
    CS2 takes off precisely (the sub-tick jump update): no half tick of gravity before the first move, so the apex is
    impulse² / 2g = 57.0 units at 64 Hz too and the jump lands on tick 48 from flat ground (tested: apex 56.9975).
    Holding JUMP jumps once (`sv_autobunnyhopping 0`).
-4. On the ground: friction, the stamina slowdown (speed × (staminaMax − stamina) / staminaMax), ground acceleration
+4. On the ground: friction, the stamina slowdown (speed × (100 − stamina) / 100 (stamina = the penalty in %, capped at `staminaMax`)), ground acceleration
    exactly as `stepMove`, then `WalkMove`: a straight move if it isn't blocked, else `StepMove` (the better of the
    plain slide and up `stepSize` → move → down), then `StayOnGround`. In the air: `AirAccelerate` (the wish speed
    for the acceleration capped at `airMaxWishSpeed`, the full wish speed for the add) and `TryPlayerMove` (4 bumps,
@@ -252,7 +252,7 @@ onto the B-site west ledge lands at −126.6; the clips stop a jump onto the wal
 | Key | Value | Source |
 | --- | ---: | --- |
 | `gravity` | 800 | CS2 `sv_gravity` default |
-| `jumpImpulse` | 301.99338 | CS2 `sv_jump_impulse` default (= √(2 × 800 × 57), Source's `GAMEMOVEMENT_JUMP_HEIGHT` 57) |
+| `jumpImpulse` | 301.99338 | CS2 `sv_jump_impulse` default (= √(2 × 800 × 57); the convar's description says "sqrt(2*gravity*height)". Source SDK 2013's `GAMEMOVEMENT_JUMP_HEIGHT` is 21, HL2's) |
 | `airAccelerate` | 12 | CS2 `sv_airaccelerate` default |
 | `airMaxWishSpeed` | 30 | CS2 `sv_air_max_wishspeed` default (Source's hard-coded 30 in `AirAccelerate`) |
 | `maxVelocity` | 3500 | CS2 `sv_maxvelocity` default |
@@ -264,8 +264,8 @@ onto the B-site west ledge lands at −126.6; the clips stop a jump onto the wal
 | `fallSafeSpeed` | 580 | Source `PLAYER_MAX_SAFE_FALL_SPEED` |
 | `fallFatalSpeed` | 1024 | Source `PLAYER_FATAL_FALL_SPEED` |
 | `fallDamageScale` | 1 | CS2 `sv_falldamage_scale` default |
-| `landSoundSpeed` | 260 | **estimated** (Source plays a land sound above about 260 u/s fall speed; tunable) |
-| `airDuckLift` | 9 | **estimated** (half the 18-unit hull difference, as Source's in-air duck; tunable) |
+| `landSoundSpeed` | 260 | CS2 `sv_min_jump_landing_sound` 260 (M1: verified) |
+| `airDuckLift` | 9 | from CS:GO's block heights (Mapper's Reference: jump 54, jump-then-crouch 63 at 64 tick; Source SDK 2013's `FinishDuck` lifts the full 18, CS:GO/CS2 duck gradually) |
 
 Fixed in code from Source: the 2-unit ground check, `NON_JUMP_VELOCITY` 140, 4 bumps, 5 clip planes, overbounce 1, the
 1/32 trace skin (G2), the hulls. The convar defaults are CS2's (`cvarlist`; the values match the CS:GO / CS2 defaults
@@ -291,8 +291,8 @@ damage); fall damage at 222 / 223 units, large and fatal falls; the landing slow
 
 ## Not modelled yet (differences from CS2)
 
-Tagging (slowdown when hit); scoped speeds (AWP 100); crouch transition time (crouch is instant); surface friction;
-sub-tick input; ladders (Mirage's two: the nav has no ladder links and the 3D world treats them as walls); surfing and
+Tagging and scoped speeds in the hosts (movement takes them since M1: `MoveOptions`); crouch transition time (crouch is instant); surface friction of materials;
+sub-tick input in the host (movement has `stepMove3dSubtick`); ladders (Mirage's two: the nav has no ladder links and the 3D world treats them as walls); surfing and
 bunny-hop speed gain beyond what the air acceleration gives; jump inaccuracy. Whether WALK and DUCK stack in CS2 is to be checked. The player
 hull is implicit against the world (nav areas are player-centre space); between pawns it is a 16-unit circle
 (C3, `docs/combat.md`, "Collision").
@@ -435,3 +435,50 @@ fall damage, steps, the slope limit.
 function (M1-8), the tagging recovery rate (H2's 0.4 / s, `docs/weapons.md`), WALK + DUCK stacking (M1-11), the
 `sv_step_move_vel_min` rule (M1-9), whether tagging also slows the acceleration (the fix scales the cap only), and the
 in-game jump apex to better than about 0.1 unit.
+
+### M1 fixes (part 2)
+
+Minimal, each cited above; constants in code (not tunables: they are Source/CS2 fixed values, not convars).
+
+| Finding | Change in `src/sim2d/movement.ts` | Effect |
+| --- | --- | --- |
+| M1-1 | `walkStop`: a ground velocity under 1 u/s after the acceleration is zeroed (both `stepMove` and `stepMove3d`); `applyFriction` leaves speeds under 0.1 alone | 7 u/s with no input stops in one tick, as Source; the counter-strafe and acceleration numbers above are unchanged |
+| M1-2 | A jump crops the horizontal speed to 1.1 × the item's run speed (`BUNNYJUMP_MAX_SPEED_FACTOR`) | a knife hop landing at 300 takes off at 275; jumps at ≤ 275 are unchanged |
+| M1-3 | Air acceleration × 0.25 when the state is airborne and its vz at the last ground check (vz + g·dt/2) is in (0, 140] | TAS long jump 247.72 → **241.52** units (landing 323.7 → 310.5 u/s); falling and fast-rising air acceleration unchanged |
+| M1-4, M1-5 | `MoveOptions { runSpeed?, velocityModifier? }` as an optional last argument of `wishFromInput`, `stepMove`, `stepMove3d`: `runSpeed` replaces the table speed (cap, acceleration scale, jump clamp), `velocityModifier` scales the cap only | a 0.4-tagged AK caps at 86; a scoped AWP runs at 100 (53 ticks from rest). Without options the result is identical (tested) |
+| M1-7 | `stepMove3dSubtick(s, before, after, fraction, …)`: the tick split at the key change into `fraction · dt` with the old input and the rest with the new one | a half-tick knife press gives 10.742 u/s (CS2 measured 10.74, W3); fraction 0 / 1 is the per-tick step exactly |
+
+**Hosts** (not in M1's ownership; for H2 / H4): pass `{ runSpeed: maxSpeedOf(...), velocityModifier: arms.tagModifier }` from
+the weapons engine (`src/engine/weapons`, H2's `applyHit` already computes the tagging modifier as min(current, flinch ×
+`mp_tagging_scale`)) into `stepMove3d` per pawn. Until then the hosts call without options and nothing changes there.
+
+### Sub-tick (M1-7): decision
+
+CS2 runs a tick as several simulations when keys change inside it (W2 l. 131): with `when` = the fraction of the tick
+at which the key changed, the move is simulated for `when · dt` with the old buttons and `(1 − when) · dt` with the new
+ones. Puppets (recorded tracks, the AI) have no sub-tick timing and stay per-tick.
+
+What it changes for the human, from the battery (AK-47 at 215, opposite key pressed at fraction 0.25 and released 7 ticks
+later): **11.06 units to the stop with sub-tick vs 13.45 per tick** (the per-tick press waits for the next tick boundary,
+up to one tick = 3.36 units at 215 u/s, 15.6 ms). Across fractions 0 / 0.25 / 0.5 / 0.75 the stop distance is 10.09 / 11.06 /
+11.95 / 12.76 with sub-tick and 10.09 / 13.45 / 13.45 / 13.45 per tick; the times to "accurate" and to the stop measured
+from the press shift by under a tick. So sub-tick is worth up to one tick of counter-strafe precision, no more.
+
+Implemented: the pure split (`stepMove3dSubtick`, tested). **Not wired into the host**: a sub-tick input has to be
+logged with the human's input for the session log to reproduce the run (`PawnInput` + `SessionLog` contracts, the host
+snapshot's pending input), which is beyond a contained change. Plan for H4 (the 3D app's input):
+1. Contract: an optional `subtickFraction` (0..1, 6 decimals) on the human's `PawnInput`; absent = per tick, so logs and
+   golden digests without it are unchanged. `docs/contracts.md` documents it; the session log carries it as part of the input.
+2. Host: `setHumanInput` keeps the previous human input; when the new one has `subtickFraction` f, the next `tick()` moves the
+   human with `stepMove3dSubtick(prev, new, f)` and then clears f (it applies to one tick). Snapshot: f is part of the
+   stored `humanInput`, so restore is exact.
+3. App: f = (keydown `event.timeStamp` − the tick's start) / tick length, for the first move-key change in the tick;
+   several changes in one tick keep the first (CS2 splits at each; at 64 Hz one is enough for counter-strafing).
+4. CS2's 2025-09-17 "improved timestep-independence of subtick movement acceleration" (W2 l. 169) changed the
+   acceleration of split ticks in a way that is not public; the plain Source split used here is the pre-change rule.
+
+### Still open after M1
+
+M1-6 duck transition (rate not public; needs a `duckAmount` in `MoveState`, the hull switching at full duck, the speed
+crop interpolated: measure with the CS2 probe first), M1-8 landing-penalty function, M1-9 `sv_step_move_vel_min`,
+M1-10 eye heights (damage block), M1-11 WALK + DUCK, M1-15 ladders (plan above), and the host wiring of M1-4 / M1-5 / M1-7.
