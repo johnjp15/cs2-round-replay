@@ -18,13 +18,15 @@
  * sensitivity (mouse 2 with the AWP / SSG 08); viewmodel_fov 60 in its own camera; the eye eases between 64 and 46
  * through a duck. Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b);
  * the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
- * shake, and the crosshair sits where the next bullet goes.
+ * shake; the crosshair stays at the centre (CS2's cl_crosshair_recoil 0; "Crosshair follows recoil" puts it where the
+ * next bullet goes). W1: Q lastinv, F inspect, the knife's slash / stab, wheel jump, the round hotkeys (Enter, P,
+ * Backspace twice) and the Ctrl+W / Ctrl+scroll guards (docs/app3d.md "Controls").
  *
  * URL parameters: `?seed=<int>` (default 1), `?human=cart` plays cart from the start, `?sens=<CS2 sensitivity>`
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
  */
 import tuningJson from '../../data/tuning.json';
-import { parseMapId, type Observe, type PlayerId, type Team, type Vec3, type WeaponId } from '../contracts/index';
+import { parseMapId, type Observe, type PlayerId, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { FixedLoop, TICK_MS } from '../app/loop';
 import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
@@ -39,14 +41,16 @@ import { PlayGuard } from '../app/play-guard';
 import { anglesTo, poseHitboxes } from '../engine/hitboxes';
 import { sim3dHostFactory, worldMesh, type Sim3DHost } from '../sim3d/index';
 import type { MapGeometry } from '../sim2d/index';
-import { loadAssets3d } from './assets3d';
+import { loadAssets3d, loadFreePlayAssets3d, scenarioList } from './assets3d';
+import { freePlay3d, mountScenarioPickers, pickScenario, recording3d, type Scenario3d } from './scenarios3d';
 import { ControlsDom } from './controls-dom';
-import { MIRAGE_RADAR } from './coords';
 import { Hud3D } from './hud3d';
 import { runBench } from './bench3d';
 import { FPS_PRESETS, FrameDriver, parseFpsLimit, type FpsLimit } from './frame-driver';
 import { BucketRate, FrameProbe, Ring, displayHz, meterText } from './perf';
-import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
+import { DEFAULT_SENSITIVITY, LastInv, WheelJump, crosshairOffsetPx, flyStep, fpsInput, lastInvSlots, turnView, wheelJumps, wrapYaw, type Look, type WheelJumpBinds } from './input3d';
+import { HotkeyMatcher, parseHotkeys, type PageHotkey } from './hotkeys3d';
+import { HotkeysDom } from './hotkeys-dom';
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
 import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
@@ -204,7 +208,11 @@ function rgbaOf(img: HTMLImageElement): RgbaImage {
 }
 
 class App3D {
-  private readonly data: SessionData;
+  /** The recording's data (null in free play: H3's Scenario3d builds the session). */
+  private readonly data: SessionData | null;
+  /** H3: the scenario this page plays (the recorded round by default), its map and its free-play session factory. */
+  private readonly h3: Scenario3d;
+  private readonly tuning: Tuning;
   private readonly world: MapGeometry;
   private readonly seed: number;
   private readonly renderer: Renderer3D;
@@ -248,6 +256,20 @@ class App3D {
    * setting, 0–1): 0 = the screen stays still and only the crosshair climbs; 1 = the camera follows the bullets.
    */
   private recoilTracking = VIEW_RECOIL_TRACKING;
+  /**
+   * W1 (#32): CS2's cl_crosshair_recoil (default 0: the crosshair stays at the centre, the view kicks by the recoil
+   * tracking; the bullet still goes where the aim punch puts it). The "Crosshair follows recoil" setting.
+   */
+  private crosshairRecoil = false;
+  /** W1 (#40): +jump on the wheel (the Keys group's checkboxes) and the notch latched for the next tick. */
+  private wheelBinds: WheelJumpBinds = { down: false, up: false };
+  private readonly wheelJump = new WheelJump();
+  /** W1 (#41): Q = lastinv: the human's previous item. */
+  private readonly lastInv = new LastInv();
+  /** W1 (#49): Start / Pause / Restart hotkeys (Enter, P, Backspace twice). */
+  private readonly hotkeys = new HotkeyMatcher();
+  /** W1 (#53): go fullscreen with the keyboard locked on Start / takeover / a click into the game (setting). */
+  private autoFullscreen = true;
   /** The camera's duck amount (0..1, view-cs2.ts duckStep). */
   private duck = 0;
   private session: Session;
@@ -292,8 +314,13 @@ class App3D {
   private summaryLine: string | null = null;
   private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; radar: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
-  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number | null, lowLatency: boolean | null, render: Uint8Array | null = null) {
+  constructor(data: SessionData | null, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number | null, lowLatency: boolean | null, render: Uint8Array | null, h3: Scenario3d) {
     this.data = data;
+    this.h3 = h3;
+    const tuning = data?.tuning ?? h3.tuning;
+    if (tuning === null) throw new Error('App3D: no tuning');
+    this.tuning = tuning;
+    this.followed = human ?? h3.playable ?? this.followed;
     this.world = world;
     this.seed = seed;
     this.sensitivity = sensitivity ?? DEFAULT_SENSITIVITY;
@@ -305,11 +332,11 @@ class App3D {
     const rgba = rgbaOf(radar);
     const art = floorArt(rgba);
     // X1: a map package with its own render mesh (?map=mirage-2020) draws that; else the collision mesh coloured from the radar.
-    const tiles = render === null ? buildWorldTiles(world, new RadarSampler(art, MIRAGE_RADAR), MIRAGE_RADAR, rgba).tiles : buildRenderTiles(decodeRenderMesh(render));
+    const tiles = render === null ? buildWorldTiles(world, new RadarSampler(art, h3.radar), h3.radar, rgba).tiles : buildRenderTiles(decodeRenderMesh(render));
     this.session = this.newSession(human);
     this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), { resolution: this.resScale, desynchronized: this.lowLatency });
-    this.hud = new Hud3D(radar, MIRAGE_RADAR);
-    this.a1 = new A1Mount(world, data.tuning, document.getElementById('bar'));
+    this.hud = new Hud3D(radar, h3.radar);
+    this.a1 = new A1Mount(world, this.tuning, document.getElementById('bar'));
     this.a1.vmState = () => this.renderer.viewmodels.last;
     this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
     this.scene = this.ready(this.session);
@@ -325,6 +352,12 @@ class App3D {
       onAttack2: () => {
         if (!this.playing()) this.spectateClick(-1);
       },
+      onWheel: (dy) => {
+        if (this.playing() && wheelJumps(this.wheelBinds, dy)) this.wheelJump.notch();
+      },
+    });
+    canvas.addEventListener('mousedown', () => {
+      if (this.playing()) this.autoFull();
     });
     this.controls.keyMap = keyMapFor(this.keys.binds);
     this.keys.onChange((b) => (this.controls.keyMap = keyMapFor(b)));
@@ -338,9 +371,13 @@ class App3D {
       // Under Keyboard Lock the browser no longer frees the mouse on a short Esc: do it here.
       onEscape: () => document.exitPointerLock(),
       onChange: () => this.updateControls(),
+      banner: document.getElementById('ctrlw-banner'),
     });
     const keybinds = document.getElementById('keybinds');
-    if (keybinds !== null) new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+    if (keybinds !== null) {
+      new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+      this.wireW1Keys(keybinds);
+    }
     this.wireSettings();
     this.buttons = {
       start: el('start', HTMLButtonElement),
@@ -351,6 +388,7 @@ class App3D {
       radar: el('radar-rules', HTMLButtonElement),
       speeds: [...document.querySelectorAll<HTMLButtonElement>('button[data-speed]')],
     };
+    mountScenarioPickers(el('bar', HTMLElement), h3);
     this.wire();
     this.updateControls();
     window.__cs2sim3d = {
@@ -440,7 +478,14 @@ class App3D {
   }
 
   private newSession(human: PlayerId | null): Session {
-    return new Session({ ...this.data, seed: this.seed, human, playable: 'cart', host: sim3dHostFactory(this.world) });
+    if (this.h3.makeSession !== null) return this.h3.makeSession(human);
+    if (this.data === null) throw new Error('App3D: no recording to play');
+    return new Session({ ...this.data, seed: this.seed, human, playable: this.h3.playable ?? 'cart', host: sim3dHostFactory(this.world) });
+  }
+
+  /** H3: the pawn E takes while watching: the scenario's playable pawn, or (free play) the spectated one. */
+  private takeTarget(): PlayerId | null {
+    return this.h3.anyPlayable ? this.followed : this.session.playable;
   }
 
   private playing(): boolean {
@@ -469,6 +514,7 @@ class App3D {
     const s = this.session;
     const act = s.step();
     const o = s.observe();
+    if (s.human !== null) this.lastInv.observe(o.pawns.find((p) => p.id === s.human)?.weapon ?? null);
     const h = this.host();
     const tick = o.tick - 1;
     for (const shot of h.shots()) {
@@ -496,13 +542,17 @@ class App3D {
 
   private takeControl(): void {
     const s = this.session;
-    if (this.touchOnly || this.seekResume !== null || !s.canTakeControl) return;
+    const target = this.takeTarget();
+    if (this.touchOnly || this.seekResume !== null || s.takeControlBlocked(target) !== null) return;
     if (this.loop.speed !== 1) {
       this.loop.speed = 1;
       s.control({ type: 'speed', x: 1 });
     }
-    s.takeControl();
-    const p = this.scene.pawn(s.human ?? 'cart');
+    s.takeControl(target);
+    this.lastInv.reset();
+    this.wheelJump.reset();
+    this.autoFull();
+    const p = this.scene.pawn(s.human ?? this.followed);
     if (p !== null) this.look = { yaw: p.yaw, pitch: p.pitch };
     this.controls.release();
     if (this.phase === 'ready') this.start();
@@ -521,6 +571,8 @@ class App3D {
     this.session.cancelSeek();
     this.seekResume = null;
     this.session.restart();
+    this.lastInv.reset();
+    this.wheelJump.reset();
     this.scene = this.ready(this.session);
     this.updateControls();
   }
@@ -557,7 +609,7 @@ class App3D {
     const t = this.scene.pawn(id);
     if (me === null || t === null) return this.look;
     const eye = { x: me.pos.x, y: me.pos.y, z: me.pos.z + (me.crouching ? 46 : 64) };
-    const head = (poseHitboxes(t, this.data.tuning.damage)[0] as { a: Vec3 }).a;
+    const head = (poseHitboxes(t, this.tuning.damage)[0] as { a: Vec3 }).a;
     const a = anglesTo(eye, head);
     this.look = { yaw: wrapYaw(a.yaw), pitch: a.pitch };
     return this.look;
@@ -632,6 +684,29 @@ class App3D {
 
   private onKey(code: string): boolean {
     const s = this.session;
+    // W1 (#49): the round hotkeys (keys no control of the game has; Restart wants a second press within 1 s).
+    if (!this.controls.keyMap.has(code)) {
+      const k = this.hotkeys.press(code, performance.now());
+      if (k !== null) {
+        this.hotkey(k);
+        return true;
+      }
+      if (code === this.hotkeys.keys.restart) return true;
+    }
+    if (this.playing() && !this.controls.keyMap.has(code)) {
+      // W1 (#41): Q = lastinv (CS2's default bind): back to the previous item, with its deploy.
+      if (code === 'KeyQ') {
+        const h = s.human as PlayerId;
+        const carried = (this.host().pawnState(h)?.inventory ?? []).map((q) => q.item);
+        for (const slot of lastInvSlots(this.lastInv.previous, this.scene.pawn(h)?.weapon ?? '', carried)) s.requestWeaponSlot(slot);
+        return true;
+      }
+      // W1 (#42): F = +lookatweapon: the viewmodel's inspect (no gameplay effect).
+      if (code === 'KeyF') {
+        if (this.zoom === 0) this.a1.inspect(this.scene.cur.tick, this.scene.renderTick(interpolationAlpha(this.loop.pending, TICK_MS)));
+        return true;
+      }
+    }
     if (code === 'KeyE' && s.human === null) {
       this.takeControl();
       return true;
@@ -655,11 +730,50 @@ class App3D {
       this.spectateStep(1);
       return true;
     }
-    if (code === 'KeyP') {
-      this.togglePause();
-      return true;
-    }
     return false;
+  }
+
+  /** W1 (#49): a round hotkey. */
+  private hotkey(k: PageHotkey): void {
+    if (k === 'start') {
+      if (this.phase === 'ready') {
+        this.start();
+        this.autoFull();
+      }
+    } else if (k === 'pause') this.togglePause();
+    else this.restart();
+    this.updateControls();
+  }
+
+  /** W1 (#53): fullscreen with Keyboard Lock, unless the setting is off (desktop only; needs a user gesture). */
+  private autoFull(): void {
+    if (this.autoFullscreen && !this.touchOnly && !this.guard.fullscreen) void this.guard.enter();
+  }
+
+  /** W1: the Keys group's round hotkeys (#49) and the wheel-jump checkboxes (#40), persisted with the settings. */
+  private wireW1Keys(container: HTMLElement): void {
+    new HotkeysDom(container, this.hotkeys.keys, (code) => this.controls.keyMap.has(code), (h) => {
+      this.hotkeys.keys = h;
+      this.saveSettings();
+    }, { start: document.getElementById('start') as HTMLButtonElement | null, pause: document.getElementById('pause') as HTMLButtonElement | null, restart: document.getElementById('restart') as HTMLButtonElement | null });
+    const check = (key: keyof WheelJumpBinds, text: string, title: string): void => {
+      const label = document.createElement('label');
+      label.className = 'keys-check';
+      label.title = title;
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.id = `set-wheel-jump-${key}`;
+      box.checked = this.wheelBinds[key];
+      box.addEventListener('change', () => {
+        this.wheelBinds = { ...this.wheelBinds, [key]: box.checked };
+        this.saveSettings();
+        box.blur();
+      });
+      label.append(box, text);
+      container.append(label);
+    };
+    check('down', 'Jump on scroll down', 'CS2 bind mwheeldown +jump: every wheel notch down is a jump press (the weapon wheel does nothing here).');
+    check('up', 'Jump on scroll up', 'CS2 bind mwheelup +jump: every wheel notch up is a jump press.');
   }
 
   private togglePause(): void {
@@ -680,7 +794,10 @@ class App3D {
         this.updateControls();
       });
     };
-    on(b.start, () => this.start());
+    on(b.start, () => {
+      this.start();
+      this.autoFull();
+    });
     on(b.pause, () => this.togglePause());
     on(b.restart, () => this.restart());
     on(b.takeover, () => this.takeControl());
@@ -700,7 +817,7 @@ class App3D {
     b.start.disabled = this.phase !== 'ready';
     b.pause.disabled = this.phase === 'ready';
     b.pause.textContent = this.phase === 'paused' ? 'Resume' : 'Pause';
-    const v = takeoverButtonView(s.human, s.playable, s.takeControlBlocked(), this.touchOnly, this.seekResume !== null);
+    const v = takeoverButtonView(s.human, this.takeTarget(), s.takeControlBlocked(this.takeTarget()), this.touchOnly, this.seekResume !== null);
     const label = b.takeover.querySelector('span');
     if (label !== null && label.textContent !== v.label) label.textContent = v.label;
     b.takeover.disabled = v.disabled;
@@ -733,7 +850,10 @@ class App3D {
       if (p !== null) this.setZoom(p.weapon, av.zoom, av.fov4x3);
       this.look = turnView(this.look, mouse.dx, mouse.dy, effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio));
       // H2b: the input carries the plain view; the host adds the aim punch × weapon_recoil_scale and the inaccuracy cone.
-      const inp = fpsInput(s.human as PlayerId, this.controls.controls(), this.look);
+      if (av.zoom > 0) this.a1.cancelInspect();
+      // W1 (#40): a wheel notch bound to +jump holds JUMP until a tick has seen it (WheelJump).
+      const held = this.controls.controls();
+      const inp = fpsInput(s.human as PlayerId, this.wheelJump.held() ? { ...held, jump: true } : held, this.look);
       s.setHumanInput(inp);
       this.a1.input(inp, p, this.scene.cur.tick, this.scene.cur.round.bomb.state === 'planted');
     } else if (this.camMode === 'free') {
@@ -745,6 +865,7 @@ class App3D {
     const t0 = performance.now();
     this.probe.mark('input', t0);
     const n = this.loop.advance(dt);
+    this.wheelJump.ticksRan(n);
     const t1 = performance.now();
     this.probe.mark('sim', t1);
     this.frames++;
@@ -828,7 +949,7 @@ class App3D {
       eye = vp === null ? this.freePos : { x: vp.x, y: vp.y, z: vp.z + this.eyeZ };
       if (firstPerson) {
         // H2b: the camera follows `recoilTracking` (view_recoil_tracking, default 0.45) of the recoil plus the screen
-        // shake; the crosshair sits where the next bullet goes (view + aim punch × 2).
+        // shake; `aim` is where the next bullet goes (view + aim punch × 2), the crosshair only with follow-recoil on.
         const v = this.aimView(human as PlayerId, this.look);
         yaw = v.camera.yaw;
         pitch = v.camera.pitch;
@@ -904,6 +1025,7 @@ class App3D {
       tracers,
       effects: this.scene.effects,
       bomb,
+      items: this.host(s).worldItems(),
       viewmodel: weapon === null || scoped ? null : { weapon, sinceShot, anim: !firstPerson ? null : exact && vmAnim !== null ? { ...vmAnim, sinceShot: 1e6 } : vmAnim, team: (firstPerson ? humanPawn?.team : vo?.team) ?? 'CT' },
       nowMs: now,
     });
@@ -917,7 +1039,11 @@ class App3D {
       this.summaryCache.invalidate();
       this.summaryLine = null;
     } else {
-      if (over) {
+      if (over && this.h3.makeSession !== null) {
+        // H3: free play has no recording to compare with: the round's result.
+        const why = { elimination: 'elimination', bomb_exploded: 'the bomb', bomb_defused: 'the defuse', time: 'time' }[o.round.reason ?? 'time'];
+        summary = `${o.round.winner ?? '?'} win by ${why} at ${(o.round.endTick / 64).toFixed(2)} s<small>${this.h3.current.title} · Restart to play it again.</small>`;
+      } else if (over) {
         // A test render (exact) parses what is left at once.
         const sum = this.summaryCache.get(s.model, s.log(), `${o.round.endTick}|${this.scene.deaths.size}|${human ?? ''}`, exact ? Infinity : undefined);
         summary = sum === null ? null : `${sum.headline}<small>Restart to watch again, or take control of cart earlier.</small>`;
@@ -926,11 +1052,12 @@ class App3D {
       } else this.summaryCache.warm(s.log());
     }
     const mode = firstPerson ? `You: ${human} · Esc frees the mouse` : human !== null ? `You: ${human} (dead) · spectating` : 'Watching';
-    const canTake = human === null && s.canTakeControl && !this.touchOnly;
-    const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake);
+    const canTake = human === null && s.takeControlBlocked(this.takeTarget()) === null && !this.touchOnly;
+    const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake, this.takeTarget() ?? 'cart');
     const r = this.renderer.renderer.domElement;
-    // The crosshair sits where the next bullet goes (off centre only with a punch; clientHeight read only then).
-    const off = (firstPerson || specPov) && !scoped && (aim.yaw !== yaw || aim.pitch !== pitch) ? aimOffsetPx({ yaw, pitch }, aim, vfovDeg, r.clientHeight) : { x: 0, y: 0 };
+    // W1 (#32): the crosshair stays at the centre (CS2's cl_crosshair_recoil 0: it shows the view, the bullet goes
+    // where the aim punch puts it); with "Crosshair follows recoil" it sits where the next bullet goes.
+    const off = (firstPerson || specPov) && !scoped ? crosshairOffsetPx(this.crosshairRecoil, { yaw, pitch }, aim, (c, a) => aimOffsetPx(c, a, vfovDeg, r.clientHeight)) : { x: 0, y: 0 };
     const radarTeam = firstPerson ? (humanPawn?.team ?? null) : viewTeam;
     // P1: the HUD (DOM) at most once per sim tick or every 15.6 ms, not on every frame of an uncapped loop.
     const hudDue = exact || o.tick !== this.hudTick || now - this.hudAt >= TICK_MS || now < this.hudAt;
@@ -956,6 +1083,7 @@ class App3D {
       summary: over ? summary : null,
       tick: o.tick,
       nowMs: now,
+      items: this.host(s).pawnState(viewId)?.inventory.map((q) => q.item) ?? null,
     });
     const r2 = performance.now();
     if (this.probing) this.probe.mark('hud', r2);
@@ -1041,9 +1169,14 @@ class App3D {
   /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
   private loadSettings(sensFromUrl: boolean): void {
     try {
-      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatency?: boolean; res?: number; recoilTracking?: number };
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatencyOptIn?: boolean; res?: number; recoilTracking?: number; crosshairRecoil?: boolean; wheelJump?: { down?: unknown; up?: unknown }; hotkeys?: unknown; autoFullscreen?: boolean };
+      if (typeof j.crosshairRecoil === 'boolean') this.crosshairRecoil = j.crosshairRecoil;
+      if (typeof j.autoFullscreen === 'boolean') this.autoFullscreen = j.autoFullscreen;
+      if (typeof j.wheelJump === 'object' && j.wheelJump !== null) this.wheelBinds = { down: j.wheelJump.down === true, up: j.wheelJump.up === true };
+      this.hotkeys.keys = parseHotkeys(j.hotkeys);
       this.fpsLimit = parseFpsLimit(j.fps);
-      if (typeof j.lowLatency === 'boolean') this.lowLatency = j.lowLatency;
+      // W1 (#78): off by default (it may flicker); an older stored `lowLatency` no longer counts, so everyone starts off.
+      if (typeof j.lowLatencyOptIn === 'boolean') this.lowLatency = j.lowLatencyOptIn;
       if (typeof j.res === 'number' && Number.isFinite(j.res)) this.resScale = clamp(j.res, 0.25, 2);
       if (j.radar === 'cs2' || j.radar === 'all') this.radarRules = j.radar;
       if (!sensFromUrl && typeof j.sensitivity === 'number') this.sensitivity = clamp(j.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX);
@@ -1057,7 +1190,7 @@ class App3D {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatency: this.lowLatency, res: this.resScale }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatencyOptIn: this.lowLatency, res: this.resScale, crosshairRecoil: this.crosshairRecoil, wheelJump: this.wheelBinds, hotkeys: this.hotkeys.keys, autoFullscreen: this.autoFullscreen }));
     } catch {
       // ignore
     }
@@ -1082,6 +1215,18 @@ class App3D {
     field('set-zoom', () => this.zoomRatio, (v) => (this.zoomRatio = clamp(v, 0.01, 3)));
     field('set-vmfov', () => this.viewmodelFov, (v) => (this.viewmodelFov = clamp(v, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX)));
     field('set-tracking', () => this.recoilTracking, (v) => (this.recoilTracking = clamp(v, 0, 1)));
+    const box = (id: string, get: () => boolean, set: (v: boolean) => void): void => {
+      const input = document.getElementById(id);
+      if (!(input instanceof HTMLInputElement)) return;
+      input.checked = get();
+      input.addEventListener('change', () => {
+        set(input.checked);
+        this.saveSettings();
+        input.blur();
+      });
+    };
+    box('set-xhair-recoil', () => this.crosshairRecoil, (v) => (this.crosshairRecoil = v));
+    box('set-autofs', () => this.autoFullscreen, (v) => (this.autoFullscreen = v));
     this.wirePerfSettings(field);
   }
 
@@ -1178,10 +1323,23 @@ async function boot(): Promise<void> {
     const resParam = params.get('res');
     const res = resParam === null ? NaN : Number(resParam);
     const lowParam = params.get('lowlatency');
-    const a = await loadAssets3d(parseMapId(params.get('map')));
-    const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
-    const world = worldMesh(a.world3d.geometry);
-    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : null, lowParam === null ? null : lowParam !== '0', a.render);
+    const sensOut = Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null;
+    const resOut = Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : null;
+    const lowOut = lowParam === null ? null : lowParam !== '0';
+    // H3: the scenario (?scenario=, default the recorded round) and its map (?map=, default the scenario's).
+    const scenarios = scenarioList();
+    const sc = pickScenario(scenarios, params.get('scenario'));
+    const map = params.get('map') === null ? sc.map : parseMapId(params.get('map'));
+    if (sc.recording === null) {
+      const fa = await loadFreePlayAssets3d(map);
+      const f = freePlay3d(sc, map, fa, tuningJson, scenarios);
+      new App3D(null, f.world, fa.radar, sc.seed, startHuman(params.get('human')) ?? sc.human, sensOut, resOut, lowOut, null, f.scen);
+    } else {
+      const a = await loadAssets3d(map);
+      const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
+      const world = worldMesh(a.world3d.geometry);
+      new App3D(data, world, a.radar, seed, startHuman(params.get('human')), sensOut, resOut, lowOut, a.render, recording3d(sc, map, scenarios));
+    }
     status.hidden = true;
     if (params.get('bench') !== null) void runBench(params);
   } catch (err) {

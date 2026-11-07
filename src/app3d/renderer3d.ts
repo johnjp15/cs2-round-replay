@@ -9,7 +9,8 @@
  *   facing the view direction, crouched shorter; dead ones lie flat and grey. Name tags (canvas sprites, constant
  *   size) over the human's teammates (all of them while watching).
  * - Effects: tracers (the 3D bullets of the last ticks, host.shots()), muzzle flash on the viewmodel, smokes (grey
- *   spheres), fires (orange discs), grenades in flight, the bomb (red box, blinking while planted).
+ *   spheres), fires (orange discs), grenades in flight, the bomb (red box, blinking while planted), W2: dropped guns
+ *   (the viewmodel geometry at world scale, on its side).
  * - First person: the camera at the eye with the view angles; the weapon's viewmodel (A1, src/app3d/viewmodels)
  *   drawn in a second pass (it never clips into walls); the other players' weapons in their hands. Frames: src/app3d/coords.ts (Source x, y, z → Three x, z, −y).
  */
@@ -45,7 +46,7 @@ import {
 import type { PlayerId, Team, Vec3, WeaponId } from '../contracts/index';
 import type { Effect } from '../app/effects';
 import type { WorldTile } from './world-mesh';
-import { ViewmodelRig, WorldWeapons } from './viewmodels/rig';
+import { ViewmodelRig, WorldItemMeshes, WorldWeapons, type DrawItem } from './viewmodels/rig';
 import type { VmAnim } from './viewmodels/pose';
 
 export const TEAM_COLOR: { readonly [K in Team]: number } = { T: 0xe8a33a, CT: 0x4f86d9 };
@@ -93,6 +94,8 @@ export interface DrawFrame {
   readonly tracers: readonly DrawTracer[];
   readonly effects: readonly Effect[];
   readonly bomb: { readonly pos: Vec3; readonly planted: boolean } | null;
+  /** W2: guns lying in the world (Sim3DHost.worldItems()); absent: none. */
+  readonly items?: readonly DrawItem[];
   /** First-person viewmodel: the held weapon and the time since the last shot (s), or null (spectating). */
   readonly viewmodel: { readonly weapon: WeaponId; readonly sinceShot: number; readonly anim?: VmAnim | null; readonly team?: Team } | null;
   readonly nowMs: number;
@@ -159,6 +162,8 @@ export class Renderer3D {
   /** A1: the procedural viewmodels (src/app3d/viewmodels) and the world models on the players. */
   readonly viewmodels = new ViewmodelRig();
   private readonly worldWeapons = new WorldWeapons();
+  /** W2: dropped guns on the ground. */
+  readonly worldItems = new WorldItemMeshes();
   private readonly canvas: HTMLCanvasElement;
   private readonly size = new Vector2();
   /** Triangles drawn in the last frame (stats). */
@@ -251,6 +256,7 @@ export class Renderer3D {
     this.bomb = new Mesh(new BoxGeometry(12, 6, 8), new MeshBasicMaterial({ color: 0xd8322c }));
     this.bomb.visible = false;
     this.scene.add(this.bomb);
+    this.scene.add(this.worldItems.root);
     // Viewmodel (A1): the held weapon with hands, drawn after the world with its own depth.
     this.vmScene.add(this.viewmodels.root);
   }
@@ -286,6 +292,7 @@ export class Renderer3D {
     this.drawPawns(f);
     this.drawTracers(f.tracers);
     this.drawEffects(f.effects, f.nowMs);
+    this.worldItems.update(f.items ?? []);
     if (f.bomb === null) this.bomb.visible = false;
     else {
       this.bomb.visible = true;

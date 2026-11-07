@@ -36,13 +36,19 @@ Without the `walk` argument (or with `null`) the puppets are off and every REPLA
 
 1. `teleport {pos, yaw}`
 2. `set_hp {hp, armor, helmet}`
-3. One `give` per item: primary, secondary, each grenade (a duplicate grenade gets its own `give`), `c4`, `defuser`.
-4. `set_weapon` to the primary, else the secondary, else `knife`.
+3. One `give` per item: primary, pistol, each grenade (a duplicate grenade gets its own `give`), `c4`, `defuser`.
+4. `set_weapon` to the primary, else the recorded secondary, else `knife`.
+
+W2, the pistol (`pistolOf`): the recorded `kit.secondary` (donk's Glock-18, Sp4rtaN's Desert Eagle), else the team's
+default (`DEFAULT_PISTOL`): Glock-18 for T, USP-S for CT. CS2 spawns every player with one
+(`mp_t_default_secondary weapon_glock`, `mp_ct_default_secondary weapon_hkp2000`, which nearly everyone sets to the
+USP-S in the loadout). The 2020 ESEA match page isn't reachable, and the video never shows the others' pistols
+(docs/round-data.md). The drawn weapon is unchanged, so every puppet holds what the tape says.
 
 Ammo:
 
 - The weapon drawn at t = 0 gets the round's `kit.clip/reserve`.
-- Any other gun gets `tuning.weapons[id].clip/reserve`. In this round that is only donk's glock, 20/120. A missing entry throws.
+- Any other gun gets `tuning.weapons[id].clip/reserve`: donk's glock 20/120, the default Glock-18s 20/120 and USP-Ss 12/24. A missing entry throws.
 - Grenades, `c4` and `defuser` are given with 0/0.
 
 Start yaw (`startYaw(model, id)` returns `{yaw, source}`). The first rule that applies wins:
@@ -619,6 +625,7 @@ Every event that doesn't involve cart is on the golden master's observe tick. Wi
 - **Late planter.** A planter back after the recorded draw tick plants late by the c4's deploy (1 s, `damage.defaultDeploySec`, which CS2 needs; the 2D engine doesn't) unless the approach drew it: in never-peeks it did, so the plant is on the tape.
 - **No late defuse**: a defuser who can't be back by his scripted USE start stays LIVE and defuses as AI.
 - **Lagging switch**: a pawn may rejoin up to 2 s behind its tape; until the puppet catches up its scripted shots aim from where it is (the damage is scripted, so kills land on the tape's ticks), and a puppet snap at a teleport point can still happen (B2's rule).
+- **Zwomp 2.8 s early when cart idles** (since T1 #36; diagnosis G7b): in never-peeks, cart-idle and the idle takeovers at T = 0 / 5, sp4rtan meets the idle cart on his flank (LIVE, sighting, 40.06 s) and fires at him. That fire is not on the tape (sp4rtan's recorded fire is 17.8 s and 49.9 s on), so barely, 1,415 u away, legitimately goes LIVE at 40.27 s (trigger 3). His LIVE guard AI on Catwalk (T1's corrected spot) then sees Zwomp coming straight up from the underpass on Zwomp's *inferred* route (observed only from 43.9 s) and kills him for real at 41.41 s (tick 2650; the tape has 2829). Before T1, barely's track had him down the Tunnel stairs, out of that line. Neither cheap fix fits the rules. Re-routing Zwomp's guess moves the no-human run off the golden master. Changing trigger 3 or what a LIVE bot may shoot is a design call that moves other scenarios. Left open.
 - **The recording's own sightings** decide "unexpected enemy in sight" (2 s windows per pair, not positions): a LIVE pawn that runs into a REPLAY enemy the tape doesn't pair it with stays LIVE and the AI fights it.
 
 ### Scenarios (`tests/scenarios.test.ts`, `fixtures/scenarios/*.json`)

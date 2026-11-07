@@ -33,6 +33,9 @@
       #status[hidden] { display: none; }
       #kbhint { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); max-width: min(92%, 760px); margin: 0; padding: 6px 12px; font-size: 13px; text-align: center; color: var(--sand); background: rgba(5, 8, 12, 0.82); border: 1px solid var(--rule); border-radius: 4px; pointer-events: none; z-index: 5; }
       #kbhint[hidden] { display: none; }
+      #ctrlw-banner { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); margin: 0; padding: 3px 10px; font-size: 12px; color: var(--sand); background: rgba(5, 8, 12, 0.7); border: 1px solid var(--rule); border-radius: 4px; pointer-events: none; z-index: 5; white-space: nowrap; }
+      #ctrlw-banner[hidden] { display: none; }
+      #keybinds .keys-check { font-size: 12px; display: inline-flex; gap: 3px; align-items: center; }
       #keybinds { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
       #keybinds .keys-label { font-size: 12px; color: var(--sand-dim); }
       #bar #keybinds button { padding: 3px 7px; font-size: 12px; }
@@ -76,6 +79,10 @@
       #vitals small, #ammo small { font-size: 13px; color: var(--sand-dim); margin-right: 4px; }
       #ammo { position: absolute; bottom: 10px; right: 10px; padding: 6px 14px; font-size: 30px; text-align: right; }
       #ammo .w { font-size: 15px; color: var(--sand-dim); display: block; text-align: right; }
+      /* W2: the viewed pawn's weapon slots, CS2's right-hand list (1 primary, 2 pistol, 3 knife, 4 grenades, 5 C4). */
+      #slots { position: absolute; bottom: 82px; right: 10px; padding: 4px 10px; font-size: 13px; text-align: right; color: var(--sand-dim); line-height: 1.5; }
+      #slots div.on { color: var(--sand, #fff); font-weight: 600; }
+      #slots b { display: inline-block; width: 1.2em; margin-left: 6px; text-align: center; opacity: 0.7; }
       /* The mode line under the score: who you are, unmistakably ("You: cart" vs "Watching"). */
       #mode { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); padding: 3px 12px; font-size: 16px; white-space: nowrap; letter-spacing: 0.02em; }
       #mode.you { color: #fff; box-shadow: inset 0 0 0 1px rgba(108,255,108,0.55); }
@@ -129,6 +136,7 @@
           <canvas id="minimap" width="416" height="416"></canvas>
           <div id="teams" class="slab"></div>
           <div id="vitals" class="slab"><span><small>HP</small><b id="hp">100</b></span><span><small>ARMOR</small><b id="armor">0</b></span></div>
+          <div id="slots" class="slab"></div>
           <div id="ammo" class="slab"><span class="w" id="weapon">Knife</span><b id="clip">–</b> <small id="reserve"></small></div>
           <div id="mode" class="slab"></div>
           <div id="spec" class="slab" hidden><div class="l1"><span class="k">SPECTATING</span><b id="spec-name"></b><span id="spec-mode"></span></div><div class="l2" id="spec-stats"></div><div class="l3" id="spec-hints"></div></div>
@@ -137,6 +145,7 @@
         </div>
         <p id="status">Loading the 3D world…</p>
         <p id="kbhint" role="status" hidden></p>
+        <p id="ctrlw-banner" role="status" hidden></p>
       </div>
       <div id="bar">
         <button id="start" type="button">Start</button>
@@ -158,12 +167,14 @@
         <label title="CS2 zoom_sensitivity_ratio: extra scale while scoped (the sensitivity is also scaled by the zoomed FOV / 90).">Zoom ratio <input id="set-zoom" type="number" step="0.01" min="0.01" max="3" /></label>
         <label title="CS2 viewmodel_fov (60–68).">VM FOV <input id="set-vmfov" type="number" step="1" min="60" max="68" /></label>
         <label title="Recoil tracking: the share of the recoil the camera follows (CS:GO view_recoil_tracking, default 0.45; 0 = the screen stays still and only the bullets climb, 1 = the camera follows the bullets).">Recoil tracking <input id="set-tracking" type="number" step="0.05" min="0" max="1" /></label>
+        <label title="CS2 cl_crosshair_recoil. Off (CS2's default): the crosshair stays at the centre and the view kicks by the recoil tracking; the bullets still land where the recoil puts them (above the crosshair in a spray). On: the crosshair sits where the next bullet goes.">Crosshair follows recoil <input id="set-xhair-recoil" type="checkbox" /></label>
         <label title="Frame rate limit. Uncapped draws frames back to back as fast as the machine allows (lowest input-to-screen latency; one CPU core busy); a number paces to that rate; VSync draws once per display refresh (least power). The display still shows at most its refresh rate. The 64 Hz simulation is the same in every mode.">FPS <select id="set-fps"><option value="uncapped">Uncapped</option><option value="vsync">VSync</option><option value="60">60</option><option value="120">120</option><option value="144">144</option><option value="240">240</option><option value="360">360</option><option value="500">500</option><option value="custom">Custom…</option></select><input id="set-fps-custom" type="number" step="1" min="20" max="1000" placeholder="fps" hidden /></label>
         <label title="Render scale × device pixel ratio (capped at 1.5). Lower is faster on high-DPI screens.">Res <input id="set-res" type="number" step="0.05" min="0.25" max="2" /></label>
-        <label title="Low-latency canvas (desynchronized): Chrome can show frames without waiting for the compositor; lower latency, may tear. Reloads the page.">Low latency <input id="set-lowlat" type="checkbox" /></label>
+        <label title="Low-latency canvas (desynchronized): Chrome can show frames without waiting for the compositor; lower latency, but it may tear or flicker (off by default). Reloads the page.">Low latency (may flicker) <input id="set-lowlat" type="checkbox" /></label>
+        <label title="Go fullscreen with the keyboard locked when the round starts, when you take control and when you click into the game, so Ctrl+W crouches forward instead of closing the tab (Chrome, Edge, Opera, Brave). Off: only the ⛶ button does.">Auto fullscreen <input id="set-autofs" type="checkbox" /></label>
         <span class="sep"></span>
         <span id="keybinds"></span>
-        <span class="help">Click to look · WASD move · Space jump · Ctrl (or C) duck · Shift walk · Mouse 1 fire · Mouse 2 scope · R reload · 1–5 weapons · E use · Esc frees the mouse · Spectating: mouse 1 / Space next, mouse 2 previous, V mode · ⛶ Fullscreen keeps Ctrl+W in the game</span>
+        <span class="help">Click to look · WASD move · Space jump · Ctrl (or C) duck · Shift walk · Mouse 1 fire · Mouse 2 scope · R reload · 1–5 weapons · Q last weapon · F inspect · E use · Esc frees the mouse · Enter start · P pause · Backspace twice restart · Spectating: mouse 1 / Space next, mouse 2 previous, V mode · ⛶ Fullscreen keeps Ctrl+W in the game</span>
       </div>
     </div>
     <script type="module" src="../src/app3d/main.ts"></script>

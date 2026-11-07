@@ -3,7 +3,7 @@
  *
  *   npm run parity -- --app 2d|3d [--times "every 0.5" | "<t>,<t>,…"] [--no-events] [--runs watch,follow]
  *                     [--out <dir>] [--video <mp4>] [--no-browser] [--baseline <json>] [--update-baseline]
- *                     [--write-docs <md>] [--sheets all|fails|none]
+ *                     [--write-docs <md>] [--sheets all|fails|none] [--spectate <id>]
  *   npm run parity:2d     # the milestone gate: whole round, both runs, against docs/parity/baseline-2d.json
  *   npm run parity:3d     # the same for the 3D app once H1's src/app3d is on main
  *
@@ -55,6 +55,8 @@ const BASELINE = arg('--baseline', '');
 const UPDATE_BASELINE = flag('--update-baseline');
 const WRITE_DOCS = arg('--write-docs', '');
 const SHEETS = arg('--sheets', 'all');
+/** 3D: spectate this player's eyes at every timestamp instead of the video's camera schedule (e.g. `--spectate cart`). */
+const SPECTATE = arg('--spectate', '');
 /** Reuse the 2D app screenshots already in <out>/app (when all are there) instead of driving the browser again. */
 const REUSE_SHOTS = flag('--reuse-shots');
 const PYTHON = process.env['PYTHON'] ?? 'python3';
@@ -259,7 +261,7 @@ async function main(): Promise<void> {
         log(`app screenshots: ${list.length}, page vs Node positions at the landed ticks: max ${worst.toFixed(3)} u`);
         if (worst > 0.01) throw new Error('the page does not show the Node run (positions differ): parity screenshots would be wrong');
       } else {
-        const schedule = times.map((t) => ({ t, tick: Math.min(tickOfT(t) + 1, sim.entries.length - 1), watched: cameraAt(round, t) }));
+        const schedule = times.map((t) => ({ t, tick: Math.min(tickOfT(t) + 1, sim.entries.length - 1), watched: SPECTATE !== '' ? SPECTATE : cameraAt(round, t) }));
         const list = await shots3d(ROOT, schedule, join(OUT, 'app3d'));
         shots = new Map(list.map((s) => [s.t, s]));
         let worst = 0;
@@ -311,7 +313,7 @@ async function main(): Promise<void> {
         const worst = f.players.filter((p) => p.verdict === 'fail' && p.error !== null).sort((a, b) => (b.error as number) - (a.error as number))[0];
         sheetSpec.push({
           focus: worst?.id ?? null,
-          out, video: join(OUT, 'truth', 'frames', `f_${String(tt.frame).padStart(5, '0')}.jpg`), sim: shot?.path ?? null, simLabel: APP === '3d' ? `sim (3D app, ${cameraAt(round, tt.t)}'s eyes)` : 'sim (2D app)', simRadar: shot === undefined,
+          out, video: join(OUT, 'truth', 'frames', `f_${String(tt.frame).padStart(5, '0')}.jpg`), sim: shot?.path ?? null, simLabel: APP === '3d' ? `sim (3D app, ${SPECTATE !== '' ? SPECTATE : cameraAt(round, tt.t)}'s eyes)` : 'sim (2D app)', simRadar: shot === undefined,
           title: `${name} · t ${tt.t.toFixed(3)} s · tick ${f.tick} · frame ${tt.frame} · camera ${f.watched ?? f.layout} · ${f.verdict.toUpperCase()}`,
           lines: [`HUD (video|sim): ${hudLine || '-'}`, ...(failing.length === 0 ? [] : [`FAIL ${failing.join(' · ')}`])],
           dots: f.players.filter((p) => p.video !== null || p.sim !== null).map((p) => ({ id: p.id, colour: p.source === 'video-dot' || p.source === 'recording-observed' ? COLOUR[p.id] : 'ct', video: p.source === 'video-dot' || p.source === 'recording-observed' ? p.video : null, sim: p.sim, ok: p.verdict !== 'fail' })),

@@ -120,6 +120,9 @@ ticks and 23 jitters; the fixes:
   probability `ai.headshotAimRatio` (0.35), else chest (pitch from `aimPitch`, `docs/combat.md`). The offset halves
   every `ai.aimSettleSec` (0.15 s) once it is engaged. Each shot adds a fresh N(0, `ai.aimResidualDeg` = 0.5°) to yaw and
   pitch for that tick only.
+- **Recoil control (B1, 3D host):** the wanted yaw and pitch are the target's minus `self.aimPunch` (the weapon's aim
+  punch × recoilScale the next shot will get), so the spray stays on the target like a player pulling down; the errors
+  above stay centred on the target. The 2D host has no recoil and passes none (docs/weapons.md).
 - **Counter-strafe first (G8):** it fires only once its speed is at most `weaponModel.moveStartFraction` (0.34,
   `CS_PLAYER_SPEED_DUCK_MODIFIER`: below it moving adds no inaccuracy, docs/weapons.md) of the held weapon's run speed
   (AK 73 u/s); before G8 a pawn reacting on the move could fire at full speed.
@@ -202,6 +205,16 @@ round shows it).
 | Defuse too late (F) | LIVE sp4rtan (kit, AK) ~700 units from the bomb with 6 s left: no defuse start, escapes, survives (T `bomb_exploded`); the same with 12 s left: walks there and defuses |
 | Defuse in progress that can't finish (F) | zwomp (no kit) defusing with 9.5 s left goes LIVE: `defuse_stop` at once, runs, 1,857 units out at the blast, 100 HP |
 | In the round (`tests/scenarios.test.ts`, F) | `flank-sp4rtan`: donk and barely, LIVE after the T win, survive the explosion (donk 1,826 units out, barely 1,564 units out on 74 HP; he went LIVE 5.7 s before it) instead of dying in it |
+
+## Map knowledge (H3)
+
+The AI asks a `MapNav` (`src/sim2d/map-nav.ts`) for everything about the map: walkability, paths, straight walks, the
+bomb sites (`inBombsite`, `bombsitePoint`), the spawns (`spawnCentre`, for the hold facing) and the blast escape. On
+Mirage's recorded round it is the 2020 grid (`legacyMapNav`: the place names as before; behaviour, scenario outcomes
+and golden digests unchanged). In free play it is CS2's nav of any map with the map package's facts (docs/nav.md
+"CS2 nav"), and there the AI also jumps the nav's jump links, ducks through its crouch areas and jumps while unsticking.
+Free play's roles and plan: docs/scenarios.md. The hosts take either (`Sim3DHost(nav: NavMesh | MapNav, …)`,
+`Sim2DHost(…, aiNav)`).
 
 ## What B4 needs to know
 

@@ -41,16 +41,72 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
 
 ## Controls
 
-Watching (default, every device) and dead: spectating, as CS2 (below). P pause.
+Watching (default, every device) and dead: spectating, as CS2 (below).
+
+**Round hotkeys (W1, #49)**: **Enter** starts the round, **P** pauses / resumes, **Backspace twice within 1 s**
+restarts (one accidental tap does nothing). None is near a hand on WASD and the mouse, none is a CS2 default bind;
+they work while the pointer is locked. Rebindable under **Keys** (Start / Pause / Restart buttons there): game keys
+(WASD, Q, E, R, F, G, B, C, T, V, Z, X, 1–5, Space, Ctrl, Shift, Alt, Tab, the arrows, the rebindable controls'
+keys) and browser keys (Esc, ⌘, F11, F12) are refused; the page's Start / Pause / Restart buttons show the bindings
+as tooltips. src/app3d/hotkeys3d.ts, hotkeys-dom.ts; kept in the settings (`hotkeys`).
 
 **E** or the button takes control of cart from that tick (the speed drops to 1×; the pointer is locked): mouse look,
 W / S forward / back and A / D strafe relative to the view (CS2's), Space jump, Ctrl or C duck, Shift walk, mouse 1
 fire / throw, mouse 2 scope (the input's ATTACK2: the scope is the engine's, H2b: levels and FOVs from
-data/weapons.json, scoped accuracy and speed, a reload or a bolt cycle drops it), R reload, 1–5 weapon slots (as the 2D app), E use (plant, defuse). Esc frees the mouse. Dead,
+data/weapons.json, scoped accuracy and speed, a reload or a bolt cycle drops it), R reload, 1–5 weapon slots (as the 2D app: 1 primary, 2 pistol, 3 knife, 4 grenades, 5 C4; the HUD lists the
+carried ones above the ammo, the held one bright), E use (plant, defuse, W2: pick up the gun looked at within 80 units,
+swapping a full slot; walking over a gun whose slot is empty picks it up), G drop the active gun (docs/sim3d.md "World
+items"). Esc frees the mouse. Dead,
 the camera spectates again (your living teammates first, as CS2 competitive's mp_forcecamera 1). G (drop) is not implemented: the engine has no dropped weapons yet (H4).
+
+W1 additions (CS2's default binds):
+
+- **Q** = `lastinv`: back to the item held before the last switch (knife ↔ rifle, grenades too: as many slot-4
+  presses as the grenade cycle needs), each switch with its deploy time (the host's `set_weapon`). It goes through
+  the Session's taped slot presses (`requestWeaponSlot`), so a rewind replays it (input3d.ts `lastInvSlots`,
+  `LastInv`).
+- **F** = `+lookatweapon`: a 2.5 s inspect of the viewmodel per class (rifles and snipers rolled to both sides,
+  pistols turned and flipped, the knife spun round its axis, C4 / grenades turned over; viewmodels/pose.ts
+  `inspectPose`). A shot, a swing, a switch, a reload, a throw, the pin or the scope cuts it off. No gameplay effect.
+- **Knife**: mouse 1 slashes, mouse 2 stabs, with CS's numbers (docs/weapons.md "Knife"); the viewmodel slashes
+  (alternating direction) and stabs as the host swings, with the slash / hit / wall sounds.
+- **Jump on scroll down / up** (two checkboxes under Keys, off by default; CS2's `bind mwheeldown +jump`): every
+  wheel notch over the view (under pointer lock or while playing) is a jump press. A notch between two ticks is held
+  until a tick has run with JUMP, then released for a tick, so it registers on the next tick at any frame rate and the
+  next notch is a fresh press (input3d.ts `WheelJump`). The wheel never changes weapons here.
 
 Duck, walk, jump and use are rebindable under **Keys** in the bar (one localStorage setting
 with the 2D page; Reset keys = CS2's defaults).
+
+### Ctrl+W, Ctrl+scroll and pinch zoom (W1, #35, #53)
+
+John: "totally block the ctrl+w and ctrl+scroll inputs". What the page does:
+
+- **Ctrl / ⌘ + wheel and trackpad pinch never zoom the page**: a non-passive capture `wheel` listener on the window
+  cancels every wheel event with ctrlKey or metaKey (Chromium and Firefox send a trackpad pinch as a Ctrl+wheel),
+  anywhere on the page, pointer-locked or not; Safari's `gesturestart / change / end` are cancelled too; the view
+  has `touch-action: none`. Under pointer lock (or over the view while playing) every wheel event is cancelled (no
+  page scroll).
+- **Ctrl+W / Ctrl+S**: cancelled in the capture phase of the window `keydown` (before anything else; not stopped,
+  the movement still needs the W).
+- **Auto fullscreen** (setting, on by default): Start, taking control and a click into the game while playing go
+  fullscreen and lock the keyboard (`navigator.keyboard.lock`, play-guard.ts `enter()`), so in Chromium Ctrl+W
+  reaches the page and is blocked. Off: only ⛶ does it.
+- **Banner**: while you play and Ctrl+W can still close the tab, a line at the bottom says "Press ⛶ for fullscreen to
+  disable Ctrl+W" (or, without Keyboard Lock, that the browser asks before leaving).
+- The `beforeunload` leave-site guard stays for what no page can block.
+
+| Browser | Not fullscreen | Fullscreen |
+| --- | --- | --- |
+| Chrome, Edge, Opera, Brave (Windows, Linux) | Ctrl+W **guarded** (the browser closes tabs before the page sees the key; the "Leave site?" dialog asks first); banner | Ctrl+W **blocked** (Keyboard Lock): crouches forward |
+| Firefox (Windows, Linux) | Ctrl+W **guarded**; banner | Ctrl+W **guarded** (no Keyboard Lock); banner |
+| Safari / any browser on macOS | Ctrl+W is no shortcut (crouches forward); ⌘W **guarded** (no page can capture it) | the same |
+| Ctrl / ⌘ + scroll, trackpad pinch | **blocked** in all of them | **blocked** |
+
+`npm run check:browser:3d:w1` (after `npm run build:3d`) checks in headless Chromium that Ctrl+wheel,
+⌘+wheel and a trackpad pinch (CDP `Input.synthesizePinchGesture`, mouse source) leave `visualViewport.scale`,
+`devicePixelRatio` and `innerWidth` unchanged (the same pinch zooms a page without the game to 2.5×), and that a
+synthesized Ctrl+wheel and Ctrl+W keydown are `defaultPrevented`.
 
 **Ctrl+W** (crouch forward) is "close tab" on Windows and Linux. **⛶ Fullscreen** in the bar enters fullscreen and,
 in Chromium browsers (Chrome, Edge, Opera, Brave; feature-detected `navigator.keyboard.lock`), locks the keyboard, so
@@ -79,7 +135,8 @@ docs/app.md "Ctrl+W, fullscreen and key bindings".
   view angles (interpolated), their viewmodel (the box gun, flashing when they fire), their HP / armor / weapon /
   ammo in the HUD, and their crosshair at their aim, moving with the recoil-tracked camera, the scope overlay
   instead while scoped. The angles, crosshair and scope come from `Sim3DHost.aimView(id, view, tracking)` (H2b's
-  weapon mechanics: camera = view + tracking × the recoil + the screen shake, crosshair = where the next bullet goes;
+  weapon mechanics: camera = view + tracking × the recoil + the screen shake, crosshair = the screen centre, or where
+  the next bullet goes with Crosshair follows recoil (W1);
   `spectatedView` in main.ts, with the viewer's Recoil tracking setting). The crosshair offset is the projection of the aim
   direction through the camera (`aimOffsetPx`). No crosshair in third person or free fly.
 - **Who**: watching, every living player in id order; dead, your living teammates (everyone once they're dead).
@@ -129,7 +186,7 @@ code isn't public; it shows the same "?" and fading X, but the timings are **unv
 | Scoped FOVs | AWP 40 / 10, SSG 08 40 / 15, AUG and SG 553 45, autosnipers 40 / 15 (4:3 degrees) | CS:GO weapon data `zoom_fov_1/2` as documented by players | **unverified** for CS2; H2's table replaces them |
 | Zoomed sensitivity | sensitivity × (zoomed FOV / 90) × zoom_sensitivity_ratio (linear in the FOV) | [SDK] view.cpp (`m_flFOVSensitivityAdjust`); [CVARS] `zoom_sensitivity_ratio 1` (0.01–3) | rule: Source; the default: yes |
 | viewmodel_fov | 60, 60–68 (a 4:3 FOV, hor+ like the world's) | [CVARS] `viewmodel_fov 60 (min 60, max 68)`; [SDK] `fovViewmodel = ScaleFOVByWidthRatio(...)` | yes (CS:GO allowed 54) |
-| Aim punch | bullets: view + punch × weapon_recoil_scale (2) + the inaccuracy cone; camera: view + punch × 2 × view_recoil_tracking (default 0.45, the **Recoil tracking** setting, 0–1) + the view punch (screen shake); crosshair: at the bullets' direction (view + punch × 2). The punch is H2's (src/engine/weapons), in the host since H2b | CS:GO cvars | **unverified** (both are hidden in CS2: not in the dump) |
+| Aim punch | bullets: view + punch × weapon_recoil_scale (2) + the inaccuracy cone; camera: view + punch × 2 × view_recoil_tracking (default 0.45, the **Recoil tracking** setting, 0–1) + the view punch (screen shake); crosshair: at the screen centre (cl_crosshair_recoil 0, W1), or at the bullets' direction (view + punch × 2) with **Crosshair follows recoil**. The punch is H2's (src/engine/weapons), in the host since H2b | CS:GO cvars | **unverified** (both are hidden in CS2: not in the dump) |
 | Eye height | 64 standing, 46 ducked | Source view offsets (`damage.eyeHeight`) | as the sim |
 | Duck transition (camera) | 0.4 s down, 0.2 s up, SimpleSpline (3x² − 2x³) | [SDK] TIME_TO_DUCK, TIME_TO_UNDUCK, SetDuckedEyeOffset | **unverified** for CS2 (the shared movement ducks the hull at once; M1 owns that) |
 
@@ -144,12 +201,20 @@ count. DPI changes counts per inch, not this formula (cm/360 = 360 / (0.022 × s
 the view, tag on hits and own the scope; the app only draws what `Sim3DHost.aimView` returns, so nothing in the
 headless host depends on the view code.
 
+**The crosshair shows the view, not the bullet (W1, #32 / #77).** CS2's default `cl_crosshair_recoil 0`: the
+crosshair stays at the centre of the screen while the view kicks; the bullets still go where CS2 puts them (view +
+aim punch × weapon_recoil_scale + the cone: the host's `fireShot`, unchanged), so in a spray they land above the
+crosshair, exactly as in CS2. **Crosshair follows recoil** (checkbox, off by default; cl_crosshair_recoil 1) draws it
+where the next bullet goes instead (input3d.ts `crosshairOffsetPx`; kept in the settings as `crosshairRecoil`). The
+same holds for a spectated player's first-person crosshair. `npm run check:browser:3d:crosshair` (after
+`npm run build:3d`) holds mouse 1 for 10+ AK shots and checks the crosshair's style and on-screen box never change
+while the camera kicks, then that it moves with the setting on.
+
 **Recoil tracking** (settings field, 0–1, default 0.45; CS:GO's `view_recoil_tracking`, hidden in CS2): how much of
-the recoil the camera follows, i.e. "how much the screen moves vs how much the crosshair moves". The bullets don't
-change: they always go to view + punch × 2, and the crosshair is drawn there. At 0.45 (CS:GO / CS2 feel) the camera
-climbs with 45 % of the spray and the crosshair climbs the rest on screen; at 0 the screen stays still (only the
-screen shake) and the crosshair alone climbs the full pattern; at 1 the camera follows the bullets and the crosshair
-stays at the centre. Kept in localStorage with the sensitivity (`recoilTracking`). `npm run check:browser:3d` checks
+the recoil the camera follows. The bullets don't change: they always go to view + punch × 2. At 0.45 (CS:GO / CS2
+feel) the camera climbs with 45 % of the spray and the bullets climb the rest above the crosshair; at 0 the screen
+stays still (only the screen shake); at 1 the camera follows the bullets, which then land on the crosshair. With
+Crosshair follows recoil on, the crosshair marks the bullets at every setting. Kept in localStorage with the sensitivity (`recoilTracking`). `npm run check:browser:3d` checks
 the kick and recovery (screenshot app3d-g-spray-kick.jpg) and the 0 / 1 ends of the setting.
 
 ## Viewmodels (A1)
@@ -171,7 +236,30 @@ USP-S (suppressor), P2000, knife, C4 (bricks, keypad, display), HE, flashbang, s
   0.52 / 0.78 of 2.5 s), knife slash (0.4 s), C4 plant (lowered, keypad tapping), grenade pin pulled and arm back while
   primed, the throw. Scoped: hidden. Walking bob.
 - **World models**: every other player's held weapon in its right hand (the same models, one merged mesh), swapped
-  when the weapon changes; on death it lies on the floor beside the body (the dropped weapon).
+  when the weapon changes. W2: a dead player's gun is a world item (docs/sim3d.md "World items"), drawn by
+  `WorldItemMeshes` on its side where it landed; the body's hand model is hidden.
+- **Hands (W2, `rig.ts` armParts)**: per class. Rifles and snipers: the right glove wraps the pistol grip (thumb over
+  the top, index on the trigger), its forearm (`forearm`: a glove cuff then the sleeve, a box along wrist → elbow)
+  runs back to the lower right out of view; the left glove cups the handguard from below (fingers up the far side,
+  thumb on the near side) with its forearm down to the lower left (it follows the mag in a reload). Pistols: the
+  right hand on the grip, the left wrapped round it from the left, forearms to both lower corners. Knife and grenades:
+  the right hand only (CS2's one-handed idle). C4: both hands under the brick. Before W2 the forearms were rotated
+  boxes whose wrist ends didn't meet the hands (the left sleeve floated beside the AK).
+- **Knife (W2)**: CS2's default knife at 11.8 in (30 cm): a 6.6 in drop-point blade (bright edge bevel rising to the
+  point, dark fuller, polished spine), a steel guard, a 4.3 in grip with four wrap rings and a pommel; ~250 triangles
+  (`taper` in parts.ts gives the point). Idle: low on the right, point up and in toward the crosshair, edge turned
+  down-left, a slow 0.4 Hz breathing bob. Hooks for W1: `VmAnim.stab` / `VmAnim.inspect` (seconds since started)
+  give the pose phases `stab` and `inspect` (placeholder motions in `pose.ts`; W1 fills the sequencing).
+
+Before / after W2 (`tools/viewmodel-shots.ts`, the lower-right part of a 1280×720 view, T sleeves):
+
+| | before | after |
+| --- | --- | --- |
+| AK-47 | ![](img/w2-vm-ak47-before.jpg) | ![](img/w2-vm-ak47-after.jpg) |
+| USP-S | ![](img/w2-vm-usps-before.jpg) | ![](img/w2-vm-usps-after.jpg) |
+| Knife | ![](img/w2-vm-knife-before.jpg) | ![](img/w2-vm-knife-after.jpg) |
+| HE | ![](img/w2-vm-he-before.jpg) | ![](img/w2-vm-he-after.jpg) |
+
 
 ![AK-47](img/app3d-viewmodel-ak47-idle.jpg)
 ![AK-47 mid-reload, mag out](img/app3d-viewmodel-ak47-reload.jpg)
@@ -197,6 +285,15 @@ something solid within 256 units above are indoors and darker (Apartments, Conne
 sandstone ramp by height, shaded by how much they face the sun (two-sided), tinted 30 % toward the floor colour in
 front of them, darker toward their foot, with ±3 % grain per triangle. The mesh is cut into 1024-unit tiles so the
 renderer culls what is off screen; everything is unlit at run time (colours baked), ≈ 73k triangles.
+
+## Scenarios (H3)
+
+`?scenario=<name>` picks a scenario from `data/scenarios/` (default `mirage-sp4rtan-1v3`, the recorded round) and
+`?map=<package>` its map; the bar's **Scenario** and **Map** pickers (`src/app3d/scenarios3d.ts`) reload the page
+with them. A free-play scenario (no recording) builds its Session from the map package's CS2 nav and facts
+(`FreePlayCore`, docs/scenarios.md): every bot is live, E (or the button) takes over **the player you spectate**,
+the floors and the radar use the map's own radar and transform, and the summary is the round's result. The
+single-file page embeds the default scenario only (its pickers list just it); free play needs `npm run build:3d`.
 
 ## Data, build and deploy
 

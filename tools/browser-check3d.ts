@@ -16,9 +16,10 @@
  *     is 1×; the mouse turns the view by exactly counts × 1.25 × 0.022° (pointer-lock deltas through the page's
  *     automation hook, since a headless page can't lock the pointer); aims at Lokier's head, clicks mouse 1 and checks
  *     the shot was fired (the HUD's ammo drops, a tracer); screenshot (f) first person; then (H2b) sprays ~0.8 s: the
- *     camera kicks up and the crosshair rises to where the bullets go (screenshot (g)), and both recover after release;
- *     with the "Recoil tracking" setting at 0 the camera stays still while the crosshair climbs, at 1 the camera takes
- *     all the recoil and the crosshair stays centred;
+ *     camera kicks up while the crosshair stays at the centre (W1: CS2's cl_crosshair_recoil 0; screenshot (g)), and
+ *     the camera recovers after release; with "Crosshair follows recoil" on (W1) and the "Recoil tracking" setting at
+ *     0 the camera stays still while the crosshair climbs to the bullets, at 1 the camera takes all the recoil and the
+ *     crosshair stays centred;
  *  4. U1, spectating: at the start the T radar shows no CT (nobody spotted), "show everyone" shows all ten; first
  *     person through Sp4rtaN's eyes shows his HP / armor / ammo / weapon, the crosshair, the spectator panel
  *     ("SPECTATING sp4rtan", 1st person) and "Watching"; mouse 1 / Space / mouse 2 switch player, V cycles 1st → 3rd
@@ -26,7 +27,10 @@
  *     screenshots app3d-spectate-*.jpg;
  *  5. A1 (tools/browser-check3d-a1.ts): audio starts on a click, firing schedules a sound, the AK reload animation
  *     runs for its reload time; viewmodel screenshots (docs/img/app3d-viewmodel-*.jpg);
- *  6. fails on page errors, console errors or requests to other origins.
+ *  6. H3 (normal build only): the Scenario / Map pickers list the scenarios; `?scenario=dust2-5v5` (free play on CS2's
+ *     Dust II) loads, plays at 4× for a few seconds with the bots moving, E takes over the spectated pawn; screenshots
+ *     app3d-freeplay-dust2-*.jpg;
+ *  7. fails on page errors, console errors or requests to other origins.
  * Port: `--port <n>` or CHECK3D_PORT (default 4180).
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
  */
@@ -130,6 +134,30 @@ async function rate(page: Page, speed: number): Promise<{ fps: number; tps: numb
 }
 
 type Mark = { id: string; team: string; kind: string; alpha: number };
+
+/** H3: the scenario pickers and free play on de_dust2 (normal build). */
+async function freePlayChecks(browser: Browser, problems: string[]): Promise<Record<string, unknown>> {
+  const page = await open(browser, 1280, 720, problems, '?scenario=dust2-5v5');
+  const options = await page.$$eval('#set-scenario option', (os) => os.map((o) => (o as HTMLOptionElement).value));
+  const maps = await page.$$eval('#set-map option', (os) => os.map((o) => (o as HTMLOptionElement).value));
+  if (!options.includes('dust2-5v5') || !options.includes('mirage-sp4rtan-1v3')) problems.push(`free play: scenario picker lists ${options.join(', ')}`);
+  const shot0 = await shot(page, 'freeplay-dust2-start');
+  const p0 = await page.evaluate(() => window.__cs2sim3d?.session().host.observe().pawns.map((p) => ({ id: p.id, x: p.pos.x, y: p.pos.y })) ?? []);
+  await page.click('#start');
+  await page.click('button[data-speed="4"]');
+  await page.waitForFunction(() => (window.__cs2sim3d?.stats().tick ?? 0) >= 64 * 8, null, { timeout: 120_000 });
+  const p1 = await page.evaluate(() => window.__cs2sim3d?.session().host.observe().pawns.map((p) => ({ id: p.id, x: p.pos.x, y: p.pos.y })) ?? []);
+  const moved = p1.filter((q, i) => Math.hypot(q.x - (p0[i]?.x ?? q.x), q.y - (p0[i]?.y ?? q.y)) > 200).length;
+  if (moved < 8) problems.push(`free play: only ${moved} of 10 bots moved more than 200 units in 8 s`);
+  const shot1 = await shot(page, 'freeplay-dust2-8s');
+  await page.keyboard.press('KeyE');
+  await page.waitForFunction(() => window.__cs2sim3d?.session().human !== null, null, { timeout: 10_000 }).catch(() => problems.push('free play: E did not take over the spectated pawn'));
+  const human = await page.evaluate(() => window.__cs2sim3d?.session().human ?? null);
+  await page.waitForTimeout(500);
+  const shot2 = await shot(page, 'freeplay-dust2-takeover');
+  await page.close();
+  return { scenarios: options, maps, movedAfter8s: moved, human, shots: [shot0, shot1, shot2] };
+}
 
 /** U1: the radar's CS2 rules, first-person spectating (HUD, crosshair, panel) and the spectator controls. */
 async function spectateChecks(browser: Browser, problems: string[], shots: string[]): Promise<Record<string, unknown>> {
@@ -362,8 +390,8 @@ async function main(): Promise<void> {
     report['fire'] = { shots: t1.humanShots, hits: t1.humanHits, clip: [clipBefore, clipAfter], hp: t1.hud.hp, killfeed: feed };
     if (t1.humanShots < 1 || clipAfter === clipBefore) problems.push(`firing: ${JSON.stringify(report['fire'])}`);
     shots.push(await shot(p, 'f-first-person'));
-    // 3b. H2b: recoil on the camera and the crosshair. Spray ~0.8 s at the floor in front of cart (the bullets kick
-    // the camera up by 45 % of the punch and move the crosshair to where they go), then release: both recover.
+    // 3b. H2b: recoil on the camera. Spray ~0.8 s at the floor in front of cart (the bullets kick the camera up by 45 %
+    // of the punch; W1: the crosshair stays at the centre, CS2's cl_crosshair_recoil 0), then release: it recovers.
     const camPitch = async (): Promise<number> => (await p.evaluate(() => window.__cs2sim3d?.test.state().camera.pitch ?? null)) ?? 0;
     const crossXf = async (): Promise<string> => p.evaluate(() => document.getElementById('crosshair')?.style.transform ?? '');
     await p.waitForTimeout(1500);
@@ -386,12 +414,22 @@ async function main(): Promise<void> {
     // Source pitch: − = up. The camera kicks up at least 1.5° (45 % of ≥ 3.5° of punch after ~8 bullets) and the
     // crosshair rises above the centre; 1.5 s later both are back (within 0.2° and 2 px).
     if (!(pitchSpray < pitch0 - 1.5)) problems.push(`recoil: camera did not kick (${JSON.stringify(report['recoil'])})`);
-    if (!(crossY(xfSpray) < -5)) problems.push(`recoil: crosshair did not rise (${JSON.stringify(report['recoil'])})`);
+    if (xfSpray !== '') problems.push(`recoil: the crosshair left the centre with "Crosshair follows recoil" off (${JSON.stringify(report['recoil'])})`);
     if (!(Math.abs(pitchAfter - lookAfter) < 0.2 && Math.abs(crossY(xfAfter)) < 2)) problems.push(`recoil: did not recover (${JSON.stringify(report['recoil'])})`);
     // 3c. H2b: the "Recoil tracking" setting (view_recoil_tracking) sets the camera's share of the recoil: spray for
     // 0.5 s at 0 (camera still but for the screen shake, < 0.6°; the crosshair takes it all) and at 1 (the camera takes
     // it all; the crosshair stays within a few px of the centre: the screen shake, which the bullets don't follow).
     const tracking: Record<string, { camera: number; crosshairY: number }> = {};
+    // W1: the crosshair marks the bullets only with "Crosshair follows recoil" (cl_crosshair_recoil 1).
+    const followRecoil = async (on: boolean): Promise<void> =>
+      p.evaluate((v) => {
+        const b = document.getElementById('set-xhair-recoil');
+        if (b instanceof HTMLInputElement && b.checked !== v) {
+          b.checked = v;
+          b.dispatchEvent(new Event('change'));
+        }
+      }, on);
+    await followRecoil(true);
     for (const k of ['0', '1']) {
       await p.evaluate((v) => {
         const f = document.getElementById('set-tracking');
@@ -415,6 +453,7 @@ async function main(): Promise<void> {
     if (!(Math.abs(tracking['0']?.camera ?? 9) < 0.6 && (tracking['0']?.crosshairY ?? 0) < -10)) problems.push(`recoil tracking 0: ${JSON.stringify(report['recoilTracking'])}`);
     if (!((tracking['1']?.camera ?? 0) < -2 && Math.abs(tracking['1']?.crosshairY ?? 99) < 8)) problems.push(`recoil tracking 1: ${JSON.stringify(report['recoilTracking'])}`);
     if (stored !== 1) problems.push(`recoil tracking not persisted: ${JSON.stringify(report['recoilTracking'])}`);
+    await followRecoil(false);
     await p.evaluate(() => {
       const f = document.getElementById('set-tracking');
       if (f instanceof HTMLInputElement) {
@@ -428,6 +467,7 @@ async function main(): Promise<void> {
     report['screenshots'] = shots.map((x) => x.replace(ROOT + '/', ''));
     // 5. A1: sound and the viewmodels.
     await a1Checks(browser, { open: (w, h) => open(browser, w, h, problems), seek, out: OUT, root: ROOT }, problems, report);
+    if (!SINGLE) report['freePlay'] = await freePlayChecks(browser, problems);
   } finally {
     await browser.close();
     server.close();
