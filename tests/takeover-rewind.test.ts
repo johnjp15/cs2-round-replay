@@ -192,7 +192,7 @@ describe('release without a rewind (CS2: the player leaves; not offered by the a
 });
 
 describe('scenario takeover-duel (G4)', () => {
-  it('watch to 18.0 s, take control at the window, take the hit, kill Lokier, play the recording: the round is the tape (G5)', () => {
+  it('watch to 18.0 s, take control at the window, take the hit, kill Lokier, play the recording: Lokier dies to his real headshot, the rest is the tape (D1)', () => {
     const sc = loadScenario(`${ROOT}/fixtures/scenarios/takeover-duel.json`);
     expect(sc.takeover).toBe(18);
     const run = runHarness(data, { human: sc.human, driver: HumanBot.fromScenario(data, sc), lastTick: 'end', seed: sc.seed, takeover: tickOf(sc.takeover ?? 0) });
@@ -202,12 +202,13 @@ describe('scenario takeover-duel (G4)', () => {
     expect(tl.filter((x) => x.kind === 'takeover').map((x) => x.tick)).toEqual([1152]);
     const ds = deaths(run.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}${d.headshot ? ' HS' : ''}`);
     const gd = deaths(goldenEntries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}${d.headshot ? ' HS' : ''}`);
-    // G5: the hit lands on its recorded tick (Lokier saw the puppet on course), cart is in the recorded duel, his first
-    // shot (18.72 s) would hit and he is still firing at 18.80 s, so the recorded kill lands on the tape's tick: every
-    // death is the golden master's (before G5 his real headshot killed Lokier at 18.72 s, after a hit at 18.59 s).
-    expect(ds).toEqual(gd);
-    expect(ds.find((d) => d.includes('>lokier'))).toBe('1203 cart>lokier HS');
+    // The hit lands on its recorded tick (Lokier saw the puppet on course): cart can still die to Lokier's tape shot if he
+    // stands in it (27 HP, so sp4rtan's post-round shot still kills him). D1 (John 13:10): his first shot (18.72 s) is a
+    // real headshot and kills Lokier then, 0.08 s before the tape (G5 held it to the recorded 18.80 s); every other death
+    // is the golden master's, on its tick, and nobody goes LIVE (inside the drift window the tape's kill was coming).
+    expect(ds.filter((d) => !d.includes('>lokier'))).toEqual(gd.filter((d) => !d.includes('>lokier')));
+    expect(ds.find((d) => d.includes('>lokier'))).toBe('1198 cart>lokier HS');
     expect(tl.some((x) => x.kind === 'live')).toBe(false);
-    expect(summarize(run.model, run.entries).headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
+    expect(summarize(run.model, run.entries).headline).toBe('Same result, different round: CT defuse, 0.72 s left; 1 kill changed');
   }, 120_000);
 });

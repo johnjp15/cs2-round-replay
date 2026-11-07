@@ -4,14 +4,13 @@
  * Lokier's head hitbox (yaw and pitch from his eye to the head's centre) and fires one AK-47 bullet.
  *
  * - Aimed at the head where the line is open: the bullet enters the head hitbox (an AK-47 headshot that kills, by the
- *   CS damage math, src/sim2d/weapons.ts bulletDamage); G6: the window opens inside cart's recorded duel with Lokier
- *   (G5), so the engine reports it as a blocked hit and the duel lands the tape's kill.
+ *   CS damage math, src/sim2d/weapons.ts bulletDamage); G6: the window opens inside cart's recorded duel with Lokier;
+ *   D1 (John 2026-11-07 13:10): the human's shots do real damage there too, so the bullet kills him at once.
  *   H2b: the bullet has CS2's spread, so cart first stops (16 ticks standing still, as a player stops before a tap):
  *   running, the AK's cone is too wide for a head at 500 u.
  * - The same shot 10° off in yaw misses everyone.
  * - Aimed at Lokier's head while the window wall is between them: H2b's penetration takes the AK bullet through the
- *   wall (one surface, less damage than in the open); inside the recorded duel it is reported as a blocked hit and
- *   does no damage. (A wall a bullet can't pass: tests/sim3d-spray.test.ts.)
+ *   wall (one surface, less damage than in the open); D1: inside the recorded duel too, that damage is real. (A wall a bullet can't pass: tests/sim3d-spray.test.ts.)
  *
  * Aiming is exact: the step that fires moves the pawns first, so the test steps once without firing from a snapshot
  * (the human stands still, so his view doesn't change where anyone goes), reads where both are, restores and fires
@@ -115,10 +114,11 @@ describe('3D aim (H1)', () => {
     const want = bulletDamage(gun, shot.distance, 'head', lokier.armor, lokier.helmet, data.tuning.damage);
     // An AK-47 headshot kills from full HP (36 × 4, with or without a helmet).
     expect(want.health).toBeGreaterThanOrEqual(100);
-    // G6: on the CS2 mesh the window opens at 17.97 s, inside cart's recorded duel with Lokier (G5, docs/core.md): the
-    // engine blocks the bullet's damage and reports where it would have hit (the duel's outcome is the tape's kill).
-    expect(events.filter((e) => e.type === 'damage' && e.attacker === 'cart')).toEqual([]);
-    expect(events.filter((e) => e.type === 'blocked_hit')).toEqual([{ type: 'blocked_hit', attacker: 'cart', victim: 'lokier', weapon: 'ak47', hitgroup: 'head' }]);
+    // G6: on the CS2 mesh the window opens at 17.97 s, inside cart's recorded duel with Lokier. D1 (John 13:10): the
+    // human's shots do real damage inside recorded duels too: the headshot takes all his HP at once, nothing is blocked.
+    expect(events.filter((e) => e.type === 'damage' && e.attacker === 'cart')).toEqual([expect.objectContaining({ victim: 'lokier', amount: lokier.hp, hitgroup: 'head', scripted: false, weapon: 'ak47' })]);
+    expect(events.filter((e) => e.type === 'blocked_hit')).toEqual([]);
+    expect(s.pawnState('lokier')?.alive).toBe(false);
   });
 
   it('the same shot 10° off misses', () => {
@@ -130,7 +130,7 @@ describe('3D aim (H1)', () => {
     expect(s.pawnState('lokier')?.hp).toBe(before?.hp);
   });
 
-  it('a shot at Lokier’s head through the wall goes through it (H2b penetration) but, inside the duel, does no damage', () => {
+  it('a shot at Lokier’s head through the wall goes through it (H2b penetration) and, inside the duel too (D1), does its reduced damage', () => {
     const BLOCKED = lineToHead(1140, 1260, false);
     const { s, h } = playTo(BLOCKED);
     const before = s.pawnState('lokier');
@@ -142,8 +142,11 @@ describe('3D aim (H1)', () => {
     const gun = gunStats('ak47', data.tuning);
     if (gun === null || before === null) throw new Error('no ak47 / lokier');
     expect(shot.penDamage).toBeLessThan(gun.damage);
-    expect(events.filter((e) => e.type === 'blocked_hit').map((e) => (e.type === 'blocked_hit' ? e.victim : ''))).toEqual(['lokier']);
-    expect(events.some((e) => e.type === 'damage' && e.attacker === 'cart')).toBe(false);
-    expect(s.pawnState('lokier')?.hp).toBe(before?.hp);
+    // D1: real damage (before D1: a blocked hit, no damage).
+    expect(events.filter((e) => e.type === 'blocked_hit')).toEqual([]);
+    const dmg = events.filter((e) => e.type === 'damage' && e.attacker === 'cart');
+    // (Spread and the wall can put it on another hitbox: here the chest, 18 HP through the wall.)
+    expect(dmg).toEqual([expect.objectContaining({ victim: 'lokier', scripted: false, weapon: 'ak47' })]);
+    expect(s.pawnState('lokier')?.hp).toBe(Math.max(0, before.hp - (dmg[0]?.type === 'damage' ? dmg[0].amount : 0)));
   });
 });

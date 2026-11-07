@@ -18,7 +18,7 @@ import { tenthsText, trackPosAt } from './divergence';
 import { dist2 } from './puppet';
 import type { RoundModel } from './round-model';
 import type { DamageEntry } from './schedule';
-import { cycleTicksOf, tapSpacing, type PawnMode, type ScriptPlan, type ScriptedEvents } from './scripted';
+import { cycleTicksOf, tapSpacing, type PawnMode, type ScriptPlan } from './scripted';
 
 /** One recorded duel of the default human (built once from the plan; immutable). */
 export interface DuelPlan {
@@ -67,18 +67,10 @@ export interface DuelState {
   toTick: number | null;
   /** First tick the human was in the duel (logged then), else null. */
   startedTick: number | null;
-  /** True while the duel's `block_damage shooter → target` is in force. */
-  blocked: boolean;
-  /** The next recorded hit to land (an index into `hits`). */
-  next: number;
-  /** Observe tick the next recorded hit lands on (scheduled), else null. */
-  dueTick: number | null;
-  /** His last would-hit shot on the target (a `blocked_hit`) in the recorded spray before the next hit, else null. */
-  aimedTick: number | null;
-  /** His last shot (any `shot` event) while in the duel, else null. */
-  lastShotTick: number | null;
-  /** His would-hit shots on the target reported while blocked (the `blocked_hit` events). */
-  shots: number;
+  /** True while he is in the duel (alive, the target alive and REPLAY, inside the window, at the spot). */
+  engaged: boolean;
+  /** His hits on the target while in the duel (real `damage` events: D1, his bullets are never blocked). */
+  hits: number;
   /** Over for good: the window has passed, or the target or he died. */
   done: boolean;
 }
@@ -138,7 +130,7 @@ function canonicalPos(p: Vec3): Vec3 {
 }
 
 function initialDuelStates(duels: readonly DuelPlan[]): DuelState[] {
-  return duels.map((d) => ({ key: d.key, shift: null, fromTick: null, toTick: null, startedTick: null, blocked: false, next: 0, dueTick: null, aimedTick: null, lastShotTick: null, shots: 0, done: false }));
+  return duels.map((d) => ({ key: d.key, shift: null, fromTick: null, toTick: null, startedTick: null, engaged: false, hits: 0, done: false }));
 }
 
 function pawnOf(o: Observe, id: PlayerId): PawnObs | undefined {
@@ -177,180 +169,116 @@ export class HumanDuels {
     this.st = initialDuelStates(this.duels);
   }
 
-  /** Snapshots from before G5 have none: every duel starts afresh. */
+  /**
+   * Snapshots from before G5 have none: every duel starts afresh. A snapshot from before D1 (G5's state, with `blocked`,
+   * `next`, `dueTick`, …) keeps its window and start; its block, if one was in force, is not restored (D1 sends none).
+   */
   restore(s: readonly DuelState[]): void {
     this.st = this.duels.map((d) => {
-      const q = s.find((x) => x.key === d.key);
+      const q = s.find((x) => x.key === d.key) as (Partial<DuelState> & { key: string }) | undefined;
       if (q === undefined) return initialDuelStates([d])[0] as DuelState;
-      return { key: q.key, shift: q.shift, fromTick: q.fromTick, toTick: q.toTick, startedTick: q.startedTick, blocked: q.blocked, next: q.next, dueTick: q.dueTick, aimedTick: q.aimedTick, lastShotTick: q.lastShotTick, shots: q.shots, done: q.done };
+      return { key: q.key, shift: q.shift ?? null, fromTick: q.fromTick ?? null, toTick: q.toTick ?? null, startedTick: q.startedTick ?? null, engaged: q.engaged ?? false, hits: q.hits ?? 0, done: q.done ?? false };
     });
-  }
-
-  /** The duel blocks in force (shooter → target), for a resync rewind (they are re-sent with B3's). */
-  standingBlocks(): { attacker: PlayerId; victim: PlayerId }[] {
-    const out: { attacker: PlayerId; victim: PlayerId }[] = [];
-    this.duels.forEach((d, i) => {
-      if (this.st[i]?.blocked === true) out.push({ attacker: d.shooter, victim: d.target });
-    });
-    return out;
   }
 
   /**
-   * One tick (not the setup step), every duel in order; appends its actions to `out`. `modes`: every pawn's Core mode
+   * True while `attacker` (the human) is in a recorded duel with `victim`, as of the last step: his hits on it are the
+   * recorded engagement, so they don't make it LIVE (Divergence's damage trigger asks this; D1).
+   */
+  engaged(attacker: PlayerId, victim: PlayerId): boolean {
+    return this.duels.some((d, i) => d.shooter === attacker && d.target === victim && this.st[i]?.engaged === true);
+  }
+
+  /**
+   * One tick (not the setup step), every duel in order; appends its logs to `out`. `modes`: every pawn's Core mode
    * after this tick's LIVE switches and rejoins. `encounters` / `states`: the scheduled encounters and their state.
    */
-  step(o: Observe, modes: readonly PawnMode[], encounters: readonly EncounterPlan[], states: readonly EncounterState[], script: ScriptedEvents, out: Action[]): void {
-    for (let i = 0; i < this.duels.length; i++) this.duelStep(this.duels[i] as DuelPlan, this.st[i] as DuelState, o, modes, encounters, states, script, out);
+  step(o: Observe, modes: readonly PawnMode[], encounters: readonly EncounterPlan[], states: readonly EncounterState[], out: Action[]): void {
+    for (let i = 0; i < this.duels.length; i++) this.duelStep(this.duels[i] as DuelPlan, this.st[i] as DuelState, o, modes, encounters, states, out);
   }
 
   /**
-   * One duel, one tick:
+   * One duel, one tick (D1, John 2026-11-07 13:10: his shots do real damage at once, like CS2, inside recorded duels too):
    * 1. Armed: an encounter-anchored duel once its encounter has seen the human at the spot (its hit's shift; the window
    *    from that sighting to the shifted last press), any other at once on the recorded ticks. Not armed yet: nothing.
-   * 2. His shots this observe, while the block was in force: every `shot` of his, and every `blocked_hit` on the target
-   *    (a shot that would have hit). The next recorded hit, at its shifted tick K, lands
-   *    - on K, if his spray is on the target through it: at act K − action latency he has had a would-hit shot since
-   *      the recorded spray's first shot (shifted, less one fire cycle) and is still firing (a shot within one cycle
-   *      before K). The tape's spray at Lokier: 18.517–19.0 s, the kill at 18.80 s, its 4th shot; tape-like play lands
-   *      the kill on 18.80 s although the engine's cadence puts that shot a tick later;
-   *    - else one action latency after his first would-hit shot reported after that act (he fired late);
-   *    and never before K: his shots before it miss, so the target's recorded hit on him lands first. A shot that would
-   *    hit but leaves him firing too short of K is a miss, as on the tape. Without hits (sp4rtan) his shots just do
-   *    nothing.
-   * 3. A scheduled hit is sent `actionLatencyTicks` before its tick (B3's damage rules: dropped if he or the target is
-   *    dead or the target LIVE then; a non-lethal hit stays non-lethal).
-   * 4. Over when the target or he is dead, or the window (and its last report) has passed with nothing due.
-   * 5. The block is in force while he is in the duel: alive, the target alive and REPLAY, inside the window, within
-   *    `humanSpotToleranceUnits` of the duel's spot, or a hit is due. Logged the first tick he is in it, and when it is
-   *    over.
+   * 2. His hits on the target this observe, while in the duel, are counted. They are the engine's (hitbox, armor,
+   *    falloff, penetration, tagging); the Core sends no block and no scripted damage for him.
+   * 3. Over when the target or he is dead, or the window has passed: logged with how the target's death compares with
+   *    the tape's (a kill before the recorded tick is fine: the target's remaining script is dropped by B3, his
+   *    encounter is over, and the divergence rules decide the rest).
+   * 4. In the duel: he alive, the target alive and REPLAY, inside the window, within `humanSpotToleranceUnits` of the
+   *    duel's spot. Logged the first tick he is in it. While in it his hits on the target don't make it LIVE.
    */
-  private duelStep(d: DuelPlan, s: DuelState, o: Observe, modes: readonly PawnMode[], encounters: readonly EncounterPlan[], states: readonly EncounterState[], script: ScriptedEvents, out: Action[]): void {
+  private duelStep(d: DuelPlan, s: DuelState, o: Observe, modes: readonly PawnMode[], encounters: readonly EncounterPlan[], states: readonly EncounterState[], out: Action[]): void {
     if (s.done) return;
     const tick = o.tick;
     const what = `duel ${d.shooter} -> ${d.target}`;
     if (o.human !== d.shooter) {
-      // Nobody plays him (watching: the recording's own shots run), or he was let go of: no duel, no block.
-      if (s.blocked) this.unblock(d, s, out);
+      // Nobody plays him (watching: the recording's own shots run), or he was let go of: no duel.
+      s.engaged = false;
       return;
     }
-    if (s.shift === null && !this.arm(d, s, o.tick, encounters, states, script)) return;
+    if (s.shift === null && !this.arm(d, s, encounters, states)) return;
     const shift = s.shift as number;
     const from = s.fromTick as number;
     const to = s.toTick as number;
     const r = this.tuning.replay;
-    const la = r.actionLatencyTicks;
-    const li = r.inputLatencyTicks;
     const me = pawnOf(o, d.shooter);
     const target = pawnOf(o, d.target);
 
-    // 2. His shots this observe (while blocked: in the duel), and the next recorded hit.
-    const h0 = d.hits[s.next];
-    const k0 = h0 === undefined ? null : h0.tick + shift;
-    if (s.blocked) {
-      for (const e of o.events) {
-        if (e.type === 'shot' && e.shooter === d.shooter) s.lastShotTick = tick;
-        if (e.type !== 'blocked_hit' || e.attacker !== d.shooter || e.victim !== d.target) continue;
-        s.shots++;
-        if (h0 === undefined || k0 === null || s.dueTick !== null || tick < d.firstShotTick + shift - d.cycleTicks) continue;
-        if (tick <= k0 - la) {
-          s.aimedTick = tick;
-          continue;
-        }
-        // Too late to land on K: one action latency after this shot.
-        s.dueTick = tick + la;
-        out.push({ type: 'log', level: 'info', text: `${what}: his shot at tick ${tick} would hit (${e.hitgroup}): the recorded ${hitText(h0)} lands at tick ${s.dueTick} (recorded ${h0.tick})` });
-      }
-      if (h0 !== undefined && k0 !== null && s.dueTick === null && tick === k0 - la && s.aimedTick !== null && s.lastShotTick !== null && s.lastShotTick >= k0 - d.cycleTicks) {
-        s.dueTick = k0;
-        out.push({
-          type: 'log',
-          level: 'info',
-          text: `${what}: his spray is on ${d.target} through the recorded ${hitText(h0)} (on target at tick ${s.aimedTick}, still firing at tick ${s.lastShotTick}): it lands at tick ${k0} (recorded ${h0.tick})`,
-        });
-      }
-    }
+    // 2. His hits on the target (real damage).
+    if (s.engaged) for (const e of o.events) if (e.type === 'damage' && e.attacker === d.shooter && e.victim === d.target) s.hits++;
 
-    // 3. A scheduled hit, one action latency before its tick.
-    if (s.dueTick !== null && tick >= s.dueTick - la) {
-      const h = d.hits[s.next] as DamageEntry;
-      const due = s.dueTick;
-      s.dueTick = null;
-      s.aimedTick = null;
-      s.next++;
-      const why = me === undefined || !me.alive ? `${d.shooter} is dead` : target === undefined || !target.alive ? `${d.target} is dead` : modeOf(modes, d.target) === 'LIVE' ? `${d.target} is LIVE` : null;
-      const hp = target?.hp ?? 0;
-      const amount = h.lethal || h.amount < hp ? h.amount : hp - 1;
-      if (why === null && amount > 0) {
-        out.push({ type: 'damage', attacker: d.shooter, victim: d.target, amount, armor: h.armor ?? 0, hitgroup: h.hitgroup, weapon: h.weapon, lethal: h.lethal });
-      } else {
-        out.push({ type: 'log', level: 'info', text: `${what}: dropped the recorded ${hitText(h)} due at tick ${due}: ${why ?? `${d.target} has ${hp} hp`}` });
-      }
-    }
-
-    // 4. Over?
+    // 3. Over?
     const over =
-      me === undefined || !me.alive ? `${d.shooter} is dead` : target === undefined || !target.alive ? `${d.target} is dead` : tick > to + li && s.dueTick === null ? 'the recorded duel is over' : null;
+      me === undefined || !me.alive ? `${d.shooter} is dead` : target === undefined || !target.alive ? this.deathText(d, o, shift) : tick > to + r.inputLatencyTicks ? 'the recorded duel is over' : null;
     if (over !== null) {
       s.done = true;
-      if (s.blocked) this.unblock(d, s, out);
-      if (s.startedTick !== null) out.push({ type: 'log', level: 'info', text: `${what}: over at tick ${tick}, ${over}; ${s.shots} would-hit shot${s.shots === 1 ? '' : 's'} blocked` });
+      s.engaged = false;
+      if (s.startedTick !== null) out.push({ type: 'log', level: 'info', text: `${what}: over at tick ${tick}, ${over}; ${s.hits} hit${s.hits === 1 ? '' : 's'} on ${d.target} in it` });
       return;
     }
 
-    // 5. In the duel now?
-    const inDuel =
-      me !== undefined && target !== undefined && modeOf(modes, d.target) === 'REPLAY' && ((tick >= from && tick <= to && dist2(me.pos, d.spot) <= r.humanSpotToleranceUnits) || s.dueTick !== null);
-    if (inDuel && s.startedTick === null) {
+    // 4. In the duel now?
+    s.engaged = me !== undefined && target !== undefined && modeOf(modes, d.target) === 'REPLAY' && tick >= from && tick <= to && dist2(me.pos, d.spot) <= r.humanSpotToleranceUnits;
+    if (s.engaged && s.startedTick === null) {
       s.startedTick = tick;
-      const outcome = d.hits.length === 0 ? 'no damage' : d.hits.map((h) => `${hitText(h)} at tick ${h.tick + shift}`).join(', ');
-      out.push({ type: 'log', level: 'info', text: `${what}: in the recorded duel from tick ${tick} (${tenthsText(shift, true)} s against the recording, to tick ${to}); his shots on ${d.target} land as recorded: ${outcome}` });
-    }
-    if (inDuel && !s.blocked) {
-      out.push({ type: 'block_damage', attacker: d.shooter, victim: d.target });
-      s.blocked = true;
-    } else if (!inDuel && s.blocked) {
-      this.unblock(d, s, out);
+      const tape = d.hits.length === 0 ? 'no damage' : d.hits.map((h) => `${hitText(h)} at tick ${h.tick + shift}`).join(', ');
+      out.push({ type: 'log', level: 'info', text: `${what}: in the recorded duel from tick ${tick} (${tenthsText(shift, true)} s against the recording, to tick ${to}); his shots on ${d.target} are real (the tape: ${tape})` });
     }
   }
 
-  /**
-   * Arm the duel if its shift is known now (see duelStep); false while it isn't (or never will be: then it is over). A
-   * takeover in the middle of the recorded spray (G4): the puppet's shots of it that went ahead (B3 decided the fire
-   * item while nobody played him, and aims it at the target) and landed before this tick start his spray, so a player
-   * who takes over at 18.6 s and keeps firing continues the tape's spray.
-   */
-  private arm(d: DuelPlan, s: DuelState, tick: number, encounters: readonly EncounterPlan[], states: readonly EncounterState[], script: ScriptedEvents): boolean {
+  /** "lokier is dead (cart's kill, -0.3 s against the tape's kill at tick 1203)", or just "lokier is dead". */
+  private deathText(d: DuelPlan, o: Observe, shift: number): string {
+    const kill = o.events.find((e) => e.type === 'death' && e.victim === d.target);
+    const lethal = d.hits.find((h) => h.lethal);
+    if (kill === undefined || kill.type !== 'death' || kill.attacker !== d.shooter) return `${d.target} is dead`;
+    if (lethal === undefined) return `${d.target} is dead (${d.shooter}'s kill; not on the tape)`;
+    const k = lethal.tick + shift;
+    return `${d.target} is dead (${d.shooter}'s kill, ${tenthsText(o.tick - k, true)} s against the tape's kill at tick ${k})`;
+  }
+
+  /** Arm the duel if its shift is known now (see duelStep); false while it isn't (or never will be: then it is over). */
+  private arm(d: DuelPlan, s: DuelState, encounters: readonly EncounterPlan[], states: readonly EncounterState[]): boolean {
     if (d.encounter === null) {
       s.shift = 0;
       s.fromTick = d.fromTick;
       s.toTick = d.toTick;
-    } else {
-      const i = encounters.findIndex((e) => e.key === d.encounter);
-      const p = encounters[i];
-      const e = states[i];
-      if (p === undefined || e === undefined) return false;
-      if (e.phase === 'done') {
-        // Its encounter ended before it saw him at the spot (the shooter LIVE or dead, or he died): no duel.
-        s.done = true;
-        return false;
-      }
-      if (e.seenTick === null || e.shotTick === null) return false;
-      s.shift = e.shotTick - p.damage.tick;
-      s.fromTick = e.seenTick;
-      s.toTick = d.toTick + s.shift;
+      return true;
     }
-    if (d.fireKeys.some((k) => script.decision(k) === true)) {
-      for (const k of d.puppetShotTicks) {
-        if (k >= tick || k < d.firstShotTick + s.shift - d.cycleTicks) continue;
-        s.aimedTick = k;
-        s.lastShotTick = k;
-      }
+    const i = encounters.findIndex((e) => e.key === d.encounter);
+    const p = encounters[i];
+    const e = states[i];
+    if (p === undefined || e === undefined) return false;
+    if (e.phase === 'done') {
+      // Its encounter ended before it saw him at the spot (the shooter LIVE or dead, or he died): no duel.
+      s.done = true;
+      return false;
     }
+    if (e.seenTick === null || e.shotTick === null) return false;
+    s.shift = e.shotTick - p.damage.tick;
+    s.fromTick = e.seenTick;
+    s.toTick = d.toTick + s.shift;
     return true;
-  }
-
-  private unblock(d: DuelPlan, s: DuelState, out: Action[]): void {
-    out.push({ type: 'unblock_damage', attacker: d.shooter, victim: d.target });
-    s.blocked = false;
   }
 }

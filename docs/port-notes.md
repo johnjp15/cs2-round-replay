@@ -265,7 +265,7 @@ Port care: `rayCapsule` / `raySphere` are plain + − × ÷ and sqrt in a fixed 
 between runtimes, which only matters for a ray grazing a capsule's surface). The Core is untouched: a run nobody plays
 gives the same acts in both hosts (tests/sim3d-golden.test.ts), so the 2D golden fixtures stay the Core's oracle.
 
-## Recorded duels of the human (src/core/duels.ts, G5)
+## Recorded duels of the human (src/core/duels.ts, G5; D1)
 
 - **Plan** (`BuildDuels`, once, from the `ScriptPlan` and the encounters): for each engagement of the default human
   (`plan.EngagementsOf(human)`, plan order) at an enemy: its fire items (same shooter and target, inside the
@@ -275,28 +275,27 @@ gives the same acts in both hosts (tests/sim3d-golden.test.ts), so the 2D golden
   inside it (the anchor). `cycleTicks = tapSpacing(cycleTicksOf(gun))` = `Math.Max(2, Math.Ceiling(64 * 60 / rpm −
   1e-9))` (AK 7). The spot: the anchor's `spot`, else `TrackPosAt(model, human, (first + last) / 2)` (integer division
   of the shot ticks, `Math.Floor`) with each coordinate rounded to 6 decimals.
+- **D1 (John 2026-11-07 13:10): no block, no scripted outcome.** The human's shots in a recorded duel do the engine's
+  real damage at once (CS2's own `OnTakeDamage` path, untouched). The duel only arms, tracks whether he is in it, counts
+  his real `damage` events on the target and logs. `DuelPlan` keeps every field (the port builds them the same way; the
+  outcome `Hits` is only quoted in the log now; `CycleTicks` and `PuppetShotTicks` are unused).
 - **Order in the step**: after `Rejoin.Step` (modes after this tick's switches), before B3's `ScheduledActions`;
-  duels in plan order. Per duel: (re)arm; then his `shot` / `blocked_hit` events of this observe, in emission order,
-  only if the duel's block was in force (`blocked` from the previous Act); then the spray check on tick `K −
-  actionLatencyTicks`; then the scripted `damage` on `dueTick − actionLatencyTicks`; then over / the block. Action order
-  in the Act: the scheduling `log`, the `damage`, then `log` (in the duel) + `block_damage`, or `unblock_damage` + the
-  over `log`.
-- **Integer rules**: K = `hit.tick + shift`; a report at tick k (≥ `firstShotTick + shift − cycleTicks`) with `k ≤ K −
-  la` sets `aimedTick = k`, later ones schedule `dueTick = k + la`; on `k == K − la` with `aimedTick` set and
-  `lastShotTick ≥ K − cycleTicks`, `dueTick = K`. A non-lethal hit is clamped as B3's (`amount < hp ? amount : hp − 1`).
-  No floating point but the spot's distance (`Math.Sqrt` of a 2D squared distance, `≤ humanSpotToleranceUnits`).
-- **A mid-spray takeover** inherits the puppet's shots: at arming, if B3's decision of any of the duel's fire items is
-  `true`, every puppet landing tick `< k` and `≥ firstShotTick + shift − cycleTicks` sets `aimedTick` and
-  `lastShotTick` (the last such wins).
+  duels in plan order. Per duel: (re)arm; then, if `Engaged` from the previous Act, count his `damage` events on the
+  target of this observe; then over (he dead, the target dead, or `tick > toTick + inputLatencyTicks`: `Done`, log);
+  then `Engaged` = alive, target alive and REPLAY, `fromTick ≤ tick ≤ toTick`, within `humanSpotToleranceUnits` of the
+  spot (`Math.Sqrt` of a 2D squared distance, the only floating point); the first such tick logs the start. The Core
+  sends only `log` actions from the duels.
+- **The damage-trigger hook**: `Divergence.RecordedHit` (set by `ReplayCore` to `HumanDuels.Engaged`) makes trigger 1
+  skip a `damage` event whose attacker/victim are an engaged duel's shooter/target (as of the previous step): his hits
+  in the recorded duel don't make the target LIVE; the target keeps replaying (his scripted shot at the human included)
+  until he dies.
 - **State** (`DuelState`, a list in plan order, in the Core snapshot; absent = afresh): `Shift`, `FromTick`, `ToTick`,
-  `StartedTick`, `DueTick`, `AimedTick`, `LastShotTick` (nullable ints), `Blocked`, `Done` (bools), `Next`, `Shots`
-  (ints). `ReplayCore.StandingBlocks` appends the duels' blocks (human → target) after the encounters' for a resync.
-- **Log texts** (`duel cart -> lokier: …`) use ids, integers and `tenthsText` (the shift) only.
-- **CS2**: see `docs/cs2-adapter.md` (`blocked_hit` in the ObsEvent table). The plugin's `OnTakeDamage` filter is the
-  same one as for B3's blocks; for a blocked pair whose attacker is the human's pawn it also queues a `blocked_hit`
-  with the hit group, and the kill comes back as an ordinary scripted `damage` (attacker cart, `ak47`, `head`, lethal),
-  applied with the same machinery as every other scripted damage (`TakeDamage` with an AK-47 headshot, or Route 3 with
-  the `player_death` rewrite: `Headshot` true).
+  `StartedTick` (nullable ints), `Engaged`, `Done` (bools), `Hits` (int). A G5 snapshot (with `Blocked`, `Next`, …)
+  restores its window and start; its block is not re-sent. `ReplayCore.StandingBlocks` has the encounters' only.
+- **Log texts** (`duel cart -> lokier: …`) use ids, integers and `tenthsText` (the shift; a kill against the tape's
+  shifted kill tick) only.
+- **CS2**: nothing to filter for the human's pawn any more; `blocked_hit` stays in the contract (the engine reports it
+  for any blocked pair of the human) but the Core no longer causes one.
 
 ## Weapon mechanics (src/engine/weapons, H2)
 
