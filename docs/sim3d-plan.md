@@ -57,6 +57,15 @@ The Core ↔ host contract is per tick: host `observe()` → Core `step(observe)
 ### H4 · Parity and polish (Opus 5.5; after H1–H3)
 - Everything the 2D app has: rewind/seek with the input tape, checkpoints, summary overlay vs the recording, timeline scrubber, aiDebug, Safari/iPhone spectate check, performance (256 ticks/s at 4×), the locked page size, the follow-recording run in 3D with G5's duel rules (tape-identical input → the tape), G6's sight parity, spectator cameras, settings (sensitivity, FOV, crosshair), a sound-free "footstep/shot" visual cue. Playtest doc.
 
+### M1 · Movement physics verified against CS2 (Opus 5.5; parallel) — added 2026-11-07 02:50
+John: "make sure the movement and aiming are true to the Source 2 engine… counter-strafing with acceleration and velocity values that are true to CS2's… air strafing and advanced movement mechanics… look into KZ movement." A numeric test battery derived from the cited Source SDK formulas and CS2 cvar defaults (accel curve, counter-strafe stop ticks/distance, walk/duck speeds and duck timing, jump/airtime/stamina, air strafing and the 30 u/s cap, bhop clamps, pre-strafe, long-jump distances with/without strafes, ladders, edges, surf, fall damage, tagging), findings first, fixes in a second PR; the sub-tick input evaluation. Aiming (sens × 0.022°, raw input, ±89° pitch, CS2 FOV 90@4:3 = fixed vertical ≈ 73.74°, scoped FOV/sens rules, viewmodel 60, punch on the bullet direction) is specified to H1 for the app.
+
+### H5 · Grenades, exact (Opus 5.5; parallel, pure module) — added 2026-11-07 03:05
+John: "implement grenades (smoke, flash, molotov, HE, decoy)… It MUST mimic CS2 as much as possible." `src/engine/grenades/`: Source projectile physics (throw strength + player velocity, gravity scale, bounce), fuses, volumetric-style smoke region with a `smokeBlocks` query, flash blind time by distance/angle/LOS, fire spreading on walkable surfaces (extinguished by smoke), HE radius/falloff/armor/occlusion, decoy; cited numbers as tunables; end-to-end tests: well-known Mirage lineups must land within tolerance on the real mesh. H4 integrates into the 3D host.
+
+### V1 · End-to-end CS2-fidelity testing (Opus 5.5; after H1 + H2 + M1 + H5 merge)
+John: "ensure you have agent(s) testing this end-to-end." An independent tester plays the 3D game headlessly and in the browser: AK-47 wall sprays vs the CS2 pattern and variance (1,000 seeded sprays; with and without scripted recoil control), counter-strafe and long-jump/bhop jump-stats vs the M1 numbers, grenade lineups in-game, the recorded round in 3D vs the tape, performance at 4×, Safari/iPhone spectate. Findings go to `docs/audit/`, fixes as small PRs.
+
 ## Order and ownership
 
 H1 ∥ H2 now (disjoint files). H3 after H1 merges. H4 after H3. G5 (duels) and G6 (3D sight) continue in `src/core`/`src/sim2d`; H1 merges `origin/main` when they land and picks up `MeshSight`.
