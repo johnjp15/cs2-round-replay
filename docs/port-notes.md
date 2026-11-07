@@ -97,6 +97,7 @@ C# re-implementation for tests would need:
 - **Fire cadence model** (`cadenceOffsets`, `simulateHolds`): due times accumulate the fractional cycle (`64 × 60 / rpm`) rounded to 6 decimals after every add (`roundNumber`, as the 2D engine stores them), and a shot fires on `Math.Ceiling(due - 1e-9)`. Plain `+ - * /` and ceiling: identical in C#. `cadenceOffsets` guards `-0` (`Math.ceil(-1e-9)` is `-0` in JS; C#'s `Math.Ceiling` returns `-0.0` too, and `-0` must not reach a log).
 - **Spray fit** tie-breaks are part of the output: candidates in `SPRAY_FIT_SHIFTS` order (0, −1, +1, −2, +2), one hold before two holds, splits in shot order, first-hold shift outer and second-hold shift inner; a candidate replaces the best only if strictly better (largest error, then sum of squared errors).
 - **Aim** uses `atan2` (bearing and pitch); both are rounded to 0.001° before they are logged or compared (`roundYaw`, `roundPitch`), and pitch is clamped to ±89. `withLook` uses `cos` / `sin` and rounds the stick to 6 decimals, like B2.
+- **Aim on sight (G6).** An engagement tracks the target's body only if `observe` lists the target in the shooter's `sees` on that tick; otherwise it turns toward the band's point over `aimSpotAt(engagement, tick)` (the first spot whose act tick is ≥ the tick, else the last; target not crouched). Spots are built once: per merged window end (distinct ticks, ascending), `RoundModel.trackAtTick(target, end + inputLatency)`, clamped to the track's first / last sample when outside it. Run-time engagements have no spots (the hold applies). In CS2 the adapter's `sees` (eye traces to the same points) feeds the same rule.
 - **Decisions** (`ScriptState.decisions`) are a list in the order they were made, looked up by string key (`fire:<i>`, `aim:<i>`); plan item indices come from a sort by (first act tick, shooter id ordinal, build order).
 - **Log texts** of drops and fallbacks use only integers and ids (`script: dropped … (5 shots from tick 3192): donk is dead`, `script: no planted event by tick 1764, …`).
 
@@ -239,6 +240,12 @@ What the 3D host does that the CS2 server provides natively (so the C# adapter d
 | `sees`: eye → head / chest / sides / legs traces on the world mesh, FOV, flash, smoke | `UTIL_TraceLine` (MASK_VISIBLE) eye to the same points, the same FOV / flash / smoke tests |
 | hearing: sound events as in 2D | game events (`player_footstep`, `weapon_fire`) |
 | the camera, FOV, sensitivity, aim punch display (src/app3d) | the client |
+
+G6: `sees`, the guard spot and the grenade effects use the same `MeshSight` as Sim2DHost (one implementation,
+`docs/vision.md`), so the 3D no-human run equals the 2D golden master in every line, `sees` included. The scripted-hit
+audit (`scriptedHitThroughGeometry`: one `traceSight` from the attacker's eye to the victim's band point at the tick the
+damage is applied, distances with `toFixed(1)`) is a debug log line in `combatLog()`, not in observe or snapshots; a
+port may skip it or log the same text.
 
 Port care: `rayCapsule` / `raySphere` are plain + − × ÷ and sqrt in a fixed order (IEEE exact in C#); the poses use
 `Math.cos` / `Math.sin` of the yaw (use `Math.Cos` / `Math.Sin` on doubles; results can differ in the last bit

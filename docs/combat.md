@@ -200,7 +200,10 @@ Per weapon, against 100/100 with a helmet (HP / armor removed):
   applied in the next `tick()`, after shots and grenades, in Core order. It removes `amount` HP and `armor` armor,
   each capped at what the victim has, and emits `damage` with `scripted: true` and the amounts actually removed.
   `lethal: true` takes all remaining HP. HP ≤ 0 → `death {victim, attacker, weapon, headshot: hitgroup === 'head'}`.
-  Damage to a dead or unknown pawn is noted in `unhandled()` and not applied.
+  Damage to a dead or unknown pawn is noted in `unhandled()` and not applied. G6: with the CS2 mesh, a scripted gun
+  hit whose segment from the attacker's eye to the victim's hit band crosses a wall is still applied (the tape is the
+  truth) and logged in `combatLog()` as `script: scripted hit through geometry: …` (`docs/vision.md`, "Scripted hits
+  through geometry"). The 2D view draws its tracer into the wall unless the shooter sees the victim.
 - **Engine damage** (bullets, HE, fire) emits `damage` with `scripted: false`.
 - **Deaths** are applied at the damage that causes them: `death` follows its `damage` event. The pawn stops, any
   reload or primed grenade is cancelled, and it takes no further part in the tick. Pawns act in id order within a

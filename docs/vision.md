@@ -4,7 +4,9 @@ What a pawn can see, and what bullets and grenade effects can cross. Since G6 th
 segments against the CS2 collision mesh** (`src/sim2d/mesh-sight.ts`, `MapGeometry.traceSight`), the same mesh 3D
 movement walks on (`docs/geometry.md`). C4's radar sight mask (`data/mirage-vismask.json`, `src/sim2d/vision.ts`)
 now only clamps grenade throws (their flight is still 2D), and is the whole sight of a host built without 3D geometry
-(the 2D movement mode, the synthetic test meshes). It is not a prefilter (below).
+(the 2D movement mode, the synthetic test meshes). It is not a prefilter (below). **Both hosts use the same
+`MeshSight`**: `Sim2DHost` and the 3D host (`Sim3DHost`, src/sim3d; its own `MeshSight3` is gone), so the 3D
+no-human run equals the 2D golden master in every line, `sees` included (`tests/sim3d-golden.test.ts`).
 
 **Why.** The radar mask has no heights: it treated whole building walls as windows and let lines pass under floors
 and through rooms. In the no-human golden master **3,107 of 7,063 `sees` entries (44 %) had every aim point blocked
@@ -65,6 +67,10 @@ drop them.
 | Core: sighting trigger, the scheduled Lokier encounter (start and gate: "cart in Lokier's `sees` at the spot"), rejoin unrest, puppet snaps (the human's `sees`) | `sees`, unchanged code |
 | flash, HE | `effectClear`: the grenade to the pawn's eye (flash) or stomach-height body (HE); a grenade lying on the ground traces from the CS2 floor under it + 2 (its z is the 2020 nav's) |
 | grenade throw clamp | the 2D radar mask (`GrenadeSight.lineOfSight`), unchanged: the flight is 2D |
+| Core: scripted aim (B3) | `sees`: a puppet tracks its target only while it sees it, else it pre-aims at the recorded spot (`docs/core.md` "Aim") |
+| scripted-hit audit (both hosts) | `MeshSight.blockDistance`: the attacker's eye to the victim's hit band (below) |
+| 2D view's tracers | `Session.tracerSight()`: a scripted hit's tracer ends on the victim only if the shooter sees it; any other ends at the first mesh wall along the shooter's view (`traceSight`) |
+| 3D host's bullets | `traceShot3` on the same world mesh (the hitboxes; `docs/sim3d.md`) |
 
 ### Not a prefilter: the radar mask
 
@@ -107,6 +113,41 @@ barely ↔ sp4rtan at 58.6–58.85 s (the pillar), both excluded with evidence i
 incredibad (0.5 s) and sp4rtan → snarlbot (17.85 s) are on inferred positions. All four duels then hold at every sample
 (`tests/sight3d.test.ts`), and the scheduled encounter's spot (cart's track at the hit) is now (−1728, 700).
 
+## Aim follows sight (G6)
+
+John, watching with no takeover, saw cart aim-lock Lokier through the Apartments wall and shoot him. Since G6 a
+puppet's scripted aim (B3) tracks the target only while the target is in its `sees`; otherwise it holds the pre-aim on
+the recorded spot where the next shot or hit lands (`docs/core.md` "Aim"). The recorded damage still lands on its tick,
+but a bullet fired at a wall ends at the wall: in 3D the ray stops there (`shots()`), and the 2D view's tracers stop
+at the first mesh wall along the shooter's view unless the shooter sees its victim. Nobody visibly tracks through
+geometry, and the no-human round's kills, damage, plant and defuse stay on their ticks (only the look changes; the
+fixtures in `docs/golden.md`).
+
+## Scripted hits through geometry (audit)
+
+The tape is the truth, so a recorded hit lands whatever the mesh says. Each host checks every scripted gun hit it
+applies: if the segment from the attacker's eye to the victim's hit band (`bandHeights[hitgroup]`, chest for bands
+without a height; crouched × 46 / 64) crosses a world triangle, it appends to `combatLog()`
+
+    script: scripted hit through geometry: lokier -> cart ssg08 chest at tick 1184 (18.50 s): wall 351.3 u from lokier's eye, cart 466.9 u; another aim point in sight
+
+(the landing tick, the pair, weapon and band, the wall's distance from the eye and the victim's, and whether any of the
+victim's five aim points is in sight). `npx tsx tools/scenario-outcomes.ts` prints them for every run. These are the
+recorded engagements whose positions (the 2020 video's, snapped) conflict with the CS2 mesh; V2 (`v2-viewfit`) refines
+the positions from the video and X1 brings the 2020 BSP. In the no-human round (identical in 2D and 3D):
+
+| tick | t (s) | attacker → victim | weapon, band | wall from the eye / victim | another aim point in sight | why |
+| ---: | ---: | --- | --- | --- | --- | --- |
+| 32 | 0.50 | snarlbot → incredibad | AK-47, chest | 126 / 223 u | no | incredibad's position is inferred (kill feed only) |
+| 816 | 12.75 | lokier → eradicate | SSG 08, head | 415 / 1,189 u | no | the balcony-door line; eradicate's puppet lags the pass-5 samples |
+| 1142 | 17.84 | sp4rtan → snarlbot | Deagle, chest | 31 / 441 u | no | sp4rtan's route is inferred |
+| 1184 | 18.50 | lokier → cart | SSG 08, chest | 351 / 467 u | yes | **the window duel**: the line meets the Apartments wall at (−1826, 648, −23), 10 u west of the window's edge (x −1816) |
+| 1203 | 18.80 | cart → lokier | AK-47, head | 114 / 477 u | yes | **the window duel**: the same wall at (−1821, 648, −10), 5 u west of the edge |
+| 2829 | 44.20 | barely → zwomp | AK-47, chest | 79 / 200 u | no | barely's recorded level is wrong (excluded in the vision labels) |
+| 3194 | 49.91 | sp4rtan → donk | AK-47, chest | 424 / 528 u | yes | the Apartments corridor door frame |
+| 3206 | 50.09 | sp4rtan → donk | AK-47, chest | 434 / 529 u | yes | the same; donk's 3200 hit is open |
+| 3766 | 58.84 | sp4rtan → barely | AK-47, head | 222 / 784 u | no | the B-site pillar (excluded in the vision labels) |
+
 ## Validation
 
 ```sh
@@ -133,6 +174,24 @@ eradicate → Lokier 17 / 17, donk → sp4rtan 36 / 36, cart → sp4rtan 68.75 s
 18.8 s kill 5 / 5). In the golden run's own positions (puppets lag their tracks by a few units) cart → Lokier is in sight
 on 67 of 87 ticks from 17.63 s; Lokier → eradicate at 12.75 s is not (eradicate's puppet lags the moved samples): a
 scripted kill between puppets, so nothing depends on it. The excluded and inferred ones stay out of sight.
+
+## Scenarios before and after (`tools/scenario-outcomes.ts`)
+
+Before: main before G6 (the radar mask, H1's tracks); after: G6 (the mesh, pass 5, aim on sight).
+
+| run | before | after | why |
+| --- | --- | --- | --- |
+| no human | the tape: CT defuse, 0.72 s | the same | scripted; nothing branches on `sees` |
+| block-barely, block-sp4rtan | round still on / sp4rtan LIVE (blocked) at 3815, kills cart 3830 | the same | body blocks; no sight change in reach |
+| **cart-dies** | Ts win by elimination: Lokier LIVE (sighting) at 10.38 s, **donk AWPs him at 721 through the Apartments**, Zwomp, eradicate, sp4rtan LIVE | CT defuse, 0.83 s left: Lokier LIVE (sighting) at 651, kills cart at 680; eradicate LIVE (gunfire); Lokier outlives his tape, barely kills him at 1418 and the rest is the tape | donk can't see Lokier through the building (the false sighting John saw), so nobody else is pulled LIVE |
+| cart-goes-a | CT defuse 0.83 s; sp4rtan sights cart at 1813, kills him 1852 | the same, sighting at 2103, kill at 2220 | A main's lines on the mesh open later |
+| duel-perfect-aim, takeover-duel, takeover-mid-duel | the tape | the tape | recorded duels in sight (pass 5) |
+| early-peek-lokier | cart kills Lokier 1053; Zwomp LIVE (gunfire) | cart kills Lokier 1091; nobody else LIVE | on the mesh cart's line to Lokier from the corridor opens 38 ticks later; the shot then no longer sets off Zwomp's gunfire trigger |
+| flank-sp4rtan | Ts win (cart kills sp4rtan 2856) | the same | open lines in both |
+| lokier-late | cart kills Lokier 1372 | 1371 | the window line one tick earlier |
+| mid-zwomp, miss-lokier-shop | CT defuse | the same | |
+| never-peeks | sp4rtan kills cart 2599 | 2597 | sp4rtan sights cart 2 ticks earlier |
+| smoke-window | cart kills Lokier 1370 | 1381 | the mesh opens cart's line through the window 11 ticks later |
 
 ## Cost
 
