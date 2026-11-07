@@ -1,7 +1,7 @@
 /**
  * P1: frame-time benchmark of the 3D page in headless Chromium (docs/app3d.md "Performance").
  *
- *   npm run build:3d && npm run bench:3d [-- --frames 1500] [--only <scenario,…>] [--size 1280x720] [--query "&dpr=1"] [--out <file.json>] [--label <name>]
+ *   npm run build:3d && npm run bench:3d [-- --frames 600] [--only <scenario,…>] [--dir <built page dir>] [--size 1280x720] [--query "&dpr=1"] [--out <file.json>] [--label <name>]
  *
  * Serves dist-3d/ on port 4182, opens `?bench=1` (src/app3d/bench3d.ts: the page runs its scenarios itself) in
  * headless Chromium with --enable-precise-memory-info (exact heap readings) and prints, per scenario, the
@@ -29,12 +29,15 @@ function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(name);
   return i >= 0 ? (process.argv[i + 1] ?? fallback) : fallback;
 }
-const FRAMES = Number(arg('--frames', '1500'));
+const FRAMES = Number(arg('--frames', '600'));
 const [W, H] = arg('--size', '1280x720').split('x').map(Number) as [number, number];
 const QUERY = arg('--query', '');
 const OUT = resolve(ROOT, arg('--out', 'logs/bench-app3d.json'));
 const LABEL = arg('--label', '');
-const DIR = resolve(ROOT, 'dist-3d');
+const DIR = resolve(ROOT, arg('--dir', 'dist-3d'));
+/** The scenarios (src/app3d/bench3d.ts SCENARIOS), one page load each. */
+const ALL = ['watch-1x-raf', 'watch-1x-loop', 'watch-1x-uncapped', 'watch-4x-uncapped', 'fp-1x-uncapped', 'inround-5s-120hz', 'postend-5s-120hz'];
+const ONLY = arg('--only', ALL.join(',')).split(',').filter((x) => x !== '');
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.bin': 'application/octet-stream', '.css': 'text/css' };
 
 function serve(dir: string): Server {
@@ -81,22 +84,35 @@ async function main(): Promise<void> {
   const browser = await chromium.launch(exe === undefined ? { headless: true, args } : { headless: true, executablePath: exe, args });
   const problems: string[] = [];
   try {
-    const page = await browser.newPage({ viewport: { width: W, height: H } });
-    page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
-    page.on('console', (m) => {
-      if (m.type() === 'error') problems.push(`console error: ${m.text()}`);
-    });
     const load0 = loadavg()[0] ?? 0;
-    await page.goto(`${ORIGIN}/?bench=${arg('--only', '1')}&frames=${FRAMES}${QUERY}`);
-    await page.waitForFunction(() => window.__cs2bench?.done === true, null, { timeout: 900_000, polling: 500 });
-    const out = await page.evaluate(() => window.__cs2bench);
-    if (out === undefined || out.result === null) throw new Error(`bench failed: ${out?.error ?? 'no result'}`);
+    // One page load per scenario (a fresh page each; progress as it goes; a slow machine can't time out the lot).
+    let merged = null as BenchResult | null;
+    for (const name of ONLY) {
+      const page = await browser.newPage({ viewport: { width: W, height: H } });
+      page.on('pageerror', (e) => problems.push(`${name}: page error: ${e.message}`));
+      page.on('console', (m) => {
+        if (m.type() === 'error') problems.push(`${name}: console error: ${m.text()}`);
+      });
+      await page.goto(`${ORIGIN}/?bench=${name}&frames=${FRAMES}${QUERY}`);
+      await page.waitForFunction(() => window.__cs2bench?.done === true, null, { timeout: 1_800_000, polling: 500 });
+      const out = await page.evaluate(() => window.__cs2bench);
+      await page.close();
+      if (out === undefined || out.result === null) throw new Error(`bench ${name} failed: ${out?.error ?? 'no result'}`);
+      if (out.result.scenarios.length === 0) {
+        console.log(`| ${name} | (not in this build) |`);
+        continue;
+      }
+      const got: BenchResult = out.result;
+      merged = merged === null ? got : { ...merged, scenarios: [...merged.scenarios, ...got.scenarios] };
+      console.log(table(got).split('\n').slice(2).join('\n'));
+    }
+    if (merged === null) throw new Error('bench: nothing ran');
     const load1 = loadavg()[0] ?? 0;
-    const result = { label: LABEL, date: new Date().toISOString(), load: { before: load0, after: load1, cores: cpus().length }, ...out.result };
+    const result = { label: LABEL, date: new Date().toISOString(), load: { before: load0, after: load1, cores: cpus().length }, ...merged };
     mkdirSync(dirname(OUT), { recursive: true });
     writeFileSync(OUT, JSON.stringify(result, null, 2) + '\n');
-    console.log(`${out.result.renderer} · ${W}×${H} · machine load ${load0.toFixed(1)} → ${load1.toFixed(1)} on ${cpus().length} cores`);
-    console.log(table(out.result));
+    console.log(`${merged.renderer} · ${W}×${H} · machine load ${load0.toFixed(1)} → ${load1.toFixed(1)} on ${cpus().length} cores`);
+    console.log(table(merged));
     console.log(`→ ${OUT.replace(ROOT + '/', '')}`);
   } finally {
     await browser.close();

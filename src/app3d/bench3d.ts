@@ -14,7 +14,7 @@
  * dropped by the compositor, which is what a 500-fps game on a 120 Hz display does too).
  *
  * URL: `?bench=1` (all scenarios), `?bench=watch-1x-uncapped,fp-1x-uncapped` (some), `&frames=<n>` (uncapped
- * frames per scenario, default 1500; rAF ones run n / 5).
+ * frames per scenario, default 600; rAF ones run n / 5).
  */
 import type { PlayerId } from '../contracts/index';
 import type { PerfReport } from './perf';
@@ -262,11 +262,11 @@ export async function runBench(params: URLSearchParams): Promise<void> {
     if (api === undefined) throw new Error('no 3D app');
     const which = params.get('bench') ?? '1';
     const pick = which === '1' || which === '' ? SCENARIOS : SCENARIOS.filter((s) => which.split(',').includes(s.name));
-    const frames = Number(params.get('frames') ?? '1500');
+    const frames = Number(params.get('frames') ?? '600');
     // Let the page settle (first frames compile the shaders).
     for (let k = 0; k < 30; k++) await nextFrame();
     const scenarios: BenchScenarioResult[] = [];
-    for (const sc of pick) scenarios.push(await runScenario(api, sc, Number.isFinite(frames) && frames > 0 ? frames : 1500));
+    for (const sc of pick) scenarios.push(await runScenario(api, sc, Number.isFinite(frames) && frames > 0 ? frames : 600));
     const canvas = document.getElementById('view') as HTMLCanvasElement;
     const result: BenchResult = { userAgent: navigator.userAgent, viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio, canvas: { width: canvas.width, height: canvas.height } }, renderer: glRenderer(), scenarios };
     window.__cs2bench = { done: true, result, error: null };
