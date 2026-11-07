@@ -197,6 +197,8 @@ export interface WeaponModelTuning {
   recoilSuppressionFactor: number;
   /** +1: a recoil angle of +90° kicks the view left (+yaw); −1 mirrors. */
   recoilYawSign: number;
+  /** The camera follows this share of the bullet's punch offset (CS:GO `view_recoil_tracking` 0.45; not in CS2's dump). */
+  viewRecoilTracking: number;
   /** Screen shake per shot: view punch = kick × this (`weapon_recoil_view_punch_extra`). */
   recoilViewPunchExtra: number;
   /** View punch exponential decay per second (CS2 `view_punch_decay`). */
@@ -565,6 +567,7 @@ const WEAPON_MODEL_KEYS = [
   'recoilSuppressionShots',
   'recoilSuppressionFactor',
   'recoilYawSign',
+  'viewRecoilTracking',
   'recoilViewPunchExtra',
   'viewPunchDecay',
   'recoilIndexDecay',
@@ -763,7 +766,7 @@ function checkWeaponModel(m: WeaponModelTuning): WeaponModelTuning {
   for (const k of WEAPON_MODEL_KEYS) if (k !== 'recoilYawSign' && m[k] < 0) throw new TuningError(`weapons._engine.${k}: must be >= 0, got ${m[k]}`);
   if (m.recoilYawSign !== 1 && m.recoilYawSign !== -1) throw new TuningError(`weapons._engine.recoilYawSign: must be 1 or -1, got ${m.recoilYawSign}`);
   if (!(m.moveFullFraction > m.moveStartFraction)) throw new TuningError('weapons._engine.moveFullFraction: must be > moveStartFraction');
-  for (const k of ['recoilVariance', 'recoilSuppressionFactor'] as const) if (m[k] > 1) throw new TuningError(`weapons._engine.${k}: must be in [0, 1], got ${m[k]}`);
+  for (const k of ['recoilVariance', 'recoilSuppressionFactor', 'viewRecoilTracking'] as const) if (m[k] > 1) throw new TuningError(`weapons._engine.${k}: must be in [0, 1], got ${m[k]}`);
   for (const k of ['penaltyDecayRatio', 'penThicknessDivisor', 'penDefaultModifier', 'burstShots', 'jumpImpulse', 'penPowerConst'] as const) if (!(m[k] > 0)) throw new TuningError(`weapons._engine.${k}: must be > 0, got ${m[k]}`);
   for (const k of ['recoilSuppressionShots', 'burstShots', 'penMaxPenetrations'] as const) if (!Number.isInteger(m[k])) throw new TuningError(`weapons._engine.${k}: must be an integer, got ${m[k]}`);
   return m;

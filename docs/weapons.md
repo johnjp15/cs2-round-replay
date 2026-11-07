@@ -29,9 +29,9 @@ and S6 (see "Recoil").
   below: `reloadTime` (= `m_flDisallowAttackAfterReloadStartDuration`) and the derived `reserve`.
 - **Spray patterns: 1,608 numbers** (26 weapons) generated from S1 by the model; 10 of the 12 weapons S5 covers match
   within 2.5 % in height (geometric mean of the ratios 1.0023 for height, 0.9970 for width).
-- **`weapons._engine`: 38 constants.** 5 verified in CS2 (S2), 1 fitted to S5 (`recoilScale`), 6 CS:GO defaults (S4)
+- **`weapons._engine`: 39 constants.** 5 verified in CS2 (S2), 1 fitted to S5 (`recoilScale`), 5 CS:GO defaults (S4)
   that reproduce CS:GO's spray envelopes within 0.5 % (so the generator and dynamics are right for CS:GO, not
-  confirmed for CS2), **26 unverified** (table below).
+  confirmed for CS2), **28 unverified** (table below, including the CS:GO `view_recoil_tracking` 0.45).
 - Global damage numbers (`tuning.damage`): hitgroup stomach 1.25 / leg 0.75 / armor bonus 0.5 / falloff 500 verified
   by S7; arm 1, neck 1, generic 1 unverified.
 
@@ -55,6 +55,8 @@ if (r.shot) for (const dir of r.shot.pellets) {
   victimArms = applyHit(ctx, victimArms, arms.weapon, armoredHitgroup);                         // tagging + hit punch
 }
 const speedCap = maxSpeedOf(ctx, arms, attack);         // for the movement code
+const camera = cameraAngles(ctx, arms, view);           // render the first-person camera here
+const crosshair = crosshairAngles(ctx, arms, view);     // where the next bullet goes (cl_crosshair_recoil)
 ```
 
 - `fireShot(ctx, state, rng, view, motion, tick) → { state, shot }` is the low-level single shot (no cadence or ammo
@@ -203,6 +205,85 @@ sign is unverified against the game.
 `sprays` holds, for the 16 spray weapons (full magazine) and 10 pistols (10 shots at the cycle time), the per-bullet
 `[pitch, yaw]` offsets in degrees (pitch − = up) of the deterministic part of the shot; inaccuracy is added on top.
 
+## Spraying: what the 3D game must reproduce (`tests/weapons-spray.test.ts`)
+
+**How CS2 randomizes a spray.** The recoil pattern is **fixed** per weapon: the 64-entry table is generated once from
+the weapon's recoil parameters and `m_nRecoilSeed` (S1), so every AK-47 spray kicks the view the same way; the
+"variance" parameters (`m_flRecoilAngleVariance` 70°, `…MagnitudeVariance` 0 for the AK) and the smoothing
+(`weapon_recoil_variance` 0.55) shape that one table, they are not re-rolled per spray (S6: csdb.gg computes patterns
+"bullet for bullet" from the game's recoil parameters; the spray-coach project in S6's search notes the real
+trajectory is "fixed, identical for everyone"). The only per-shot randomness is the **inaccuracy + spread cone**
+(accuracy.ts), drawn from the seeded RNG, whose size grows with each shot (fire inaccuracy) and recovers over the
+recovery time.
+
+**1,000 seeded AK-47 magazines at a wall 1,024 u away, standing still, view fixed** (seeds 1000–1999). The mean
+impact of each bullet equals the pattern within 0.1° (tested: all 30), the scatter about it equals the cone of that
+bullet within 6 %, and no bullet leaves the cone `1,024 × (I + S)`. The mean cloud spans 11.09° × 6.99° (csstats.gg
+CS2: 11.06° × 7.14°). Pitch − = up, yaw + = left:
+
+| bullet | pattern pitch ° | pattern yaw ° | mean of 1,000 (pitch, yaw) | inaccuracy I | mean scatter at 1,024 u | max scatter |
+| ---: | ---: | ---: | --- | ---: | ---: | ---: |
+| 1 | 0.000 | 0.000 | 0.001, 0.001 | 0.00641 | 3.28 | 7.2 |
+| 2 | -0.373 | 0.193 | -0.369, 0.179 | 0.01035 | 5.20 | 11.2 |
+| 3 | -1.631 | -0.053 | -1.646, -0.055 | 0.01294 | 6.67 | 13.9 |
+| 4 | -3.552 | 0.129 | -3.549, 0.145 | 0.01421 | 7.62 | 15.2 |
+| 5 | -5.429 | 0.185 | -5.414, 0.188 | 0.01617 | 8.12 | 17.2 |
+| 6 | -7.247 | -0.534 | -7.240, -0.538 | 0.01787 | 9.10 | 18.9 |
+| 7 | -8.612 | -0.989 | -8.603, -1.003 | 0.01812 | 9.42 | 19.2 |
+| 8 | -9.450 | -1.678 | -9.441, -1.659 | 0.01914 | 9.99 | 20.2 |
+| 9 | -9.967 | -0.775 | -9.971, -0.775 | 0.01889 | 10.11 | 20.0 |
+| 10 | -9.591 | 1.471 | -9.596, 1.477 | 0.01965 | 9.98 | 20.7 |
+| 11 | -9.883 | 2.676 | -9.882, 2.688 | 0.02014 | 10.78 | 21.2 |
+| 12 | -10.217 | 1.995 | -10.221, 2.000 | 0.01950 | 9.95 | 20.6 |
+| 13 | -10.224 | 2.827 | -10.247, 2.829 | 0.02004 | 10.29 | 21.1 |
+| 14 | -9.677 | 4.161 | -9.688, 4.161 | 0.01944 | 10.17 | 20.5 |
+| 15 | -9.911 | 4.307 | -9.918, 4.310 | 0.02001 | 10.16 | 21.1 |
+| 16 | -10.319 | 2.422 | -10.272, 2.428 | 0.02038 | 9.86 | 21.5 |
+| 17 | -10.542 | 1.225 | -10.552, 1.214 | 0.01964 | 10.22 | 20.7 |
+| 18 | -10.846 | 0.481 | -10.837, 0.468 | 0.02014 | 10.28 | 21.2 |
+| 19 | -10.703 | -0.941 | -10.707, -0.937 | 0.01950 | 10.23 | 20.6 |
+| 20 | -10.270 | -2.683 | -10.272, -2.701 | 0.02004 | 10.14 | 21.1 |
+| 21 | -10.516 | -1.729 | -10.496, -1.730 | 0.02040 | 10.66 | 21.5 |
+| 22 | -10.521 | -1.977 | -10.508, -1.989 | 0.01966 | 10.11 | 20.7 |
+| 23 | -10.809 | -1.570 | -10.807, -1.581 | 0.02015 | 10.30 | 21.2 |
+| 24 | -10.928 | -1.099 | -10.938, -1.093 | 0.01950 | 10.33 | 20.6 |
+| 25 | -10.790 | -2.100 | -10.771, -2.091 | 0.02005 | 10.55 | 21.1 |
+| 26 | -11.081 | -2.460 | -11.098, -2.473 | 0.02040 | 10.19 | 21.5 |
+| 27 | -11.088 | -1.365 | -11.088, -1.344 | 0.01966 | 9.92 | 20.7 |
+| 28 | -10.943 | 0.343 | -10.977, 0.341 | 0.02015 | 10.44 | 21.2 |
+| 29 | -9.899 | 2.731 | -9.913, 2.726 | 0.01951 | 9.80 | 20.6 |
+| 30 | -9.912 | 3.488 | -9.920, 3.452 | 0.02005 | 10.54 | 21.1 |
+
+**Recoil control.** A shooter that pulls the view against the mean pattern before each bullet (view = −pattern[i])
+puts every bullet's mean on the aim point (within 0.06°) and leaves only the cone: the first 10 bullets group with a
+**median of 7.2 u, 95 % within 17.3 u and all within 20.3 u** of the aim point at 1,024 u (1,000 sprays). Uncontrolled,
+the same 10 bullets lie at a median of 112 u and 95 % within 183 u. This is the expected CS2 grouping for a perfect
+pull-down; a human adds his own tracking error on top.
+
+**View vs bullet vs crosshair.** Bullets leave along view + aim punch × `recoilScale` (`crosshairAngles`; CS2's default
+`cl_crosshair_recoil true` draws the crosshair there, S2). The camera (`cameraAngles`) moves by view + aim punch ×
+recoilScale × `viewRecoilTracking` (0.45, CS:GO's `view_recoil_tracking`; CS2 has no such variable in its dump, so
+**unverified**) + the view punch (screen shake, ×0.055 of the kick, decaying at `view_punch_decay` 18). So with a fixed
+crosshair the spray climbs ~55 % above where the camera looks; with the recoil crosshair, the crosshair sits on the next
+bullet. The app must: render with `cameraAngles`, draw the crosshair at `crosshairAngles` (or centred if the player
+turns it off), and feed the mouse into `view` only (never write punch back into view).
+
+**First shot and recovery** (AK-47; all from S1 values through the formulas above):
+
+| situation | inaccuracy I | max cone at 1,024 u |
+| --- | ---: | ---: |
+| first shot standing | 0.00641 | 7.2 u |
+| first shot crouched | 0.00481 | 5.5 u |
+| walking 111.8 u/s (shift) | 0.05807 | 60 u |
+| running 215 u/s | 0.18147 | 186 u |
+| moving ≤ 73.1 u/s (34 % of 215: counter-strafed) | 0.00641 | 7.2 u (the movement term is instantaneous) |
+| take-off | ≈ 0.239 | 245 u |
+| near the apex | < 0.02 (air term ~0, take-off penalty decaying) | < 21 u |
+| 0.75 s after landing | < 0.00654 (within 2 % of standing) | 7.3 u |
+| bullet 8–30 of a held spray | 0.0189–0.0204 | ≈ 21 u |
+| after a spray | the excess falls to 1/10 in 0.506 s (standing "final" recovery) | |
+| AWP scoped / unscoped first shot | ≈ 0.0015 / > 0.05 | ≈ 1.5 u / > 50 u |
+
 ## Accuracy (`accuracy.ts`)
 
 All in the game's units (tangent of the cone half-angle; radius at 1,024 u = 1,024 × value).
@@ -289,6 +370,7 @@ passed beside that frame: it is a position error of the recording, not a wallban
 | recoilDecayExp / recoilDecayLin / recoilVelDecay | 8 / 18 / 4.5 | S4 | CS:GO, validated by S5 |
 | recoilVariance | 0.55 | S4 | CS:GO, validated by S5 |
 | recoilViewPunchExtra | 0.055 | S4 | CS:GO |
+| viewRecoilTracking | 0.45 | CS:GO `view_recoil_tracking` (not in CS2's dump) | unverified |
 | recoilSuppressionShots / Factor | 4 / 0.75 | M | unverified |
 | recoilYawSign | 1 | S6 (AK drifts left after bullet 10) | unverified |
 | viewPunchDecay | 18 | S2 `view_punch_decay` | verified |

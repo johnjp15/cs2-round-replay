@@ -342,6 +342,25 @@ export function applyHit(ctx: ArmsContext, victim: ArmsState, attackerWeapon: st
   };
 }
 
+/**
+ * Where the bullets go now (the crosshair with CS2's default `cl_crosshair_recoil true`): view + aim punch ×
+ * recoilScale. A player controls recoil by moving the view so that this stays on the target.
+ */
+export function crosshairAngles(ctx: ArmsContext, s: ArmsState, view: Angle2): Angle2 {
+  const o = punchOffset(s.punch, ctx.model);
+  return { pitch: roundNumber(view.pitch + o.pitch), yaw: roundNumber(view.yaw + o.yaw) };
+}
+
+/**
+ * The first-person camera: view + aim punch × recoilScale × viewRecoilTracking + view punch (screen shake). The camera
+ * moves less than the bullets, so with a fixed crosshair (cl_crosshair_recoil false) the spray drifts off the centre.
+ */
+export function cameraAngles(ctx: ArmsContext, s: ArmsState, view: Angle2): Angle2 {
+  const o = punchOffset(s.punch, ctx.model);
+  const k = ctx.model.viewRecoilTracking;
+  return { pitch: roundNumber(view.pitch + o.pitch * k + s.punch.view.pitch), yaw: roundNumber(view.yaw + o.yaw * k + s.punch.view.yaw) };
+}
+
 function reached(tick: number, t: number): boolean {
   return tick + TICK_EPS >= t;
 }

@@ -98,6 +98,7 @@
       "recoilSuppressionShots": 4,
       "recoilSuppressionFactor": 0.75,
       "recoilYawSign": 1,
+      "viewRecoilTracking": 0.45,
       "recoilViewPunchExtra": 0.055,
       "viewPunchDecay": 18,
       "recoilIndexDecay": 2,
