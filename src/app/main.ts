@@ -22,7 +22,7 @@
  * build (vite.single.config.ts) redirects that import to assets-embedded.ts, which reads them from the page.
  */
 import tuningJson from '../../data/tuning.json';
-import { type PlayerId, type RoundSummary } from '../contracts/index';
+import { parseMapId, type PlayerId, type RoundSummary } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { loadAssets } from './assets';
 import type { Camera } from './camera';
@@ -674,7 +674,7 @@ async function boot(): Promise<void> {
     const params = new URLSearchParams(window.location.search);
     const seedParam = Number(params.get('seed') ?? '1');
     const seed = Number.isInteger(seedParam) ? seedParam : 1;
-    const a = await loadAssets();
+    const a = await loadAssets(parseMapId(params.get('map')));
     const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
     new App(data, a.radar, seed, startHuman(params.get('human')), a.height);
     status.hidden = true;
