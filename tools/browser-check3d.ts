@@ -15,13 +15,18 @@
  *  3. takes control: restart, seek to 18.2 s, E (keyboard): cart is the human, the HUD says "You: cart", the speed
  *     is 1×; the mouse turns the view by exactly counts × 1.25 × 0.022° (pointer-lock deltas through the page's
  *     automation hook, since a headless page can't lock the pointer); aims at Lokier's head, clicks mouse 1 and checks
- *     the shot was fired (the HUD's ammo drops, a tracer); screenshot (f) first person;
+ *     the shot was fired (the HUD's ammo drops, a tracer); screenshot (f) first person; then (H2b) sprays ~0.8 s: the
+ *     camera kicks up and the crosshair rises to where the bullets go (screenshot (g)), and both recover after release;
+ *     with the "Recoil tracking" setting at 0 the camera stays still while the crosshair climbs, at 1 the camera takes
+ *     all the recoil and the crosshair stays centred;
  *  4. U1, spectating: at the start the T radar shows no CT (nobody spotted), "show everyone" shows all ten; first
  *     person through Sp4rtaN's eyes shows his HP / armor / ammo / weapon, the crosshair, the spectator panel
  *     ("SPECTATING sp4rtan", 1st person) and "Watching"; mouse 1 / Space / mouse 2 switch player, V cycles 1st → 3rd
  *     (no crosshair) → free → 1st; then the round plays at 4× until an enemy spotted earlier shows as the "?" ghost;
  *     screenshots app3d-spectate-*.jpg;
- *  5. fails on page errors, console errors or requests to other origins.
+ *  5. A1 (tools/browser-check3d-a1.ts): audio starts on a click, firing schedules a sound, the AK reload animation
+ *     runs for its reload time; viewmodel screenshots (docs/img/app3d-viewmodel-*.jpg);
+ *  6. fails on page errors, console errors or requests to other origins.
  * Port: `--port <n>` or CHECK3D_PORT (default 4180).
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
  */
@@ -31,6 +36,7 @@ import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cpus, loadavg } from 'node:os';
 import { chromium, type Browser, type Page } from 'playwright-core';
+import { a1Checks } from './browser-check3d-a1';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const PORT = Number(process.argv.includes('--port') ? process.argv[process.argv.indexOf('--port') + 1] : (process.env['CHECK3D_PORT'] ?? '4180'));
@@ -40,6 +46,7 @@ function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(name);
   return i >= 0 ? (process.argv[i + 1] ?? fallback) : fallback;
 }
+
 const SINGLE = process.argv.includes('--single');
 const OUT = resolve(ROOT, arg('--out', 'docs/img'));
 const SECONDS = Number(arg('--seconds', '4'));
@@ -355,10 +362,72 @@ async function main(): Promise<void> {
     report['fire'] = { shots: t1.humanShots, hits: t1.humanHits, clip: [clipBefore, clipAfter], hp: t1.hud.hp, killfeed: feed };
     if (t1.humanShots < 1 || clipAfter === clipBefore) problems.push(`firing: ${JSON.stringify(report['fire'])}`);
     shots.push(await shot(p, 'f-first-person'));
+    // 3b. H2b: recoil on the camera and the crosshair. Spray ~0.8 s at the floor in front of cart (the bullets kick
+    // the camera up by 45 % of the punch and move the crosshair to where they go), then release: both recover.
+    const camPitch = async (): Promise<number> => (await p.evaluate(() => window.__cs2sim3d?.test.state().camera.pitch ?? null)) ?? 0;
+    const crossXf = async (): Promise<string> => p.evaluate(() => document.getElementById('crosshair')?.style.transform ?? '');
+    await p.waitForTimeout(1500);
+    const pitch0 = await camPitch();
+    const look0 = (await stats(p)).look.pitch;
+    if (box !== null) {
+      await p.mouse.down();
+      await p.waitForTimeout(800);
+    }
+    const pitchSpray = await camPitch();
+    const xfSpray = await crossXf();
+    shots.push(await shot(p, 'g-spray-kick'));
+    if (box !== null) await p.mouse.up();
+    await p.waitForTimeout(1500);
+    const pitchAfter = await camPitch();
+    const xfAfter = await crossXf();
+    const lookAfter = (await stats(p)).look.pitch;
+    const crossY = (xf: string): number => Number(/translate\([^,]+,\s*(-?[\d.]+)px\)/.exec(xf)?.[1] ?? 0);
+    report['recoil'] = { cameraPitch: { before: pitch0, spraying: pitchSpray, after: pitchAfter }, look: [look0, lookAfter], crosshair: { spraying: xfSpray, after: xfAfter } };
+    // Source pitch: − = up. The camera kicks up at least 1.5° (45 % of ≥ 3.5° of punch after ~8 bullets) and the
+    // crosshair rises above the centre; 1.5 s later both are back (within 0.2° and 2 px).
+    if (!(pitchSpray < pitch0 - 1.5)) problems.push(`recoil: camera did not kick (${JSON.stringify(report['recoil'])})`);
+    if (!(crossY(xfSpray) < -5)) problems.push(`recoil: crosshair did not rise (${JSON.stringify(report['recoil'])})`);
+    if (!(Math.abs(pitchAfter - lookAfter) < 0.2 && Math.abs(crossY(xfAfter)) < 2)) problems.push(`recoil: did not recover (${JSON.stringify(report['recoil'])})`);
+    // 3c. H2b: the "Recoil tracking" setting (view_recoil_tracking) sets the camera's share of the recoil: spray for
+    // 0.5 s at 0 (camera still but for the screen shake, < 0.6°; the crosshair takes it all) and at 1 (the camera takes
+    // it all; the crosshair stays within a few px of the centre: the screen shake, which the bullets don't follow).
+    const tracking: Record<string, { camera: number; crosshairY: number }> = {};
+    for (const k of ['0', '1']) {
+      await p.evaluate((v) => {
+        const f = document.getElementById('set-tracking');
+        if (f instanceof HTMLInputElement) {
+          f.value = v;
+          f.dispatchEvent(new Event('change'));
+        }
+      }, k);
+      await p.waitForTimeout(1500);
+      const lk = (await stats(p)).look.pitch;
+      if (box !== null) await p.mouse.down();
+      await p.waitForTimeout(500);
+      const cam = await camPitch();
+      const xf = await crossXf();
+      const lk2 = (await stats(p)).look.pitch;
+      if (box !== null) await p.mouse.up();
+      tracking[k] = { camera: cam - (lk + lk2) / 2, crosshairY: crossY(xf) };
+    }
+    const stored = await p.evaluate(() => (JSON.parse(localStorage.getItem('cs2-sim3d-settings') ?? '{}') as { recoilTracking?: number }).recoilTracking ?? null);
+    report['recoilTracking'] = { ...tracking, stored };
+    if (!(Math.abs(tracking['0']?.camera ?? 9) < 0.6 && (tracking['0']?.crosshairY ?? 0) < -10)) problems.push(`recoil tracking 0: ${JSON.stringify(report['recoilTracking'])}`);
+    if (!((tracking['1']?.camera ?? 0) < -2 && Math.abs(tracking['1']?.crosshairY ?? 99) < 8)) problems.push(`recoil tracking 1: ${JSON.stringify(report['recoilTracking'])}`);
+    if (stored !== 1) problems.push(`recoil tracking not persisted: ${JSON.stringify(report['recoilTracking'])}`);
+    await p.evaluate(() => {
+      const f = document.getElementById('set-tracking');
+      if (f instanceof HTMLInputElement) {
+        f.value = '0.45';
+        f.dispatchEvent(new Event('change'));
+      }
+    });
     await p.close();
     // 4. Spectating (U1).
     report['spectate'] = await spectateChecks(browser, problems, shots);
     report['screenshots'] = shots.map((x) => x.replace(ROOT + '/', ''));
+    // 5. A1: sound and the viewmodels.
+    await a1Checks(browser, { open: (w, h) => open(browser, w, h, problems), seek, out: OUT, root: ROOT }, problems, report);
   } finally {
     await browser.close();
     server.close();
