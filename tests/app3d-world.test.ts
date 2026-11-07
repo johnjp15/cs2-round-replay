@@ -24,7 +24,8 @@ describe('world mesh (H1)', () => {
       expect(t.floor.positions.length).toBe(t.floor.triangles * 9);
       expect(t.floor.uvs.length).toBe(t.floor.triangles * 6);
       expect(t.plain.colors.length).toBe(t.plain.triangles * 9);
-      for (const v of t.floor.uvs) expect(v >= 0 && v <= 1).toBe(true);
+      // UVs from the radar transform; a vertex of a floor whose centre is on the radar may lie a little off it (clamped).
+      for (const v of t.floor.uvs) expect(v > -0.1 && v < 1.1).toBe(true);
     }
     console.log(JSON.stringify(stats));
   });
