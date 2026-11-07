@@ -12,7 +12,7 @@
  * Buffers: the real CS2 files from the packed bank (bank.ts) when present, else the placeholders (synth.ts). Voices
  * are pooled (no per-frame allocation; one AudioBufferSourceNode per sound, which Web Audio requires).
  */
-import manifestJson from '../../../data/audio/cs2-sound-events.json';
+import manifestJson from '../../../data/audio/cs2-sound-runtime.json';
 import type { Vec3 } from '../../contracts/index';
 import { toThree } from '../coords';
 import { SOUNDS, SOUND_IDS, BUSES, type Bus, type SoundDef } from './events';
@@ -202,17 +202,20 @@ export class AudioEngine implements SoundSink {
     const files = bankFiles();
     if (files === null) return;
     const decoded = new Map<string, AudioBuffer>();
-    for (const [path, b64] of Object.entries(files)) {
-      try {
-        const bin = atob(b64);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        decoded.set(path, await ctx.decodeAudioData(bytes.buffer));
-      } catch {
-        // This browser can't decode it (e.g. an old Safari and Opus): that event keeps its placeholder.
-      }
-    }
-    this.realFiles = decoded.size;
+    // In parallel: the browser decodes off the main thread.
+    await Promise.all(
+      Object.entries(files).map(async ([path, b64]) => {
+        try {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          decoded.set(path, await ctx.decodeAudioData(bytes.buffer));
+          this.realFiles = decoded.size;
+        } catch {
+          // This browser can't decode it (e.g. an old Safari and Opus): that event keeps its placeholder.
+        }
+      }),
+    );
     for (const layers of this.layers.values()) {
       for (const l of layers) {
         const bufs = l.ev.files.map((f) => decoded.get(f)).filter((b): b is AudioBuffer => b !== undefined);

@@ -23,8 +23,11 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
   while watching).
 - **Effects**: 3D tracers of the last 10 ticks' bullets (`Sim3DHost.shots()`), the muzzle flash on the viewmodel,
   smokes (grey domes), molotov fires (orange discs), grenades in flight, the bomb (red, blinking when planted).
-- **First person**: the camera at the eye, a box viewmodel coloured by weapon drawn in its own pass and camera
-  (viewmodel_fov), crosshair, hit marker (white; red for a headshot), the scope overlay while zoomed.
+- **First person**: the camera at the eye, the held weapon's low-poly viewmodel with hands (A1, "Viewmodels" below)
+  drawn in its own pass and camera (viewmodel_fov), crosshair, hit marker (white; red for a headshot), the scope
+  overlay while zoomed (the viewmodel hidden, as in CS2).
+- **Sound** (A1): CS2's sound events with positional HRTF audio, CS2's distance curves and occlusion on the mesh,
+  starting with the first click or key; placeholders until John's CS2 files are packed. docs/cs2-sounds.md.
 - **HUD**: score and round clock (the bomb timer once planted, red; green while defusing), the bomb line (carrier,
   planted, who is defusing and how long is left, defused), the kill feed, the radar minimap (the CS2 radar around the
   camera, every pawn as a dot, the view cone), the team panel (HP bar, mode: REPLAY / LIVE / YOU), HP / armor and
@@ -76,6 +79,32 @@ count. DPI changes counts per inch, not this formula (cm/360 = 360 / (0.022 × s
 
 **Firing.** The human's input carries the firing angles (view + 2 × punch: the view while the punch is zero); the
 headless host consumes only yaw and pitch, so nothing in it depends on the view code.
+
+## Viewmodels (A1)
+
+`src/app3d/viewmodels/`: low-poly procedural models, boxes and cylinders only (no Valve models), at real size in
+Source units with a key light baked into the vertex colours (unlit materials like the world): AK-47 (wood furniture,
+curved steel mag), M4A4, M4A1-S (long suppressor), AWP (green, big scope), SSG 08, Desert Eagle (silver), Glock-18,
+USP-S (suppressor), P2000, knife, C4 (bricks, keypad, display), HE, flashbang, smoke, molotov, incendiary, decoy.
+120–700 triangles each, built once, one held at a time, gloves and sleeves in the team's colour.
+
+- **Position**: the grip at a per-class hold point in view space plus CS2's `viewmodel_offset_x 1`, `_y 1`, `_z −1`
+  (defaults, convar dump), toed in 2.6°, drawn at `viewmodel_fov` 60. The hold points are fitted by eye to CS2's
+  default composition (**assumed**).
+- **Animations** (`pose.ts`, pure, tested), timed by the weapon state machine (`tracker.ts` reads the host's
+  `deployEndTick` / `reloadEndTick` / `grenadePrimed` and the `shot` events, in game ticks, so they follow pause,
+  speed and seek): deploy (rises over the first 45 % of the deploy time), fire (35 ms flash at the muzzle, kick, bolt or
+  slide; the AWP / SSG 08 bolt worked at 38–60 % of the cycle, with its sounds), reload (tilt, mag out at the
+  `clipout` fraction, new mag in at `clipin`, bolt at `bolt`, the same fractions as the reload sounds; AK-47: 0.17 /
+  0.52 / 0.78 of 2.5 s), knife slash (0.4 s), C4 plant (lowered, keypad tapping), grenade pin pulled and arm back while
+  primed, the throw. Scoped: hidden. Walking bob.
+- **World models**: every other player's held weapon in its right hand (the same models, one merged mesh), swapped
+  when the weapon changes; on death it lies on the floor beside the body (the dropped weapon).
+
+![AK-47](img/app3d-viewmodel-ak47-idle.jpg)
+![AK-47 mid-reload, mag out](img/app3d-viewmodel-ak47-reload.jpg)
+
+Also `app3d-viewmodel-{ak47-fire,m4a1s,awp,deagle,usps,knife,c4,he,world}.jpg` in docs/img.
 
 ## Frames
 
@@ -130,7 +159,10 @@ screenshot `#view`. The other hooks (`stats`, `session`, `takeControl`, `aimAt`,
 
 `tools/browser-check3d.ts` (port 4180; `--single` serves the single file). It screenshots (a) the start, (b) Lokier
 at B from cart's window (18.5 s, cart's eyes), (c) the plant (27.6 s, behind barely), (d) Sp4rtaN behind donk
-(49.95 s), (e) the defuse (64 s), (f) first person after taking control; checks the FOV (vertical 73.74°), that E
+(49.95 s), (e) the defuse (64 s), (f) first person after taking control; A1 (`tools/browser-check3d-a1.ts`, also runnable
+alone): audio starts on a click, a shot schedules `fire.<gun>`, R runs the reload animation for the state machine's
+reload time (measured in game ticks) with its three sounds, the viewmodel screenshots; `--port` / `BROWSER_CHECK_PORT`
+when 4180 is taken; checks the FOV (vertical 73.74°), that E
 takes control (YOU, 1×), that mouse counts turn the view by exactly counts × 1.25 × 0.022°, and that mouse 1 fires
 (ammo drops); measures fps and ticks/s at 1× and 4×.
 

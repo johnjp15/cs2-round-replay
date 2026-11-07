@@ -10,8 +10,8 @@
  *   size) over the human's teammates (all of them while watching).
  * - Effects: tracers (the 3D bullets of the last ticks, host.shots()), muzzle flash on the viewmodel, smokes (grey
  *   spheres), fires (orange discs), grenades in flight, the bomb (red box, blinking while planted).
- * - First person: the camera at the eye with the view angles; a box viewmodel drawn in a second pass (it never
- *   clips into walls). Frames: src/app3d/coords.ts (Source x, y, z → Three x, z, −y).
+ * - First person: the camera at the eye with the view angles; the weapon's viewmodel (A1, src/app3d/viewmodels)
+ *   drawn in a second pass (it never clips into walls); the other players' weapons in their hands. Frames: src/app3d/coords.ts (Source x, y, z → Three x, z, −y).
  */
 import {
   BoxGeometry,

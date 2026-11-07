@@ -154,6 +154,28 @@ export function buildManifest(checkout: string, names: readonly string[]): Manif
   return { source: { repo: 'SteamDatabase/GameTracking-CS2', commit, date }, events: sorted, files: sortedFiles, missing: missing.sort(), absent: [...absent].sort() };
 }
 
+const sig = (x: number): number => Number(x.toPrecision(4));
+
+/** The engine's subset of the manifest: per event files, volume, pitch, randoms, delay, curve, occlusion, z offset, children. */
+export function runtimeManifest(m: Manifest): { events: Record<string, unknown> } {
+  const events: Record<string, unknown> = {};
+  for (const [name, e] of Object.entries(m.events)) {
+    events[name] = {
+      files: e.files,
+      volume: sig(e.volume),
+      pitch: sig(e.pitch),
+      pitchRandom: e.pitchRandom.map(sig),
+      volumeRandom: e.volumeRandom.map(sig),
+      delay: sig(e.delay),
+      curve: e.curve.map((p) => p.slice(0, 4).map(sig)),
+      occlusion: sig(e.occlusion),
+      offset: [0, 0, sig(e.offset[2])],
+      children: e.children,
+    };
+  }
+  return { events };
+}
+
 function main(): void {
   const args = process.argv.slice(2);
   const checkout = args.find((a) => !a.startsWith('--'));
@@ -166,6 +188,9 @@ function main(): void {
   const m = buildManifest(resolve(checkout), cs2EventNames());
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(m, null, 1) + '\n');
+  // The page embeds only what the engine plays with (src/app3d/audio/engine.ts), numbers to 4 significant digits.
+  const runtime = join(dirname(out), 'cs2-sound-runtime.json');
+  writeFileSync(runtime, JSON.stringify(runtimeManifest(m)) + '\n');
   const bytes = Object.values(m.files).reduce((a, b) => a + Math.max(0, b), 0);
   console.log(`${Object.keys(m.events).length} events, ${Object.keys(m.files).length} files (${(bytes / 1024).toFixed(0)} KB in pak01), missing: ${m.missing.join(', ') || 'none'}, absent files: ${m.absent.join(', ') || 'none'} → ${out}`);
 }

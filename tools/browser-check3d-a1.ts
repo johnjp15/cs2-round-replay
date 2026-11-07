@@ -45,10 +45,16 @@ export async function a1Checks(_browser: Browser, ctx: A1Context, problems: stri
   if (before.audio.state !== 'none') problems.push(`a1: audio before any gesture: ${before.audio.state}`);
   await p.click('#view');
   await p.waitForFunction(() => window.__cs2a1?.stats().audio.state === 'running', null, { timeout: 10_000 }).catch(() => undefined);
+  // With a CS2 bank in the build, wait for its files to decode.
+  await p.waitForFunction(() => {
+    const a = window.__cs2a1?.stats().audio;
+    return a !== undefined && (!a.bank || a.realFiles > 0);
+  }, null, { timeout: 60_000 }).catch(() => undefined);
   const started = await a1(p);
   r['audioAfterClick'] = started.audio.state;
   r['bank'] = { inBuild: started.audio.bank, realFiles: started.audio.realFiles };
   if (started.audio.state !== 'running') problems.push(`a1: audio after a click: ${started.audio.state}`);
+  if (started.audio.bank && started.audio.realFiles === 0) problems.push('a1: the build has a CS2 sound bank but no file decoded');
   // 2. Take control of cart and fire: a sound is scheduled.
   await p.click('#start').catch(() => undefined);
   await ctx.seek(p, 18.2);
