@@ -328,6 +328,8 @@ export class MapGeometry {
   private readonly polyB = new Float64Array(24);
   private clipMinZ = 0;
   private clipMaxZ = 0;
+  /** The triangle behind the last segment trace's answer (−1: clear), for `sightBlocker`. */
+  private hitTri = -1;
 
   constructor(mesh: GeometryMesh) {
     const nv = mesh.verts.length / 3;
@@ -961,6 +963,22 @@ export class MapGeometry {
   }
 
   /**
+   * G6: a sight triangle the segment a → b crosses (the first one `sightBlocked` finds), or −1 if it is clear. Sight
+   * keeps it as a hint: the next query of the same pair tests it first (`crossesTriangle`).
+   */
+  sightBlocker(ax: number, ay: number, az: number, bx: number, by: number, bz: number): number {
+    this.hitTri = -1;
+    this.segmentTrace(ax, ay, az, bx, by, bz, true, true);
+    return this.hitTri;
+  }
+
+  /** G6: true if the segment a → b crosses triangle t (closed triangle, open segment, as the traces count it). */
+  crossesTriangle(t: number, ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
+    if (t < 0 || t >= this.triangleCount) return false;
+    return this.segmentTri(t, ax, ay, az, bx - ax, by - ay, bz - az) < 1;
+  }
+
+  /**
    * The segment DDA behind traceLine and traceSight. Per cell it tests the triangles listed there (`sight`: only the
    * sight triangles, a prefix of the list), skipping a sight cell whose triangles' z extent misses the segment's z range
    * in the cell, and any triangle whose bounding box misses the segment's box in the cell (padded by SEGMENT_PAD). A
@@ -1013,6 +1031,7 @@ export class MapGeometry {
             const f = this.segmentTri(t, ax, ay, az, dx, dy, dz);
             if (f < best) {
               best = f;
+              this.hitTri = t;
               if (firstOnly) return best;
             }
           }

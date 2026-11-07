@@ -569,7 +569,8 @@ export const SEES_BA = 2;
  * the CS2 mesh) implement it.
  */
 export interface PairSight {
-  pairSight(a: SeePawn, b: SeePawn, ab: boolean, ba: boolean): number;
+  /** `key`: a number that names the pair across calls (computeSees: i × pawns + j), for caches that never change answers. */
+  pairSight(a: SeePawn, b: SeePawn, ab: boolean, ba: boolean, key?: number): number;
 }
 
 /** The LIVE AI's guard-spot test (ai.ts guardSpot): a pawn standing at `spot` sees the point `height` above `target`. */
@@ -614,7 +615,7 @@ export function computeSees(pawns: readonly SeePawn[], sight: PairSight, smoke: 
       const ba = !b.blind && angleOff(b.yaw, b.pos, a.pos) <= half;
       if (!ab && !ba) continue;
       if (smoke.smokeBlocks(a.pos, b.pos)) continue;
-      const seen = sight.pairSight(a, b, ab, ba);
+      const seen = sight.pairSight(a, b, ab, ba, i * pawns.length + j);
       if ((seen & SEES_AB) !== 0) (out[i] as PlayerId[]).push(b.id);
       if ((seen & SEES_BA) !== 0) (out[j] as PlayerId[]).push(a.id);
     }

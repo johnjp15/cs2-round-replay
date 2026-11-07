@@ -68,8 +68,17 @@ const GRENADE_FLOOR_WINDOW = 32;
 export class MeshSight implements PairSight, GuardSight {
   readonly options: MeshSightOptions;
   private readonly g: MapGeometry;
-  /** Traces done since construction (tools and benchmarks; not state). */
+  /** Segment tests and the full traces among them (the rest were answered by a hint triangle); benchmarks, not state. */
   traces = 0;
+  fullTraces = 0;
+  /**
+   * Per pair (`pairSight`'s key): the triangle that last blocked one of its segments. A pair's next query tests it
+   * first: if the segment crosses it, the segment is blocked, which is what the full trace would say. Otherwise the
+   * full trace decides. So the hints only save time: answers never depend on them (snapshots don't carry them).
+   */
+  private readonly hints = new Map<number, number>();
+  /** The hint in use during one query (−1: none). */
+  private hint = -1;
 
   constructor(g: MapGeometry, options: MeshSightOptions) {
     this.g = g;
@@ -81,14 +90,20 @@ export class MeshSight implements PairSight, GuardSight {
     return this.g;
   }
 
-  /** True if the segment a → b crosses no sight triangle. */
+  /** True if the segment a → b crosses no sight triangle (the current hint triangle first, then the full trace). */
   segmentClear(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
     this.traces++;
-    return !this.g.sightBlocked(ax, ay, az, bx, by, bz);
+    if (this.hint >= 0 && this.g.crossesTriangle(this.hint, ax, ay, az, bx, by, bz)) return false;
+    this.fullTraces++;
+    const t = this.g.sightBlocker(ax, ay, az, bx, by, bz);
+    if (t < 0) return true;
+    this.hint = t;
+    return false;
   }
 
-  /** `segmentClear` for two points. */
+  /** `segmentClear` for two points (bullets, grenade effects); no hint carried in or out. */
   clear(a: Vec3, b: Vec3): boolean {
+    this.hint = -1;
     return this.segmentClear(a.x, a.y, a.z, b.x, b.y, b.z);
   }
 
@@ -130,6 +145,12 @@ export class MeshSight implements PairSight, GuardSight {
    * AIM_POINTS order and stops at the first clear one; `skipHead`: the head point is already known blocked.
    */
   visible(viewer: SightBody, target: SightBody, skipHead = false): boolean {
+    if (!skipHead) this.hint = -1;
+    return this.visibleFrom(viewer, target, skipHead);
+  }
+
+  /** `visible` with the current hint (one pair's query). */
+  private visibleFrom(viewer: SightBody, target: SightBody, skipHead: boolean): boolean {
     const o = this.options;
     const v = viewer.pos;
     const t = target.pos;
@@ -156,6 +177,7 @@ export class MeshSight implements PairSight, GuardSight {
    * `height` above `target`. One segment; a box between hides the bomb unless the line passes over it.
    */
   pointClear(spot: Vec3, eye: number, target: Vec3, height: number): boolean {
+    this.hint = -1;
     return this.segmentClear(spot.x, spot.y, spot.z + eye, target.x, target.y, target.z + height);
   }
 
@@ -174,16 +196,24 @@ export class MeshSight implements PairSight, GuardSight {
    * Both directions of a pair at once: SEES_AB if `ab` is asked and a sees b, SEES_BA if `ba` is asked and b sees a.
    * When both pawns' head points are their eyes (the head band is the eye height, standing or crouched), the
    * eye-to-eye segment is traced once, from a's eye to b's, for both directions: clear means both see each other;
-   * blocked, each asked direction tries its remaining points. Otherwise each asked direction runs `visible`.
+   * blocked, each asked direction tries its remaining points. Otherwise each asked direction runs `visible`. `key`
+   * (computeSees: the pair's index) keeps the pair's blocking triangle as a hint for its next query.
    */
-  pairSight(a: SightBody, b: SightBody, ab: boolean, ba: boolean): number {
+  pairSight(a: SightBody, b: SightBody, ab: boolean, ba: boolean, key = -1): number {
     if (!ab && !ba) return 0;
+    this.hint = key < 0 ? -1 : (this.hints.get(key) ?? -1);
+    const r = this.pairQuery(a, b, ab, ba);
+    if (key >= 0 && this.hint >= 0) this.hints.set(key, this.hint);
+    return r;
+  }
+
+  private pairQuery(a: SightBody, b: SightBody, ab: boolean, ba: boolean): number {
     const o = this.options;
     const eyeA = this.eye(a.crouching);
     const eyeB = this.eye(b.crouching);
     const shared = this.scaled(o.headHeight, a.crouching) === eyeA && this.scaled(o.headHeight, b.crouching) === eyeB;
-    if (!shared) return (ab && this.visible(a, b) ? SEES_AB : 0) | (ba && this.visible(b, a) ? SEES_BA : 0);
+    if (!shared) return (ab && this.visibleFrom(a, b, false) ? SEES_AB : 0) | (ba && this.visibleFrom(b, a, false) ? SEES_BA : 0);
     if (this.segmentClear(a.pos.x, a.pos.y, a.pos.z + eyeA, b.pos.x, b.pos.y, b.pos.z + eyeB)) return (ab ? SEES_AB : 0) | (ba ? SEES_BA : 0);
-    return (ab && this.visible(a, b, true) ? SEES_AB : 0) | (ba && this.visible(b, a, true) ? SEES_BA : 0);
+    return (ab && this.visibleFrom(a, b, true) ? SEES_AB : 0) | (ba && this.visibleFrom(b, a, true) ? SEES_BA : 0);
   }
 }
