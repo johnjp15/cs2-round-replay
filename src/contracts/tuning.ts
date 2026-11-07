@@ -220,7 +220,7 @@ export interface WeaponModelTuning {
   recoilViewPunchExtra: number;
   /** View punch exponential decay per second (CS2 `view_punch_decay`). */
   viewPunchDecay: number;
-  /** Recoil index decay per second (exponential) once no shot came for recoilIndexDelayCycles × the cycle time. */
+  /** `weapon_recoil_decay_coefficient` (CS:GO 2): the recoil index × e^(−ln 10 × this × dt) per tick once no shot came for recoilIndexDelayCycles × the cycle time. */
   recoilIndexDecay: number;
   recoilIndexDelayCycles: number;
   /** Rounds per Glock / FAMAS burst. */
