@@ -44,6 +44,8 @@ DZ_WEIGHT = 0.004
 # Viterbi: per hypothesis switch, cost per degree of view change beyond what a player turns in 0.1 s anyway.
 TURN_FREE_DEG = 12.0
 TURN_COST = 0.006
+SKIP_COST = 0.15
+MAX_SKIP = 3
 DISTINCT_DEG = 5.0
 # Weight of the Manhattan vanishing-point cue (features.LineSet) against the mesh score.
 MANHATTAN_WEIGHT = 0.5
@@ -334,27 +336,51 @@ def fit_frame(ff: FrameFit, prev: list[tuple[float, np.ndarray, int]], radar: fl
 
 
 def viterbi(frames: list[dict]) -> list[int]:
-    """Index of the chosen hypothesis per frame: max sum of scores minus turn costs."""
-    if not frames:
-        return []
+    """Index of the chosen hypothesis per frame, or -1 for a frame left out as an outlier.
+
+    Minimises, along the segment: per visited frame its score deficit against that frame's best hypothesis, per
+    transition TURN_COST x the view change beyond what a player turns anyway in that time, and SKIP_COST per frame
+    left out (at most MAX_SKIP in a row). Leaving frames out lets one motion-blurred or smoke-filled frame not drag the
+    sequence onto a wrong view (e.g. looking down instead of up at the Market ceiling, 59.73-59.8 s)."""
     n = len(frames)
-    cost = [np.array([-h['score'] for h in frames[0]['hyps']])]
-    back: list[np.ndarray] = []
-    for i in range(1, n):
-        a = np.array([[h['yaw'], h['pitch']] for h in frames[i - 1]['hyps']])
-        b = np.array([[h['yaw'], h['pitch']] for h in frames[i]['hyps']])
-        dt = max(frames[i]['t'] - frames[i - 1]['t'], 1 / FPS)
-        d = angdist(a[:, None, :], b[None, :, :])
-        free = TURN_FREE_DEG * dt / 0.1
-        trans = TURN_COST * np.maximum(d - free, 0)
-        tot = cost[-1][:, None] + trans
-        bi = np.argmin(tot, axis=0)
-        back.append(bi)
-        cost.append(tot[bi, np.arange(len(b))] - np.array([h['score'] for h in frames[i]['hyps']]))
-    path = [int(np.argmin(cost[-1]))]
-    for bi in reversed(back):
-        path.append(int(bi[path[-1]]))
-    return list(reversed(path))
+    if n == 0:
+        return []
+    views = [np.array([[h['yaw'], h['pitch']] for h in f['hyps']]) for f in frames]
+    deficit = [np.array([f['hyps'][0]['score'] - h['score'] for h in f['hyps']]) for f in frames]
+    cost: list[np.ndarray] = []
+    back: list[tuple[np.ndarray, np.ndarray]] = []
+    for jdx in range(n):
+        cj = deficit[jdx] + SKIP_COST * jdx  # start here: every frame before is left out
+        bi = np.full(len(cj), -1)
+        bk = np.full(len(cj), -1)
+        for idx in range(max(0, jdx - 1 - MAX_SKIP), jdx):
+            dt = max(frames[jdx]['t'] - frames[idx]['t'], 1 / FPS)
+            d = angdist(views[idx][:, None, :], views[jdx][None, :, :])
+            trans = TURN_COST * np.maximum(d - TURN_FREE_DEG * dt / 0.1, 0)
+            tot = cost[idx][:, None] + trans + SKIP_COST * (jdx - idx - 1)
+            a = np.argmin(tot, axis=0)
+            c = tot[a, np.arange(len(cj))] + deficit[jdx]
+            better = c < cj
+            cj = np.where(better, c, cj)
+            bi = np.where(better, idx, bi)
+            bk = np.where(better, a, bk)
+        cost.append(cj)
+        back.append((bi, bk))
+    # End: the last frames may be left out too.
+    best = None
+    for idx in range(max(0, n - 1 - MAX_SKIP), n):
+        k = int(np.argmin(cost[idx]))
+        c = float(cost[idx][k]) + SKIP_COST * (n - 1 - idx)
+        if best is None or c < best[0]:
+            best = (c, idx, k)
+    assert best is not None
+    path = [-1] * n
+    _, idx, k = best
+    while idx >= 0:
+        path[idx] = int(k)
+        pi, pk = back[idx]
+        idx, k = int(pi[k]), int(pk[k])
+    return path
 
 
 def seg_path(seg_dir: str, seg: dict, jobs: list[dict]) -> str:
@@ -422,7 +448,21 @@ def main() -> None:
     ap.add_argument('--out', default=os.path.join(ROOT, 'logs', 'viewfit'))
     ap.add_argument('--only', default=None)
     ap.add_argument('--workers', type=int, default=2)
+    ap.add_argument('--repick', action='store_true', help='recompute the Viterbi picks of the cached segments and write fit.json')
     a = ap.parse_args()
+    if a.repick:
+        seg_dir = os.path.join(a.out, 'segments')
+        results = []
+        for name in sorted(os.listdir(seg_dir)):
+            seg = json.load(open(os.path.join(seg_dir, name)))
+            seg.sort(key=lambda r: r['t'])
+            for rec, k in zip(seg, viterbi(seg)):
+                rec['pick'] = k
+            results.extend(seg)
+        results.sort(key=lambda r: (r['t'], r['player']))
+        json.dump({'format': 'cs2-round-replay/viewfit-raw@1', 'width': W, 'height': H, 'step': STEP, 'frames': results}, open(os.path.join(a.out, 'fit.json'), 'w'))
+        print('repicked', len(results), 'frames')
+        return
     os.makedirs(a.out, exist_ok=True)
     rnd = Round()
     only = parse_only(a.only)

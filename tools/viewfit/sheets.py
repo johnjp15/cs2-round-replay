@@ -52,7 +52,7 @@ def label(img: np.ndarray, text: str) -> None:
 
 def sheet_row(scene: Scene, video: str, rec: dict, w: int, extra: list[tuple[np.ndarray, str]] | None = None) -> np.ndarray:
     h = w * 9 // 16
-    hyp = rec['hyps'][rec.get('pick', 0)]
+    hyp = rec['hyps'][max(rec.get('pick', 0), 0)]
     cam = Camera(w, h, hyp['vfov'])
     base = np.array(rec['base'], float)
     eye = base + [hyp['dx'], hyp['dy'], EYE_STAND + hyp['dz']]

@@ -11,7 +11,7 @@
 // What it does with the raw fit (docs/viewfit.md):
 //   1. Per frame, the Viterbi pick; its margin over the best alternative view more than 8 deg away; a confidence.
 //   2. Views: `video` (observed / estimated) where the fit holds, else the radar yaw (`radar`, no pitch); each camera
-//      segment's first clear view held back across the spectator's camera switch (`inferred`, up to 0.6 s).
+//      segment's first clear view held back across the spectator's camera switch (`inferred`, up to 0.8 s).
 //   3. Engagements the camera watches: the shooter's eye offset (the fit's median) and the target moved onto the
 //      shooter's line of sight at the frames where the crosshair is on him; both within the radar's accuracy.
 //   4. Checks: the view against the target at every watched shot, and the eye-to-band line of every scripted hit of
@@ -84,7 +84,7 @@ export const OBSERVED_MIN_SCORE = 0.62;
 export const OBSERVED_MIN_MARGIN = 0.02;
 export const ESTIMATED_MIN_SCORE = 0.45;
 /** A camera segment's first clear view is held back this long across the spectator's camera switch. */
-export const HOLD_BACK_SEC = 0.6;
+export const HOLD_BACK_SEC = 0.8;
 
 export function angDist(y1: number, p1: number, y2: number, p2: number): number {
   const r = Math.PI / 180;
@@ -93,12 +93,14 @@ export function angDist(y1: number, p1: number, y2: number, p2: number): number 
 }
 
 export function classify(f: RawFrame): FitFrame {
-  const view = f.hyps[f.pick] as RawHyp;
+  // pick -1: the Viterbi pass left the frame out as an outlier.
+  const view = (f.pick >= 0 ? f.hyps[f.pick] : f.hyps[0]) as RawHyp;
   let alt = -Infinity;
   for (const h of f.hyps) if (h !== view && angDist(h.yaw, h.pitch, view.yaw, view.pitch) > ALT_DEG) alt = Math.max(alt, h.score);
   const margin = alt === -Infinity ? view.score : view.score - alt;
   let confidence: Confidence | 'failed' = 'failed';
-  if (view.score >= OBSERVED_MIN_SCORE && margin >= OBSERVED_MIN_MARGIN) confidence = 'observed';
+  if (f.pick < 0) confidence = 'failed';
+  else if (view.score >= OBSERVED_MIN_SCORE && margin >= OBSERVED_MIN_MARGIN) confidence = 'observed';
   else if (view.score >= ESTIMATED_MIN_SCORE) confidence = 'estimated';
   return {
     player: f.player,
@@ -167,7 +169,7 @@ export function buildViews(round: RoundData, frames: readonly FitFrame[]): Recor
     if (list === undefined || tr === undefined) continue;
     const inSeg = list.filter((v) => v.t >= seg.t0 - 1e-9 && v.t <= seg.t1 + 1e-9);
     const first = inSeg.slice(0, 3);
-    if (first.length < 3 || first.some((v) => v.source !== 'video' || v.confidence !== 'observed')) continue;
+    if (first.length < 3 || first.some((v) => v.source !== 'video') || (first[0] as OutView).confidence !== 'observed') continue;
     const a = first[0] as OutView;
     if (first.some((v) => angDist(v.yaw, v.pitch as number, a.yaw, a.pitch as number) > 6)) continue;
     const prevEnd = Math.max(0, ...round.pov.filter((p) => p.target === id && p.t1 <= seg.t0 + 1e-9 && p !== seg).map((p) => p.t1));
@@ -191,8 +193,15 @@ interface Snapped {
   tracks: Record<string, [number, number, number][]>;
 }
 
-function loadSnapped(): Snapped {
-  return JSON.parse(readFileSync(resolve(ROOT, 'data/geometry/mirage-tracks.json'), 'utf8')) as Snapped;
+/**
+ * The snapped tracks the fit's eye bases come from (each frame's `base`): data/geometry/mirage-tracks.json as it was
+ * when the fit ran, i.e. before G6's sight pass (pass 5) moved samples to make duels visible. The refinement is relative
+ * to these; snap-tracks then re-snaps round.json with the refined samples, and pass 5 only moves what is still
+ * out of sight. `--snapped` overrides; default logs/viewfit/tracks-base.json if present, else the committed file.
+ */
+function loadSnapped(path: string | null): Snapped {
+  const p = path ?? (existsSync(resolve(ROOT, 'logs/viewfit/tracks-base.json')) ? resolve(ROOT, 'logs/viewfit/tracks-base.json') : resolve(ROOT, 'data/geometry/mirage-tracks.json'));
+  return JSON.parse(readFileSync(p, 'utf8')) as Snapped;
 }
 
 /** Snapped (CS2 floor) position at t, linear between the 10 Hz samples, clamped. */
@@ -237,6 +246,8 @@ export interface Engagement {
   readonly other: PlayerId;
   readonly window: readonly [number, number];
   readonly aim: readonly number[];
+  /** Refine positions (false: the views only, no frame shows the other player at the crosshair). */
+  readonly refine: boolean;
   readonly note: string;
 }
 
@@ -245,8 +256,9 @@ export const ENGAGEMENTS: readonly Engagement[] = [
     name: 'cart-lokier',
     watched: 'cart',
     other: 'lokier',
-    window: [17.4, 18.8],
+    window: [18.2, 18.8],
     aim: [18.75, 18.767, 18.783, 18.8],
+    refine: true,
     note: "cart's Apartments window over B site; his headshot on Lokier at 18.8 s (shots 18.52-19.0 s)",
   },
   {
@@ -255,6 +267,7 @@ export const ENGAGEMENTS: readonly Engagement[] = [
     other: 'sp4rtan',
     window: [49.5, 50.3],
     aim: [49.85, 49.867],
+    refine: false,
     note: "donk's AWP shot at Sp4rtaN at 49.85 s; Sp4rtaN's hits on donk 49.9-50.3 s",
   },
   {
@@ -263,6 +276,7 @@ export const ENGAGEMENTS: readonly Engagement[] = [
     other: 'sp4rtan',
     window: [58.3, 58.8],
     aim: [],
+    refine: false,
     note: "barely's last frames before Sp4rtaN's headshot at 58.85 s",
   },
   {
@@ -271,12 +285,13 @@ export const ENGAGEMENTS: readonly Engagement[] = [
     other: 'sp4rtan',
     window: [65.8, 69.4],
     aim: [],
+    refine: false,
     note: "cart's shots at the defusing Sp4rtaN 65.9-66.9 and 68.67-69.27 s; Sp4rtaN kills cart at 69.4 s",
   },
 ];
 
 /** Refinements are tapered over this long outside each window. */
-const TAPER_SEC = 0.3;
+const TAPER_SEC = 0.8;
 /** A refinement never moves a sample further than this (the radar's accuracy is 20-40 u; CTs carry their radius). */
 const MAX_MOVE_T = 60;
 
@@ -300,42 +315,109 @@ function clampLen(dx: number, dy: number, max: number): { dx: number; dy: number
   return l <= max ? { dx, dy } : { dx: (dx * max) / l, dy: (dy * max) / l };
 }
 
-export function engagementMoves(round: RoundData, frames: readonly FitFrame[], sn: Snapped): Move[] {
+/**
+ * The fitted eye is well placed across the view but not along it: moving the camera forward along the view changes
+ * the frame little (the score of cart's 18.5-18.8 s frames drops 0.02-0.08 over the first 80-100 u forward, then
+ * collapses when the eye reaches the window; docs/viewfit.md "Depth"). So after the fitted offset, the watched player
+ * moves forward along his median view yaw by the least amount (DEPTH_STEP steps, at most MAX_DEPTH) that opens the
+ * eye-to-band line of every scripted hit of the pair in the window, with the other player re-placed on the line of
+ * sight each step.
+ */
+const DEPTH_STEP = 4;
+const MAX_DEPTH = 128;
+/** Sideways the fit is tighter: at most this far (units). */
+const MAX_SIDE = 64;
+/** The other player counts as at the crosshair within this angle of the fitted view. */
+const AIM_TOL_DEG = 3;
+
+export function engagementMoves(round: RoundData, frames: readonly FitFrame[], sn: Snapped, g: MapGeometry): Move[] {
   const moves: Move[] = [];
+  const hits = engagementHits(round);
   for (const e of ENGAGEMENTS) {
+    if (!e.refine) continue;
     const fr = frames.filter((f) => f.player === e.watched && f.t >= e.window[0] - 1e-9 && f.t <= e.window[1] + 1e-9 && f.confidence === 'observed');
     if (fr.length === 0) continue;
-    const dx = median(fr.map((f) => f.view.dx));
-    const dy = median(fr.map((f) => f.view.dy));
-    const off = clampLen(dx, dy, MAX_MOVE_T);
+    const base = clampLen(median(fr.map((f) => f.view.dx)), median(fr.map((f) => f.view.dy)), MAX_MOVE_T);
+    const aimFr = e.aim.map((t) => frames.find((f) => f.player === e.watched && Math.abs(f.t - t) < 0.009)).filter((f): f is FitFrame => f !== undefined && f.confidence !== 'failed');
+    const yawRef = median((aimFr.length > 0 ? aimFr : fr).map((f) => f.view.yaw));
+    const ux = Math.cos((yawRef * Math.PI) / 180);
+    const uy = Math.sin((yawRef * Math.PI) / 180);
+    // The other player's cap: 60 u where the radar saw him in the window, else his uncertainty radius.
+    const otherSamples = (round.tracks[e.other]?.samples ?? []).filter((s) => s.t >= Math.min(...e.aim, e.window[1]) - 0.5 - 1e-9 && s.t <= e.window[1] + 1e-9);
+    const cap = Math.min(...otherSamples.map((s) => (s.confidence === 'observed' ? MAX_MOVE_T : Math.max(MAX_MOVE_T, s.uncertainty ?? MAX_MOVE_T))));
+    const pairHits = hits.filter((h) => [h.attacker, h.victim].sort().join('-') === [e.watched, e.other].sort().join('-') && h.t >= e.window[0] - 1e-9 && h.t <= e.window[1] + 0.06);
+    const place = (off: { dx: number; dy: number }): { dx: number; dy: number } | null => {
+      if (aimFr.length === 0) return null;
+      const cx: number[] = [];
+      const cy: number[] = [];
+      const ds: number[] = [];
+      for (const f of aimFr) {
+        const eye = { x: f.base.x + off.dx, y: f.base.y + off.dy, z: f.base.z + EYE + f.view.dz };
+        const d = viewDir(f.view.yaw, f.view.pitch);
+        const p = snappedAt(sn, e.other, f.t);
+        const hl = Math.hypot(d.x, d.y);
+        const s = Math.max(0, (p.x - eye.x) * (d.x / hl) + (p.y - eye.y) * (d.y / hl));
+        cx.push(eye.x + (d.x / hl) * s - p.x);
+        cy.push(eye.y + (d.y / hl) * s - p.y);
+        ds.push(s);
+      }
+      // Within AIM_TOL_DEG of the crosshair is on it (the fit's accuracy, spread and recoil): move only the rest.
+      const mx = median(cx);
+      const my = median(cy);
+      const len = Math.hypot(mx, my);
+      const tol = median(ds) * Math.tan((AIM_TOL_DEG * Math.PI) / 180);
+      const k = len <= tol ? 0 : (len - tol) / len;
+      return clampLen(mx * k, my * k, Number.isFinite(cap) ? cap : MAX_MOVE_T);
+    };
+    const open = (off: { dx: number; dy: number }, toff: { dx: number; dy: number } | null): boolean =>
+      pairHits.every((h) => {
+        const mv = (id: PlayerId): { dx: number; dy: number } => (id === e.watched ? off : id === e.other && toff !== null ? toff : { dx: 0, dy: 0 });
+        const a = snappedAt(sn, h.attacker, Math.min(h.t, e.window[1]));
+        const b = snappedAt(sn, h.victim, Math.min(h.t, e.window[1]));
+        const ma = mv(h.attacker);
+        const mb = mv(h.victim);
+        const band = h.band === 'head' ? HEAD : CHEST;
+        // With a margin: the band 4 u lower and both ends 2 u off either way stay open too (integer positions,
+        // the snapping's floor z).
+        const pa = { x: a.x + ma.dx, y: a.y + ma.dy, z: a.z };
+        const pb = { x: b.x + mb.dx, y: b.y + mb.dy, z: b.z };
+        // ... and with the victim crouched (the puppet's button plan crouches slow stretches: band × 46 / 64).
+        return [0, 2, -2].every(
+          (q) =>
+            lineOpen(g, { ...pa, x: pa.x + q, y: pa.y + q }, { ...pb, x: pb.x - q, y: pb.y - q }, band) &&
+            lineOpen(g, { ...pa, x: pa.x + q, y: pa.y - q }, { ...pb, x: pb.x + q, y: pb.y - q }, band - 4) &&
+            lineOpen(g, { ...pa, x: pa.x - q, y: pa.y + q }, { ...pb, x: pb.x - q, y: pb.y + q }, (band * 46) / 64),
+        );
+      });
+    // Candidates: forward along the view (weakly constrained by the frame) costs half as much as sideways (well
+    // constrained); the cheapest one that opens every shot line wins.
+    const cands: { s: number; l: number; cost: number }[] = [];
+    for (let fs = 0; fs <= MAX_DEPTH; fs += DEPTH_STEP) for (let l = -MAX_SIDE; l <= MAX_SIDE; l += DEPTH_STEP) cands.push({ s: fs, l, cost: Math.hypot(fs / 2, l) });
+    cands.sort((a, b) => a.cost - b.cost || a.s - b.s || a.l - b.l);
+    let off = base;
+    let toff = place(off);
+    let depth = 0;
+    let side = 0;
+    for (const c of cands) {
+      const o = { dx: base.dx + ux * c.s - uy * c.l, dy: base.dy + uy * c.s + ux * c.l };
+      const to = place(o);
+      if (open(o, to)) {
+        off = o;
+        toff = to;
+        depth = c.s;
+        side = c.l;
+        break;
+      }
+    }
     const ts = fr.map((f) => f.t);
     moves.push({
       player: e.watched,
       offset: off,
       window: e.window,
       frames: `${fr.length} observed frames ${Math.min(...ts).toFixed(2)}-${Math.max(...ts).toFixed(2)} s`,
-      reason: `${e.name}: the fitted eye (median offset of the frames)`,
+      reason: `${e.name}: the fitted eye (median offset of the frames)${depth !== 0 || side !== 0 ? `, then ${depth} u forward and ${side} u to the left of the view (yaw ${yawRef.toFixed(1)}°) to open the shot lines` : ''}`,
     });
-    // The other player onto the line of sight at the aim frames.
-    const aimFr = e.aim.map((t) => frames.find((f) => f.player === e.watched && Math.abs(f.t - t) < 0.009)).filter((f): f is FitFrame => f !== undefined && f.confidence !== 'failed');
-    if (aimFr.length === 0) continue;
-    const cx: number[] = [];
-    const cy: number[] = [];
-    for (const f of aimFr) {
-      const eye = { x: f.base.x + off.dx, y: f.base.y + off.dy, z: f.base.z + EYE + f.view.dz };
-      const d = viewDir(f.view.yaw, f.view.pitch);
-      const p = snappedAt(sn, e.other, f.t);
-      const h = { x: p.x, y: p.y, z: p.z + HEAD };
-      // Closest point of the view ray to the head, in 2D (the target keeps his floor).
-      const hl = Math.hypot(d.x, d.y);
-      const ux = d.x / hl;
-      const uy = d.y / hl;
-      const s = Math.max(0, (h.x - eye.x) * ux + (h.y - eye.y) * uy);
-      cx.push(eye.x + ux * s - h.x);
-      cy.push(eye.y + uy * s - h.y);
-    }
-    const unc = Math.max(MAX_MOVE_T, ...(round.tracks[e.other]?.samples ?? []).filter((s) => s.t >= e.window[0] - 1e-9 && s.t <= e.window[1] + 1e-9).map((s) => s.uncertainty ?? 0));
-    const toff = clampLen(median(cx), median(cy), unc);
+    if (toff === null) continue;
     moves.push({
       player: e.other,
       offset: toff,
@@ -348,7 +430,7 @@ export function engagementMoves(round: RoundData, frames: readonly FitFrame[], s
 }
 
 /** Per-sample position edits for the moves (10 Hz grid), tapered at the window ends. */
-export function positionEdits(round: RoundData, original: (id: PlayerId, t: number) => Vec3, moves: readonly Move[]): ViewFitFile['positions'] {
+export function positionEdits(round: RoundData, original: (id: PlayerId, t: number) => Vec3, snapped: (id: PlayerId, t: number) => Vec3, moves: readonly Move[]): ViewFitFile['positions'] {
   const out: { player: string; t: number; from: Vec3; to: Vec3; frames: string; reason: string }[] = [];
   for (const m of moves) {
     const tr = round.tracks[m.player];
@@ -357,7 +439,10 @@ export function positionEdits(round: RoundData, original: (id: PlayerId, t: numb
       const w = s.t < a ? 1 - (a - s.t) / TAPER_SEC : s.t > b ? 1 - (s.t - b) / TAPER_SEC : 1;
       if (w <= 0) continue;
       const from = original(m.player, s.t);
-      const to = { x: Math.round(from.x + m.offset.dx * w), y: Math.round(from.y + m.offset.dy * w), z: from.z };
+      // The offset is relative to the snapped (CS2 floor) spot the fit used as the eye base, so the edit puts the
+      // sample there (snap-tracks keeps a spot where a hull stands); z stays the recording's.
+      const sp = snapped(m.player, s.t);
+      const to = { x: Math.round(sp.x + m.offset.dx * w), y: Math.round(sp.y + m.offset.dy * w), z: from.z };
       if (to.x === from.x && to.y === from.y) continue;
       const prev = out.find((q) => q.player === m.player && Math.abs(q.t - s.t) < 1e-9);
       if (prev !== undefined) continue; // the first move of a sample wins
@@ -497,25 +582,15 @@ function main(argv: string[]): void {
   const round = JSON.parse(readFileSync(resolve(ROOT, 'data/round.json'), 'utf8')) as RoundData;
   const raw = JSON.parse(readFileSync(fitPath, 'utf8')) as { frames: RawFrame[] };
   const frames = raw.frames.map(classify);
-  const sn = loadSnapped();
+  const sn = check ? loadSnapped(resolve(ROOT, 'data/geometry/mirage-tracks.json')) : loadSnapped(args.includes('--snapped') ? resolve(arg(args, '--snapped', '')) : null);
   const g = loadWorld();
   const prev = existsSync(outPath) ? (JSON.parse(readFileSync(outPath, 'utf8')) as ViewFitFile) : null;
 
   if (check) {
-    // round.json and the snapped tracks already carry the refinement: "before" = undo it on the snapped positions.
-    const moved = prev?.positions ?? [];
+    // After: the committed (re-snapped) tracks; before: the tracks the fit ran on.
+    const base = loadSnapped(null);
     const after = (id: PlayerId, t: number): Vec3 => snappedAt(sn, id, t);
-    const before = (id: PlayerId, t: number): Vec3 => {
-      const p = snappedAt(sn, id, t);
-      const q = (k0: number): { dx: number; dy: number } => {
-        const m = moved.find((e) => e.player === id && Math.abs(e.t - k0 / 10) < 1e-9);
-        return m === undefined ? { dx: 0, dy: 0 } : { dx: m.to.x - m.from.x, dy: m.to.y - m.from.y };
-      };
-      const f = t * 10 - Math.floor(t * 10);
-      const a = q(Math.floor(t * 10));
-      const b = q(Math.floor(t * 10) + 1);
-      return { x: p.x - (a.dx + (b.dx - a.dx) * f), y: p.y - (a.dy + (b.dy - a.dy) * f), z: p.z };
-    };
+    const before = (id: PlayerId, t: number): Vec3 => snappedAt(base, id, t);
     const views = buildViews(round, frames);
     const text = report(round, frames, views, before, after, g);
     console.log(text);
@@ -532,33 +607,17 @@ function main(argv: string[]): void {
     if (s === undefined) throw new Error(`no sample of ${id} at ${t}`);
     return { x: s.x, y: s.y, z: s.z };
   };
-  // Snapped positions without the earlier refinement (the snapping moves refined samples too).
-  const undoPrev = (id: PlayerId, t: number): Vec3 => {
-    const p = snappedAt(sn, id, t);
-    const mv = (k: number): { dx: number; dy: number } => {
-      const m = prev?.positions.find((e) => e.player === id && Math.abs(e.t - k / 10) < 1e-9);
-      return m === undefined ? { dx: 0, dy: 0 } : { dx: m.to.x - m.from.x, dy: m.to.y - m.from.y };
-    };
-    const f = t * 10 - Math.floor(t * 10);
-    const a = mv(Math.floor(t * 10));
-    const b = mv(Math.floor(t * 10) + 1);
-    return { x: p.x - (a.dx + (b.dx - a.dx) * f), y: p.y - (a.dy + (b.dy - a.dy) * f), z: p.z };
-  };
-  const snUndone: Snapped = { tracks: {} };
-  for (const id of Object.keys(sn.tracks)) {
-    snUndone.tracks[id] = (sn.tracks[id] as [number, number, number][]).map((_, k) => {
-      const p = undoPrev(id as PlayerId, k / 10);
-      return [p.x, p.y, p.z];
-    });
-  }
+  // The base tracks predate any refinement (loadSnapped).
+  const snUndone = sn;
   const views = buildViews(round, frames);
-  const moves = engagementMoves(round, frames, snUndone);
-  const positions = positionEdits(round, original, moves);
+  const moves = engagementMoves(round, frames, snUndone, g);
+  const positions = positionEdits(round, original, (id, t) => snappedAt(snUndone, id, t), moves);
   const after = (id: PlayerId, t: number): Vec3 => {
     const p = snappedAt(snUndone, id, t);
     const mv = (k: number): { dx: number; dy: number } => {
       const m = positions.find((e) => e.player === id && Math.abs(e.t - k / 10) < 1e-9);
-      return m === undefined ? { dx: 0, dy: 0 } : { dx: m.to.x - m.from.x, dy: m.to.y - m.from.y };
+      const b = snappedAt(snUndone, id, k / 10);
+      return m === undefined ? { dx: 0, dy: 0 } : { dx: m.to.x - b.x, dy: m.to.y - b.y };
     };
     const f = t * 10 - Math.floor(t * 10);
     const a = mv(Math.floor(t * 10));

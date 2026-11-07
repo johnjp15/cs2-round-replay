@@ -6,7 +6,7 @@
  *   npm run build:3d && npx tsx tools/viewfit/check3d.ts [--at cart:59.5,cart:18.8] [--out logs/viewfit/app3d]
  *
  * Serves dist-3d/ on port 4186 and opens it in headless Chromium (as tools/browser-check3d.ts). Exits 1 when the
- * camera pitch at a moment with a recorded video view differs from it by more than 0.5° (the puppet's turn limit
+ * camera pitch at a moment with a recorded video view differs from it (at that tick or the one before) by more than 0.5° (the puppet's turn limit
  * reaches any fitted view within a few ticks; B3's aim overrides it during scripted engagements, listed separately).
  */
 import { createServer, type Server } from 'node:http';
@@ -103,9 +103,12 @@ async function main(): Promise<void> {
       )) as CamState;
       const file = join(out, `${id}-${t.toFixed(3)}.png`);
       await page.locator('#view').screenshot({ path: file });
-      const rec = recordedView(round.tracks[id as keyof RoundData['tracks']]?.view ?? [], st.t);
+      const view = round.tracks[id as keyof RoundData['tracks']]?.view ?? [];
+      const rec = recordedView(view, st.t);
+      // The pawn's pitch at a tick is the one its input set on the tick before: compare with both.
+      const prev = recordedView(view, st.t - 1 / 64);
       const engaged = round.shots.some((s) => s.shooter === id && s.t !== null && Math.abs(s.t - st.t) < 0.35);
-      const dp = rec === null ? null : Math.abs(st.camera.pitch - rec.pitch);
+      const dp = rec === null ? null : Math.min(Math.abs(st.camera.pitch - rec.pitch), prev === null ? Infinity : Math.abs(st.camera.pitch - prev.pitch));
       const ok = dp === null || engaged || dp <= 0.5;
       if (!ok) failed = true;
       rows.push({ id, t: st.t, tick: st.tick, cameraYaw: st.camera.yaw, cameraPitch: st.camera.pitch, vfov: st.camera.vfovDeg, recorded: rec, engaged, ok, file });

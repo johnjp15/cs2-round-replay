@@ -63,8 +63,8 @@ export function validateRound(round: RoundData, csvRows?: number): string[] {
       if (!CONFIDENCES.includes(v.confidence)) errs.push(`${id}: bad view confidence ${v.confidence} at ${v.t}`);
       if (v.confidence === 'inferred' ? v.source !== 'video' : false) errs.push(`${id}: inferred view must be a held video view at ${v.t}`);
       if (v.t > tr.endT + 1e-9) errs.push(`${id}: view at ${v.t} after the track ends (${tr.endT})`);
-      // Watched at t; a held (inferred) view may precede its segment by up to 0.6 s.
-      const lead = v.confidence === 'inferred' ? 0.6 : 0;
+      // Watched at t; a held (inferred) view may precede its segment by up to 0.8 s.
+      const lead = v.confidence === 'inferred' ? 0.8 : 0;
       if (!pov.some((p) => v.t >= p.t0 - lead - 1e-9 && v.t <= p.t1 + 1e-9)) errs.push(`${id}: view at ${v.t} outside every camera segment of ${id}`);
     });
     tr.samples.forEach((s) => {

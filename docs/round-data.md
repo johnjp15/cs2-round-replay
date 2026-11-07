@@ -9,7 +9,7 @@ npx tsx tools/extract-round.ts ../web-apps/cs2/mirage-round-replay/index.html   
 npx tsx tools/validate-round.ts                                                 # [data/round.json] [--csv <csv>]
 ```
 
-- **Inputs:** the web-apps replay page (its `<script id="data" type="application/json">` block and the one inline `data:image/jpeg` radar), the shots CSV (default `<page dir>/source/shots/mirage-round-sp4rtan-1v3-shots.csv`), and `data/tuning.json` (clip/reserve per weapon).
+- **Inputs:** (V2) `data/source/view-fit.json` when present (the fitted views and position refinements); the web-apps replay page (its `<script id="data" type="application/json">` block and the one inline `data:image/jpeg` radar), the shots CSV (default `<page dir>/source/shots/mirage-round-sp4rtan-1v3-shots.csv`), and `data/tuning.json` (clip/reserve per weapon).
 - **Outputs:** `data/round.json` (2-space JSON, fixed key order, trailing newline), `data/mirage-radar.jpg` (1024×1024 overview, the bytes from the page), and `data/source/mirage-round-sp4rtan-1v3-shots.csv` (a verbatim copy, so CI can check the shot count without web-apps).
 - **Determinism:** same inputs give byte-identical outputs. `tests/round-data.test.ts` rebuilds the round twice and compares it with the committed file whenever the web-apps clone is found next to the repo (or at `$ROUND_SOURCE_HTML`); without it that one test is skipped.
 - `meta.sources` records the SHA-256 of both inputs, so a stale `round.json` is easy to spot.
@@ -40,7 +40,7 @@ npx tsx tools/validate-round.ts                                                 
 | `roundEndT/Tick` | `meta.roundEnd` | 66.8, the defuse |
 | `hudRound` | `meta.hudRound` | "Round 12/30" |
 | `ticksPerSec` | constant | 64 |
-| `sources` | computed | input file names (relative to the workspace), SHA-256s, CSV row count |
+| `sources` | computed | input file names (relative to the workspace), SHA-256s, CSV row count; `viewFit` (V2) when `data/source/view-fit.json` was merged |
 
 ### `players[]` (sorted by id)
 
@@ -76,9 +76,10 @@ Kits at t = 0:
 
 | Field | Source / meaning |
 | --- | --- |
-| `samples[] {t, tick, x, y, z, confidence, uncertainty?, resampled?}` | page `tracks` rows `[t, x, y, z, flag(, uncertainty)]`, on an exact 0.1 s grid from t = 0 to the last source sample |
+| `samples[] {t, tick, x, y, z, confidence, uncertainty?, resampled?, refined?}` | page `tracks` rows `[t, x, y, z, flag(, uncertainty)]`, on an exact 0.1 s grid from t = 0 to the last source sample |
 | `offGridSamples[]` | source rows whose `t` is not a multiple of 0.1 (event anchors such as kills at 17.85 s), kept verbatim |
-| `yaw[] {t, tick, deg}` | page `yaw` rows `[t, id, deg]` for this player (20 Hz where present; Ts only, while they were on camera) |
+| `yaw[] {t, tick, deg}` | page `yaw` rows `[t, id, deg]` for this player (20 Hz where present; Ts only, while they were on camera): the radar's view cone |
+| `view[] {t, tick, yaw, pitch, source, confidence}` | **V2**, `data/source/view-fit.json` (`tools/fit-view-angles.ts`, `docs/viewfit.md`): the first-person view fitted to the video frame while the camera watches this player (10 Hz, 30–60 fps around key moments; empty for the others). `source: 'video'` with `confidence` `observed` (clear fit) or `estimated` (ambiguous), `'radar'` (the fit failed: smoke, flash, blur; `yaw` = the radar yaw, `pitch: null`), and `inferred` = a segment's first view held back up to 0.8 s across the camera switch. `yaw` degrees CCW from +x, `pitch` Source's (+ = down, ±89). |
 | `endT/endTick` | last source sample (death time, or 70.3 s for Sp4rtaN) |
 
 Track `flag`, worked out from the data and the round breakdown:
@@ -92,6 +93,56 @@ Track `flag`, worked out from the data and the round breakdown:
 The 6th column (CT tracks only) is the uncertainty radius in world units. It is written as `uncertainty` on every non-observed sample that has it (for example Sp4rtaN 320 before his first kill, then 200, 260, 140, 120; Zwomp 450 then 240). Observed samples carry 0 in the source and have no `uncertainty` field.
 
 Resampling: the source is 10 Hz but jumps half a step at some event anchors (snarlbot from 13.05 s, Lokier from 12.75 s, Sp4rtaN around 17.85, 19.6, 68.75 and 70.0 s, eradicate's last sample at 12.75 s). Grid samples that fall between source rows are linearly interpolated, rounded to whole units, marked `resampled: true`, and take the less certain confidence (and larger uncertainty) of their two neighbours. The original off-grid rows are in `offGridSamples`, so nothing from the source is lost.
+
+`refined: 'viewfit'` (V2) marks a sample moved from the radar reading to where the video's first-person frames put the
+player (below).
+
+### View fit: position refinements (V2)
+
+`data/source/view-fit.json` `positions` (`tools/fit-view-angles.ts`, `docs/viewfit.md` "Engagement positions") moves
+the samples of the window duel (cart ↔ Lokier, 18.5 / 18.8 s) to the fitted eye (cart: the median offset of his 13
+observed frames 18.2–18.78 s, then 104 u forward and 56 u left along his view so that both scripted hits' lines are open
+on the CS2 mesh) and onto cart's line of sight (Lokier: at the frames where cart's crosshair is on him, 18.75–18.8 s),
+tapered over 0.8 s. `to` is the refined spot relative to the snapped track the fit used (z stays the recording's;
+`tools/snap-tracks.ts` puts it on the floor). The extractor checks each `from` against the source sample.
+
+| player | t (s) | recording (x, y, z) | refined (x, y) | frames used |
+| --- | ---: | --- | --- | --- |
+| cart | 17.5 | (-1571, 736, -48) | (-1573, 721) | 13 observed frames 18.20-18.78 s |
+| cart | 17.6 | (-1579, 745, -48) | (-1583, 714) | 13 observed frames 18.20-18.78 s |
+| cart | 17.7 | (-1588, 763, -48) | (-1594, 717) | 13 observed frames 18.20-18.78 s |
+| cart | 17.8 | (-1607, 776, -48) | (-1615, 715) | 13 observed frames 18.20-18.78 s |
+| cart | 17.9 | (-1636, 786, -48) | (-1645, 709) | 13 observed frames 18.20-18.78 s |
+| cart | 18 | (-1665, 792, -48) | (-1676, 700) | 13 observed frames 18.20-18.78 s |
+| cart | 18.1 | (-1697, 796, -48) | (-1710, 689) | 13 observed frames 18.20-18.78 s |
+| cart | 18.2 | (-1723, 800, -48) | (-1738, 677) | 13 observed frames 18.20-18.78 s |
+| cart | 18.3 | (-1739, 802, -48) | (-1754, 679) | 13 observed frames 18.20-18.78 s |
+| cart | 18.4 | (-1754, 802, -48) | (-1769, 679) | 13 observed frames 18.20-18.78 s |
+| cart | 18.5 | (-1764, 800, -48) | (-1779, 677) | 13 observed frames 18.20-18.78 s |
+| cart | 18.6 | (-1766, 797, -48) | (-1781, 674) | 13 observed frames 18.20-18.78 s |
+| cart | 18.7 | (-1764, 794, -48) | (-1779, 671) | 13 observed frames 18.20-18.78 s |
+| cart | 18.8 | (-1758, 793, -48) | (-1773, 670) | 13 observed frames 18.20-18.78 s |
+| cart | 18.9 | (-1755, 794, -48) | (-1768, 687) | 13 observed frames 18.20-18.78 s |
+| cart | 19 | (-1761, 796, -48) | (-1772, 704) | 13 observed frames 18.20-18.78 s |
+| cart | 19.1 | (-1766, 799, -48) | (-1775, 722) | 13 observed frames 18.20-18.78 s |
+| cart | 19.2 | (-1771, 801, -48) | (-1779, 740) | 13 observed frames 18.20-18.78 s |
+| cart | 19.3 | (-1778, 804, -48) | (-1784, 758) | 13 observed frames 18.20-18.78 s |
+| cart | 19.4 | (-1795, 810, -48) | (-1797, 779) | 13 observed frames 18.20-18.78 s |
+| cart | 19.5 | (-1820, 814, -48) | (-1796, 789) | 13 observed frames 18.20-18.78 s |
+| lokier | 17.5 | (-2123, 453, -160) | (-2118, 466) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 17.6 | (-2116, 460, -162) | (-2108, 462) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 17.7 | (-2109, 466, -163) | (-2096, 454) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 17.8 | (-2103, 473, -165) | (-2085, 454) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 17.9 | (-2103, 479, -166) | (-2080, 454) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 18 | (-2109, 487, -168) | (-2081, 457) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 18.1 | (-2103, 479, -168) | (-2070, 444) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 18.2 | (-2103, 472, -168) | (-2064, 431) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 18.3 | (-2110, 465, -166) | (-2069, 425) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 18.4 | (-2118, 459, -165) | (-2077, 425) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 18.5 | (-2125, 452, -164) | (-2084, 426) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 18.6 | (-2132, 445, -162) | (-2081, 425) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 18.7 | (-2139, 439, -161) | (-2086, 427) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+| lokier | 18.8 | (-2146, 432, -160) | (-2087, 426) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
 
 ### `shots[]` (one per CSV row, in CSV order)
 
@@ -136,6 +187,6 @@ Not copied: the page's `nav` and `places` (the nav mesh is task A3's `data/mirag
 - **CT HP and armor:** never shown; 100/100 with helmet is assumed. CT money is unknown (`startMoney: null`).
 - **CT routes:** outside sightings the CT tracks are `inferred` reconstructions with an `uncertainty` radius of 110–450 units. Treat them as plausible, not recorded.
 - **Grenade landings:** only the throw position and time are known; where each smoke, flash, HE and molotov landed is not in the data.
-- **Yaw:** only for Ts while on camera (eradicate, cart, donk, barely). There is no CT yaw, and most players have no yaw at t = 0.
+- **Yaw / view:** only for Ts while on camera (eradicate, cart, donk, barely). There is no CT yaw, and most players have no yaw at t = 0. V2's fitted view (`view[]`) adds the pitch and corrects the radar yaw (median 13–22° off in the spectator segments); 21 of 856 frames fall back to the radar yaw.
 - **Shots:** exact times only for shots seen on the ammo HUD of the spectated player, plus a few audio-confirmed first shots. Off-camera sprays are counts over a time window, and kill-feed-only kills don't say how many shots were fired.
 - **Resampled samples:** a few tens of grid samples per affected track are interpolated (see above), so they can differ by a few units from where the player really was.
