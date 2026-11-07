@@ -125,6 +125,7 @@ export type {
   Kill,
   Damage,
   Utility,
+  GrenadeLanding,
   Radio,
   Chat,
   Sighting,
