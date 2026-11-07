@@ -273,9 +273,9 @@ describe('2. cart kills Lokier about 3 s late', () => {
     expect((run.entries[seen + delay] as LogEntry).observe.events.some((e) => e.type === 'shot' && e.shooter === 'lokier')).toBe(true);
     const kill = deaths(run.entries).find((d) => d.victim === 'lokier');
     expect(kill).toMatchObject({ attacker: 'cart' });
-    // G5: the kill is the recorded duel's (scripted), on the recorded kill's tick shifted with the encounter's hit
-    // (18.80 s + 2.64 s); before G5 his real headshot killed Lokier one tick earlier.
-    expect(damages(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ scripted: true, attacker: 'cart', hitgroup: 'head', tick: LOKIER_DEATH + (seen + delay - 1184) });
+    // G6: his peek spot is in sight of Lokier through the window on the CS2 mesh, so his real headshot kills him (21.42 s)
+    // with no recorded duel needed (G5 alone: the duel's scripted kill at 18.80 s + 2.64 s, the old spot behind the sill).
+    expect(damages(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ scripted: false, attacker: 'cart', hitgroup: 'head' });
     const late = ((kill?.tick ?? 0) - LOKIER_DEATH) / 64;
     console.log(`[lokier-late] seen ${seen}, scripted hit ${seen + delay}, kill ${kill?.tick} (${late.toFixed(2)} s after the recorded 18.80 s)`);
     expect(late).toBeGreaterThan(2);
@@ -583,7 +583,8 @@ describe('10. cart misses Lokier at the window and hides in Shop (G1)', () => {
     // G5: he is in the recorded duel, but none of his shots would hit Lokier, so nothing is forced: Lokier lives.
     expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'blocked_hit'))).toBe(false);
     expect(coreLogs(run.entries).filter((l) => l.text.startsWith('duel cart -> lokier')).map((l) => l.text)).toEqual([
-      'duel cart -> lokier: in the recorded duel from tick 1126 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203',
+      // G6: from 1138 (1126 before): Lokier first sees him at the window on the CS2 mesh then.
+      'duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203',
       'duel cart -> lokier: over at tick 1217, the recorded duel is over; 0 would-hit shots blocked',
     ]);
     expect(switches(run).find((s) => s.id === 'lokier')).toMatchObject({ tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });

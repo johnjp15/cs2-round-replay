@@ -111,8 +111,20 @@ for tests would need:
   visited). `Math.Floor`, `+ - * /` and `Math.Sqrt` are IEEE-exact, so C# matches bit for bit.
 - **Level check.** Samples at `i / n` with `n = ceil(length / step)`; floors from `floorsAt` sorted ascending; runs over a
   surface are matched to the previous sample's floors in that order (first match within `stepHeight`).
-- **sees** visits unordered pairs (i < j) in id order and traces each once; the lists are then sorted ordinally. The FOV
-  test uses `atan2` (not bit-specified): a target exactly on the FOV edge can differ in the last ulp.
+- **sees** visits unordered pairs (i < j) in id order; the lists are then sorted ordinally. The FOV test uses `atan2`
+  (not bit-specified): a target exactly on the FOV edge can differ in the last ulp.
+- **3D sight (G6, `mesh-sight.ts`).** Per pair: both FOV directions, then smoke, then one eye-to-eye segment traced
+  **from pawn i to pawn j** (the lower id first: `traceSight` is not bit-symmetric under reversal), then per asked
+  direction the remaining aim points in the order chest, left, right, leg (first clear wins). Side offsets
+  `(−dy/len, dx/len) × sideUnits` from the 2D viewer→target vector, `len = Math.Sqrt`; crouched heights `h × 46 / 64`.
+  `traceSight` = `traceLine` restricted to the triangle prefix `[0, sightTriangles)` of each broad-phase cell list, with
+  a per-cell z-extent skip and a per-triangle box skip padded by 1e-6 (pure filters: answers unchanged). The per-pair
+  hint triangle (`crossesTriangle` first) is an optional cache; drop it or keep it, answers are identical.
+- **Bullets (G6):** band from pitch first (skip the pawn if none), then `traceSight(eye, impact)` with the impact at the
+  ray's circle entry and the band's height; blocked → no hit for this or any later candidate.
+- **Pass 5 of the snapped tracks** is offline (tools/sight-snap.ts): the C# side reads `mirage-tracks.json` as is.
+- **LIVE AI `progressDist`:** −1 = not measured since the last plan (it was `Infinity`, which a JSON copy turns into
+  null); the test is `!(progressDist >= 0) || remaining < progressDist − stuckProgressUnits`.
 - **AI randomness:** `new Rng(seed).fork("ai:" + id).fork("d" + n).NextDouble()` for the n-th draw. The normal draws use
   Box–Muller (`Math.Log`, `Math.Cos`), rounded to 6 decimals; the inputs are canonicalized (6 decimals) like all host
   state. Expect the same rare last-digit caveat as the movement trig.
