@@ -357,8 +357,12 @@ def viterbi(frames: list[dict]) -> list[int]:
     return list(reversed(path))
 
 
-def fit_segment(args: tuple[dict, list[dict], dict[int, np.ndarray]]) -> list[dict]:
-    seg, jobs, frames = args
+def seg_path(seg_dir: str, seg: dict, jobs: list[dict]) -> str:
+    return os.path.join(seg_dir, f"{seg['player']}-{seg['t0']:.2f}-{len(jobs)}.json")
+
+
+def fit_segment(args: tuple[dict, list[dict], dict[int, np.ndarray], str | None]) -> list[dict]:
+    seg, jobs, frames, cache = args
     scene = Scene()
     region = plane_ids(scene)
     rnd = Round()
@@ -396,6 +400,8 @@ def fit_segment(args: tuple[dict, list[dict], dict[int, np.ndarray]]) -> list[di
     path = viterbi(out)
     for rec, k in zip(out, path):
         rec['pick'] = k
+    if cache:
+        json.dump(out, open(cache, 'w'))
     return out
 
 
@@ -424,14 +430,25 @@ def main() -> None:
     print(f'{len(jobs)} frames', flush=True)
     frames = decode_frames(a.video, [j['n'] for j in jobs], os.path.join(a.out, 'frames'))
     # One task per segment; a long segment is split where the 10 Hz grid allows (each part restarts with a full search).
-    tasks: list[tuple[dict, list[dict], dict[int, np.ndarray]]] = []
+    tasks: list = []
     for seg in rnd.segments():
         sj = [j for j in jobs if j['player'] == seg['player'] and seg['t0'] <= j['t'] <= seg['t1']]
         if not sj:
             continue
         tasks.append((seg, sj, {j['n']: frames[j['n']] for j in sj}))
     tasks.sort(key=lambda q: -len(q[1]))
+    # Each segment's result is cached in <out>/segments/ (a long run survives a restart); --only runs never cache.
+    seg_dir = os.path.join(a.out, 'segments')
+    os.makedirs(seg_dir, exist_ok=True)
     results: list[dict] = []
+    todo = []
+    for task in tasks:
+        cp = seg_path(seg_dir, task[0], task[1])
+        if not only and os.path.exists(cp):
+            results.extend(json.load(open(cp)))
+        else:
+            todo.append(task)
+    tasks = [(t[0], t[1], t[2], None if only else seg_path(seg_dir, t[0], t[1])) for t in todo]
     if a.workers > 1 and len(tasks) > 1:
         import multiprocessing as mp
 
