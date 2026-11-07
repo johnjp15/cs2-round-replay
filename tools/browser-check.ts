@@ -90,7 +90,7 @@ const SECONDS = Number(arg('--seconds', '10'));
 const ONLY = arg('--only', '');
 /** Golden parity: compare the logs through this observe tick (20 s). */
 const PARITY_TICK = 20 * 64;
-const PORT = 4179;
+const PORT = Number(arg('--port', process.env['CHECK_PORT'] ?? '4179'));
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
 async function waitForServer(url: string, ms: number): Promise<void> {

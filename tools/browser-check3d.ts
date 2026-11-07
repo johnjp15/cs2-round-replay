@@ -27,7 +27,7 @@ import { cpus, loadavg } from 'node:os';
 import { chromium, type Browser, type Page } from 'playwright-core';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
-const PORT = 4180;
+const PORT = Number(arg('--port', process.env['CHECK_PORT'] ?? '4180'));
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
 function arg(name: string, fallback: string): string {
