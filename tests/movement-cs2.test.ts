@@ -338,9 +338,9 @@ describe('steps and slopes (sv_stepsize 18, sv_standable_normal 0.7)', () => {
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
-// KZ (Kreedz climbing) mechanics in vanilla CS2. Jump-stat definitions from CS2KZ (KZGlobalTeam/cs2kz-metamod @ 317449df):
-// distance = 32 + the 2D distance from take-off to landing origin (src/kz/jumpstats/kz_jumpstats.cpp:676-697); the
-// vanilla-mode (VNL) LJ tiers are 215 / 230 / 235 / 240 / 245 / 248 (src/kz/mode/kz_mode_vnl.h:9).
+// Stock competitive CS2 only (the convars above; no KZ / movement-server settings). The KZ community is used only for how
+// jumps are measured: CS2KZ's jump distance = 32 + the 2D distance from take-off to landing origin
+// (KZGlobalTeam/cs2kz-metamod @ 317449df, src/kz/jumpstats/kz_jumpstats.cpp:676-697).
 // ---------------------------------------------------------------------------------------------------------------------
 
 const heading = (s: MoveState): number => (Math.atan2(s.vel.y, s.vel.x) * 180) / Math.PI;
@@ -386,8 +386,8 @@ function longJump(v0: number, weapon: string, strafe: (s: MoveState) => MoveInpu
 /** Tool-assisted strafes: every tick the wish is perpendicular to the velocity, turning back towards +x (W + mouse). */
 const tasStrafe = (s: MoveState): MoveInput => inp(1, 0, heading(s) + (heading(s) > 0 ? -90 : 90));
 
-describe('KZ: ground pre-strafe (turning while running, Source Friction + Accelerate)', () => {
-  it('knife: the best wish angle is 14.40° off the velocity and the speed settles at 256.79 u/s (2.7 % over 250); AK-47 220.84', () => {
+describe('stock: turning while running (no pre-strafe feature; only what Friction + Accelerate give)', () => {
+  it('the stock gain is small and needs a perfect turn: wish 14.40° ahead of the velocity every tick (≈ 76°/s) settles a knife at 256.79 (+2.7 %), an AK at 220.84', () => {
     for (const [weapon, cap, pre] of [
       ['knife', 250, 256.7928],
       ['ak47', 215, 220.8418],
@@ -404,8 +404,8 @@ describe('KZ: ground pre-strafe (turning while running, Source Friction + Accele
   });
 });
 
-describe('KZ: long jump (LJ) from 250 u/s with a knife', () => {
-  it('no strafes: 48 ticks in the air, 250 × 48 / 64 + 32 = 219.5 units (VNL tier 1 "215")', () => {
+describe('stock: one long jump from 250 u/s with a knife (distance measured as jump stats do)', () => {
+  it('no strafes: 48 ticks in the air, 250 × 48 / 64 + 32 = 219.5 units', () => {
     const j = longJump(250, 'knife', () => null);
     expect(j.ticks).toBe(48);
     expect(j.distance).toBeCloseTo(219.5, 6);
@@ -427,7 +427,7 @@ describe('KZ: long jump (LJ) from 250 u/s with a knife', () => {
   });
 });
 
-describe('KZ: bunnyhops (sv_autobunnyhopping 0, sv_enablebunnyhopping 0, sv_bhop_time_window 0.0078 s)', () => {
+describe('stock: why bunnyhop chains are hard (sv_autobunnyhopping 0, sv_enablebunnyhopping 0)', () => {
   /** Airborne just above the floor, falling at 300 u/s, moving `v` along +x: lands on the next tick. */
   const landing = (v: number): MoveState => ({ ...restingState({ x: 0, y: 0, z: 1 }), vel: { x: v, y: 0, z: -300 }, onGround: false });
 
@@ -463,7 +463,7 @@ describe('KZ: bunnyhops (sv_autobunnyhopping 0, sv_enablebunnyhopping 0, sv_bhop
   });
 });
 
-describe('KZ: crouch jump, edges, surf', () => {
+describe('stock: crouch jump, edges, steep slopes', () => {
   it('crouch jump: the feet reach 56.9975 + 9 (in-air duck) = 66.0, so 66-unit boxes are just reachable (CS2 de_ancient A box)', () => {
     let s = restingState({ x: 0, y: 0, z: 0 });
     let top = 0;
@@ -481,7 +481,7 @@ describe('KZ: crouch jump, edges, surf', () => {
     const off = stepMove3d({ ...restingState({ x: 17, y: 0, z: 100 }) }, null, 'knife', ledge, m).state;
     expect(off.onGround).toBe(false);
   });
-  it('surf: on a 60° ramp (normal z 0.5 < 0.7) the pawn is never on the ground and slides down at g · sin 60° = 692.8 u/s²', () => {
+  it('a steep slope (60°, normal z 0.5 < 0.7) is not ground: Source slides the pawn down it the pawn is never on the ground and slides down at g · sin 60° = 692.8 u/s²', () => {
     const t = Math.tan(Math.PI / 3);
     // A ramp rising towards +x: z = x · tan 60°.
     const ramp = meshOf([
