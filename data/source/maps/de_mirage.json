@@ -1,0 +1,27 @@
+{
+  "format": "cs2-round-replay/map-facts@1",
+  "map": "de_mirage",
+  "package": "mirage-cs2",
+  "name": "Mirage",
+  "bspPackage": "mirage-2020",
+  "notes": [
+    "Bomb sites and spawn zones: the March 2020 nav's places (data/mirage-nav.json, docs/nav.md), the same areas the LIVE AI and the plant rule have always used on Mirage ('Bombsite A', 'Bombsite B', 'T Spawn', 'CT Spawn'); one rect per nav area.",
+    "planter: the 'CanBePlanter' spawns of B3none/cs2-retakes RetakesPlugin/map_config/de_mirage.json (commit 2fde4a9cc21e791d6909b98bacc833aa5c54bdad, GPL-3.0; coordinates only); each lies inside its 2020 place."
+  ],
+  "bombsites": [
+    {
+      "name": "A",
+      "legacyPlace": "Bombsite A",
+      "planter": [[-321.03, -2036.16, -174.56], [-554.97, -2103.69, -179.97], [-253.97, -2134.08, -172.95]]
+    },
+    {
+      "name": "B",
+      "legacyPlace": "Bombsite B",
+      "planter": [[-1969.03, 450.03, -159.97], [-1892.41, 242.03, -159.97], [-2198.97, 89.03, -159.97]]
+    }
+  ],
+  "spawnZones": {
+    "T": "T Spawn",
+    "CT": "CT Spawn"
+  }
+}

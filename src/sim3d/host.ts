@@ -60,11 +60,14 @@ import {
   applyHit,
   armsContext,
   cameraAngles,
+  compensatedView,
   crosshairAngles,
   damageAfterHitgroup,
   freshArms,
   maxSpeedOf,
+  nextShotPunch,
   parseWeaponTable,
+  punchOffset,
   trackArms,
   trackShot,
   weaponDef,
@@ -74,13 +77,14 @@ import {
   type Motion,
   type SolidQuery,
 } from '../engine/weapons/index';
-import { freshAiState, roleOf, stepAi, type AiOther } from '../sim2d/ai';
-import { applyBombAction, bombFromObs, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from '../sim2d/bomb';
+import { freshAiState, legacyMapNav, roleOf, stepAi, type AiOther } from '../sim2d/ai';
+import type { MapNav } from '../sim2d/map-nav';
+import { applyBombAction, bombFromObs, freshBomb, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from '../sim2d/bomb';
 import { collideMove, type CollisionNav, type Obstacle } from '../sim2d/collision';
 import type { MapGeometry } from '../sim2d/geometry';
 import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeOutcome } from '../sim2d/grenades';
 import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove3d, type MoveOptions, type MoveState, type MoveStep } from '../sim2d/movement';
-import type { NavMesh, NavPoint } from '../sim2d/nav';
+import { NavMesh, type NavPoint } from '../sim2d/nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from '../sim2d/round';
 import { MeshGrenadeNav, MeshSight, meshSightOptionsFromTuning, scriptedHitThroughGeometry } from '../sim2d/mesh-sight';
 import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning } from '../sim2d/vision';
@@ -161,7 +165,8 @@ interface HostState {
 }
 
 export class Sim3DHost implements IHost {
-  private readonly nav: NavMesh;
+  /** H3: the map's nav for the LIVE AI, the plant rule, the 2D sight fallback and grenade throws: the Mirage 2020 grid (`legacyMapNav`) or a CS2 nav. */
+  private readonly nav: MapNav;
   /** The collision mesh (world + player clips) for movement. */
   private readonly geometry: MapGeometry;
   /** G6: sight (`sees`), the guard spot and grenade effects on the world mesh (MeshSight, shared with Sim2DHost). */
@@ -211,13 +216,16 @@ export class Sim3DHost implements IHost {
   /** W2: the human's USE / DROP held on the last tick (pickup and drop act on the press). */
   private humanUse = false;
   private humanDrop = false;
+  /** B1: bots (LIVE AI) and puppets compensate recoil (docs/weapons.md); off only for tests of the old behaviour. */
+  private botRecoilControl = true;
 
   /**
    * @param options score before the round and the round clock at tick 0; default 0 – 0 and `tuning.round.timeSec`.
    * @param vision the sight mask (the LIVE AI's and the grenades' 2D sight) and the AI seed; default no mask and seed 0.
    * @param world the movement mesh and the world mesh (sight and bullets).
    */
-  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null, vision: Sim2DVision | null, world: Sim3DWorld) {
+  /** @param nav the 2020 Mirage nav grid (NavMesh), or H3: any map's nav (a CS2 nav: src/engine/nav/cs2-nav.ts). */
+  constructor(nav: NavMesh | MapNav, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null, vision: Sim2DVision | null, world: Sim3DWorld) {
     if (roster.length === 0) throw new Error('Sim3DHost: empty roster');
     const seen = new Set<string>();
     for (const r of roster) {
@@ -225,11 +233,11 @@ export class Sim3DHost implements IHost {
       if (seen.has(r.id)) throw new Error(`Sim3DHost: duplicate player id ${r.id}`);
       seen.add(r.id);
     }
-    this.nav = nav;
+    this.nav = nav instanceof NavMesh ? legacyMapNav(nav) : nav;
     this.geometry = world.movement;
     this.tuning = tuning;
-    this.sight = new Sight(vision?.mask ?? null, nav, sightOptionsFromTuning(tuning));
-    this.grenadeSight = new GrenadeSight(this.sight, nav);
+    this.sight = new Sight(vision?.mask ?? null, this.nav, sightOptionsFromTuning(tuning));
+    this.grenadeSight = new GrenadeSight(this.sight, this.nav);
     this.meshSight = new MeshSight(world.world, meshSightOptionsFromTuning(tuning));
     this.grenadeNav = new MeshGrenadeNav(this.grenadeSight, this.meshSight);
     this.aiSeed = vision?.seed ?? 0;
@@ -597,6 +605,7 @@ export class Sim3DHost implements IHost {
           ready: reached(t, w.nextAttackTick) && reached(t, w.deployEndTick) && !reloading,
           reloading,
           defuseEndTick: this.bomb.defuse?.id === p.id ? this.bomb.defuse.endTick : null,
+          ...(this.botRecoilControl && this.armsCtx !== null && this.arms[i] !== undefined ? { aimPunch: nextShotPunch(this.armsCtx, this.arms[i] as ArmsState) } : {}),
         },
         goal,
         others: others.filter((q) => q.id !== p.id),
@@ -732,7 +741,24 @@ export class Sim3DHost implements IHost {
     if (a === null || ctx === null) return { camera: view, crosshair: view, zoom: 0, fov4x3: 90 };
     const w = ctx.table.weapons[a.weapon];
     const fov = w === undefined || a.zoom <= 0 ? 90 : (w.zoom.fov[Math.min(a.zoom, 2) - 1] ?? 90);
-    return { camera: cameraAngles(ctx, a, view, tracking ?? ctx.model.viewRecoilTracking), crosshair: crosshairAngles(ctx, a, view), zoom: a.zoom, fov4x3: fov };
+    // B1: a spectated puppet pulls against its recoil (its scripted view is where its bullets go), so its eye is
+    // the view minus the punch: the crosshair stays on the scripted aim and the camera dips like a player's.
+    const p = this.pawn(id);
+    const eye = p !== null && this.compensates(p) ? compensatedView(view, punchOffset(a.punch, ctx.model)) : view;
+    return { camera: cameraAngles(ctx, a, eye, tracking ?? ctx.model.viewRecoilTracking), crosshair: crosshairAngles(ctx, a, eye), zoom: a.zoom, fov4x3: fov };
+  }
+
+  /**
+   * B1: bots and puppets compensate recoil like a player pulling down (docs/weapons.md). On by default; `false`
+   * restores the old behaviour (views aimed at the target, sprays climbing over it) for regression tests.
+   */
+  setBotRecoilControl(on: boolean): void {
+    this.botRecoilControl = on;
+  }
+
+  /** B1: the host applies recoil control to this pawn's fire angles: a puppet (REPLAY and not the human's). */
+  private compensates(p: PawnState): boolean {
+    return this.botRecoilControl && this.armsCtx !== null && !this.mechanical(p);
   }
 
   private stepPawnWeapon(p: PawnState, t: number): void {
@@ -774,7 +800,12 @@ export class Sim3DHost implements IHost {
       let dir: Vec3 | null = null;
       if (ctx !== null && ai >= 0) {
         const rng = new Rng(this.aiSeed).fork(`spread:${p.id}:${t}`);
-        const r = trackShot(ctx, this.arms[ai] as ArmsState, rng, { pitch: p.move.pitch, yaw: p.move.yaw }, motion, t, p.wpn.nextAttackTick);
+        const view = { pitch: p.move.pitch, yaw: p.move.yaw };
+        // B1: a puppet's scripted view is where it aims: it pulls against the recoil like a player, so the drawn
+        // bullet goes there (its outcome below is still traced along the scripted view: the tape's). A LIVE bot's
+        // view already has it (the AI aims at target − punch, `AiSelf.aimPunch`); the human's view is the human's.
+        const fireView = this.compensates(p) ? compensatedView(view, nextShotPunch(ctx, this.arms[ai] as ArmsState, true)) : view;
+        const r = trackShot(ctx, this.arms[ai] as ArmsState, rng, fireView, motion, t, p.wpn.nextAttackTick);
         this.arms[ai] = r.state;
         dir = r.shot.pellets[0] ?? null;
       }
@@ -1036,7 +1067,7 @@ export class Sim3DHost implements IHost {
       const input = this.inputFor(p.id);
       const use = input !== null && input.buttons.includes('USE');
       const hasC4 = p.inventory.some((q) => q.item === 'c4');
-      const inSite = p.alive && p.team === 'T' && use && p.weapon === 'c4' && isBombsite(this.nav.placeName(p.move.pos));
+      const inSite = p.alive && p.team === 'T' && use && p.weapon === 'c4' && this.nav.inBombsite(p.move.pos);
       return { id: p.id, team: p.team, pos: copyVec(p.move.pos), alive: p.alive, weapon: p.weapon, use, hasC4, hasKit: p.inventory.some((q) => q.item === 'defuser'), inSite };
     });
   }

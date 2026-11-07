@@ -60,7 +60,8 @@ wins (ties: lower id). Damage: `bulletDamage(gun, distance, hitgroup, armor, hel
 distance. A blocked pair (the Core's `block_damage`) is traced and logged but not applied, as in 2D. Since H2b the
 direction is the weapon mechanics' (view + aim punch × 2 + the inaccuracy cone) and the human's and LIVE pawns'
 bullets go through walls (`meshSolidQuery` + `penetrate`); puppets' outcomes are traced along their scripted view as
-before. docs/weapons.md "In the 3D host".
+before. Bots and puppets compensate recoil (B1): their view at each shot is the aim − the punch offset, so their sprays
+stay on the target (docs/weapons.md "Bots and puppets compensate recoil"). docs/weapons.md "In the 3D host".
 
 ## Sight
 
