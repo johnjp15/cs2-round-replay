@@ -3,8 +3,8 @@
  * This barrel exports the DOM-free parts (usable from Node, e.g. the C5 headless harness).
  * The page entry is main.ts; the DOM layers are renderer.ts, hud.ts, input-dom.ts and camera-dom.ts.
  */
-export { Session, DEFAULT_HUMAN, defaultCore, parseSessionData, walkQueryOf } from './session';
-export type { SessionConfig, SessionData, SessionSnapshot, CoreParts, CoreFactory, World3dFiles } from './session';
+export { Session, DEFAULT_HUMAN, defaultCore, defaultHost, parseSessionData, walkQueryOf } from './session';
+export type { SessionConfig, SessionData, SessionSnapshot, CoreParts, CoreFactory, HostFactory, HostParts, SessionHost, World3dFiles } from './session';
 export { TAKEOVER_KEY, startHuman, takeoverButtonView, youNote } from './takeover';
 export type { TakeoverButtonView } from './takeover';
 export { FixedLoop, RateMeter, TICK_HZ, TICK_MS, MIN_SPEED, MAX_SPEED, SPEEDS, DEFAULT_MAX_TICKS_PER_FRAME } from './loop';
