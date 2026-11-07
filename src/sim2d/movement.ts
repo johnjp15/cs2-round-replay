@@ -50,6 +50,31 @@ export function restingState(pos: Vec3, yaw = 0, pitch = 0, crouching = false): 
 /** The fields of a PawnInput that movement reads (any PawnInput fits). */
 export type MoveInput = Pick<PawnInput, 'forward' | 'side' | 'yaw' | 'pitch' | 'buttons'>;
 
+/**
+ * Per-pawn speed state the weapons engine owns (H2, src/engine/weapons `maxSpeedOf` / `applyHit`), passed in by the host.
+ * Both optional; absent = the plain `runSpeedByWeapon` table, so the per-tick path is unchanged without them.
+ */
+export interface MoveOptions {
+  /** The held item's speed in its current mode (CS2 weapons.vdata `m_flMaxSpeed[mode]`: AWP 100 scoped), replacing `runSpeedByWeapon`. */
+  readonly runSpeed?: number;
+  /**
+   * Tagging (CS2 `m_flVelocityModifier`, 0..1): scales the speed cap (wish speed) only, not the acceleration rate
+   * (unverified; docs/movement.md M1-4). The victim's modifier after a hit = min(current, flinch × `mp_tagging_scale`).
+   */
+  readonly velocityModifier?: number;
+}
+
+const NO_OPTIONS: MoveOptions = {};
+
+/** Speed under which a ground move stops dead (Source WalkMove: `if ( spd < 1.0f ) mv->m_vecVelocity.Init()`). */
+const WALK_STOP_SPEED = 1;
+/** Friction leaves speeds below this alone (Source Friction: `if (speed < 0.1f) return`). */
+const FRICTION_MIN_SPEED = 0.1;
+/** `sv_enablebunnyhopping 0`: "Allow jump speed to exceed 1.1x max speed" (CS2 convar description). */
+const BUNNYJUMP_MAX_SPEED_FACTOR = 1.1;
+/** Source CategorizePosition: airborne and moving up (0 < vz ≤ NON_JUMP_VELOCITY) → m_surfaceFriction 0.25 for AirAccelerate. */
+const AIR_RISE_SURFACE_FRICTION = 0.25;
+
 /** Wish direction (unit vector in the x/y plane, or zero), wish speed and acceleration scale (units/s). */
 export interface Wish {
   readonly dirX: number;
@@ -85,7 +110,8 @@ export class MovementError extends Error {
  * Run speed (units/s) for the held item: `runSpeedByWeapon[weapon]`, falling back to the knife's
  * entry for items the table does not list (e.g. a defuser). Throws if neither exists.
  */
-export function runSpeed(weapon: string, m: MovementTuning): number {
+export function runSpeed(weapon: string, m: MovementTuning, opts: MoveOptions = NO_OPTIONS): number {
+  if (opts.runSpeed !== undefined) return opts.runSpeed;
   const own = m.runSpeedByWeapon[weapon];
   if (own !== undefined) return own;
   const knife = m.runSpeedByWeapon['knife'];
@@ -94,8 +120,9 @@ export function runSpeed(weapon: string, m: MovementTuning): number {
 }
 
 /** Speed cap for the held item and buttons: run × (WALK ? walkFactor : 1) × (DUCK ? crouchFactor : 1). */
-export function maxSpeed(weapon: string, buttons: readonly Button[], m: MovementTuning): number {
-  let v = runSpeed(weapon, m);
+export function maxSpeed(weapon: string, buttons: readonly Button[], m: MovementTuning, opts: MoveOptions = NO_OPTIONS): number {
+  let v = runSpeed(weapon, m, opts);
+  if (opts.velocityModifier !== undefined) v *= opts.velocityModifier;
   if (buttons.includes('WALK')) v *= m.walkFactor;
   if (buttons.includes('DUCK')) v *= m.crouchFactor;
   return v;
@@ -106,7 +133,7 @@ export function maxSpeed(weapon: string, buttons: readonly Button[], m: Movement
  * positive side = strafe right = yaw − 90° = (sin yaw, −cos yaw). (forward, side) is normalized when
  * its length exceeds 1; wish speed = maxSpeed × min(1, |(forward, side)|).
  */
-export function wishFromInput(input: MoveInput, weapon: string, m: MovementTuning): Wish {
+export function wishFromInput(input: MoveInput, weapon: string, m: MovementTuning, opts: MoveOptions = NO_OPTIONS): Wish {
   let f = input.forward;
   let s = input.side;
   const len = Math.sqrt(f * f + s * s);
@@ -121,17 +148,18 @@ export function wishFromInput(input: MoveInput, weapon: string, m: MovementTunin
   const wy = f * sn - s * c;
   const wl = Math.sqrt(wx * wx + wy * wy);
   if (wl === 0) return NO_WISH;
-  const speed = maxSpeed(weapon, input.buttons, m) * Math.min(1, len);
-  return { dirX: wx / wl, dirY: wy / wl, speed, accelScale: Math.max(speed, m.accelScaleFloor * runSpeed(weapon, m)) };
+  const speed = maxSpeed(weapon, input.buttons, m, opts) * Math.min(1, len);
+  return { dirX: wx / wl, dirY: wy / wl, speed, accelScale: Math.max(speed, m.accelScaleFloor * runSpeed(weapon, m, opts)) };
 }
 
 /**
- * Source ground friction: control = max(speed, svStopSpeed); drop = control × svFriction × dt;
- * vel *= max(speed − drop, 0) / speed.
+ * Source ground friction (gamemovement.cpp Friction): speeds below 0.1 are left alone; control = max(speed, svStopSpeed);
+ * drop = control × svFriction × dt; vel *= max(speed − drop, 0) / speed.
  */
 export function applyFriction(vel: Vec3, m: MovementTuning, dt: number): Vec3 {
   const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
   if (speed === 0) return ZERO;
+  if (speed < FRICTION_MIN_SPEED) return { x: vel.x, y: vel.y, z: 0 };
   const control = Math.max(speed, m.svStopSpeed);
   const drop = control * m.svFriction * dt;
   const scale = Math.max(speed - drop, 0) / speed;
@@ -151,6 +179,11 @@ export function accelerate(vel: Vec3, wish: Wish, m: MovementTuning, dt: number)
   return { x: vel.x + accelspeed * wish.dirX, y: vel.y + accelspeed * wish.dirY, z: 0 };
 }
 
+/** Source WalkMove: a ground velocity under 1 u/s after the acceleration is zeroed. */
+function walkStop(vel: Vec3): Vec3 {
+  return vel.x * vel.x + vel.y * vel.y < WALK_STOP_SPEED * WALK_STOP_SPEED ? ZERO : vel;
+}
+
 /**
  * One movement tick. `input` null = no command (zero move, keep yaw/pitch, buttons released).
  * Order: yaw/pitch/crouch from the input, friction, accelerate, then position via
@@ -159,12 +192,13 @@ export function accelerate(vel: Vec3, wish: Wish, m: MovementTuning, dt: number)
  * A pawn that starts off walkable space (e.g. teleported into a hole) moves unclamped until it is
  * back on the mesh, rather than being frozen in place.
  */
-export function stepMove(s: MoveState, input: MoveInput | null, weapon: string, nav: NavMesh, m: MovementTuning, dt: number = TICK_DT): MoveStep {
+export function stepMove(s: MoveState, input: MoveInput | null, weapon: string, nav: NavMesh, m: MovementTuning, dt: number = TICK_DT, opts: MoveOptions = NO_OPTIONS): MoveStep {
   const yaw = input === null ? s.yaw : input.yaw;
   const pitch = input === null ? s.pitch : input.pitch;
   const crouching = input === null ? false : input.buttons.includes('DUCK');
   let vel = applyFriction(s.vel, m, dt);
-  if (input !== null) vel = accelerate(vel, wishFromInput(input, weapon, m), m, dt);
+  if (input !== null) vel = accelerate(vel, wishFromInput(input, weapon, m, opts), m, dt);
+  vel = walkStop(vel);
 
   const tx = s.pos.x + vel.x * dt;
   const ty = s.pos.y + vel.y * dt;
@@ -515,7 +549,7 @@ class Mover {
  *    and TryPlayerMove between two half steps of gravity.
  * 5. Ground check (CategorizePosition). A landing adds the penalty and computes fall damage from the fall speed.
  */
-export function stepMove3d(s: MoveState, input: MoveInput | null, weapon: string, g: MapGeometry, m: MovementTuning, dt: number = TICK_DT): MoveStep {
+export function stepMove3d(s: MoveState, input: MoveInput | null, weapon: string, g: MapGeometry, m: MovementTuning, dt: number = TICK_DT, opts: MoveOptions = NO_OPTIONS): MoveStep {
   const yaw = input === null ? s.yaw : input.yaw;
   const pitch = input === null ? s.pitch : input.pitch;
   const buttons = input === null ? [] : input.buttons;
@@ -563,6 +597,13 @@ export function stepMove3d(s: MoveState, input: MoveInput | null, weapon: string
   let jumped = false;
   if (wantJump && mv.onGround && !s.jumpHeld) {
     mv.onGround = false;
+    // sv_enablebunnyhopping 0: the take-off speed is cropped to 1.1 × the item's max speed (as PreventBunnyJumping).
+    const cap = BUNNYJUMP_MAX_SPEED_FACTOR * runSpeed(weapon, m, opts);
+    const hs = Math.sqrt(mv.vx * mv.vx + mv.vy * mv.vy);
+    if (hs > cap) {
+      mv.vx *= cap / hs;
+      mv.vy *= cap / hs;
+    }
     mv.vz = m.jumpImpulse;
     jumped = true;
   }
@@ -578,7 +619,7 @@ export function stepMove3d(s: MoveState, input: MoveInput | null, weapon: string
       vx *= r;
       vy *= r;
     }
-    const a = input === null ? { x: vx, y: vy, z: 0 } : accelerate({ x: vx, y: vy, z: 0 }, wishFromInput(input, weapon, m), m, dt);
+    const a = walkStop(input === null ? { x: vx, y: vy, z: 0 } : accelerate({ x: vx, y: vy, z: 0 }, wishFromInput(input, weapon, m, opts), m, dt));
     mv.vx = a.x;
     mv.vy = a.y;
     mv.vz = 0;
@@ -586,12 +627,16 @@ export function stepMove3d(s: MoveState, input: MoveInput | null, weapon: string
     groundFound = mv.walkMove(dt);
   } else {
     if (input !== null) {
-      const w = wishFromInput(input, weapon, m);
+      const w = wishFromInput(input, weapon, m, opts);
       if (w.speed > 0) {
         const cap = Math.min(w.speed, m.airMaxWishSpeed);
         const add = cap - (mv.vx * w.dirX + mv.vy * w.dirY);
         if (add > 0) {
-          const accel = Math.min(m.airAccelerate * w.speed * dt, add);
+          // m_surfaceFriction from the last ground check (CategorizePosition, before FinishGravity's half step): 0.25 if
+          // it found no ground while moving up at ≤ 140 u/s. vz then was this state's vz + half a tick of gravity.
+          const vzAtCheck = s.vel.z + (m.gravity * dt) / 2;
+          const sf = !s.onGround && vzAtCheck > 0 && vzAtCheck <= NON_JUMP_VELOCITY ? AIR_RISE_SURFACE_FRICTION : 1;
+          const accel = Math.min(m.airAccelerate * w.speed * dt * sf, add);
           mv.vx += accel * w.dirX;
           mv.vy += accel * w.dirY;
         }
@@ -671,4 +716,34 @@ export function settle(g: MapGeometry, pos: Vec3, crouching: boolean, m: Movemen
   }
   const t = g.traceBox(from, { x: at.x, y: at.y, z: at.z - down }, hull);
   return { pos: { x: t.endX, y: t.endY, z: t.endZ }, onGround: t.hit && t.normalZ >= m.standableNormal };
+}
+
+/**
+ * Sub-tick input (CS2): a key change at `fraction` (0..1) of the tick splits the tick into two simulations, the first
+ * `fraction × dt` with the input before the change, the rest with the input after it (docs/movement.md "Sub-tick").
+ * `fraction` ≤ 0 or ≥ 1 is one plain `stepMove3d` tick (with `after` / `before`), bit-identical to the per-tick path.
+ * The result's `jumped` / `landSpeed` / `fallDamage` / `clipped` merge both parts (a landing in the first part counts).
+ */
+export function stepMove3dSubtick(
+  s: MoveState,
+  before: MoveInput | null,
+  after: MoveInput | null,
+  fraction: number,
+  weapon: string,
+  g: MapGeometry,
+  m: MovementTuning,
+  dt: number = TICK_DT,
+  opts: MoveOptions = NO_OPTIONS,
+): MoveStep {
+  if (!(fraction > 0)) return stepMove3d(s, after, weapon, g, m, dt, opts);
+  if (!(fraction < 1)) return stepMove3d(s, before, weapon, g, m, dt, opts);
+  const a = stepMove3d(s, before, weapon, g, m, dt * fraction, opts);
+  const b = stepMove3d(a.state, after, weapon, g, m, dt * (1 - fraction), opts);
+  return {
+    state: b.state,
+    clipped: a.clipped || b.clipped,
+    jumped: a.jumped || b.jumped,
+    landSpeed: Math.max(a.landSpeed, b.landSpeed),
+    fallDamage: a.fallDamage + b.fallDamage,
+  };
 }

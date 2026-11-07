@@ -32,12 +32,17 @@ import { Hud } from './hud';
 import { overlayForKey, toggleOverlay, type OverlayKey, type Overlays, type ScreenRect } from './hud-model';
 import { humanInput, yawToward } from './input';
 import { InputDom } from './input-dom';
+import { keyMapFor } from './input';
+import { KeyBindsStore, pageStorage } from './keybinds';
+import { KeyBindsDom } from './keybinds-dom';
+import { PlayGuard } from './play-guard';
 import { FixedLoop, RateMeter, TICK_MS } from './loop';
 import { screenToWorld, worldToScreen } from './radar';
 import { FOLLOWED, Renderer } from './renderer';
 import { Scene, interpolationAlpha } from './scene';
 import { Session, parseSessionData, type SessionData } from './session';
 import { STANDING_HULL, TRACE_SKIN } from '../sim2d/index';
+import { SummaryCache } from './run-entries';
 import { SUMMARY_DELAY_TICKS, SummaryOverlay, summaryDue, summaryView } from './summary-overlay';
 import { TAKEOVER_KEY, startHuman, takeoverButtonView, youNote } from './takeover';
 import { TimelineDom, seekFraction, seekStepForKey, stepTarget, timelineSpanTicks } from './timeline';
@@ -74,6 +79,8 @@ export interface AppStats {
   /** B5: the summary overlay is showing. */
   readonly summaryOpen: boolean;
   readonly checkpoints: number;
+  /** play-guard.ts: the leave-site guard is on, the keyboard is locked (fullscreen, Chromium), the duck key. */
+  readonly guard: { readonly leaveGuard: boolean; readonly keyboardLocked: boolean; readonly fullscreen: boolean; readonly duckKey: string };
 }
 
 declare global {
@@ -125,6 +132,9 @@ class App {
   private readonly renderer: Renderer;
   private readonly hud: Hud;
   private readonly input: InputDom;
+  /** The key-binding setting (duck / walk / jump / use) and the Ctrl+W guard (fullscreen Keyboard Lock, leave-site). */
+  private readonly keys = new KeyBindsStore(pageStorage());
+  private readonly guard: PlayGuard;
   private readonly loop: FixedLoop;
   private readonly fpsMeter = new RateMeter(1000);
   private readonly tpsMeter = new RateMeter(1000);
@@ -154,6 +164,8 @@ class App {
   private seekResume: Phase | null = null;
   /** The summary was closed for this round end (it comes back after a rewind past it, or with the Summary button). */
   private summaryDismissed = false;
+  /** P1: the summary, computed once per (round end, deaths) from incrementally parsed log entries. */
+  private readonly summaryCache = new SummaryCache();
   /** Deaths ingested, and the count the open summary was made with (a later death, the post-round kill, refreshes it). */
   private deaths = 0;
   private summaryDeaths = -1;
@@ -215,7 +227,20 @@ class App {
       onSlot: (slot) => {
         if (this.phase === 'running') this.session.requestWeaponSlot(slot);
       },
+      keyboardLocked: () => this.guard.keyboardLocked,
     });
+    this.input.keyMap = keyMapFor(this.keys.binds);
+    this.keys.onChange((b) => (this.input.keyMap = keyMapFor(b)));
+    this.guard = new PlayGuard({
+      button: document.getElementById('fullscreen') as HTMLButtonElement | null,
+      hint: document.getElementById('kbhint'),
+      // The leave-site guard is on while cart is the player's and alive (paused too).
+      playing: () => this.session.human !== null && this.phase !== 'ready' && this.scene.pawn(this.session.human)?.alive === true,
+      binds: () => this.keys.binds,
+      pointerLock: false,
+    });
+    const keybinds = document.getElementById('keybinds');
+    if (keybinds !== null && !this.touchOnly) new KeyBindsDom(keybinds, this.keys, this.guard.mac);
     new CameraInput(canvas, {
       playing: () => this.playing(),
       onZoom: (at, factor) => this.renderer.zoomAt(this.overlays.follow ? null : at, factor),
@@ -334,12 +359,20 @@ class App {
     this.updateControls();
   }
 
-  /** Show the summary of the run so far. */
-  private showSummary(): void {
+  /**
+   * Show the summary of the run so far. P1: from log entries parsed a few per frame since the round ended
+   * (run-entries.ts), computed once per (round end, deaths); false while the entries are still catching up (call
+   * again next frame). `now` parses whatever is left at once (the Summary button).
+   */
+  private showSummary(now = false): boolean {
     const s = this.session;
-    this.overlay.show(summaryView(summarize(s.model, s.log()), (id) => s.model.player(id).team));
+    const r = this.scene.cur.round;
+    const sum = this.summaryCache.get(s.model, s.log(), `${r.endTick}|${this.deaths}|${s.human ?? ''}`, now ? Infinity : undefined);
+    if (sum === null) return false;
+    this.overlay.show(summaryView(sum, (id) => s.model.player(id).team));
     this.summaryDeaths = this.deaths;
     this.updateControls();
+    return true;
   }
 
   /** The host's grenade effects (Sim2DHost.activeEffects). */
@@ -429,7 +462,7 @@ class App {
     on(b.restart, () => this.restart());
     on(b.summary, () => {
       if (this.overlay.open) this.overlay.hide();
-      else this.showSummary();
+      else this.showSummary(true);
     });
     on(b.back5, () => this.startSeek(stepTarget(this.session.tick, -5)));
     on(b.back10, () => this.startSeek(stepTarget(this.session.tick, -10)));
@@ -506,6 +539,7 @@ class App {
     if (this.seekResume !== null) this.advanceSeek();
     if (this.playing()) this.feedHuman();
     const n = this.loop.advance(dt);
+    this.guard.update();
     this.updateSummary();
     this.frames++;
     this.fpsMeter.add(now, 1);
@@ -554,6 +588,7 @@ class App {
     if (this.seekResume !== null) return;
     const cur = this.scene.cur;
     if (cur.round.phase !== 'over') {
+      this.summaryCache.invalidate();
       if (this.overlay.open || this.summaryDismissed) {
         this.overlay.hide();
         this.summaryDismissed = false;
@@ -563,6 +598,7 @@ class App {
     }
     if (!this.overlay.open && !this.summaryDismissed && summaryDue(cur.round, cur.tick, SUMMARY_DELAY_TICKS)) this.showSummary();
     else if (this.overlay.open && this.summaryDeaths !== this.deaths) this.showSummary();
+    else if (!this.overlay.open) this.summaryCache.warm(this.session.log());
     if (this.buttons.summary.disabled) this.updateControls();
   }
 
@@ -624,6 +660,7 @@ class App {
       seeking: this.seekResume !== null,
       summaryOpen: this.overlay.open,
       checkpoints: this.session.checkpoints.size,
+      guard: { leaveGuard: this.guard.guarded, keyboardLocked: this.guard.keyboardLocked, fullscreen: this.guard.fullscreen, duckKey: this.keys.binds.duck },
     };
   }
 }
