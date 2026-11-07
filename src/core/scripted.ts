@@ -243,6 +243,18 @@ export interface Engagement {
   readonly band: AimBand;
   readonly fromTick: number;
   readonly toTick: number;
+  /**
+   * G6: the recorded spots the shooter pre-aims at while it doesn't see the target (B3 "Aim"): for each merged window,
+   * its last act tick and the target's recorded position where that shot or hit lands (act tick + input latency), in
+   * tick order. Absent (run-time engagements, B4): the shooter keeps its hold (if any) until it sees the target.
+   */
+  readonly spots?: readonly AimSpot[];
+}
+
+/** G6: where an engagement's shooter pre-aims (the target's recorded feet) until act tick `tick`. */
+export interface AimSpot {
+  readonly tick: number;
+  readonly pos: Vec3;
 }
 
 /** A scheduled damage entry, sent as a `damage` action at `emitTick`. */
@@ -335,7 +347,7 @@ export class ScriptPlan {
     this.fire = buildFire(schedule, tuning);
     this.fireByPlayer = PLAYER_IDS.map((id) => this.fire.filter((f) => f.shooter === id));
     this.damage = schedule.ofType('damage').map((entry) => ({ entry, emitTick: entry.tick - la }));
-    this.engagements = buildEngagements(this.fire, this.damage, preAim, li);
+    this.engagements = buildEngagements(this.fire, this.damage, preAim, li, (id, tick) => recordedFeet(model, id, tick));
     this.aimByPlayer = PLAYER_IDS.map((id) => this.engagements.filter((e) => e.shooter === id));
 
     const inventory: InventoryItem[] = [];
@@ -563,7 +575,7 @@ interface AimWindow {
  * damage entry ([its tick − inputLatency − preAim, its tick − inputLatency]); a shooter's overlapping or
  * touching windows at the same target merge. `head` if any merged damage entry is a headshot.
  */
-function buildEngagements(fire: readonly FireItem[], damage: readonly DamageItem[], preAim: number, li: number): Engagement[] {
+function buildEngagements(fire: readonly FireItem[], damage: readonly DamageItem[], preAim: number, li: number, recordedAt: (id: PlayerId, tick: number) => Vec3 | null): Engagement[] {
   const windows: AimWindow[] = [];
   for (const f of fire) if (f.target !== null && f.target !== f.shooter) windows.push({ shooter: f.shooter, target: f.target, from: f.fromTick - preAim, to: f.toTick, head: false });
   for (const d of damage) {
@@ -579,22 +591,54 @@ function buildEngagements(fire: readonly FireItem[], damage: readonly DamageItem
         .filter((x) => x.w.shooter === shooter && x.w.target === target)
         .sort((a, b) => a.w.from - b.w.from || a.w.to - b.w.to || a.i - b.i)
         .map((x) => x.w);
-      let cur: { from: number; to: number; head: boolean } | null = null;
+      let cur: { from: number; to: number; head: boolean; ends: number[] } | null = null;
+      const push = (c: { from: number; to: number; head: boolean; ends: number[] }): void => {
+        out.push({ key: '', shooter, target, band: c.head ? 'head' : 'chest', fromTick: c.from, toTick: c.to, spots: aimSpots(target, c.ends, li, recordedAt) });
+      };
       for (const w of mine) {
         if (cur !== null && w.from <= cur.to + 1) {
-          cur = { from: cur.from, to: Math.max(cur.to, w.to), head: cur.head || w.head };
+          cur = { from: cur.from, to: Math.max(cur.to, w.to), head: cur.head || w.head, ends: [...cur.ends, w.to] };
           continue;
         }
-        if (cur !== null) out.push({ key: '', shooter, target, band: cur.head ? 'head' : 'chest', fromTick: cur.from, toTick: cur.to });
-        cur = { from: w.from, to: w.to, head: w.head };
+        if (cur !== null) push(cur);
+        cur = { from: w.from, to: w.to, head: w.head, ends: [w.to] };
       }
-      if (cur !== null) out.push({ key: '', shooter, target, band: cur.head ? 'head' : 'chest', fromTick: cur.from, toTick: cur.to });
+      if (cur !== null) push(cur);
     }
   }
   return out
     .map((e, i) => ({ e, i }))
     .sort((a, b) => a.e.fromTick - b.e.fromTick || compareOrdinal(a.e.shooter, b.e.shooter) || a.i - b.i)
     .map((x, i) => ({ ...x.e, key: `aim:${i}` }));
+}
+
+/** G6: the recorded position at `tick`, clamped to the track's ends (a victim's track can end just before the kill). */
+function recordedFeet(model: RoundModel, id: PlayerId, tick: number): Vec3 | null {
+  const at = model.trackAtTick(id, tick);
+  if (at !== null) return at.pos;
+  const track = model.track(id);
+  const first = track[0];
+  const last = track[track.length - 1];
+  if (first === undefined || last === undefined) return null;
+  const s = tick / TICK_RATE <= first.t ? first : last;
+  return { x: s.x, y: s.y, z: s.z };
+}
+
+/** G6: an engagement's pre-aim spots: per distinct window end (act tick), the target's recorded feet where it lands. */
+function aimSpots(target: PlayerId, ends: readonly number[], li: number, recordedAt: (id: PlayerId, tick: number) => Vec3 | null): AimSpot[] {
+  const out: AimSpot[] = [];
+  for (const tick of [...new Set(ends)].sort((a, b) => a - b)) {
+    const pos = recordedAt(target, tick + li);
+    if (pos !== null) out.push({ tick, pos: { x: pos.x, y: pos.y, z: pos.z } });
+  }
+  return out;
+}
+
+/** G6: the spot an engagement pre-aims at on act tick `tick`: the first whose tick is still ahead, else the last; null without spots. */
+export function aimSpotAt(e: Engagement, tick: number): AimSpot | null {
+  const spots = e.spots ?? [];
+  for (const s of spots) if (s.tick >= tick) return s;
+  return spots[spots.length - 1] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -961,7 +1005,12 @@ export class ScriptedEvents {
       const eng = this.activeEngagement(p.id, tick);
       const target = eng === null ? undefined : pawnOf(o, eng.target);
       if (eng !== null && target !== undefined) {
-        look = lookToward(prev, p.pos, crouching, bandPoint(target.pos, target.crouching, eng.band, d), d, r.aimTurnRateDegPerTick);
+        // G6: track the body only while the engine reports the target in the shooter's sight; otherwise pre-aim at the
+        // recorded spot (no tracking through walls). The recorded damage still lands on its tick.
+        const seen = p.sees.includes(eng.target);
+        const spot = seen ? null : aimSpotAt(eng, tick);
+        if (seen) look = lookToward(prev, p.pos, crouching, bandPoint(target.pos, target.crouching, eng.band, d), d, r.aimTurnRateDegPerTick);
+        else if (spot !== null) look = lookToward(prev, p.pos, crouching, bandPoint(spot.pos, false, eng.band, d), d, r.aimTurnRateDegPerTick);
       }
     }
     if (look === null) {

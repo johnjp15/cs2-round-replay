@@ -153,6 +153,11 @@ export function nextBombState(b: BombState, e: BombEvent, tick: number): BombSta
 /** The engine's 2D line-of-sight query (NavMesh.lineOfSight fits). */
 export interface SightQuery {
   lineOfSight(a: Point2, b: Point2): boolean;
+  /**
+   * G6: where a bullet from this pawn's eye along its view (yaw, pitch) meets the CS2 mesh's first wall within `range`
+   * (2D point), or null for no wall. With it tracers stop at the real walls; without it, at the 2D line of sight's.
+   */
+  wallAlong?(p: { readonly pos: Vec3; readonly crouching: boolean; readonly yaw: number; readonly pitch: number }, range: number): Point2 | null;
 }
 
 /** End of a ray from `from` along `yawDeg`: `range` units, or the last point in sight before a wall (bisection). */
@@ -310,16 +315,19 @@ export class Scene {
     if (NO_TRACER.includes(weapon)) return;
     const p = o.pawns.find((q) => q.id === shooter);
     if (p === undefined) return;
-    // The pawn this shot damaged, if any (one shot per shooter per tick).
+    // The pawn this shot damaged, if any (one shot per shooter per tick). G6: a scripted hit (the tape's damage) ends
+    // the tracer on its victim only if the shooter sees it; otherwise the bullet went into the wall in front of it.
     let victim: PawnObs | undefined;
     for (const e of o.events) {
       if (e.type === 'damage' && e.attacker === shooter && e.weapon === weapon) {
-        victim = o.pawns.find((q) => q.id === e.victim);
+        const v = o.pawns.find((q) => q.id === e.victim);
+        if (v !== undefined && (!e.scripted || p.sees.includes(v.id))) victim = v;
         break;
       }
     }
     const from = { x: p.pos.x, y: p.pos.y };
-    const to = victim === undefined ? rayEnd(from, p.yaw, TRACER_RANGE_UNITS, this.sight) : { x: victim.pos.x, y: victim.pos.y };
+    const wall = victim === undefined && this.sight?.wallAlong !== undefined ? this.sight.wallAlong(p, TRACER_RANGE_UNITS) : null;
+    const to = victim !== undefined ? { x: victim.pos.x, y: victim.pos.y } : this.sight?.wallAlong !== undefined ? (wall ?? rayEnd(from, p.yaw, TRACER_RANGE_UNITS, null)) : rayEnd(from, p.yaw, TRACER_RANGE_UNITS, this.sight);
     this.tracers.push({ tick, shooter, team: p.team, from, to, hit: victim !== undefined });
   }
 
