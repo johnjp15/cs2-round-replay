@@ -197,9 +197,10 @@ export class ReplayCore implements ICore {
       s.resync = null;
     }
 
-    // G4: the player took control of a pawn (or let go of one) since the last step. Not on the setup step: its blocks
-    // and encounters already follow the human its observe names (a takeover at tick 0 is a human from the start).
-    if (!s.setupThisStep && o.human !== s.human) this.humanChanged(o, s.human, actions);
+    // G4: the player took control of a pawn (or let go of one) since the last step. Only after a setup, and not on the
+    // setup step: its blocks and encounters already follow the human its observe names (a takeover at tick 0 is a
+    // human from the start). Before any start the Core sends nothing.
+    if (!s.setupThisStep && s.startTick !== null && o.human !== s.human) this.humanChanged(o, s.human, actions);
     s.human = o.human;
 
     // B4: the triggers and the scheduled encounters (not on the setup step: that observe predates the setup).

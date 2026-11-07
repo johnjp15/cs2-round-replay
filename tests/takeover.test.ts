@@ -11,16 +11,23 @@
  *   from the puppet's sighting), after the recorded hit (fired on the recorded ticks), after Lokier's death (none).
  * - Idle after the takeover: the outcome and the non-cart events against the tape (the table is printed).
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PLAYER_IDS, stableStringify, type LogEntry, type PlayerId } from '../src/contracts/index';
+import { PLAYER_IDS, parseJsonLine, stableStringify, type LogEntry, type PlayerId } from '../src/contracts/index';
 import { summarize, tickOf } from '../src/core/index';
 import { Session } from '../src/app/session';
-import { NO_HUMAN, coreLogs, deaths, loadHarnessData, logDigest, runHarness, type HarnessRun } from '../tools/harness';
+import { GOLDEN_DIR, gunzipText, readManifest } from '../tools/golden-fixtures';
+import { ROOT, coreLogs, deaths, loadHarnessData, logDigest, runHarness, type HarnessRun } from '../tools/harness';
 
 const data = loadHarnessData();
-const golden = runHarness(data, NO_HUMAN);
-const goldenLines = golden.log.lines();
-const END = golden.lastTick;
+/** The no-human golden master: the committed fixture (tests/fixtures.test.ts and the golden round keep it current). */
+const GOLDEN = readManifest()?.fixtures.find((f) => f.name === 'round-nohuman');
+const goldenLines = gunzipText(readFileSync(resolve(ROOT, GOLDEN_DIR, GOLDEN?.file ?? 'round-nohuman.jsonl.gz')))
+  .split('\n')
+  .filter((l) => l !== '');
+const END = goldenLines.length - 1;
+const goldenAt = (k: number): LogEntry => parseJsonLine(goldenLines[k] ?? '') as unknown as LogEntry;
 
 /** The takeover times of the acceptance (seconds), plus 18.0 s (Lokier has seen the puppet at the window) and 68 s (after the round end). */
 const TAKEOVERS = [0, 5, 17.6, 18, 18.6, 30, 45, 60, 68] as const;
@@ -69,7 +76,7 @@ describe('never taking control (G4)', () => {
     const s = new Session({ ...data, seed: 1, human: null });
     expect([s.human, s.playable, s.takeoverTick, s.canTakeControl]).toEqual([null, 'cart', null, true]);
     while (s.tick <= END) s.step();
-    expect(logDigest(s.log())).toBe(logDigest(golden.log));
+    expect(logDigest(s.log())).toBe(GOLDEN?.digest);
     expect(s.log().lines().length).toBe(goldenLines.length);
     expect(summarize(s.model, s.log()).headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
     // Cart died after the round (69.41 s): no takeover any more.
@@ -97,7 +104,7 @@ describe('a takeover at T (G4)', () => {
       const r = run(t);
       const k = tickOf(t);
       const e = line(r, k);
-      const g = line(golden, k);
+      const g = goldenAt(k);
       expect(e.observe.human).toBe('cart');
       expect(stableStringify({ ...e.observe, human: null })).toBe(stableStringify(g.observe));
       // Lifted: cart's self pair, then both ways with every CT (none has lifted blocks while nobody plays), dead ones too.

@@ -3,18 +3,25 @@
  * tick, the Session's rules (who, when, what is logged), a release without a rewind, and the human-bot scenario
  * `takeover-duel`. docs/core.md "Takeover", docs/app.md. Seed 1, the real Core and Sim2DHost.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { replay, type LogEntry, type PawnInput, type SessionLog } from '../src/contracts/index';
 import { EventSchedule, ReplayCore, RoundModel, summarize, tickOf } from '../src/core/index';
 import { NavWalkQuery } from '../src/sim2d/index';
 import { Session, type SessionConfig } from '../src/app/session';
-import { NO_HUMAN, ROOT, coreLogs, deaths, loadHarnessData, logDigest, runHarness } from '../tools/harness';
+import { GOLDEN_DIR, gunzipText, readManifest } from '../tools/golden-fixtures';
+import { ROOT, coreLogs, deaths, loadHarnessData, logDigest, runHarness } from '../tools/harness';
 import { HumanBot, formatTimeline, loadScenario, timeline } from '../tools/human-bot';
 
 const data = loadHarnessData();
-const golden = runHarness(data, NO_HUMAN);
-const goldenLines = golden.log.lines();
-const END = golden.lastTick;
+/** The no-human golden master: the committed fixture (tests/fixtures.test.ts and the golden round keep it current). */
+const GOLDEN = readManifest()?.fixtures.find((f) => f.name === 'round-nohuman');
+const goldenLines = gunzipText(readFileSync(resolve(ROOT, GOLDEN_DIR, GOLDEN?.file ?? 'round-nohuman.jsonl.gz')))
+  .split('\n')
+  .filter((l) => l !== '');
+const goldenEntries = goldenLines.map((l) => JSON.parse(l) as LogEntry);
+const END = goldenLines.length - 1;
 const TAKEOVER = tickOf(25);
 
 function session(extra: Partial<SessionConfig> = {}): Session {
@@ -86,7 +93,7 @@ describe('rewind across the takeover (exact: the host snapshots)', () => {
     runTo(s, END, false);
     expect(s.tapeEnd).toBeNull();
     expect(firstDiff(s.log().lines(), goldenLines)).toBe(-1);
-    expect(logDigest(s.log())).toBe(logDigest(golden.log));
+    expect(logDigest(s.log())).toBe(GOLDEN?.digest);
     expect(summarize(s.model, s.log()).headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
 
     // A second takeover at another tick (40 s): the log up to it is still the golden master's.
@@ -146,7 +153,7 @@ describe('rewind across the takeover (resync: no host snapshot, as in CS2)', () 
         .map((d) => ({ key: `${d.attacker ?? 'world'}>${d.victim}`, tick: d.tick }))
         .concat(r.flatMap((e) => e.observe.events.filter((ev) => ev.type === 'bomb' || ev.type === 'round_end').map((ev) => ({ key: ev.type === 'bomb' ? `bomb ${ev.phase}` : 'round_end', tick: e.observe.tick }))));
     const got = key(es);
-    const want = key(golden.entries);
+    const want = key(goldenEntries);
     expect(got.map((x) => x.key)).toEqual(want.map((x) => x.key));
     for (let i = 0; i < want.length; i++) expect(Math.abs((got[i]?.tick ?? 0) - (want[i]?.tick ?? 0)), want[i]?.key).toBeLessThanOrEqual(2);
     const core = new ReplayCore(new RoundModel(data.round), new EventSchedule(data.round), data.tuning, 1, new NavWalkQuery(data.nav));
@@ -195,7 +202,7 @@ describe('scenario takeover-duel (G4)', () => {
     expect(firstDiff(run.log.lines().slice(0, 1152), goldenLines.slice(0, 1152))).toBe(-1);
     expect(tl.filter((x) => x.kind === 'takeover').map((x) => x.tick)).toEqual([1152]);
     const ds = deaths(run.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}${d.headshot ? ' HS' : ''}`);
-    const gd = deaths(golden.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}${d.headshot ? ' HS' : ''}`);
+    const gd = deaths(goldenEntries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}${d.headshot ? ' HS' : ''}`);
     // Cart kills Lokier for real (0.08 s before the tape), after the time-shifted hit; everything else on the tape's ticks.
     expect(ds.filter((d) => !d.includes('lokier'))).toEqual(gd.filter((d) => !d.includes('lokier')));
     expect(ds.find((d) => d.includes('>lokier'))).toBe('1198 cart>lokier HS');
