@@ -56,9 +56,10 @@ stride, no lean), a spherical head. H2's penetration and H4 may refine them.
 world mesh is traced first (`MapGeometry.traceLine`, the nearest crossing); then every pawn that can be hit (alive,
 not the shooter, an enemy unless `damage.friendlyFire`) has its hitboxes tested up to the wall; the nearest entry
 wins (ties: lower id). Damage: `bulletDamage(gun, distance, hitgroup, armor, helmet)` with the eye-to-impact
-distance. A blocked pair (the Core's `block_damage`) is traced and logged but not applied, as in 2D. No spread,
-recoil or penetration yet: H2's `src/engine/weapons` supplies them; the app already sends the firing angles (view +
-aim punch × 2, zero punch for now; docs/app3d.md).
+distance. A blocked pair (the Core's `block_damage`) is traced and logged but not applied, as in 2D. Since H2b the
+direction is the weapon mechanics' (view + aim punch × 2 + the inaccuracy cone) and the human's and LIVE pawns'
+bullets go through walls (`meshSolidQuery` + `penetrate`); puppets' outcomes are traced along their scripted view as
+before. docs/weapons.md "In the 3D host".
 
 ## Sight
 
@@ -70,10 +71,10 @@ mesh (docs/geometry.md), so they are open. When G6's `MeshSight` lands on main, 
 
 ## Results (headless, `npm run harness3d`, seed 1)
 
-- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `a2883aa0`; kills on 32, 794, 816, 1142, 1203,
+- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `cbb335eb` (`a2883aa0` before #30's movement fixes moved every pawn's floats; H2b's weapon mechanics leave it byte-identical: puppets' outcomes are traced along their scripted view, and nobody is mechanical in a run nobody plays); kills on 32, 794, 816, 1142, 1203,
   2829, 3222, 3766, 4442 (all nine, the recording's), every damage event identical to the 2D golden master's, plant
   1761, defuse 3955 → 4275, "Played it like the tape: CT defuse, 0.72 s left". Against the 2D golden master
-  (`fixtures/golden/round-nohuman`, `72b58704`, `tools/fixture-diff.ts`): **0 acts differ**, no control, event or
+  (`fixtures/golden/round-nohuman`, `63bd3d86` since #30, `tools/fixture-diff.ts`): **0 acts differ**, no control, event or
   round difference, every observed pawn field identical except `sees` (1,539 of 4,517 lines differ, only in `sees`,
   from tick 1). Pitch is identical too (the puppets' pitch is the Core's aim, applied the same way). The Core never
   branches on `sees` in a run nobody plays, so the mesh sight changes nothing else.

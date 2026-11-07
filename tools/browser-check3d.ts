@@ -366,7 +366,8 @@ async function main(): Promise<void> {
     if (!(crossY(xfSpray) < -5)) problems.push(`recoil: crosshair did not rise (${JSON.stringify(report['recoil'])})`);
     if (!(Math.abs(pitchAfter - lookAfter) < 0.2 && Math.abs(crossY(xfAfter)) < 2)) problems.push(`recoil: did not recover (${JSON.stringify(report['recoil'])})`);
     // 3c. H2b: the "Recoil tracking" setting (view_recoil_tracking) sets the camera's share of the recoil: spray for
-    // 0.5 s at 0 (camera still, the crosshair takes it all) and at 1 (the camera takes it all, the crosshair stays centred).
+    // 0.5 s at 0 (camera still but for the screen shake, < 0.6°; the crosshair takes it all) and at 1 (the camera takes
+    // it all; the crosshair stays within a few px of the centre: the screen shake, which the bullets don't follow).
     const tracking: Record<string, { camera: number; crosshairY: number }> = {};
     for (const k of ['0', '1']) {
       await p.evaluate((v) => {
@@ -389,7 +390,7 @@ async function main(): Promise<void> {
     const stored = await p.evaluate(() => (JSON.parse(localStorage.getItem('cs2-sim3d-settings') ?? '{}') as { recoilTracking?: number }).recoilTracking ?? null);
     report['recoilTracking'] = { ...tracking, stored };
     if (!(Math.abs(tracking['0']?.camera ?? 9) < 0.6 && (tracking['0']?.crosshairY ?? 0) < -10)) problems.push(`recoil tracking 0: ${JSON.stringify(report['recoilTracking'])}`);
-    if (!((tracking['1']?.camera ?? 0) < -2 && Math.abs(tracking['1']?.crosshairY ?? 99) < 3)) problems.push(`recoil tracking 1: ${JSON.stringify(report['recoilTracking'])}`);
+    if (!((tracking['1']?.camera ?? 0) < -2 && Math.abs(tracking['1']?.crosshairY ?? 99) < 8)) problems.push(`recoil tracking 1: ${JSON.stringify(report['recoilTracking'])}`);
     if (stored !== 1) problems.push(`recoil tracking not persisted: ${JSON.stringify(report['recoilTracking'])}`);
     await p.evaluate(() => {
       const f = document.getElementById('set-tracking');
