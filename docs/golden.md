@@ -306,7 +306,7 @@ tested (no WebKit here).
 ## History
 
 - W2 (every pawn gets a pistol in the setup: the recorded one, else Glock-18 T / USP-S CT, docs/core.md "Start state"):
-  no-human `7168c0a5` → `9f07df0b`, cart-idle → `384e6c75`, cart-takeover → `f49d323c`; never-peeks without rejoin
+  no-human `7168c0a5` → `9f07df0b`, cart-idle `12bf92f7` → `384e6c75`, cart-takeover `53e00fa6` → `f49d323c`; never-peeks without rejoin
   `93e0dc15` → `b861137b`. `tools/fixture-diff.ts` on all three: one act differs (tick 0: eight more `give`s, glock
   20/120 for barely, cart, eradicate, snarlbot; usps 12/24 for incredibad, lokier, snakelore, zwomp), every observe
   line identical (no pawn field, event or round state moves), walk oracles unchanged.
