@@ -191,6 +191,11 @@ Per weapon, against 100/100 with a helmet (HP / armor removed):
   But no HP or armor changes and **no `damage` event** is emitted. Each blocked hit adds a line to
   `host.combatLog()` (debug only; not in observe or snapshots). Scripted damage ignores blocks.
   `blockedPairs()` lists the active blocks.
+- **`blocked_hit {attacker, victim, weapon, hitgroup}`** (G5): a *bullet of the human's pawn* that a block stopped is
+  reported in the observe, right after its `shot` and `sound`: whom it would have hit and the band the hitscan picked
+  (the same trace as an unblocked bullet; walls, cover and the pitch bands decide as usual). A miss reports nothing,
+  and neither do the puppets' blocked bullets or anyone's grenades. The Core uses it to resolve the human's shots in
+  his recorded duels like the tape (`docs/core.md` "Recorded duels of the human").
 - **`damage {attacker, victim, amount, armor, hitgroup, weapon, lethal}`** (scripted) is queued by `apply()` and
   applied in the next `tick()`, after shots and grenades, in Core order. It removes `amount` HP and `armor` armor,
   each capped at what the victim has, and emits `damage` with `scripted: true` and the amounts actually removed.
@@ -526,7 +531,8 @@ mid-grenade-flight, mid-plant, mid-defuse and post-round snapshots, into the sam
 
 - **No spread, recoil or movement inaccuracy:** every bullet goes exactly along yaw and pitch, so shots are
   deterministic. In CS2, running and spraying are inaccurate. A Core tuned here must still stop or counter-strafe
-  in CS2.
+  in CS2. (G5: in the human's recorded duels his bullets on the target are blocked and the Core applies the tape's
+  outcome from the `blocked_hit` reports, so there the result doesn't hang on spread: `docs/core.md`.)
 - No wall penetration (wallbangs), no tagging (slowdown when hit), no aim punch, no scoped AWP state, no knife
   attacks, no Glock burst mode. Bullets and grenades don't hit the bomb.
 - Bomb: see "Bomb and round rules", "Differences from CS2".
