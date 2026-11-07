@@ -3,7 +3,7 @@
   "fixtures": [
     {
       "bytes": 952501,
-      "commit": "ec7db16131921718740767c42312c4727bf871fa",
+      "commit": "13d01902eb073e3a62c825e610b37c6b8fdc44f5",
       "description": "The golden master: no human, the Core drives all ten pawns for the whole round (npm run harness -- --human none --until end).",
       "digest": "150f77b4",
       "file": "round-nohuman.jsonl.gz",
@@ -14,7 +14,7 @@
       "name": "round-nohuman",
       "navHash": "8f831148",
       "rawBytes": 18369649,
-      "roundHash": "86e07261",
+      "roundHash": "cadd68f7",
       "script": null,
       "scriptHash": null,
       "seed": 1,
@@ -32,7 +32,7 @@
     },
     {
       "bytes": 600282,
-      "commit": "ec7db16131921718740767c42312c4727bf871fa",
+      "commit": "13d01902eb073e3a62c825e610b37c6b8fdc44f5",
       "description": "Human cart stands still in Back Alley (fixtures/scripts/cart-idle.json) for 45 s: the Core skips him and his scripted damage; Lokier outlives his recording, barely kills him and rejoins (G1), sp4rtan kills cart on his flank and rejoins, barely hears it, goes LIVE and rejoins again (rejoin path queries in the walk oracle).",
       "digest": "8f471b88",
       "file": "round-cart-idle.jsonl.gz",
@@ -43,7 +43,7 @@
       "name": "round-cart-idle",
       "navHash": "8f831148",
       "rawBytes": 11723445,
-      "roundHash": "86e07261",
+      "roundHash": "cadd68f7",
       "script": "fixtures/scripts/cart-idle.json",
       "scriptHash": "4577d8df",
       "seed": 1,
@@ -61,7 +61,7 @@
     },
     {
       "bytes": 375090,
-      "commit": "ec7db16131921718740767c42312c4727bf871fa",
+      "commit": "13d01902eb073e3a62c825e610b37c6b8fdc44f5",
       "description": "G4: nobody plays until 15 s, where the player takes control of cart in the Apartments and then stands still (npm run harness -- --takeover 15 --until 24): ticks 0–959 are the golden master; on tick 960 observe.human becomes cart and the Core lifts his 11 damage blocks and activates Lokier’s encounter (waiting); Lokier outlives his recording, barely kills him and rejoins (G1).",
       "digest": "cae23207",
       "file": "round-cart-takeover.jsonl.gz",
@@ -72,7 +72,7 @@
       "name": "round-cart-takeover",
       "navHash": "8f831148",
       "rawBytes": 6513465,
-      "roundHash": "86e07261",
+      "roundHash": "cadd68f7",
       "script": null,
       "scriptHash": null,
       "seed": 1,
