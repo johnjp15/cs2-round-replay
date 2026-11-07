@@ -72,11 +72,16 @@ export class ControlsDom {
       if (b !== null && b.kind === 'hold') this.held[b.control] = false;
     });
     element.addEventListener('contextmenu', (e) => e.preventDefault());
-    document.addEventListener('mousemove', (e) => {
+    // P1: mouse movement at the device's event rate: `pointerrawupdate` (Chromium, secure pages) isn't coalesced to
+    // the display's frames like mousemove, so an uncapped frame loop turns the view with the newest counts. Only one of
+    // the two is listened to (they report the same movement).
+    const move = (e: MouseEvent): void => {
       if (document.pointerLockElement !== element) return;
       this.dx += e.movementX;
       this.dy += e.movementY;
-    });
+    };
+    this.rawEvents = 'onpointerrawupdate' in window && window.isSecureContext;
+    document.addEventListener(this.rawEvents ? ('pointerrawupdate' as 'pointermove') : 'mousemove', move);
   }
 
   /** Whether the last lock got raw (unadjusted) mouse movement. */
@@ -120,6 +125,9 @@ export class ControlsDom {
   get locked(): boolean {
     return document.pointerLockElement === this.element;
   }
+
+  /** Mouse movement comes from `pointerrawupdate` (event rate) rather than mousemove. */
+  rawEvents = false;
 
   controls(): HeldControls {
     return { ...this.held };
