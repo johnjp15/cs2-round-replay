@@ -228,6 +228,8 @@ export interface BspNode {
 export interface Leaf {
   readonly contents: number;
   readonly cluster: number;
+  /** The leaf's area (areaportal-separated region; the 3D skybox is its own area). */
+  readonly area: number;
   readonly firstLeafBrush: number;
   readonly numLeafBrushes: number;
   readonly firstLeafFace: number;
@@ -575,6 +577,7 @@ export class BspFile {
       out[i] = {
         contents: dv.getInt32(o, true),
         cluster: dv.getInt16(o + 4, true),
+        area: dv.getUint16(o + 6, true) & 0x1ff,
         firstLeafFace: dv.getUint16(o + 20, true),
         numLeafFaces: dv.getUint16(o + 22, true),
         firstLeafBrush: dv.getUint16(o + 24, true),
@@ -593,6 +596,34 @@ export class BspFile {
     return out;
   }
 
+  leafFaces(): Uint16Array {
+    const b = this.lump(LUMP.LEAFFACES);
+    const dv = dvOf(b);
+    const n = countOf('leaffaces', b, 2);
+    const out = new Uint16Array(n);
+    for (let i = 0; i < n; i++) out[i] = dv.getUint16(i * 2, true);
+    return out;
+  }
+
+  /** The leaf of the world tree (model 0) containing a point. */
+  leafAt(x: number, y: number, z: number): number {
+    const nodes = this.nodes();
+    const planes = this.planes();
+    let n = (this.models()[0] as Model).headNode;
+    while (n >= 0) {
+      const node = nodes[n] as BspNode;
+      const p = planes[node.planeNum] as Plane;
+      n = x * p.nx + y * p.ny + z * p.nz - p.dist >= 0 ? node.children[0] : node.children[1];
+    }
+    return -1 - n;
+  }
+
+  /** The faces to draw: FACES, or FACES_HDR when the map was compiled HDR-only (CS:GO maps can be). */
+  drawFaces(): { lump: number; faces: Face[] } {
+    if (this.lump(LUMP.FACES).length > 0) return { lump: LUMP.FACES, faces: this.faces(LUMP.FACES) };
+    return { lump: LUMP.FACES_HDR, faces: this.faces(LUMP.FACES_HDR) };
+  }
+
   /**
    * Displacement infos. The documented stride is 176 bytes (SDK 2013); the stride is taken from the lump size and
    * the number of displacements the faces reference, so a branch with a different tail still reads (the fields used
@@ -602,7 +633,7 @@ export class BspFile {
     const b = this.lump(LUMP.DISPINFO);
     if (b.length === 0) return [];
     let count = 0;
-    for (const f of this.faces()) if (f.dispInfo >= 0) count = Math.max(count, f.dispInfo + 1);
+    for (const f of this.drawFaces().faces) if (f.dispInfo >= 0) count = Math.max(count, f.dispInfo + 1);
     if (count === 0) return [];
     const stride = b.length / count;
     if (!Number.isInteger(stride) || stride < 48) throw new BspError(`dispinfo: lump size ${b.length} doesn't divide into ${count} displacements`);
@@ -724,10 +755,9 @@ export class BspFile {
     return { version, stride, models, props };
   }
 
-  /** The lightmap lump to use: LDR (8) when present, else HDR (53). Both are ColorRGBExp32 samples. */
+  /** The lightmap lump that goes with `drawFaces()`: LDR (8) with FACES, HDR (53) with FACES_HDR. Both are ColorRGBExp32 samples. */
   lighting(): { lump: number; bytes: Uint8Array } {
-    const ldr = this.lump(LUMP.LIGHTING);
-    if (ldr.length > 0) return { lump: LUMP.LIGHTING, bytes: ldr };
+    if (this.drawFaces().lump === LUMP.FACES && this.lump(LUMP.LIGHTING).length > 0) return { lump: LUMP.LIGHTING, bytes: this.lump(LUMP.LIGHTING) };
     return { lump: LUMP.LIGHTING_HDR, bytes: this.lump(LUMP.LIGHTING_HDR) };
   }
 
