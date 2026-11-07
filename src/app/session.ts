@@ -24,7 +24,7 @@
  *   is applied to the host. Neither is in the logged Act: in CS2 the human moves and switches weapons
  *   natively, and the Replayer diffs Core's own output. The next observe shows the result.
  * - G4 takeover: a session built with `human: null` starts watching (every pawn replays, the run is the no-human
- *   round). takeControl() hands the playable pawn (cart) to the human from the next step on (the engine's
+ *   round). takeControl() hands the playable pawn (cart; U2: takeControl(id) any takeable pawn) to the human from the next step on (the engine's
  *   `setHuman`, CS2's bot takeover); the Core sees `observe.human` change on that tick (docs/core.md "Takeover"). The
  *   takeover is part of the run like the human's inputs: a rewind to a checkpoint before it returns to watching (the
  *   tape keeps it, so a forward seek replays it on its tick), and restart() returns to the start, watching.
@@ -187,10 +187,17 @@ export interface SessionConfig {
    */
   readonly human?: PlayerId | null;
   /**
-   * G4: the pawn a watching player may take control of mid-round (takeControl). Default: `human`, else DEFAULT_HUMAN
-   * (cart); null = none (spectate only). The Core's scheduled encounters exist for the default human only.
+   * G4: the pawn a watching player takes control of by default (takeControl() without an id: the app's "Take control
+   * of cart" button and its C key). Default: `human`, else DEFAULT_HUMAN (cart); null = nobody (spectate only, and
+   * then `takeable` defaults to nobody too).
    */
   readonly playable?: PlayerId | null;
+  /**
+   * U2: the pawns a watching player may take control of (takeControl(id): the app's E on the spectated player).
+   * Default: every pawn of the roster ('all'); only `playable` when that is given; none when it is null. The Core's scheduled encounters and
+   * recorded duels exist for every player (docs/core.md "Takeover").
+   */
+  readonly takeable?: 'all' | readonly PlayerId[];
   /** Builds the Core (default: defaultCore). For tests, benchmarks and Core variants. */
   readonly core?: CoreFactory;
   /** H1: builds the engine (default: defaultHost, the 2D app's Sim2DHost; the 3D app passes Sim3DHost's). */
@@ -270,8 +277,10 @@ export class Session {
   readonly geometry: MapGeometry | null;
   readonly tuning: Tuning;
   readonly seed: number;
-  /** G4: the pawn takeControl() may hand to the player (SessionConfig.playable), or null. */
+  /** G4: the pawn takeControl() hands to the player by default (SessionConfig.playable: cart), or null. */
   readonly playable: PlayerId | null;
+  /** U2: the pawns takeControl(id) may hand to the player (SessionConfig.takeable), in roster order. */
+  readonly takeable: readonly PlayerId[];
   readonly model: RoundModel;
   readonly schedule: EventSchedule;
   /** For inspection (renderer, tests); drive the session through its own methods. */
@@ -313,8 +322,8 @@ export class Session {
   private readonly startHuman: PlayerId | null;
   /** G4: the tick the human took control from in this run (0: from the start), or null while watching. */
   private takeoverAt: number | null;
-  /** G4: a takeover the tape holds (a rewind took the run back before it): a forward seek replays it on this tick. */
-  private tapeTakeover: number | null = null;
+  /** G4: a takeover the tape holds (a rewind took the run back before it): a forward seek replays it on its tick (U2: of its pawn). */
+  private tapeTakeover: { tick: number; id: PlayerId } | null = null;
 
   constructor(config: SessionConfig) {
     this.round = config.round;
@@ -328,6 +337,9 @@ export class Session {
     this.model = new RoundModel(config.round);
     this.schedule = new EventSchedule(config.round);
     const roster: RosterEntry[] = this.model.players.map((p) => ({ id: p.id, team: p.team }));
+    // U2: every pawn by default; a session that names its playable pawn (and no takeable) keeps to it, as before U2.
+    const takeable = config.takeable ?? (this.playable === null ? [] : config.playable !== undefined ? [this.playable] : 'all');
+    this.takeable = takeable === 'all' ? roster.map((r) => r.id) : roster.map((r) => r.id).filter((id) => takeable.includes(id));
     this.geometry = config.geometry ?? null;
     const makeHost = config.host ?? defaultHost;
     this.host = makeHost({
@@ -430,7 +442,8 @@ export class Session {
   }
 
   /**
-   * G4: the watching player takes control of `id` (the playable pawn, cart) from the next step on. The engine hands
+   * G4: the watching player takes control of `id` (default: the playable pawn, cart; U2: any takeable pawn alive, the
+   * app's spectated player) from the next step on. The engine hands
    * him the pawn before the next observe (Sim2DHost.setHuman; CS2: the native bot takeover), so that observe names him
    * as `human` and the Core treats the pawn as the human from that tick (docs/core.md "Takeover"); everything before
    * is the no-human run. The pawn keeps its position, velocity, view, weapon, HP and items; until setHumanInput it gets
@@ -445,13 +458,14 @@ export class Session {
   }
 
   /**
-   * G4: why takeControl(id) would refuse now, or null: someone already plays, `id` is not the playable pawn, it is
-   * dead, a seek is running, or a resync is pending (step first). After the round end it is allowed while he lives
-   * (the post-round kill is then real).
+   * G4: why takeControl(id) would refuse now, or null: someone already plays, `id` is not takeable (U2: by default
+   * every pawn is), it is dead, a seek is running, or a resync is pending (step first). After the round end it is
+   * allowed while he lives (the post-round kill is then real).
    */
   takeControlBlocked(id: PlayerId | null = this.playable): string | null {
     if (this.humanNow !== null) return `${this.humanNow} is already controlled`;
-    if (id === null || id !== this.playable) return `${String(id)} is not the playable pawn (${String(this.playable)})`;
+    if (id === null) return `${String(id)} is not the playable pawn (${String(this.playable)})`;
+    if (!this.takeable.includes(id)) return `${id} is not ${this.takeable.length === 1 ? 'the playable pawn' : 'a playable pawn'} (${this.takeable.length === 0 ? 'none' : this.takeable.join(', ')})`;
     if (this.seekState !== null) return 'a seek is in progress';
     if (this.resyncObserve !== null) return 'a resync is pending; step first';
     const p = this.host.pawnState(id);
@@ -459,9 +473,14 @@ export class Session {
     return null;
   }
 
-  /** G4: takeControl() would succeed now (the app's "Take control" button and E key). */
+  /** G4: takeControl() would succeed now (the app's "Take control of cart" button and C key). */
   get canTakeControl(): boolean {
     return this.takeControlBlocked() === null;
+  }
+
+  /** U2: takeControl(id) would succeed now (the app's E on the spectated player). */
+  canTakeControlOf(id: PlayerId): boolean {
+    return this.takeControlBlocked(id) === null;
   }
 
   private applyTakeover(id: PlayerId): void {
@@ -489,6 +508,7 @@ export class Session {
     if (cp === null) throw new Error(`rewind: no checkpoint ${id}`);
     this.seekState = null;
     const takenAt = this.takeoverAt;
+    const takenBy = this.humanNow;
     const lastInput = this.humanTrack.length === 0 ? -1 : (this.humanTrack[this.humanTrack.length - 1] as HumanInputAt).tick;
     const lastSlot = this.slotTrack.length === 0 ? -1 : (this.slotTrack[this.slotTrack.length - 1] as SlotAt).tick;
     this.tapeInputs = [...this.humanTrack.filter((e) => e.tick >= cp.tick), ...this.tapeInputs.filter((e) => e.tick > lastInput)];
@@ -498,7 +518,7 @@ export class Session {
     if (this.humanNow !== null) this.tapeUntil = Math.max(this.tick, this.tapeUntil ?? 0);
     this.rewindTo(cp);
     // G4: back before the takeover: watching again, and the takeover goes on the tape (a forward seek replays it).
-    if (takenAt !== null && this.takeoverAt === null) this.tapeTakeover = takenAt;
+    if (takenAt !== null && takenBy !== null && this.takeoverAt === null) this.tapeTakeover = { tick: takenAt, id: takenBy };
     return cp;
   }
 
@@ -542,9 +562,10 @@ export class Session {
         if (inputs.length > 0) this.tapeInputs = this.tapeInputs.filter((e) => e.tick !== k);
         if (slots.length > 0) this.tapeSlots = this.tapeSlots.filter((e) => e.tick !== k);
         // G4: the takeover first (his inputs need a human pawn).
-        if (this.tapeTakeover === k && this.humanNow === null && this.playable !== null) {
+        const tt = this.tapeTakeover;
+        if (tt !== null && tt.tick === k && this.humanNow === null) {
           this.tapeTakeover = null;
-          this.applyTakeover(this.playable);
+          this.applyTakeover(tt.id);
         }
         for (const e of inputs) this.setHumanInput(e.input);
         for (const e of slots) this.requestWeaponSlot(e.slot);
@@ -715,8 +736,8 @@ export class Session {
   }
 
   /**
-   * Return to a snapshot of this session (same seed; its human, if any, one this session can have: the start's or the
-   * playable pawn). The log is cut back to the snapshot's lines, so stepping on reproduces what followed the snapshot
+   * Return to a snapshot of this session (same seed; its human, if any, one this session can have: the start's or a
+   * takeable pawn). The log is cut back to the snapshot's lines, so stepping on reproduces what followed the snapshot
    * the first time.
    * Rebuilding a long log re-parses it (roughly 0.1 s per 1,000 ticks); restoring to the current
    * length or to an empty log is free.
@@ -724,8 +745,8 @@ export class Session {
   restore(s: SessionSnapshot): void {
     if (s.kind !== 'session' || s.version !== SNAPSHOT_VERSION) throw new Error('Session.restore: not a session snapshot of this version');
     if (s.seed !== this.seed) throw new Error(`Session.restore: snapshot seed ${s.seed} != session seed ${this.seed}`);
-    if (s.human !== null && s.human !== this.startHuman && s.human !== this.playable) {
-      throw new Error(`Session.restore: snapshot human ${String(s.human)} is not this session's (playable: ${String(this.playable)})`);
+    if (s.human !== null && s.human !== this.startHuman && !this.takeable.includes(s.human)) {
+      throw new Error(`Session.restore: snapshot human ${String(s.human)} is not this session's (takeable: ${this.takeable.join(', ') || 'none'})`);
     }
     this.host.restore(s.host);
     this.humanNow = s.human;

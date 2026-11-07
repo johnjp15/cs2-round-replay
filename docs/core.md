@@ -459,7 +459,7 @@ Built once from the schedule and `round.json` `sightings[]`:
 
 ### Scheduled encounters: Lokier on B (`EncounterPlan`, `EncounterState`)
 
-Every non-lethal recorded hit on the default human by an enemy is a scheduled encounter, active while that player is the human (G4: from a takeover on, by the takeover's time: "Takeover"; while nobody plays it only notes when the shooter first sees the puppet at the spot, `puppetSightTick`): here exactly one, Lokier's 73 HP / 7 armor SSG 08 hit on cart at 18.50 s, from the 17.45 s sighting (the time shift's origin), with cart's recorded spot at the hit, (−1764, 800) at the Apartments window. It is time-shifted, not divergence:
+Every non-lethal recorded hit on a player by an enemy is a scheduled encounter (U2: every player's, "Takeover" → Any player), active while that player is the human (G4: from a takeover on, by the takeover's time: "Takeover"; while nobody plays it only notes when the shooter first sees the puppet at the spot, `puppetSightTick`): here exactly one, Lokier's 73 HP / 7 armor SSG 08 hit on cart at 18.50 s, from the 17.45 s sighting (the time shift's origin), with cart's recorded spot at the hit, (−1764, 800) at the Apartments window. It is time-shifted, not divergence:
 
 - **Setup**: B3's recorded tap and aim of that hit are suppressed (`ScriptedEvents.suppress`), and from the recorded aim's start (tick 1161) Lokier **holds the angle** on the spot (a B3 `HoldItem`: he looks at chest height there whenever no engagement is active), after replaying to his track's end on B and holding there.
 - **waiting → seen**: the first tick Lokier (REPLAY) has cart in `sees` within `humanSpotToleranceUnits` (192) of the spot, **G7: within `encounterWindowSec` (3 s) of the recorded sighting** (17.45 s, tick 1117; `inEncounterWindow`). Seen at the spot outside it (cart there 9 s early in `cart-dies`), the encounter is **cancelled** (`encounter lokier -> cart: cancelled at tick 513, cart in sight at the spot -9.4 s against the recording, beyond the encounter window (3.0 s): a real fight`), it owns nothing from then, and trigger 2 makes Lokier LIVE on that tick: a real fight, no scripted 73. **G5: on course then** (`onCourse`: within `offCourseUnits` of his recorded track at that tick, so he is the recording, as for trigger 2) the hit is due on its **recorded tick** (18.50 s, 1184) if that is at least one latency ahead (`encounterShotTick`): tape-like play gets the tape's hit whatever tick the engine's sight catches him on (the 2D sight sees the follow run's cart at 17.59 s, tick 1126, when he comes within 192 u of the spot; the recording's sighting is 17.45 s, 211 u out). Otherwise (early, late, or at the spot off his track) the hit is due `encounterDelaySec` (1 s) later, as in B4. Lokier aims at cart's chest from now (a run-time B3 engagement). Logged with the shift against the recording (and `(on course: the recorded tick)`).
@@ -796,6 +796,33 @@ left"). At any tick T the player can **take control** of cart; from T on cart is
 `observe.human` had named him from the start, and before T nothing differs: the log's first T lines are the golden
 master's. This is CS2's own bot takeover (a dead or spectating player presses E on a teammate bot): the CS2 adapter
 maps it one to one (`docs/cs2-adapter.md`, `docs/port-notes.md` "Takeover").
+
+### Any player (U2: the human slot)
+
+Since U2 the human slot is not cart's: the player may take control of **any living pawn of either team**
+(`Session.takeable`, every roster pawn by default; `takeControl(id)`; `Session.playable` stays cart, the default of
+`takeControl()` and the app's C key / "Take control of cart" button). Everything below keys on `observe.human`, never on
+cart's id, so it applies to whoever is taken; the only cart-specific pieces were the plans, now built for everyone:
+
+- **Scheduled encounters** (`buildEncounters`): every non-lethal recorded hit on a player by an enemy, cart's first
+  (`enc:0`, as before), then each other victim's in `PLAYER_IDS` order (`enc:<victim>:<i>`: here sp4rtan's three hits
+  on donk at 49.9–50.1 s, `enc:donk:0..2`). Active only while the victim is the human; while nobody plays they only
+  note the puppet sight, as cart's did. A Core snapshot from before U2 restores with the new ones `waiting`.
+- **Recorded duels** (`buildDuels`): every player's engagements on an enemy, cart's first (`duel:0..2`), then the
+  others' (`duel:<shooter>:<i>`: Lokier → eradicate 12.4–12.7 s, Lokier → cart 18.1–18.5 s, sp4rtan → donk, barely →
+  zwomp, …). Active only while the shooter is the human, with the same rules as cart's (his would-hit shots on the
+  target blocked and the recorded outcome applied; elsewhere his bullets are real).
+- **Nothing scripted for the human** (B3, unchanged): no Core input, no weapon / grenade / plant / defuse scripting, no
+  scripted damage to or from him. A pawn the tape kills later plays on while he lives (eradicate at 5 s outlives
+  Lokier's 12.75 s SSG 08 kill; Lokier at 10 s is not killed by cart's scripted 18.80 s headshot, only by the
+  engine's bullets if cart's real fire hits him). A human CT defuses with USE at the bomb (sp4rtan taken at 61.72 s:
+  3951 → 4271, CT win), a human T plants with the c4 and USE (barely taken mid-plant at 27.19 s plants on 1761; without
+  USE the plant doesn't happen and the Core sends no `plant` fallback).
+- **The Session's tape** keeps who was taken (`tapeTakeover {tick, id}`), so a rewind before a takeover of eradicate
+  and a forward seek replay it; `restore` accepts a snapshot whose human is any takeable pawn.
+
+Tests: `tests/takeover-any.test.ts` (eradicate at 5 s, Lokier at 10 s in both hosts; rewind / seek; defuse and plant).
+The no-human run is unchanged (golden master `Played it like the tape`, same digests), and so are cart's takeover runs.
 
 ### How the Core learns of it
 

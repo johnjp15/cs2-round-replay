@@ -118,9 +118,10 @@ describe('rewind across the takeover (exact: the host snapshots)', () => {
     expect([s.human, s.takeoverTick, s.log().length]).toEqual([null, null, 0]);
     runTo(s, 99);
     expect(firstDiff(s.log().lines(), goldenLines.slice(0, 100))).toBe(-1);
-    // Only the playable pawn, only while watching.
-    expect(s.takeControlBlocked('donk')).toBe('donk is not the playable pawn (cart)');
-    expect(() => s.takeControl('donk')).toThrow(/playable/);
+    // Only a takeable pawn (U2: any by default; a session may restrict it to cart), only while watching.
+    expect(s.takeControlBlocked('donk')).toBeNull();
+    expect(session({ takeable: ['cart'] }).takeControlBlocked('donk')).toBe('donk is not the playable pawn (cart)');
+    expect(() => session({ takeable: ['cart'] }).takeControl('donk')).toThrow(/playable/);
     expect(session({ playable: null }).takeControlBlocked()).toMatch(/not the playable pawn/);
     // A session with a human from the start has nobody to take over.
     expect(new Session({ ...data, seed: 1 }).takeControlBlocked()).toBe('cart is already controlled');

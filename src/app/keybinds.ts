@@ -7,7 +7,7 @@
  * browsers in fullscreen get Keyboard Lock (play-guard.ts) and keep Ctrl; elsewhere a player can move duck to C or
  * Alt here. docs/app.md "Keys".
  */
-import { DEFAULT_KEY_BINDS, parseKeyBinds, rebind, type KeyBinds, type RebindableControl } from './input';
+import { DEFAULT_KEY_BINDS, bindKeyOf, canBindKey, parseKeyBinds, rebind, type KeyBinds, type RebindableControl } from './input';
 
 export const KEY_BINDS_STORAGE_KEY = 'cs2-sim-keybinds';
 
@@ -73,5 +73,83 @@ export class KeyBindsStore {
       // Storage full or blocked: the binds hold for this visit.
     }
     for (const f of this.listeners) f(b);
+  }
+}
+
+// ---- U2: page keys (not pawn controls): the key that always takes control of cart -----------------------------------
+
+/** U2: the page's own rebindable keys, kept apart from the pawn controls (they only act while watching). */
+export interface PageKeys {
+  /** Takes control of cart while watching, whoever is spectated (default C; while playing C stays the extra duck key). */
+  readonly takeCart: string;
+}
+
+export const DEFAULT_PAGE_KEYS: PageKeys = { takeCart: 'KeyC' };
+export const PAGE_KEYS_STORAGE_KEY = 'cs2-sim-pagekeys';
+
+/**
+ * Whether `code` can be the take-cart key given the pawn binds: a key a pawn control could take (input.ts canBindKey:
+ * not a fixed or page key), not a modifier, and not the Use or Jump key (E takes the spectated player, Space cycles
+ * players while watching). The duck key may share it: duck only acts while playing, take-cart only while watching.
+ */
+export function canBindPageKey(code: string, binds: KeyBinds): boolean {
+  const key = bindKeyOf(code);
+  return key === code && canBindKey(key) && key !== binds.use && key !== binds.jump && key !== 'Space';
+}
+
+/** Stored page keys (JSON, maybe old or hand-edited) → valid ones: an unbindable key keeps its default. */
+export function parsePageKeys(raw: unknown, binds: KeyBinds = DEFAULT_KEY_BINDS): PageKeys {
+  if (typeof raw !== 'object' || raw === null) return DEFAULT_PAGE_KEYS;
+  const v = (raw as { readonly [k: string]: unknown })['takeCart'];
+  return typeof v === 'string' && canBindPageKey(v, binds) ? { takeCart: v } : DEFAULT_PAGE_KEYS;
+}
+
+/** The page keys in localStorage (same rules as KeyBindsStore). */
+export class PageKeysStore {
+  private current: PageKeys;
+  private readonly listeners: ((k: PageKeys) => void)[] = [];
+
+  constructor(
+    private readonly storage: KeyValueStorage | null,
+    private readonly binds: () => KeyBinds = () => DEFAULT_KEY_BINDS,
+  ) {
+    let k = DEFAULT_PAGE_KEYS;
+    try {
+      const raw = storage?.getItem(PAGE_KEYS_STORAGE_KEY) ?? null;
+      if (raw !== null) k = parsePageKeys(JSON.parse(raw), binds());
+    } catch {
+      k = DEFAULT_PAGE_KEYS;
+    }
+    this.current = k;
+  }
+
+  get keys(): PageKeys {
+    return this.current;
+  }
+
+  /** The take-cart key on `code`; false when it can't be bound. */
+  setTakeCart(code: string): boolean {
+    if (!canBindPageKey(code, this.binds())) return false;
+    this.apply({ takeCart: code });
+    return true;
+  }
+
+  reset(): void {
+    this.apply(DEFAULT_PAGE_KEYS);
+  }
+
+  onChange(f: (k: PageKeys) => void): void {
+    this.listeners.push(f);
+  }
+
+  private apply(k: PageKeys): void {
+    this.current = k;
+    try {
+      if (k.takeCart === DEFAULT_PAGE_KEYS.takeCart) this.storage?.removeItem(PAGE_KEYS_STORAGE_KEY);
+      else this.storage?.setItem(PAGE_KEYS_STORAGE_KEY, JSON.stringify(k));
+    } catch {
+      // Storage full or blocked: the key holds for this visit.
+    }
+    for (const f of this.listeners) f(k);
   }
 }

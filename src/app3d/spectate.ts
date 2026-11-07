@@ -10,6 +10,9 @@ import type { PawnObs, PlayerId, Team } from '../contracts/index';
 
 export type SpectateMode = 'pov' | 'follow' | 'free';
 
+/** U2: the player the take-cart key (C) always takes. */
+const CART: PlayerId = 'cart';
+
 /** V's order, starting from the default (first person). */
 export const SPECTATE_MODES: readonly SpectateMode[] = ['pov', 'follow', 'free'];
 
@@ -70,11 +73,22 @@ export interface SpectatePanel {
   readonly hints: string;
 }
 
-/** The bottom spectator panel's text (null: not spectating). */
-export function spectatePanel(p: PawnObs | null, kills: number, mode: SpectateMode, weapon: string, canTakeControl: boolean): SpectatePanel | null {
+/**
+ * The bottom spectator panel's text (null: not spectating). U2: `canTakeControl` = the Use key (`keys.use`, E) takes
+ * control of this player now; `keys.cart` = the take-cart key's label while it would take cart (hinted when another
+ * player is spectated), else null.
+ */
+export function spectatePanel(p: PawnObs | null, kills: number, mode: SpectateMode, weapon: string, canTakeControl: boolean, keys: { readonly use: string; readonly cart: string | null } = { use: 'E', cart: null }): SpectatePanel | null {
   if (p === null) return null;
   const hp = p.alive ? Math.round(p.hp) : 0;
-  const hints = [mode === 'free' ? 'Mouse 1 / 2 pick a player' : 'Mouse 1 / 2 switch player', 'V mode', canTakeControl ? 'E take control of cart' : null].filter((x) => x !== null).join(' · ');
+  const hints = [
+    mode === 'free' ? 'Mouse 1 / 2 pick a player' : 'Mouse 1 / 2 switch player',
+    'V mode',
+    canTakeControl ? `${keys.use} take control of ${p.id}` : null,
+    keys.cart !== null && p.id !== CART ? `${keys.cart} take cart` : null,
+  ]
+    .filter((x) => x !== null)
+    .join(' · ');
   return {
     name: p.id,
     team: p.team,

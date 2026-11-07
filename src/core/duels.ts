@@ -1,5 +1,5 @@
 /**
- * Recorded duels of the human (G5). Once the player controls cart he never fires by himself (the Core sends the human
+ * Recorded duels of the human (G5; U2: of whichever player he controls). Once the player controls cart (or anyone) he never fires by himself (the Core sends the human
  * nothing), but his recorded engagements stay *recorded duels*: the duel with Lokier at the Apartments window, the
  * spray at the defusing sp4rtan and the post-round shots at sp4rtan. While he is in one (alive, at cart's recorded spot
  * within `humanSpotToleranceUnits`, inside its window, the target a REPLAY puppet) his bullets on that target do no
@@ -12,7 +12,7 @@
  * Portable style (docs/port-notes.md "Recorded duels of the human"): plain data, integer ticks, duels in plan order,
  * log texts from integer arithmetic only.
  */
-import { roundNumber, type Action, type Observe, type PawnObs, type PlayerId, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
+import { PLAYER_IDS, roundNumber, type Action, type Observe, type PawnObs, type PlayerId, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
 import type { EncounterPlan, EncounterState } from './divergence';
 import { tenthsText, trackPosAt } from './divergence';
 import { dist2 } from './puppet';
@@ -20,11 +20,11 @@ import type { RoundModel } from './round-model';
 import type { DamageEntry } from './schedule';
 import { cycleTicksOf, tapSpacing, type PawnMode, type ScriptPlan, type ScriptedEvents } from './scripted';
 
-/** One recorded duel of the default human (built once from the plan; immutable). */
+/** One recorded duel of a player (built once from the plan; immutable; acts only while he is the human). */
 export interface DuelPlan {
   /** `duel:<i>`, in the order of the human's engagements. */
   readonly key: string;
-  /** The default human (cart). */
+  /** The player whose duel it is (cart, or any other player: U2). */
   readonly shooter: PlayerId;
   readonly target: PlayerId;
   /** The recorded weapon (the engagement's fire item). */
@@ -84,14 +84,26 @@ export interface DuelState {
 }
 
 /**
- * The recorded duels of the default human: one per B3 engagement in which he shoots an enemy (cart: Lokier
- * 18.14–18.98 s, sp4rtan 65.55–66.89 s and 68.30–69.27 s). Its weapon and shots are the fire items inside it, its
- * outcome the recorded damage on the target whose aim falls in it, and it answers a scheduled encounter whose recorded
- * hit on him falls in it (Lokier's 73 at 18.50 s).
+ * The recorded duels of every player (U2: any player may be the human; a duel acts only while its shooter is): one
+ * per B3 engagement in which he shoots an enemy (cart: Lokier 18.14–18.98 s, sp4rtan 65.55–66.89 s and 68.30–69.27
+ * s). Its weapon and shots are the fire items inside it, its outcome the recorded damage on the target whose aim falls
+ * in it, and it answers a scheduled encounter whose recorded hit on him falls in it (Lokier's 73 at 18.50 s). The
+ * default human's (cart) come first, keyed `duel:<i>` as before U2; every other player's follow in PLAYER_IDS order,
+ * keyed `duel:<shooter>:<i>`.
  */
 export function buildDuels(model: RoundModel, plan: ScriptPlan, encounters: readonly EncounterPlan[], tuning: Tuning): DuelPlan[] {
-  const human = model.players.find((p) => p.isHumanDefault)?.id ?? null;
-  if (human === null) return [];
+  const first = model.players.find((p) => p.isHumanDefault)?.id ?? null;
+  const shooters: PlayerId[] = first === null ? [] : [first];
+  for (const id of PLAYER_IDS) if (id !== first) shooters.push(id);
+  const out: DuelPlan[] = [];
+  for (const h of shooters) {
+    duelsOf(model, plan, encounters, tuning, h).forEach((d, i) => out.push({ ...d, key: h === first ? `duel:${i}` : `duel:${h}:${i}` }));
+  }
+  return out;
+}
+
+/** The recorded duels of `human` (keys filled in by buildDuels). */
+function duelsOf(model: RoundModel, plan: ScriptPlan, encounters: readonly EncounterPlan[], tuning: Tuning, human: PlayerId): DuelPlan[] {
   const li = tuning.replay.inputLatencyTicks;
   const team = model.player(human).team;
   const out: DuelPlan[] = [];

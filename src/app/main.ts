@@ -22,7 +22,7 @@
  * build (vite.single.config.ts) redirects that import to assets-embedded.ts, which reads them from the page.
  */
 import tuningJson from '../../data/tuning.json';
-import { parseMapId, type PlayerId, type RoundSummary } from '../contracts/index';
+import { isPlayerId, parseMapId, type PlayerId, type RoundSummary } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { loadAssets } from './assets';
 import type { Camera } from './camera';
@@ -33,8 +33,8 @@ import { overlayForKey, toggleOverlay, type OverlayKey, type Overlays, type Scre
 import { humanInput, yawToward } from './input';
 import { InputDom } from './input-dom';
 import { keyMapFor } from './input';
-import { KeyBindsStore, pageStorage } from './keybinds';
-import { KeyBindsDom } from './keybinds-dom';
+import { KeyBindsStore, PageKeysStore, pageStorage } from './keybinds';
+import { KeyBindsDom, PageKeyDom } from './keybinds-dom';
 import { PlayGuard } from './play-guard';
 import { FixedLoop, RateMeter, TICK_MS } from './loop';
 import { screenToWorld, worldToScreen } from './radar';
@@ -134,6 +134,10 @@ class App {
   private readonly input: InputDom;
   /** The key-binding setting (duck / walk / jump / use) and the Ctrl+W guard (fullscreen Keyboard Lock, leave-site). */
   private readonly keys = new KeyBindsStore(pageStorage());
+  /** U2: the take-cart key (C), rebindable under Keys. */
+  private readonly pageKeys = new PageKeysStore(pageStorage(), () => this.keys.binds);
+  /** U2: the player the takeover button and E take (the picker beside the button; the 2D page has no spectating). */
+  private picked: PlayerId = FOLLOWED;
   private readonly guard: PlayGuard;
   private readonly loop: FixedLoop;
   private readonly fpsMeter = new RateMeter(1000);
@@ -240,7 +244,10 @@ class App {
       pointerLock: false,
     });
     const keybinds = document.getElementById('keybinds');
-    if (keybinds !== null && !this.touchOnly) new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+    if (keybinds !== null && !this.touchOnly) {
+      new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+      new PageKeyDom(keybinds, this.pageKeys, this.keys, this.guard.mac);
+    }
     new CameraInput(canvas, {
       playing: () => this.playing(),
       onZoom: (at, factor) => this.renderer.zoomAt(this.overlays.follow ? null : at, factor),
@@ -337,14 +344,15 @@ class App {
    * G4: the player takes control of cart from the next tick on (the button, or E while watching). The pawn keeps what
    * the puppet had; a 4× (or any) speed drops to 1×, since nobody plays at 4× (the speed buttons still work).
    */
-  private takeControl(): void {
+  /** Take control of `id` (default: the picked player; C: cart, U2); refused while he is dead or during a seek. */
+  private takeControl(id: PlayerId = this.picked): void {
     const s = this.session;
-    if (this.touchOnly || this.seekResume !== null || !s.canTakeControl) return;
+    if (this.touchOnly || this.seekResume !== null || !s.canTakeControlOf(id)) return;
     if (this.loop.speed !== 1) {
       this.loop.speed = 1;
       s.control({ type: 'speed', x: 1 });
     }
-    s.takeControl();
+    s.takeControl(id);
     this.updateControls();
   }
 
@@ -411,10 +419,16 @@ class App {
   /** View toggles: F follow, G ghost, T tracks, Tab status panel, H height map (G3); B5: `[` / `]` seek 5 s back / ahead. */
   private onKey(e: KeyboardEvent): void {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-    // G4: E while watching takes control (while playing it is USE, InputDom's).
+    // G4: E while watching takes control of the picked player (while playing it is USE, InputDom's); U2: C (the
+    // take-cart key; while playing C ducks) always cart.
     if (e.code === TAKEOVER_KEY && this.session.human === null) {
       e.preventDefault();
       this.takeControl();
+      return;
+    }
+    if (e.code === this.pageKeys.keys.takeCart && this.session.human === null && this.session.playable !== null) {
+      e.preventDefault();
+      this.takeControl(this.session.playable);
       return;
     }
     const step = seekStepForKey(e.code);
@@ -468,6 +482,7 @@ class App {
     on(b.back10, () => this.startSeek(stepTarget(this.session.tick, -10)));
     on(b.fwd5, () => this.startSeek(stepTarget(this.session.tick, 5)));
     on(b.takeover, () => this.takeControl());
+    this.wirePicker();
     for (const sb of b.speeds) {
       on(sb, () => {
         const x = Number(sb.dataset['speed']);
@@ -515,7 +530,9 @@ class App {
   /** G4: the takeover button (label, E cap, disabled, pressed, tooltip); only touches the DOM when it changed. */
   private updateTakeover(force = false): void {
     const s = this.session;
-    const v = takeoverButtonView(s.human, s.playable, s.takeControlBlocked(), this.touchOnly, this.seekResume !== null);
+    const v = takeoverButtonView(s.human, this.picked, s.takeControlBlocked(this.picked), this.touchOnly, this.seekResume !== null);
+    const pick = document.getElementById('takeover-pick') as HTMLSelectElement | null;
+    if (pick !== null) pick.disabled = s.human !== null || this.touchOnly;
     const key = `${v.label}|${v.disabled}|${v.pressed}|${v.key}|${v.title}`;
     if (!force && key === this.takeoverKey) return;
     this.takeoverKey = key;
@@ -527,6 +544,31 @@ class App {
     b.disabled = v.disabled;
     b.title = v.title;
     b.setAttribute('aria-pressed', String(v.pressed));
+  }
+
+  /** U2: the player picker beside the takeover button: every player, T then CT; the pick is what E and the button take. */
+  private wirePicker(): void {
+    const pick = document.getElementById('takeover-pick') as HTMLSelectElement | null;
+    if (pick === null) return;
+    pick.replaceChildren();
+    for (const team of ['T', 'CT'] as const) {
+      const g = document.createElement('optgroup');
+      g.label = team;
+      for (const p of this.session.model.players) {
+        if (p.team !== team) continue;
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.id;
+        g.append(o);
+      }
+      pick.append(g);
+    }
+    pick.value = this.picked;
+    pick.addEventListener('change', () => {
+      if (isPlayerId(pick.value)) this.picked = pick.value;
+      pick.blur();
+      this.updateControls();
+    });
   }
 
   private fileStem(): string {
@@ -567,7 +609,7 @@ class App {
       clock: s.clock,
       human: s.human,
       you: s.human ?? FOLLOWED,
-      youNote: youNote(s.human, s.human ?? FOLLOWED, s.playable, s.canTakeControl, this.touchOnly),
+      youNote: youNote(s.human, s.human ?? FOLLOWED, this.picked, s.canTakeControlOf(this.picked), this.touchOnly),
       phase: this.phase,
       speed: this.loop.speed,
       panelOpen: this.overlays.panel,

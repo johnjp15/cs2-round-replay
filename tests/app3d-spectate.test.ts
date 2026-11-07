@@ -40,7 +40,10 @@ describe('spectating', () => {
 
   it('writes the spectator panel', () => {
     const p = spectatePanel(pawn('donk', 'CT'), 2, 'pov', 'AK-47', true);
-    expect(p).toEqual({ name: 'donk', team: 'CT', stats: '76 HP · 100 armor · AK-47 · 2 kills', mode: '1st person', hints: 'Mouse 1 / 2 switch player · V mode · E take control of cart' });
+    expect(p).toEqual({ name: 'donk', team: 'CT', stats: '76 HP · 100 armor · AK-47 · 2 kills', mode: '1st person', hints: 'Mouse 1 / 2 switch player · V mode · E take control of donk' });
+    // U2: with the take-cart key, spectating anyone but cart hints it too.
+    expect(spectatePanel(pawn('donk', 'CT'), 2, 'pov', 'AK-47', true, { use: 'E', cart: 'C' })?.hints).toBe('Mouse 1 / 2 switch player · V mode · E take control of donk · C take cart');
+    expect(spectatePanel(pawn('cart', 'T'), 2, 'pov', 'AK-47', false, { use: 'E', cart: 'C' })?.hints).toBe('Mouse 1 / 2 switch player · V mode');
     expect(spectatePanel(pawn('cart', 'T'), 1, 'follow', 'Knife', false)?.stats).toContain('1 kill');
     expect(spectatePanel(null, 0, 'pov', '', false)).toBeNull();
   });

@@ -45,7 +45,7 @@ describe('the recorded duels of the round', () => {
   it('cart has three, from his engagements: Lokier at the window (it answers Lokier’s encounter), the defuse spray and the post-round shots at sp4rtan', () => {
     const core = new ReplayCore(golden.model, golden.session.schedule, data.tuning, 1, walkQueryOf(data));
     const enc = core.divergence.encounters[0];
-    const d = core.duels.duels.map((x) => ({ key: x.key, target: x.target, weapon: x.weapon, aim: x.aimKey, from: x.fromTick, to: x.toTick, shots: [x.firstShotTick, x.lastShotTick], hits: x.hits.map((h) => `${h.tick} ${h.weapon} ${h.hitgroup}${h.lethal ? ' lethal' : ''}`), encounter: x.encounter, cycle: x.cycleTicks }));
+    const d = core.duels.duels.filter((x) => x.shooter === 'cart').map((x) => ({ key: x.key, target: x.target, weapon: x.weapon, aim: x.aimKey, from: x.fromTick, to: x.toTick, shots: [x.firstShotTick, x.lastShotTick], hits: x.hits.map((h) => `${h.tick} ${h.weapon} ${h.hitgroup}${h.lethal ? ' lethal' : ''}`), encounter: x.encounter, cycle: x.cycleTicks }));
     expect(d).toEqual([
       { key: 'duel:0', target: 'lokier', weapon: 'ak47', aim: 'aim:4', from: 1161, to: 1215, shots: [1185, 1216], hits: ['1203 ak47 head lethal'], encounter: 'enc:0', cycle: 7 },
       { key: 'duel:1', target: 'sp4rtan', weapon: 'ak47', aim: 'aim:10', from: 4195, to: 4281, shots: [4218, 4282], hits: [], encounter: null, cycle: 7 },

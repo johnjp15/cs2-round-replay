@@ -7,7 +7,7 @@
  * The page starts **watching** (nobody controls cart; the round plays as recorded) with CS2's spectator camera
  * (U1, spectate.ts): first person through the followed pawn's eyes (cart) with its viewmodel, HUD and crosshair,
  * third person, or free fly (V cycles; mouse 1 / Space next player, mouse 2 previous; Z / X too), the spectator
- * panel, and the radar under CS2's spotting rules (radar3d.ts; the panel toggle shows everyone). E or "Take control of cart" hands him to the player from that tick on (a speed other than 1× drops to 1×):
+ * panel, and the radar under CS2's spotting rules (radar3d.ts; the panel toggle shows everyone). E (the Use key) or "Take control of <spectated>" hands the spectated player to the player from that tick on, C (rebindable under Keys) or "Take control of cart" always cart (U2; a speed other than 1× drops to 1×):
  * first-person camera at his eye (64 standing, 46 crouched), pointer-lock mouse look, WASD, Space, Ctrl, Shift,
  * mouse 1, R, 1–5, E (input3d.ts; duck, walk, jump and use rebindable under Keys). ⛶ Fullscreen locks the keyboard
  * where the browser can, so Ctrl+W crouches forward instead of closing the tab (src/app/play-guard.ts). Dead, the
@@ -31,10 +31,10 @@ import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
 import { Session, parseSessionData, type SessionData } from '../app/session';
 import { SummaryCache } from '../app/run-entries';
 import { weaponName } from '../app/hud-model';
-import { startHuman, takeoverButtonView } from '../app/takeover';
-import { keyMapFor } from '../app/input';
-import { KeyBindsStore, pageStorage } from '../app/keybinds';
-import { KeyBindsDom } from '../app/keybinds-dom';
+import { spectatedTakeoverView, startHuman, takeoverButtonView, type TakeoverButtonView } from '../app/takeover';
+import { codesOfKey, keyLabel, keyMapFor } from '../app/input';
+import { KeyBindsStore, PageKeysStore, pageStorage } from '../app/keybinds';
+import { KeyBindsDom, PageKeyDom } from '../app/keybinds-dom';
 import { PlayGuard } from '../app/play-guard';
 import { anglesTo, poseHitboxes } from '../engine/hitboxes';
 import { sim3dHostFactory, worldMesh, type Sim3DHost } from '../sim3d/index';
@@ -107,7 +107,8 @@ declare global {
     __cs2sim3d?: {
       stats: () => App3DStats;
       session: () => Session;
-      takeControl: () => void;
+      /** Take control of `id` (default cart), as C / E do. */
+      takeControl: (id?: PlayerId) => void;
       /** Look at a pawn's head hitbox (yaw and pitch), as if the mouse had moved there. */
       aimAt: (id: PlayerId) => Look;
       setLook: (yaw: number, pitch: number) => void;
@@ -214,6 +215,8 @@ class App3D {
   private readonly controls: ControlsDom;
   /** The key-binding setting (duck / walk / jump / use) and the Ctrl+W guard (fullscreen Keyboard Lock, leave-site). */
   private readonly keys = new KeyBindsStore(pageStorage());
+  /** U2: the take-cart key (C), rebindable under Keys. */
+  private readonly pageKeys = new PageKeysStore(pageStorage(), () => this.keys.binds);
   private readonly guard: PlayGuard;
   private readonly loop: FixedLoop;
   private readonly fpsMeter = new BucketRate(1000);
@@ -290,7 +293,7 @@ class App3D {
   private readonly summaryCache = new SummaryCache();
   /** The last summary line shown (kept while a refresh catches up). */
   private summaryLine: string | null = null;
-  private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; radar: HTMLButtonElement; speeds: HTMLButtonElement[] };
+  private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; takeoverSpec: HTMLButtonElement | null; camera: HTMLButtonElement; radar: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
   constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number | null, lowLatency: boolean | null, render: Uint8Array | null = null) {
     this.data = data;
@@ -340,13 +343,18 @@ class App3D {
       onChange: () => this.updateControls(),
     });
     const keybinds = document.getElementById('keybinds');
-    if (keybinds !== null) new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+    if (keybinds !== null) {
+      new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+      new PageKeyDom(keybinds, this.pageKeys, this.keys, this.guard.mac);
+    }
+    this.pageKeys.onChange(() => this.updateControls());
     this.wireSettings();
     this.buttons = {
       start: el('start', HTMLButtonElement),
       pause: el('pause', HTMLButtonElement),
       restart: el('restart', HTMLButtonElement),
       takeover: el('takeover', HTMLButtonElement),
+      takeoverSpec: document.getElementById('takeover-spec') as HTMLButtonElement | null,
       camera: el('camera', HTMLButtonElement),
       radar: el('radar-rules', HTMLButtonElement),
       speeds: [...document.querySelectorAll<HTMLButtonElement>('button[data-speed]')],
@@ -356,7 +364,7 @@ class App3D {
     window.__cs2sim3d = {
       stats: () => this.stats(),
       session: () => this.session,
-      takeControl: () => this.takeControl(),
+      takeControl: (id) => this.takeControl(id),
       aimAt: (id) => this.aimAt(id),
       setLook: (yaw, pitch) => {
         this.look = { yaw: wrapYaw(yaw), pitch: Math.max(-89, Math.min(89, pitch)) };
@@ -440,7 +448,8 @@ class App3D {
   }
 
   private newSession(human: PlayerId | null): Session {
-    return new Session({ ...this.data, seed: this.seed, human, playable: 'cart', host: sim3dHostFactory(this.world) });
+    // U2: any player can be taken over (Session's default takeable: all); cart is the default (C, the cart button).
+    return new Session({ ...this.data, seed: this.seed, human, host: sim3dHostFactory(this.world) });
   }
 
   private playing(): boolean {
@@ -494,15 +503,20 @@ class App3D {
     this.a1.tick(o, h, s.human);
   }
 
-  private takeControl(): void {
+  /**
+   * Take control of `id` (default: the session's playable pawn, cart): E on the spectated player, C or the cart button
+   * on cart (U2). Refused (nothing happens; the buttons show why) while he is dead, during a seek, on touch screens.
+   */
+  private takeControl(id: PlayerId | null = this.session.playable): void {
     const s = this.session;
-    if (this.touchOnly || this.seekResume !== null || !s.canTakeControl) return;
+    if (id === null || this.touchOnly || this.seekResume !== null || !s.canTakeControlOf(id)) return;
     if (this.loop.speed !== 1) {
       this.loop.speed = 1;
       s.control({ type: 'speed', x: 1 });
     }
-    s.takeControl();
-    const p = this.scene.pawn(s.human ?? 'cart');
+    s.takeControl(id);
+    this.followed = id;
+    const p = this.scene.pawn(id);
     if (p !== null) this.look = { yaw: p.yaw, pitch: p.pitch };
     this.controls.release();
     if (this.phase === 'ready') this.start();
@@ -632,7 +646,12 @@ class App3D {
 
   private onKey(code: string): boolean {
     const s = this.session;
-    if (code === 'KeyE' && s.human === null) {
+    // U2: while watching, Use (E) takes the spectated player, the take-cart key (C) always cart.
+    if (s.human === null && codesOfKey(this.keys.binds.use).includes(code)) {
+      this.takeControl(this.followed);
+      return true;
+    }
+    if (s.human === null && code === this.pageKeys.keys.takeCart) {
       this.takeControl();
       return true;
     }
@@ -684,6 +703,7 @@ class App3D {
     on(b.pause, () => this.togglePause());
     on(b.restart, () => this.restart());
     on(b.takeover, () => this.takeControl());
+    if (b.takeoverSpec !== null) on(b.takeoverSpec, () => this.takeControl(this.followed));
     on(b.camera, () => this.onKey('KeyV'));
     on(b.radar, () => this.setRadarRules(this.radarRules === 'cs2' ? 'all' : 'cs2'));
     for (const sb of b.speeds) {
@@ -700,12 +720,17 @@ class App3D {
     b.start.disabled = this.phase !== 'ready';
     b.pause.disabled = this.phase === 'ready';
     b.pause.textContent = this.phase === 'paused' ? 'Resume' : 'Pause';
-    const v = takeoverButtonView(s.human, s.playable, s.takeControlBlocked(), this.touchOnly, this.seekResume !== null);
-    const label = b.takeover.querySelector('span');
-    if (label !== null && label.textContent !== v.label) label.textContent = v.label;
-    b.takeover.disabled = v.disabled;
-    b.takeover.title = v.title;
-    b.takeover.setAttribute('aria-pressed', String(v.pressed));
+    const seeking = this.seekResume !== null;
+    const cartKey = keyLabel(this.pageKeys.keys.takeCart, this.guard.mac);
+    const useKey = keyLabel(this.keys.binds.use, this.guard.mac);
+    const v = takeoverButtonView(s.human, s.playable, s.takeControlBlocked(), this.touchOnly, seeking, cartKey);
+    paintTakeover(b.takeover, v, cartKey);
+    // U2: the spectated player's button (E), hidden while cart is spectated or someone plays.
+    if (b.takeoverSpec !== null) {
+      const sv = spectatedTakeoverView(s.human, this.followed, s.playable, s.takeControlBlocked(this.followed), this.touchOnly, seeking, useKey);
+      paintTakeover(b.takeoverSpec, sv, useKey);
+      b.takeoverSpec.hidden = sv.hidden;
+    }
     const cam = b.camera.querySelector('span');
     const camText = this.playing() ? 'Camera: first person' : `Camera: ${this.camMode === 'pov' ? '1st person' : this.camMode === 'follow' ? '3rd person' : 'free'}`;
     if (cam !== null && cam.textContent !== camText) cam.textContent = camText;
@@ -920,14 +945,15 @@ class App3D {
       if (over) {
         // A test render (exact) parses what is left at once.
         const sum = this.summaryCache.get(s.model, s.log(), `${o.round.endTick}|${this.scene.deaths.size}|${human ?? ''}`, exact ? Infinity : undefined);
-        summary = sum === null ? null : `${sum.headline}<small>Restart to watch again, or take control of cart earlier.</small>`;
+        summary = sum === null ? null : `${sum.headline}<small>Restart to watch again, or take control of someone earlier.</small>`;
         if (sum !== null) this.summaryLine = summary;
         else summary = this.summaryLine;
       } else this.summaryCache.warm(s.log());
     }
     const mode = firstPerson ? `You: ${human} · Esc frees the mouse` : human !== null ? `You: ${human} (dead) · spectating` : 'Watching';
-    const canTake = human === null && s.canTakeControl && !this.touchOnly;
-    const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake);
+    const canTake = human === null && !this.touchOnly && s.canTakeControlOf(viewId);
+    const cartHint = human === null && !this.touchOnly && s.canTakeControl ? keyLabel(this.pageKeys.keys.takeCart, this.guard.mac) : null;
+    const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake, { use: keyLabel(this.keys.binds.use, this.guard.mac), cart: cartHint });
     const r = this.renderer.renderer.domElement;
     // The crosshair sits where the next bullet goes (off centre only with a punch; clientHeight read only then).
     const off = (firstPerson || specPov) && !scoped && (aim.yaw !== yaw || aim.pitch !== pitch) ? aimOffsetPx({ yaw, pitch }, aim, vfovDeg, r.clientHeight) : { x: 0, y: 0 };
@@ -944,7 +970,7 @@ class App3D {
       viewer: viewId,
       human,
       at: { x: eye.x, y: eye.y, yaw },
-      mode: this.phase === 'ready' && human === null ? 'Watching · press Start, or E to play cart' : mode,
+      mode: this.phase === 'ready' && human === null ? `Watching · press Start, or E to play ${this.followed}` : mode,
       modeKind: firstPerson ? 'you' : human !== null ? 'dead' : 'watching',
       crosshair: (firstPerson || specPov) && !scoped,
       crosshairAt: { x: Math.round(off.x * 2) / 2, y: Math.round(off.y * 2) / 2 },
@@ -1191,3 +1217,17 @@ async function boot(): Promise<void> {
 }
 
 void boot();
+
+/** U2: one takeover button from its view (label, key cap, disabled, pressed, tooltip); touches the DOM only on change. */
+function paintTakeover(b: HTMLButtonElement, v: TakeoverButtonView, key: string): void {
+  const label = b.querySelector('span');
+  if (label !== null && label.textContent !== v.label) label.textContent = v.label;
+  const cap = b.querySelector('kbd');
+  if (cap !== null) {
+    if (cap.textContent !== key) cap.textContent = key;
+    cap.hidden = !v.key;
+  }
+  b.disabled = v.disabled;
+  b.title = v.title;
+  b.setAttribute('aria-pressed', String(v.pressed));
+}

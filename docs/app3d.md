@@ -34,7 +34,7 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
   camera, every pawn as a dot, the view cone), the team panel (HP bar, mode: REPLAY / LIVE / YOU), HP / armor and
   weapon / ammo of the pawn being viewed, the mode line, the headroom meter (Performance, below), and the
   end-of-round summary line 2 s after the round end. While spectating: the spectator panel and an edge vignette (below).
-- **Bar**: Start, Pause, Restart, Take control of cart (E), Camera (V), Radar (CS2 rules / show everyone), speed
+- **Bar**: Start, Pause, Restart, Take control of <spectated player> (E; hidden while cart is spectated), Take control of cart (C), Camera (V), Radar (CS2 rules / show everyone), speed
   0.25–4×, the settings (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov, and **Recoil tracking**), and FPS
   limit, Res (render scale) and Low latency (Performance, below). These and the radar toggle are kept in localStorage,
   `cs2-sim3d-settings`.
@@ -43,14 +43,20 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
 
 Watching (default, every device) and dead: spectating, as CS2 (below). P pause.
 
-**E** or the button takes control of cart from that tick (the speed drops to 1×; the pointer is locked): mouse look,
+**E** (the Use key) or "Take control of <name>" takes control of the **spectated player**, either team (U2; CS2's
++use on a spectated bot), and **C** or "Take control of cart" always takes cart, whoever is spectated. Either acts from
+that tick (the speed drops to 1×; the pointer is locked); a dead player is refused (the button shows "Not now: … is
+dead"). Then the radar, HUD, team colours and spectating follow the controlled pawn: the radar is his team's view under
+CS2's spotting rules (enemies hidden unless his team spots them), and dead he spectates his own living teammates. Playing: mouse look,
 W / S forward / back and A / D strafe relative to the view (CS2's), Space jump, Ctrl or C duck, Shift walk, mouse 1
 fire / throw, mouse 2 scope (the input's ATTACK2: the scope is the engine's, H2b: levels and FOVs from
 data/weapons.json, scoped accuracy and speed, a reload or a bolt cycle drops it), R reload, 1–5 weapon slots (as the 2D app), E use (plant, defuse). Esc frees the mouse. Dead,
 the camera spectates again (your living teammates first, as CS2 competitive's mp_forcecamera 1). G (drop) is not implemented: the engine has no dropped weapons yet (H4).
 
 Duck, walk, jump and use are rebindable under **Keys** in the bar (one localStorage setting
-with the 2D page; Reset keys = CS2's defaults).
+with the 2D page; Reset keys = CS2's defaults). So is **Take cart** (default C; `cs2-sim-pagekeys`, src/app/keybinds.ts
+`PageKeysStore`): any key a control could take except Use and Jump. C is CS2's voice key, unused here; while you play C
+stays the extra duck key (take-cart only acts while watching, duck only while playing).
 
 **Ctrl+W** (crouch forward) is "close tab" on Windows and Linux. **⛶ Fullscreen** in the bar enters fullscreen and,
 in Chromium browsers (Chrome, Edge, Opera, Brave; feature-detected `navigator.keyboard.lock`), locks the keyboard, so
@@ -73,7 +79,8 @@ docs/app.md "Ctrl+W, fullscreen and key bindings".
 | Mouse | nothing (the view is theirs) | orbits | looks |
 | V | → third person | → free fly | → first person |
 | Z / X | previous / next player (kept from H1) | same | same |
-| E | take control of cart (when allowed) | same | same |
+| E (Use) | take control of the spectated player (when allowed; U2) | same | same |
+| C (Take cart) | take control of cart, whoever is spectated (U2) | same | same |
 
 - **First person** is through the spectated player's eyes exactly as they'd see it: their eye height (duck eased),
   view angles (interpolated), their viewmodel (the box gun, flashing when they fire), their HP / armor / weapon /

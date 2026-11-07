@@ -404,8 +404,9 @@ export class ExpectedEncounters {
 // ---------------------------------------------------------------------------
 
 /**
- * A recorded non-lethal hit on the default human (cart) by an enemy puppet, played time-shifted instead of as divergence:
- * Lokier's 73 HP / 7 armor SSG 08 hit at 18.50 s. Active only while that player is the human.
+ * A recorded non-lethal hit on a player by an enemy puppet, played time-shifted instead of as divergence when the
+ * victim is the human (cart: Lokier's 73 HP / 7 armor SSG 08 hit at 18.50 s). Active only while the victim is the
+ * human (U2: any player may be).
  */
 export interface EncounterPlan {
   /** `enc:<i>`; also names its run-time fire item (`fire:enc:<i>`) and engagement (`aim:enc:<i>`). */
@@ -479,10 +480,25 @@ export function trackPosAt(model: RoundModel, id: PlayerId, tick: number): Vec3 
   return p === null ? { x: last.x, y: last.y, z: last.z } : p.pos;
 }
 
-/** The scheduled encounters of the round: every non-lethal recorded hit on the default human by an enemy. */
+/**
+ * The scheduled encounters of the round: every non-lethal recorded hit on a player by an enemy (U2: any player may be
+ * the human; an encounter is active only while its victim is). The default human's (cart) come first, keyed `enc:<i>`
+ * as before U2; every other victim's follow in PLAYER_IDS order, keyed `enc:<victim>:<i>`.
+ */
 export function buildEncounters(model: RoundModel, schedule: EventSchedule, plan: ScriptPlan, index: ExpectedEncounters, tuning: Tuning): EncounterPlan[] {
-  const human = model.players.find((p) => p.isHumanDefault)?.id ?? null;
-  if (human === null) return [];
+  const first = model.players.find((p) => p.isHumanDefault)?.id ?? null;
+  const victims: PlayerId[] = first === null ? [] : [first];
+  for (const id of PLAYER_IDS) if (id !== first) victims.push(id);
+  const out: EncounterPlan[] = [];
+  for (const v of victims) {
+    const mine = encountersOf(model, schedule, plan, index, tuning, v);
+    mine.forEach((e, i) => out.push({ ...e, key: v === first ? `enc:${i}` : `enc:${v}:${i}` }));
+  }
+  return out;
+}
+
+/** The encounters whose victim is `human` (keys filled in by buildEncounters). */
+function encountersOf(model: RoundModel, schedule: EventSchedule, plan: ScriptPlan, index: ExpectedEncounters, tuning: Tuning, human: PlayerId): EncounterPlan[] {
   const li = tuning.replay.inputLatencyTicks;
   const out: EncounterPlan[] = [];
   for (const d of schedule.ofType('damage')) {
@@ -732,7 +748,8 @@ export class Divergence {
     this.st = {
       encounters: this.encounters.map((e) => {
         const q = s.encounters.find((x) => x.key === e.key);
-        if (q === undefined) throw new Error(`Divergence.restore: no state for ${e.key}`);
+        // Snapshots from before U2 hold only the default human's encounters: any other starts afresh.
+        if (q === undefined) return { key: e.key, phase: 'waiting', seenTick: null, shotTick: null, blocked: false, puppetSightTick: null, puppetSightOnCourse: false };
         // Snapshots from before G4 have no puppet sight (and before G5 no on-course flag: the B4 delay then).
         return { key: q.key, phase: q.phase, seenTick: q.seenTick, shotTick: q.shotTick, blocked: q.blocked, puppetSightTick: q.puppetSightTick ?? null, puppetSightOnCourse: q.puppetSightOnCourse ?? false };
       }),

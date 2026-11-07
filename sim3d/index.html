@@ -108,6 +108,7 @@
       #bar button { font: 13px var(--text); color: var(--sand); background: #18222d; border: 1px solid var(--rule); border-radius: 4px; padding: 5px 10px; cursor: pointer; }
       #bar button[aria-pressed="true"] { background: #2b3b4c; border-color: #4a6178; }
       #bar button:disabled { opacity: 0.45; cursor: default; }
+      #bar button[hidden], #bar kbd[hidden] { display: none; }
       #bar kbd { font: 11px var(--text); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
       #bar .sep { width: 1px; height: 22px; background: var(--rule); }
       #bar .help { color: var(--sand-dim); font-size: 12px; margin-left: auto; }
@@ -143,7 +144,8 @@
         <button id="pause" type="button">Pause</button>
         <button id="restart" type="button">Restart</button>
         <span class="sep"></span>
-        <button id="takeover" type="button"><span>Take control of cart</span><kbd>E</kbd></button>
+        <button id="takeover-spec" type="button" hidden><span>Take control</span><kbd>E</kbd></button>
+        <button id="takeover" type="button"><span>Take control of cart</span><kbd>C</kbd></button>
         <button id="camera" type="button"><span>Camera: 1st person</span><kbd>V</kbd></button>
         <button id="radar-rules" type="button" title="CS2 rules: teammates always, enemies only while your team spots them (then a fading ?). Show everyone: every player on the radar."><span>Radar: CS2 rules</span></button>
         <button id="fullscreen" type="button" aria-pressed="false">⛶ Fullscreen</button>

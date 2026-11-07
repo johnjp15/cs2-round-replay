@@ -191,6 +191,8 @@
       #controls button[aria-pressed="true"] { background: var(--sand); border-color: var(--sand); color: #0a0f15; }
       button:disabled { opacity: 0.4; cursor: default; }
       #controls kbd { margin-left: 5px; font: 500 12px/1 var(--display); opacity: 0.6; }
+      #takeover-pick { font: 600 14px/1.1 var(--display); color: var(--sand); background: var(--slab-solid); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 4px; min-height: 36px; }
+      @media (hover: none) { #takeover-pick { display: none; } }
       .group { display: inline-flex; }
       .group button { border-radius: 0; margin-left: -1px; min-width: 2.75rem; }
       .group button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
@@ -413,11 +415,12 @@
           <button type="button" data-overlay="height" aria-pressed="false" title="Map layer: the CS2 height map instead of the radar">Height<kbd>H</kbd></button>
         </span>
         <button id="takeover" type="button" aria-pressed="false" title="Play cart from this moment on (E)"><span>Take control of cart</span><kbd>E</kbd></button>
+        <select id="takeover-pick" aria-label="The player Take control (E) plays; C always takes cart" title="The player Take control (E) plays; C always takes cart"></select>
         <button id="fullscreen" type="button" aria-pressed="false">⛶ Fullscreen</button>
         <span id="keybinds" role="group" aria-label="Key bindings"></span>
         <button id="dl-log" type="button">Download log</button>
         <button id="dl-trace" type="button">Download trace</button>
-        <p id="help">The round plays as recorded; Take control of cart (or E) lets you play him from that moment. Playing: WASD moves (W is up on the map), the mouse aims, click fires, Shift walks, Ctrl or C crouches, Space jumps, R reloads, E uses, 1–5 switch weapons (Keys moves duck, walk, jump and use; ⛶ Fullscreen locks the keyboard in Chrome and Edge, so Ctrl+W crouches forward instead of closing the tab). Wheel zooms; drag pans (middle button while playing); double-click shows the whole map. Ghost is cart’s recorded position; Tracks shows everyone’s recorded path for the next 3 s; Height shows floor heights. [ and ] seek 5 s back and ahead; drag the timeline to seek (its marks are the checkpoints).</p>
+        <p id="help">The round plays as recorded; Take control (or E) lets you play the player picked beside it from that moment, C always cart (Keys moves C). Playing: WASD moves (W is up on the map), the mouse aims, click fires, Shift walks, Ctrl or C crouches, Space jumps, R reloads, E uses, 1–5 switch weapons (Keys moves duck, walk, jump and use; ⛶ Fullscreen locks the keyboard in Chrome and Edge, so Ctrl+W crouches forward instead of closing the tab). Wheel zooms; drag pans (middle button while playing); double-click shows the whole map. Ghost is cart’s recorded position; Tracks shows everyone’s recorded path for the next 3 s; Height shows floor heights. [ and ] seek 5 s back and ahead; drag the timeline to seek (its marks are the checkpoints).</p>
       </div>
     </main>
     <script type="module" src="/src/app/main.ts"></script>

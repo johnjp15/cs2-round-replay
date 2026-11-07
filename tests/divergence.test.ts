@@ -205,7 +205,9 @@ describe('expected encounters and the scheduled encounter', () => {
   });
 
   it('builds one encounter: Lokier’s 73 HP / 7 armor SSG 08 hit on cart, from the 17.45 s sighting, at the window', () => {
-    expect(encs).toHaveLength(1);
+    // U2: every player's encounters exist (active only while he is the human); cart's come first, keyed as before.
+    expect(encs.filter((x) => x.victim === 'cart')).toHaveLength(1);
+    expect(encs.map((x) => x.key)).toEqual(['enc:0', 'enc:donk:0', 'enc:donk:1', 'enc:donk:2']);
     const e = encs[0];
     expect(e).toMatchObject({ key: 'enc:0', shooter: 'lokier', victim: 'cart', band: 'chest', weapon: 'ssg08', recordedSightTick: 1117, holdFromTick: 1161 });
     expect(e?.damage).toMatchObject({ tick: 1184, amount: 73, armor: 7, lethal: false });

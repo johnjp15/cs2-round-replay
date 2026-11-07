@@ -197,7 +197,7 @@ for tests would need:
   the underpass are one above the other where the 2020 nav switches between them; the recording's z on T ramp is a
   floor 80 above CS2's. The CS2 build is 2000942 (`data/source/cs2/PROVENANCE.md`).
 
-## Takeover (G4: take control of cart at any time)
+## Takeover (G4: take control of cart at any time; U2: of any player)
 
 - **Detect it from the observe, never from a control.** The Core keeps the last step's `observe.human`
   (`ReplayCoreState.human`, in the snapshot) and treats a different one on a later step (not the setup step) as a
@@ -212,8 +212,14 @@ for tests would need:
   `cart` as `human`, and it **stops injecting usercmds for cart's bot** (the Core's Act has no input for him anyway;
   drop any movement token, button and view route of that slot, and release Bot-Controller's lock on it so the
   player's own usercmds drive the pawn). Position, velocity, view, weapon and HP stay the engine's: nothing to do.
-  Only cart may be taken over: the plugin refuses the others (clear `CanControlObservedBot` while the player observes
-  another bot, or cancel in a `bot_takeover` Pre hook if CSS allows it; probe P8).
+  U2: **any player slot** may be taken over (the app's E on the spectated player; C always cart). CS2 only lets a
+  player take a living bot of his own team, so the plugin moves the spectating human to the observed bot's team first
+  (`ChangeTeam` to that side while he is dead / spectating, then the E press; or call the takeover itself on the
+  observed bot: probe P8), and the adapter maps the slot generically: whichever bot the human now controls is
+  `observe.human`, its usercmd injection stops, its Bot-Controller lock is released. Nothing in the Core is per-player:
+  encounters and recorded duels exist for every player (cart's keys unchanged: `enc:0`, `duel:0..2`; others
+  `enc:<victim>:<i>`, `duel:<shooter>:<i>`), all keyed on `observe.human`. The human CT defuses and the human T plants
+  natively (+use), as any player.
 - **Release.** A resync rewind to a checkpoint before the takeover (`checkpoint.observe.human == null`) must first
   give cart's pawn back to his bot and the player back to spectating (CS:GO's `CCSPlayer::ReleaseControlOfBot`; in CS2
   the route is unknown: P8 tries the player switching to spectator and back, which returns the pawn to its bot in

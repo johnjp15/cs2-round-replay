@@ -155,7 +155,8 @@ const snap = s.snapshot(); /* … */ s.restore(snap); s.restart();
 | Shift | WALK |
 | Ctrl or C | DUCK (rebindable under **Keys**; C ducks too while no other control has it) |
 | Space | JUMP (G3; held, it jumps once: a fresh press each jump, as CS2 with `sv_autobunnyhopping 0`; a tap shorter than a frame is latched until the next frame reads the keys) |
-| R / E | RELOAD / USE while playing. **E while watching: take control of cart** (G4; CS2's own key for taking over a spectated bot) |
+| R / E | RELOAD / USE while playing. **E while watching: take control of the picked player** (G4, U2; CS2's own key for taking over a spectated bot) |
+| C | while watching: take control of cart, whoever is picked (U2; rebindable as Take cart); while playing: duck |
 | 1 2 3 4 5 | Primary, pistol, knife, grenades (repeat to cycle), C4 (app-side `set_weapon`, see above) |
 | F | Follow cart (the camera centres on him; from the full map it zooms to 3×) |
 | G | Ghost: cart's recorded position now, as a hollow outline (on by default) |
@@ -258,6 +259,11 @@ are a click away); the `speed` control is logged on the takeover tick, after the
 changed (the spectate view or F's follow, which follows cart either way). **Restart** returns to watching; a rewind
 (`[`, −5 s, −10 s, the timeline) to before the takeover is watching again too, and a forward seek through it replays it
 (the tape). The tape and checkpoints carry it ("Session" above).
+
+**Any player (U2).** The 2D page has no spectating, so a small picker beside the button chooses who **Take control of
+<name>** and **E** take (default cart; every player, T then CT; a dead pick is refused with "Not now: … is dead"). **C**
+(rebindable under Keys as "Take cart"; while playing C still ducks) always takes cart, whatever is picked. The Core
+treats whoever is taken exactly as it treats cart (docs/core.md "Takeover" → Any player).
 
 ![Watching at 10 s, 4× (headless Chrome, 1280×860): "watching · E: take control"](img/app-watching.jpg)
 
