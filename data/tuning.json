@@ -342,7 +342,12 @@
     "defuseRangeFactor": 0.6,
     "guardMaxUnits": 800,
     "blastMarginUnits": 64,
-    "defuseMarginSec": 0.25
+    "defuseMarginSec": 0.25,
+    "lookTurnRateDegPerTick": 6,
+    "crouchRangeUnits": 1000,
+    "coverSec": 2,
+    "coverSearchUnits": 256,
+    "holdSlackUnits": 48
   },
   "nav": { "stepHeight": 18, "edgeEpsilon": 1, "losMargin": 8, "dropHeight": 200 },
   "collision": { "pawnRadius": 16, "solidTeammates": false },

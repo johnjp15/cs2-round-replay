@@ -116,6 +116,8 @@ export { HumanDuels, buildDuels } from './duels';
 export type { DuelPlan, DuelState } from './duels';
 export { REJOIN_MAX_PATH_QUERIES, REJOIN_ROLE, REJOIN_TRIGGER, Rejoin, busyReason, lagTicks, rejoinGoal, trackLength, unrestReason } from './rejoin';
 export type { RejoinHit, RejoinPawn, RejoinState, RejoinTarget } from './rejoin';
+export { EXECUTE_ROLE, FATE_TRIGGER, RETAKE_ROLE, fateGone, survivorGoal } from './fate';
+export type { FateGone } from './fate';
 export { CheckpointStore, autoCheckpointId, checkpointInterval } from './checkpoints';
 export type { Checkpoint } from './checkpoints';
 export { copyLoadouts, initialLoadouts, isGrenadeItem, loadoutOf, noteActions, noteObserve, releaseWindowTicks } from './loadout';

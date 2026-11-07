@@ -42,6 +42,7 @@ the table says; the bomb's blast (next section) comes before both.
 | `retake`, `defuse` | A CT goes to the planted bomb once it knows where it is (from the bomb's beeps, which only these roles listen to), walks to within `ai.defuseRangeFactor` × `bomb.defuseRange` (0.6 × 62 units), and holds USE only while no enemy is in its `sees` (it fights first). The engine defuses in 5 s with a kit, 10 s without. No bomb yet: `hold`. |
 | `hunt` | Go to the last known enemy position (seen or heard, at most `ai.memorySec` old); reaching it without contact forgets it and holds there (`searching`). Nothing known: `hold`. |
 | `rejoin` (G1) | Heading back to its recorded track (docs/core.md "Rejoin"): the Core picked `goal.hold`, a point of its reference track it can reach in time (route empty). Go there by the nav path, **running** (never WALK, even near a known enemy: time matters more than noise), keeping the held item (the Core may have drawn the c4 for a planter going back into his plant window), and wait there facing the likely approach. It still fights what it sees (it draws its best gun for that, as always). The Core switches it to REPLAY on the way, usually long before it arrives. `aiDebug().behaviour` is `rejoining`. |
+| `execute` (G8) | A T playing on after its recorded fate is gone (docs/core.md "Fate gone: LIVE for good"); `goal.hold` is the recorded plant spot (the site the team takes). With the c4: go there and plant (as `plant`). Without: cover the plant from the site (`plantCoverSpot`: a ring point 300–800 units from the spot, every 15°, on the site's level, within 64 units of its height, with eye-to-eye sight to it, nearest to the pawn), facing the enemy's approach. Once planted: `guard_bomb` from a ring spot (never the bomb itself). |
 | anything else | `hold` (aiDebug reports `hold`). |
 
 ### The bomb's blast (F)
@@ -65,7 +66,9 @@ side's spawn (place `T Spawn` for a CT, `CT Spawn` for a T) to the spot, reverse
 reversed; else the current yaw. While moving it looks where it goes, or at a heard sound.
 
 `aiDebug().behaviour` is one of `route moving holding planting guarding defusing hunting searching reacting fighting
-escaping rejoining` (G1: `rejoining` for the `rejoin` role, moving or waiting).
+escaping rejoining covering` (G1: `rejoining` for the `rejoin` role, moving or waiting; G8: `covering`, below).
+
+A CT LIVE for good gets `retake` (hold where its recorded track ends, then the planted bomb once it hears it).
 
 ## Navigation
 
@@ -75,6 +78,33 @@ escaping rejoining` (G1: `rejoining` for the `rejoin` role, moving or waiting).
 - Runs; holds WALK within `ai.walkNearEnemyUnits` (600) of a known enemy position. Eases off in the last 48 units.
 - **Stuck:** if the remaining path length hasn't dropped by `ai.stuckProgressUnits` (16) in `ai.stuckSec` (1 s), it
   re-plans and strafes sideways (seeded side) for `ai.unstickSec` (0.4 s). `aiDebug().repaths` counts these.
+
+## Moving like a player (G8)
+
+`tools/live-trace.ts --scenario <file> --pawn <id> [--3d]` prints a LIVE pawn tick by tick (mode, role, behaviour,
+position, speed, yaw, target) and `liveMotion`'s checks: idle LIVE ticks (slower than 5 u/s, not fighting, holding,
+guarding, planting or defusing), jitter (velocity reversals under 60 u/s), the largest calm turn per tick, over-speed
+ticks and off-mesh ticks. Before G8 eradicate, LIVE after surviving Lokier (`kill-lokier-early`), had 1,000 idle
+ticks and 23 jitters; the fixes:
+
+- **Ledges.** The 3D nav (docs/nav.md "3D (G3)") takes the Balcony's west end down to B, but from the Apartments floor
+  the sill is 18.1 units up (CS2 Mirage), more than `movement.stepSize` (18). A next path point more than half a step
+  above the feet, within 48 units, with no walkable line to it, is jumped onto: a crouch jump (JUMP once, a fresh
+  press each time, DUCK held), steering at it at full push; no re-plan and no stuck verdict while airborne. One jump
+  takes eradicate onto the sill (3.25 s from the corridor), he walks off it and drops to B.
+- **Doors the 2020 nav misses.** When the next leg isn't walkable after a re-plan (the 2020 portal runs through a CS2
+  door frame: the Apartments → Back Alley door, passable at y 540–590, the portal at 612), the pawn steps round by a
+  nearby point (`detourPoint`: rings of 16, 32, 48 units, 16 bearings nearest the straight way first) with a walkable
+  line from it and on to the next path point or a later one (the ones in the wall are dropped). Before G8 it re-planned
+  the same leg every tick and slid along the frame for up to 2 s.
+- **No steering at a point under its feet**: a re-planned path is advanced past the points already within 12 units
+  (before G8 the re-planned first point, 2 units away, was overshot and steered back to: the shuffle at the window).
+- **Holding a spot** (hold, guard, escape, cover): once arrived it walks back only beyond `holdSlackUnits` (48), not
+  each time it drifts past `arriveUnits` (24).
+- **Turning**: calm (no target, no sound to look at) it turns at `lookTurnRateDegPerTick` (6°, 384°/s), a running
+  player's pace; toward a target or a sound at `turnRateDegPerTick` (12°) as before. No turn is ever faster.
+- **Run speed** is the engine's per weapon (`movement.runSpeedByWeapon`, docs/movement.md); the AI pushes 1 or eases
+  off near its spot. `liveMotion` counts ticks above it × 1.05 (0 in G8's scenarios).
 
 ## Combat
 
@@ -90,6 +120,16 @@ escaping rejoining` (G1: `rejoining` for the `rejoin` role, moving or waiting).
   probability `ai.headshotAimRatio` (0.35), else chest (pitch from `aimPitch`, `docs/combat.md`). The offset halves
   every `ai.aimSettleSec` (0.15 s) once it is engaged. Each shot adds a fresh N(0, `ai.aimResidualDeg` = 0.5°) to yaw and
   pitch for that tick only.
+- **Counter-strafe first (G8):** it fires only once its speed is at most `weaponModel.moveStartFraction` (0.34,
+  `CS_PLAYER_SPEED_DUCK_MODIFIER`: below it moving adds no inaccuracy, docs/weapons.md) of the held weapon's run speed
+  (AK 73 u/s); before G8 a pawn reacting on the move could fire at full speed.
+- **Crouch (G8):** an automatic gun stopped (≤ `counterStrafeSpeed`) on a visible target at least `crouchRangeUnits`
+  (1,000) away holds DUCK. It never crouches otherwise.
+- **Cover (G8):** hit by an enemy it doesn't see, with no target and nothing in sight, it runs (no WALK) to the
+  nearest walkable point within `coverSearchUnits` (256; rings of 64, 16 bearings, a straight walkable line from it,
+  on its level) that the shooter's heard position can't see eye to eye (`sight.pointClear`), and stays there facing
+  the threat for `coverSec` (2 s), then goes back to its role (`covering`). Not while planting or defusing, and only
+  with the shot heard (the shooter's position known).
 - **Fire:** when the view is within `ai.fireConeDeg` (1.5°) of the aim point and the settling offset is within the
   target's angular radius (asin(16 / distance); pitch: `damage.hitToleranceDeg`):
   - automatic guns hold ATTACK, starting within `ai.sprayStartFactor` (2) × that radius;
@@ -134,6 +174,10 @@ round shows it).
 | `guardMaxUnits` | 800 | a guard spot's largest distance from the bomb |
 | `blastMarginUnits` | 64 | leave the blast to at least `bomb.radius` + this (3D) |
 | `defuseMarginSec` | 0.25 | a defuse must be able to finish this long before the explosion |
+| `lookTurnRateDegPerTick` | 6 | G8: yaw and pitch limit when calm (no target, no sound) |
+| `crouchRangeUnits` | 1000 | G8: an automatic gun crouches, stopped, on a target this far or more |
+| `coverSec`, `coverSearchUnits` | 2, 256 | G8: under fire from an unseen enemy, stay in cover this long; look this far for it |
+| `holdSlackUnits` | 48 | G8: a holder walks back to its spot only beyond this |
 | `losWallTolerancePx`, `losEndpointTolerancePx`, `losLevelStepUnits`, `losLevelSlackUnits` | 1, 3, 16, 48 | sight (`docs/vision.md`) |
 | `losCoverTolerancePx`, `losCoverNearUnits`, `losCoverHeightUnits` | 1, 48, 72 | the 2D cover rule (`docs/vision.md`, "Cover"; hosts without 3D geometry) |
 | `sightSideUnits` | 12 | G6: the left and right aim points of `sees`, off the body axis at chest height (`docs/vision.md`) |
@@ -172,7 +216,8 @@ round shows it).
   a CT needs `retake`/`defuse` to go to the bomb (it hears the beeps from anywhere); `guard_bomb` before the plant just
   holds.
 - **Expect** it to stop and fight whatever it sees (enemies only) and to turn toward enemy shots and footsteps within
-  1,500 units. It walks near known enemies, so it can be quiet. It doesn't throw grenades, jump or crouch. After the
+  1,500 units. It walks near known enemies, so it can be quiet. It doesn't throw grenades; G8: it jumps only onto a
+  ledge on its path and crouches only to fire an automatic gun at long range. After the
   round, and when a defuse is too late, it leaves the bomb's blast whatever its goal (above).
 - **Timing:** the set_mode applies in `apply()`; the AI first moves the pawn in the following `tick()`.
 - **Status:** `aiDebug(id)` is the 2D host's; CS2 has its own bot state, so the Core must not depend on it.

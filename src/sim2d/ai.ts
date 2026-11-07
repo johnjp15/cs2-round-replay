@@ -16,12 +16,12 @@ import type { NavMesh, NavPoint } from './nav';
 import type { GuardSight } from './vision';
 import { fallbackWeapon, gunStats, isGrenade } from './weapons';
 
-/** The roles `goal.role` may name (any other string behaves as `hold`). docs/ai.md. G1 added `rejoin`. */
-export const AI_ROLES = ['hold', 'take_site', 'plant', 'guard_bomb', 'retake', 'defuse', 'rotate', 'hunt', 'rejoin'] as const;
+/** The roles `goal.role` may name (any other string behaves as `hold`). docs/ai.md. G1 added `rejoin`, G8 `execute`. */
+export const AI_ROLES = ['hold', 'take_site', 'plant', 'guard_bomb', 'retake', 'defuse', 'rotate', 'hunt', 'rejoin', 'execute'] as const;
 export type AiRole = (typeof AI_ROLES)[number];
 
 /** What the pawn is doing (aiDebug). */
-export type AiBehaviour = 'route' | 'moving' | 'holding' | 'planting' | 'guarding' | 'defusing' | 'hunting' | 'reacting' | 'fighting' | 'searching' | 'escaping' | 'rejoining';
+export type AiBehaviour = 'route' | 'moving' | 'holding' | 'planting' | 'guarding' | 'defusing' | 'hunting' | 'reacting' | 'fighting' | 'searching' | 'escaping' | 'rejoining' | 'covering';
 
 const DEG = Math.PI / 180;
 
@@ -78,6 +78,12 @@ export interface AiState {
   escape?: Vec3 | null;
   /** A CT that can't finish the defuse before the explosion gave it up (for the rest of this goal). */
   abandoned?: boolean;
+  /** G8: JUMP was pressed on the previous tick (a ledge climb needs fresh presses). */
+  jumpHeld?: boolean;
+  /** G8: the spot it arrived at and holds (`spot`, `escape`, a guard spot): it walks back only beyond `holdSlackUnits`. */
+  settled?: Vec3 | null;
+  /** G8: under fire from an enemy it can't see: the cover point it goes to and until when it stays. */
+  cover?: { pos: Vec3; untilTick: number } | null;
 }
 
 /** What the AI may know about itself. */
@@ -445,6 +451,73 @@ export function canFinishDefuse(ctx: AiContext, bomb: Vec3): boolean {
   return walk / speed <= budget;
 }
 
+/** The held item's run speed (movement.runSpeedByWeapon; the knife's for anything unlisted). */
+function runSpeedOf(weapon: string, tuning: Tuning): number {
+  return tuning.movement.runSpeedByWeapon[weapon] ?? tuning.movement.runSpeedByWeapon['knife'] ?? 250;
+}
+
+/**
+ * G8: whether a pawn at `pos` counts as at `spot`: within `arrive`, or, once it has arrived there (`s.settled` is that
+ * spot), within `slack`, so a holder doesn't shuffle back and forth over the arrival radius.
+ */
+function atSpot(s: AiState, pos: Vec3, spot: Vec3, arrive: number, slack: number): boolean {
+  const d = dist2d(pos, spot);
+  const settledHere = s.settled !== undefined && s.settled !== null && dist2d(s.settled, spot) < 1;
+  if (d <= arrive || (settledHere && d <= Math.max(arrive, slack))) {
+    s.settled = copy(spot);
+    return true;
+  }
+  if (settledHere) s.settled = null;
+  return false;
+}
+
+/**
+ * G8: a cover point from a threat at `from`: the nearest walkable point (rings of 64 units up to
+ * `ai.coverSearchUnits`, 16 bearings) in a straight walkable line from the pawn whose eye the threat's eye can't see
+ * (`sight.pointClear`, the CS2 mesh in 3D). null if none.
+ */
+export function coverPoint(ctx: AiContext, from: Vec3): Vec3 | null {
+  const { nav, sight, tuning, self } = ctx;
+  const eye = tuning.damage.eyeHeight;
+  for (let r = 64; r <= tuning.ai.coverSearchUnits + 1e-9; r += 64) {
+    for (let k = 0; k < 16; k++) {
+      const a = k * 22.5 * DEG;
+      const q = { x: roundNumber(self.pos.x + Math.cos(a) * r), y: roundNumber(self.pos.y + Math.sin(a) * r) };
+      if (!nav.isWalkable(q)) continue;
+      const p = { x: q.x, y: q.y, z: roundNumber(nav.zAt({ ...q, z: self.pos.z })) };
+      if (Math.abs(p.z - self.pos.z) > 64 || !nav.segmentWalkable(self.pos, p)) continue;
+      if (!sight.pointClear(p, eye, from, eye)) return p;
+    }
+  }
+  return null;
+}
+
+/**
+ * G8: where a T without the c4 covers the plant at `site` (the plant spot): a guard-ring point (300–guardMaxUnits,
+ * every 15°) on the site's level (within 64 units of its height), walkable, with sight to the spot, nearest to the
+ * pawn; null if none.
+ */
+export function plantCoverSpot(ctx: AiContext, site: Vec3): Vec3 | null {
+  const { nav, sight, tuning } = ctx;
+  const eye = tuning.damage.eyeHeight;
+  let best: Vec3 | null = null;
+  let bestD = Infinity;
+  for (let r = 300; r <= tuning.ai.guardMaxUnits + 1e-9; r += 150) {
+    for (let k = 0; k < 24; k++) {
+      const a = k * 15 * DEG;
+      const q = { x: site.x + Math.cos(a) * r, y: site.y + Math.sin(a) * r };
+      const p = { x: roundNumber(q.x), y: roundNumber(q.y), z: roundNumber(nav.zAt({ ...q, z: site.z })) };
+      if (!nav.isWalkable(p) || Math.abs(p.z - site.z) > 64 || !sight.pointClear(p, eye, site, eye)) continue;
+      const d = dist2d(p, ctx.self.pos);
+      if (d < bestD - 1e-9) {
+        bestD = d;
+        best = p;
+      }
+    }
+  }
+  return best;
+}
+
 function pathLength2d(points: readonly Vec3[]): number {
   let len = 0;
   for (let i = 1; i < points.length; i++) len += dist2d(points[i - 1] as Vec3, points[i] as Vec3);
@@ -487,6 +560,9 @@ export function stepAi(prev: AiState, ctx: AiContext): AiStep {
     if (speed > ai.counterStrafeSpeed) move = { dirX: -self.vel.x / speed, dirY: -self.vel.y / speed, mag: 1 };
     weapon = bestGun(self);
     const gun = gunStats(self.weapon, tuning);
+    // G8: no shot before the counter-strafe has it accurate: at most moveStartFraction (0.34, CS's
+    // CS_PLAYER_SPEED_DUCK_MODIFIER: below it moving adds no inaccuracy, docs/weapons.md) of the weapon's run speed.
+    const accurate = speed <= (tuning.weaponModel?.moveStartFraction ?? 0.34) * runSpeedOf(self.weapon, tuning) + 1e-9;
     // Fire once the view has caught up with the aim point and the settling offset is within the target's angular
     // radius (automatic guns start spraying within sprayStartFactor of it). Misses come from the residual.
     const aligned = Math.abs(angleDiff(yaw, wantYaw)) <= ai.fireConeDeg && Math.abs(pitch - wantPitch) <= ai.fireConeDeg;
@@ -494,7 +570,9 @@ export function stepAi(prev: AiState, ctx: AiContext): AiStep {
     const radius = d > tuning.damage.pawnRadius ? Math.asin(tuning.damage.pawnRadius / d) / DEG : 90;
     const spread = gun !== null && gun.automatic ? ai.sprayStartFactor : 1;
     const onTarget = Math.abs(s.aimYawErr * settle) <= radius * spread && Math.abs(s.aimPitchErr * settle) <= tuning.damage.hitToleranceDeg * spread;
-    if (visible && gun !== null && weapon === null && self.clip > 0 && !self.reloading && aligned && onTarget) {
+    // G8: an automatic gun at long range crouches once stopped (players do: less spread, a smaller target).
+    if (visible && gun !== null && gun.automatic && weapon === null && speed <= ai.counterStrafeSpeed && d >= ai.crouchRangeUnits) buttons.push('DUCK');
+    if (visible && gun !== null && weapon === null && self.clip > 0 && !self.reloading && aligned && onTarget && accurate) {
       if (gun.automatic) {
         buttons.push('ATTACK');
       } else if (!s.attackHeld && self.ready && tau >= ai.semiAutoSettleFactor * ai.aimSettleSec) {
@@ -526,12 +604,18 @@ export function stepAi(prev: AiState, ctx: AiContext): AiStep {
       const m = followPath(s, ctx, plan.dest, plan.arriveUnits);
       if (m !== null) {
         move = m;
+        if (m.jump === true) buttons.push('JUMP');
+        if (m.duck === true) buttons.push('DUCK');
         faceYaw ??= Math.atan2(m.dirY, m.dirX) / DEG;
       }
     }
-    if (!reacting && s.lookAt !== null && tick < s.lookAt.untilTick && !plan.use) faceYaw = bearing(self.pos, s.lookAt.pos);
-    if (faceYaw !== null) yaw = turn(self.yaw, faceYaw, rate);
-    pitch = turn(self.pitch, 0, rate);
+    const looking = !reacting && s.lookAt !== null && tick < s.lookAt.untilTick && !plan.use;
+    if (looking && s.lookAt !== null) faceYaw = bearing(self.pos, s.lookAt.pos);
+    // G8: a calm pawn turns at a walking player's pace (lookTurnRateDegPerTick); toward a target or a sound it snaps
+    // round at the combat rate, as before.
+    const turnRate = s.target !== null || looking ? rate : Math.min(rate, ai.lookTurnRateDegPerTick);
+    if (faceYaw !== null) yaw = turn(self.yaw, faceYaw, turnRate);
+    pitch = turn(self.pitch, 0, turnRate);
     // Reload when low and nothing is in sight.
     const gun = gunStats(self.weapon, tuning);
     if (gun !== null && s.target === null && !self.reloading && self.reserve > 0 && self.clip < gun.clip && self.clip <= gun.clip * ai.reloadClipFraction) buttons.push('RELOAD');
@@ -595,6 +679,19 @@ function perceive(s: AiState, ctx: AiContext, role: AiRole): void {
     if (s.target === null) s.lookAt = { pos: heard.pos, untilTick: tick + sec(tuning.ai.soundLookSec) };
   }
   if (s.lookAt !== null && tick >= s.lookAt.untilTick) s.lookAt = null;
+  // G8: hit by an enemy it doesn't see, with nothing in its sights: take cover from where the shot was heard.
+  const hit = ctx.events.find((e) => e.type === 'damage' && e.victim === self.id && e.attacker !== null && e.attacker !== self.id);
+  if (hit !== undefined && hit.type === 'damage' && hit.attacker !== null && (s.cover ?? null) === null && s.target === null && nearest === null) {
+    const by = ctx.others.find((o) => o.id === hit.attacker);
+    const threat = s.lastKnown !== null && s.lastKnown.id === hit.attacker && tick - s.lastKnown.tick <= TICKS_PER_SEC ? s.lastKnown.pos : null;
+    if (by !== undefined && isEnemy(self, by) && threat !== null && self.weapon !== 'c4' && self.defuseEndTick === null) {
+      const p = coverPoint(ctx, threat);
+      if (p !== null) {
+        s.cover = { pos: p, untilTick: tick + sec(tuning.ai.coverSec) };
+        s.holdYaw = null;
+      }
+    }
+  }
   // Ts know where their bomb is (the round shows it).
   if (self.team === 'T' && ctx.bomb.planted !== null) s.bombPos = copy(ctx.bomb.planted);
   if (!ctx.bomb.ticking && ctx.bomb.planted !== null && s.bombPos !== null && self.team === 'CT') {
@@ -669,7 +766,7 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
 
   const nav = ctx.nav;
   const holdAt = (spot: Vec3, behaviour: AiBehaviour = 'holding'): RolePlan => {
-    if (dist2d(self.pos, spot) > arrive) {
+    if (!atSpot(s, self.pos, spot, arrive, ai.holdSlackUnits)) {
       s.holdYaw = null;
       return plan('moving', spot, null);
     }
@@ -685,7 +782,7 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
       s.holdYaw = null;
     }
     const spot = s.escape;
-    if (dist2d(self.pos, spot) > arrive) {
+    if (!atSpot(s, self.pos, spot, arrive, ai.holdSlackUnits)) {
       s.holdYaw = null;
       return { ...plan('escaping', spot, null), walk: false };
     }
@@ -696,6 +793,20 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
   // After the explosion a pawn that got out keeps holding there: the round is over, there is nothing to go back to.
   const stayOut = ctx.round.phase === 'over' && s.escape !== undefined && s.escape !== null;
   if (mustLeave || stayOut) return escape();
+
+  // G8: under fire from an enemy it can't see (perceive): to cover, run, and stay there facing the threat for
+  // ai.coverSec, then back to the role. Not while planting or defusing.
+  if (s.cover !== undefined && s.cover !== null) {
+    if (tick >= s.cover.untilTick || self.weapon === 'c4' || self.defuseEndTick !== null) {
+      s.cover = null;
+      s.holdYaw = null;
+    } else {
+      const c = s.cover.pos;
+      if (dist2d(self.pos, c) > arrive) return { ...plan('covering', c, null), walk: false };
+      const threat = s.lastKnown;
+      return { ...plan('covering', null, threat === null ? null : roundNumber(bearing(self.pos, threat.pos))), walk: false };
+    }
+  }
 
   // The route first (every role); off-mesh points count at their projection onto the mesh.
   while (s.routeIndex < goal.route.length && dist2d(self.pos, snapToNav(nav, goal.route[s.routeIndex] as Vec3)) <= arrive) s.routeIndex++;
@@ -727,6 +838,24 @@ function rolePlan(s: AiState, ctx: AiContext, role: AiRole): RolePlan {
     }
     case 'guard_bomb':
       return guardPlan(s, ctx, plan, holdAt, defaultSpot);
+    case 'execute': {
+      // G8: a T playing on after its recorded fate is gone: onto the site the team takes (goal.hold: the recorded plant
+      // spot). With the c4: plant there (as `plant`). Without: cover the plant from a spot on the site's level with
+      // sight to it. Once planted: guard the bomb (a ring spot, never the bomb itself).
+      const site = goal.hold === null ? nearestBombsitePoint(nav, self.pos) : snapToNav(nav, goal.hold);
+      if (site === null) return holdAt(defaultSpot());
+      if (ctx.bomb.planted !== null) {
+        if (s.spot !== null && s.bombPos !== null && dist2d(s.spot, s.bombPos) < 1) s.spot = null;
+        return guardPlan(s, ctx, plan, holdAt, defaultSpot, false);
+      }
+      if (self.items.includes('c4')) {
+        const inSiteNow = nav.placeName(self.pos).startsWith('Bombsite');
+        if (inSiteNow && dist2d(self.pos, site) <= ai.plantSpotUnits) return plan('planting', null, null, self.weapon === 'c4', 'c4');
+        return plan('moving', site, null, false, gun, Math.min(arrive, ai.plantSpotUnits));
+      }
+      s.spot ??= plantCoverSpot(ctx, site) ?? site;
+      return holdAt(s.spot);
+    }
     case 'retake':
     case 'defuse': {
       if (self.team === 'CT' && s.bombPos !== null && ctx.bomb.ticking && bombAt !== null && !canFinishDefuse(ctx, s.bombPos)) {
@@ -782,16 +911,50 @@ function guardPlan(
   plan: (b: AiBehaviour, dest: Vec3 | null, faceYaw: number | null) => RolePlan,
   holdAt: (spot: Vec3, behaviour?: AiBehaviour) => RolePlan,
   defaultSpot: () => Vec3,
+  useHold = true,
 ): RolePlan {
   const bomb = s.bombPos;
   if (bomb === null || !ctx.bomb.ticking) return holdAt(defaultSpot());
   if (s.spot === null || dist2d(s.spot, bomb) > ctx.tuning.ai.guardMaxUnits) {
-    s.spot = guardSpot(ctx, bomb) ?? copy(ctx.self.pos);
+    s.spot = guardSpot(useHold ? ctx : { ...ctx, goal: { ...ctx.goal, hold: null } }, bomb) ?? copy(ctx.self.pos);
     s.holdYaw = null;
   }
-  if (dist2d(ctx.self.pos, s.spot) > ctx.tuning.ai.arriveUnits) return plan('moving', s.spot, null);
+  if (!atSpot(s, ctx.self.pos, s.spot, ctx.tuning.ai.arriveUnits, ctx.tuning.ai.holdSlackUnits)) return plan('moving', s.spot, null);
   return plan('guarding', null, roundNumber(bearing(ctx.self.pos, bomb)));
 }
+
+/** A step of path following: the direction and push (0–1), and for a ledge JUMP (fresh presses) with DUCK held. */
+interface PathMove {
+  readonly dirX: number;
+  readonly dirY: number;
+  readonly mag: number;
+  readonly jump?: boolean;
+  readonly duck?: boolean;
+}
+
+/**
+ * G8: a point near `pos` that is walkable in a straight line from `pos` and on to `next` (rings of 16, 32, 48 units;
+ * 16 bearings, tried in order of their angle from the straight way, left before right), or null.
+ */
+export function detourPoint(nav: NavMesh, pos: Vec3, next: Vec3): Vec3 | null {
+  const base = Math.atan2(next.y - pos.y, next.x - pos.x);
+  for (const r of [16, 32, 48]) {
+    for (let k = 1; k <= 8; k++) {
+      for (const sgn of [1, -1]) {
+        if (k === 8 && sgn === -1) continue;
+        const a = base + sgn * k * 22.5 * DEG;
+        const q = { x: roundNumber(pos.x + Math.cos(a) * r), y: roundNumber(pos.y + Math.sin(a) * r) };
+        if (!nav.isWalkable(q)) continue;
+        const p = { x: q.x, y: q.y, z: roundNumber(nav.zAt({ ...q, z: pos.z })) };
+        if (nav.segmentWalkable(pos, p) && nav.segmentWalkable(p, next)) return p;
+      }
+    }
+  }
+  return null;
+}
+
+/** G8: a ledge this close (2D) with the next path point more than half a step above the feet is jumped onto. */
+const CLIMB_REACH_UNITS = 48;
 
 /**
  * Steer along the nav path to `dest`: (re)plan when the destination changes, skip ahead to the furthest later path
@@ -799,10 +962,12 @@ function guardPlan(
  * off within 48 units of the end, and repath with a sideways nudge when the remaining length hasn't dropped by
  * stuckProgressUnits in stuckSec. null once within arriveUnits.
  */
-function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number): { dirX: number; dirY: number; mag: number } | null {
+function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number): PathMove | null {
   const { nav, self, tick, tuning } = ctx;
   const ai = tuning.ai;
   const pos = self.pos;
+  const climbRise = tuning.movement.stepSize * 0.5;
+  const climbReach = CLIMB_REACH_UNITS;
   if (dist2d(pos, dest) <= arriveUnits) {
     s.path = [];
     s.dest = copy(dest);
@@ -817,21 +982,43 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
     s.progressDist = -1;
   };
   if (s.dest === null || dist2d(s.dest, dest) > 1 || s.path.length === 0) replan();
-  const path = s.path;
   // Advance past reached points and skip ahead where a straight walkable line allows.
-  while (s.pathIndex < path.length - 1 && dist2d(pos, path[s.pathIndex] as Vec3) <= ai.arriveUnits * 0.5) s.pathIndex++;
-  for (let j = path.length - 1; j > s.pathIndex; j--) {
-    if (nav.segmentWalkable(pos, path[j] as Vec3)) {
-      s.pathIndex = j;
-      break;
+  const advance = (): void => {
+    const path = s.path;
+    while (s.pathIndex < path.length - 1 && dist2d(pos, path[s.pathIndex] as Vec3) <= ai.arriveUnits * 0.5) s.pathIndex++;
+    for (let j = path.length - 1; j > s.pathIndex; j--) {
+      if (nav.segmentWalkable(pos, path[j] as Vec3)) {
+        s.pathIndex = j;
+        break;
+      }
     }
-  }
-  // Off the corridor (a corner cut short): re-plan from here, so the first leg is walkable again.
-  if (!nav.segmentWalkable(pos, path[s.pathIndex] as Vec3) && nav.isWalkable(pos)) {
+  };
+  advance();
+  // Off the corridor (a corner cut short): re-plan from here, so the first leg is walkable again. G8: not for a ledge
+  // to climb (the next point above a step: the leg isn't walkable, a jump gets there), and the new path is advanced
+  // past the points already reached, so the pawn never steers at a point under its feet (the jitter at the Apartments
+  // window before G8: re-planned every tick, a 2-unit leg, overshoot, back).
+  const ledge = (q: Vec3): boolean => q.z - pos.z > climbRise && dist2d(pos, q) <= climbReach;
+  const airborne = Math.abs(self.vel.z) > 1;
+  if (!airborne && !nav.segmentWalkable(pos, s.path[s.pathIndex] as Vec3) && nav.isWalkable(pos) && !ledge(s.path[s.pathIndex] as Vec3)) {
     const keep = { progressTick: s.progressTick, progressDist: s.progressDist };
     replan();
+    advance();
     s.progressTick = keep.progressTick;
     s.progressDist = keep.progressDist;
+    // G8: still no walkable first leg (the 2020 corridor runs through a CS2 door frame or prop): step round it, by a
+    // nearby point with a walkable line from here and on to the next point (rings of 16, 32 and 48 units, 16 bearings,
+    // nearest to the straight way first).
+    // Tried toward the next point, then each later one (the points in the wall are dropped).
+    const nx = s.path[s.pathIndex] as Vec3;
+    if (!nav.segmentWalkable(pos, nx) && !ledge(nx)) {
+      for (let j = s.pathIndex; j < s.path.length; j++) {
+        const p = detourPoint(nav, pos, s.path[j] as Vec3);
+        if (p === null) continue;
+        s.path = [...s.path.slice(0, s.pathIndex), p, ...s.path.slice(j)];
+        break;
+      }
+    }
   }
   const next = s.path[s.pathIndex] as Vec3;
   let remaining = dist2d(pos, next);
@@ -839,6 +1026,8 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
   if (!(s.progressDist >= 0) || remaining < s.progressDist - ai.stuckProgressUnits) {
     s.progressDist = remaining;
     s.progressTick = tick;
+  } else if (airborne) {
+    // In the air (a climb, a drop): no stuck verdict.
   } else if (tick - s.progressTick > sec(ai.stuckSec)) {
     s.repaths++;
     s.unstickUntilTick = tick + sec(ai.unstickSec);
@@ -858,5 +1047,10 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
   }
   const toEnd = dist2d(pos, dest);
   const mag = Math.min(1, Math.max(0.25, toEnd / 48));
-  return { dirX: dx, dirY: dy, mag };
+  // G8: a ledge in the way (the next point more than a step above, close, and no walkable line to it): a crouch jump,
+  // as players get onto the Apartments window sill. A fresh press each time (the engine jumps on a new press only).
+  const climb = ledge(next) && !nav.segmentWalkable(pos, next);
+  const jump = climb && !airborne && s.jumpHeld !== true;
+  s.jumpHeld = jump;
+  return { dirX: dx, dirY: dy, mag: climb ? 1 : mag, jump, duck: climb };
 }

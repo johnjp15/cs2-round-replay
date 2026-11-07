@@ -431,7 +431,7 @@ HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/10
 
 By default the round replays exactly. When the human does something different, only the puppets whose world actually changed go **LIVE** (the engine's AI drives them, carrying their recorded intent as a goal), and everyone else keeps replaying. A puppet follows its recording until something happens that its recorded self never experienced; divergence spreads only through cause and effect from an **off-script** pawn (the human, or a LIVE pawn): damage, sight, gunfire, a body block. A cancelled event alone changes nothing: B3 drops the shots and damage whose other side is dead or LIVE and the puppet carries on replaying (barely's 44.2 s kill of an already dead Zwomp).
 
-**Modes** (G1): REPLAY → LIVE (a trigger below, or G4's `released`: the human let go of the pawn without a rewind) → REPLAY again once the reason is gone (**rejoin**, below: calm, still alive on the tape, its state fits the recorded future) → LIVE again if something new reaches it, and so on; DEAD ends it. A pawn with no tape left (outlived) stays LIVE. The human is never LIVE or REPLAY. Before G1 modes went one way (REPLAY → LIVE → DEAD): one small deviation by the human (cart idle in Back Alley) cascaded through the rest of the round (never-peeks ended in a T win instead of the recorded CT defuse).
+**Modes** (G1): REPLAY → LIVE (a trigger below, or G4's `released`: the human let go of the pawn without a rewind) → REPLAY again once the reason is gone (**rejoin**, below: calm, still alive on the tape, its state fits the recorded future) → LIVE again if something new reaches it, and so on; DEAD ends it. A pawn with no tape left (outlived) stays LIVE; G8: a pawn whose recorded death can no longer happen is **LIVE for good** ("Fate gone: LIVE for good", below). The human is never LIVE or REPLAY. Before G1 modes went one way (REPLAY → LIVE → DEAD): one small deviation by the human (cart idle in Back Alley) cascaded through the rest of the round (never-peeks ended in a T win instead of the recorded CT defuse).
 
 ### Triggers (checked every tick, pure functions)
 
@@ -442,7 +442,8 @@ Every alive REPLAY puppet that isn't the human, in id order, the first that appl
 | 1 | `damage` (`damageTrigger`) | a `damage` event on it from the human or a LIVE pawn (any weapon; world and self damage don't count) | `hit by cart (27 hp, ak47)` |
 | 2 | `sighting` (`sightingTrigger`) | its `sees` holds an off-script enemy that the recording doesn't have it engaging or sighting then (`ExpectedEncounters.saw`; G7: within `closeRangeUnits` only with the enemy about where the tape has him, `recordedPairInSight`); not the human while he is **on script** (G7, `humanOnScript`: within `offCourseUnits` of his recorded track at some tick within `onCourseDriftSec` of now: then he is the recording, exactly as two puppets seeing each other is no divergence); not a pair a scheduled encounter owns | `sees cart (the human), not in the recording` |
 | 3 | `gunfire` (`gunfireTrigger`) | a `shot` sound from an off-script enemy within `hearingRangeUnits` (2D, as the AI hears) that isn't recorded fire of that shooter (`ExpectedEncounters.fired`, shifted by a started encounter: cart's late shots at Lokier; G7: and from about where the tape has him fire, within `humanSpotToleranceUnits` of his recorded track in the window, or of the encounter's spot when shifted) | `heard donk fire 1387 u away` |
-| 4 | `outlived` (`outlivedTrigger`) | alive `outliveGraceSec` (3 s) or more after its recorded death (kill feed) | `outlived recording (+3.0 s)` |
+| 0 | `fate` (`fateGone`, G8) | alive on a tick after its recorded death (kill feed) by a player other than the human: the scripted lethal hit was dropped; checked first, LIVE for good with a survivor's goal | `alive after its recorded death (lokier at tick 816): fate gone, LIVE for good` |
+| 4 | `outlived` (`outlivedTrigger`; G8: `fateGone`) | alive `outliveGraceSec` (3 s) or more after its recorded death (kill feed) by the human (his recorded duel may land late, G5); G8: LIVE for good with a survivor's goal | `outlived recording (+3.0 s)` |
 | 5 | `blocked` (`blockedTrigger`) | the human sees it, a solid pawn touches it on the side of its puppet reference (`blockingPawn`: centres within 2 × `collision.pawnRadius` + `contactSlackUnits`, the direction within 90° of the way back to its track), and either the contact has *added* more than `offCourseUnits` to its drift (pushed), or it has stood in the contact (slower than `standSpeedThreshold`) for `blockedSec` while more than `offCourseUnits` off course (held). Counting only the added drift keeps a puppet that already lags its track (sp4rtan's fast inferred one) from switching at a touch. Inferred from positions and velocities: `host.blockedBy` is a debug hint the Core can't use, and neither engine pushes players | `blocked by cart, held 110 u off course, seen by cart` |
 | — | `encounter` | a scheduled encounter's gate fails (below) | `encounter lokier -> cart at tick 1191: cart not in sight` |
 
@@ -494,6 +495,36 @@ John: "if the bots are able to attack the enemy, they can; they don't have to st
 Rejoin's calm (`unrestReason`) uses the same on-script rule. The **LIVE AI** (docs/ai.md) also changed for holders: a `hold` pawn reacting to an enemy in sight stops and turns to it instead of walking on to its hold spot (before, a LIVE Lokier who saw cart from Truck walked off it during his reaction and lost him).
 
 **Invariant** (`tools/react-check.ts`, `reactViolations`; asserted over the golden master and every scenario in `tests/scenarios.test.ts`, `tests/duels.test.ts`, `tests/normal-bots.test.ts`): no alive REPLAY bot has an off-script enemy (the human, or a LIVE pawn) in its `sees` for more than `ai.reactionSec` (16 ticks) in a row unless on each of those ticks the recording covers it: the human on script, a recorded pair with the enemy at his recorded place or beyond close range, or the scheduled encounter engaging him (from its sighting to the hit; after it at the spot). Two REPLAY puppets seeing each other are both the recording and don't count. Before G7 (B4 rules, measured with this check): `block-sp4rtan` sp4rtan → cart 140 ticks (57.42–59.59 s); with the pair taken without range (as first tried) the follow run, `duel-perfect-aim`, `early-peek-lokier`, `lokier-late`, `takeover-duel`, `takeover-mid-duel` showed sp4rtan → cart 60 ticks at 57.4 s, and `block-barely` / `miss-lokier-shop` Lokier → cart 23 / 52 ticks (long range: covered by rule 3). After G7: 0 everywhere.
+
+### Fate gone: LIVE for good (`fate.ts`, G8)
+
+John (11:35): "If he does not die to Lokier, he should continue to play out the round as a normal player. This applies
+to all players." Before G8 a pawn that survived its recorded death had a tape that has it dead: kill Lokier before
+12.75 s (`kill-lokier-early`) and eradicate, REPLAY, stood still at the end of his track in the Apartments corridor
+for 3 s; at 15.75 s `outlived` made him LIVE with `take_site` and as hold "where the recording has him at the plant",
+which for a dead man is his last sample: he stood in the corridor until the plant (27.5 s); then `guard_bomb` walked
+him to the Apartments window, where the 2020 nav's way down is a step up onto the sill on CS2 Mirage, and he pushed
+into it, shuffling ±2 units with a re-plan every tick, until the round ended (19 s); after it he stuck again on a
+Back Alley door frame (`tools/live-trace.ts` shows it, 1,000 idle LIVE ticks, 23 jitters). The rule:
+
+1. **When** (`fateGone`, every tick, every alive pawn but the human, before the triggers): its recorded death is gone
+   once it is alive on a tick after the kill feed's tick, if its recorded killer is a puppet (B3 lands the scripted
+   lethal hit on that tick, so alive after it means the hit was dropped: the killer LIVE or dead, or the victim LIVE);
+   if its recorded killer is the human, once it is alive `outliveGraceSec` (3 s) after it (G5 shifts the human's
+   recorded duels; before G8 this was trigger 4 for everyone). Nothing else counts: a killer whose victim is already
+   dead keeps its tape (its recorded future after the kill is still one it was recorded alive in: barely after the
+   44.2 s kill of a Zwomp cart already killed, `mid-zwomp`); the rule only fires once the recorded future is impossible.
+2. **What**: a REPLAY puppet goes LIVE with trigger `fate` (or `outlived`); a pawn already LIVE gets the new goal
+   (`set_mode` LIVE, log `<id> LIVE for good: …; goal <role>`). Either way it is in `DivergenceState.forGood` (Core
+   snapshot) from then on: **rejoin never plans or switches it** (there is no tape to go back to), a takeover release
+   and a resync give it the survivor's goal back.
+3. **The goal** (`survivorGoal`): a T gets `execute` with the recorded plant spot as `hold` (the site the team takes: B
+   here); a CT gets `retake` with the end of its recorded track as `hold`. No route: the AI walks the nav mesh. What the
+   roles do (plant with the c4 when the site is reached, otherwise cover the plant from the site, guard the bomb, go to
+   the planted bomb and defuse, fight on the way, take cover under fire) is docs/ai.md's.
+
+The no-human run never reaches the rule (everyone dies on his tick): byte-identical (`7168c0a5`). It works for any
+human pawn (it reads `observe.human`; the human's own death is never "gone").
 
 ### The human's pawn
 
