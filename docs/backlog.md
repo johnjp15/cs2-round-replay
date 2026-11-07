@@ -80,6 +80,7 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 46 | 11-07 11:05 | When cart leaves Market to try to kill sp4rtan he teleports through the Market window; don't do that | queued | T2: the snapped track at Market exit (a snap teleport, or the window climb animated as a jump instead of a path); fix the path on the CS2 mesh |
 | 47 | 11-07 11:05 | An agent compares the video frame by frame with our game spectating cart, flags every issue, puts them into the backlog | queued | V3: cart first-person POV, video vs game, every 0.5 s + key moments; findings ranked into this file |
 | 48 | 11-07 11:05 | Take control of any player you're spectating (E on them), plus a hotkey that always takes control of cart | queued | U2: takeover of the spectated pawn (core takeover generalized beyond cart: duel rules, "only my own shots", rejoin for that pawn); a dedicated key (e.g. C) for cart |
+| 49 | 11-07 11:06 | Hotkeys to start, pause and restart the round; not accidentally pressable | queued | W1: e.g. Start = Home/Enter, Pause = P or Pause/Break, Restart = Shift+R twice / Backspace held — no bare WASD-adjacent keys; rebindable under Keys |
 
 ## Queued (not started)
 - **H3** generic maps + scenarios + free play + LIVE AI on the CS2 nav (plan card).
