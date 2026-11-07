@@ -278,7 +278,7 @@ the same at every setting.
 `Sim3DHost` (src/sim3d/host.ts) keeps sim2d's fire / ammo / reload machine (`stepWeapon`, so cadence, ammo and the
 recorded fire ticks are unchanged) and runs the mechanics next to it for every pawn: `trackArms` each tick (weapon
 sync, penalties and decay, scope, punch decay, tagging recovery) and `trackShot` on each shot (`fireShot`: the
-direction from view + punch × 2 + the cone, RNG `Rng(seed).fork('spread:<id>:<tick>')`). State in snapshots
+direction from view + aim punch × `recoilScale` (1.884) + the cone, RNG `Rng(seed).fork('spread:<id>:<tick>')`). State in snapshots
 (`arms`).
 
 | Who | Bullet | Speed |

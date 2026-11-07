@@ -58,7 +58,7 @@ world mesh is traced first (`MapGeometry.traceLine`, the nearest crossing); then
 not the shooter, an enemy unless `damage.friendlyFire`) has its hitboxes tested up to the wall; the nearest entry
 wins (ties: lower id). Damage: `bulletDamage(gun, distance, hitgroup, armor, helmet)` with the eye-to-impact
 distance. A blocked pair (the Core's `block_damage`) is traced and logged but not applied, as in 2D. Since H2b the
-direction is the weapon mechanics' (view + aim punch × 2 + the inaccuracy cone) and the human's and LIVE pawns'
+direction is the weapon mechanics' (view + aim punch × `recoilScale` 1.884 + the inaccuracy cone) and the human's and LIVE pawns'
 bullets go through walls (`meshSolidQuery` + `penetrate`); puppets' outcomes are traced along their scripted view as
 before. docs/weapons.md "In the 3D host".
 
