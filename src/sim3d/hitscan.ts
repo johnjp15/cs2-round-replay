@@ -3,8 +3,8 @@
  * along its view direction (yaw and pitch, Source convention: pitch positive = down), `damage.maxRange` long. It
  * stops at the nearest of: the first world triangle it crosses (the CS2 mesh without player clips; no wall
  * penetration yet, H2 adds it) and the first hitbox it enters (src/engine/hitboxes.ts) of a pawn it may hit (alive,
- * not the shooter, an enemy unless `damage.friendlyFire`). The hitgroup is the hitbox's. No spread or recoil yet
- * (H2): the ray is exactly the view direction. Ties between pawns at the same distance go to the lower id.
+ * not the shooter, an enemy unless `damage.friendlyFire`). The hitgroup is the hitbox's. The direction is the host's
+ * (H2: view + aim punch + the inaccuracy cone), else exactly the view direction. Ties between pawns at the same distance go to the lower id.
  */
 import { roundNumber, type DamageTuning, type Hitgroup, type PlayerId, type Team, type Vec3 } from '../contracts/index';
 import { rayHitboxes, viewDir, type HitboxScale } from '../engine/hitboxes';
@@ -41,10 +41,13 @@ export function eyeOf(p: Pick<ShotPawn, 'pos' | 'crouching'>, d: Pick<DamageTuni
   return { x: p.pos.x, y: p.pos.y, z: p.pos.z + (p.crouching ? d.crouchEyeHeight : d.eyeHeight) };
 }
 
-/** Trace one bullet of `shooter` through `pawns` and the world mesh. */
-export function traceShot3(shooter: ShotPawn, pawns: readonly ShotPawn[], world: MapGeometry, d: DamageTuning): Shot3 {
+/**
+ * Trace one bullet of `shooter` through `pawns` and the world mesh, along `direction` (a unit vector: H2's
+ * spread + recoil, src/engine/weapons) or, if null, exactly along the shooter's view.
+ */
+export function traceShot3(shooter: ShotPawn, pawns: readonly ShotPawn[], world: MapGeometry, d: DamageTuning, direction: Vec3 | null = null): Shot3 {
   const o = eyeOf(shooter, d);
-  const dir = viewDir(shooter.yaw, shooter.pitch);
+  const dir = direction ?? viewDir(shooter.yaw, shooter.pitch);
   const range = d.maxRange;
   const f = world.traceLine(o.x, o.y, o.z, o.x + dir.x * range, o.y + dir.y * range, o.z + dir.z * range);
   const wallT = f * range;
