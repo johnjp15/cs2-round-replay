@@ -39,7 +39,10 @@ export interface AiState {
   path: Vec3[];
   pathIndex: number;
   dest: Vec3 | null;
-  /** Stuck detection: the best remaining path length since `progressTick`. */
+  /**
+   * Stuck detection: the best remaining path length since `progressTick`; negative (or null, from an old state's JSON
+   * copy of Infinity) = not measured since the last (re)plan. Kept finite so the state stays JSON (snapshots).
+   */
   progressTick: number;
   progressDist: number;
   repaths: number;
@@ -148,7 +151,7 @@ export function freshAiState(id: PlayerId, tick: number, draws: number): AiState
     pathIndex: 0,
     dest: null,
     progressTick: tick,
-    progressDist: Infinity,
+    progressDist: -1,
     repaths: 0,
     unstickUntilTick: 0,
     unstickSide: 1,
@@ -803,7 +806,7 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
     s.pathIndex = Math.min(1, s.path.length - 1);
     s.dest = copy(dest);
     s.progressTick = tick;
-    s.progressDist = Infinity;
+    s.progressDist = -1;
   };
   if (s.dest === null || dist2d(s.dest, dest) > 1 || s.path.length === 0) replan();
   const path = s.path;
@@ -825,7 +828,7 @@ function followPath(s: AiState, ctx: AiContext, dest: Vec3, arriveUnits: number)
   const next = s.path[s.pathIndex] as Vec3;
   let remaining = dist2d(pos, next);
   for (let j = s.pathIndex; j < s.path.length - 1; j++) remaining += dist2d(s.path[j] as Vec3, s.path[j + 1] as Vec3);
-  if (remaining < s.progressDist - ai.stuckProgressUnits) {
+  if (!(s.progressDist >= 0) || remaining < s.progressDist - ai.stuckProgressUnits) {
     s.progressDist = remaining;
     s.progressTick = tick;
   } else if (tick - s.progressTick > sec(ai.stuckSec)) {
