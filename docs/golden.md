@@ -14,7 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 7168c0a5 (T1's level flips)
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest b63192a9 (K1's sp4rtan route)
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
@@ -160,7 +160,7 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `7168c0a5` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `b63192a9` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `72d1547f` |
 | `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `fb19a2fa` |
 | `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `6cd197f2` |
@@ -304,6 +304,13 @@ D1's spectate check (phone viewport, 1×) still compares a whole page log with a
 tested (no WebKit here).
 
 ## History
+
+- K1 (`tools/snap-tracks.ts` pass 4 `lead` and pass 5's barely ↔ sp4rtan duel, docs/round-data.md "sp4rtan's kill on
+  barely"): no-human `7168c0a5` → `b63192a9` (walk oracle `29adfc6e` → `a29f7a43`), cart-idle `12bf92f7` → `decfd128`
+  (walk unchanged), cart-takeover unchanged. `tools/fixture-diff.ts`, no-human: Core acts from tick 3146 (sp4rtan's
+  and, from 58.4 s, barely's puppet inputs), pawn pos/vel/yaw/pitch/sees/onGround and footstep `sound` events; no
+  shot, damage, death, bomb or round event differs. cart-idle: one act (sp4rtan's LIVE route waypoints at tick 2564,
+  a few units), no observe.
 
 - T1 (`tools/snap-tracks.ts` pass 0, barely back on Catwalk 35.1–44.7 s): on G6's base no-human `150f77b4` → `7168c0a5`
   (walk oracle `8d41dc25` → `29adfc6e`), cart-idle `8f471b88` → `5770cd34` (`f9a434ca` → `7fae11b5`), cart-takeover

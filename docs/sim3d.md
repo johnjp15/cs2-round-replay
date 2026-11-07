@@ -76,7 +76,7 @@ logged (`script: scripted hit through geometry`, `combatLog()`), as in 2D.
 
 ## Results (headless, `npm run harness3d`, seed 1)
 
-- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `7168c0a5`, the 2D golden master's (T1; `150f77b4` at G6; `a2883aa0` before #30, `cbb335eb` between #30 and G6; H2b's weapon mechanics leave it byte-identical: puppets' outcomes are traced along their scripted view, and nobody is mechanical in a run nobody plays); kills on 32, 794, 816, 1142, 1203,
+- **Nobody plays** (tests/sim3d-golden.test.ts): 4,517 ticks, digest `b63192a9`, the 2D golden master's (K1; `7168c0a5` at T1; `150f77b4` at G6; `a2883aa0` before #30, `cbb335eb` between #30 and G6; H2b's weapon mechanics leave it byte-identical: puppets' outcomes are traced along their scripted view, and nobody is mechanical in a run nobody plays); kills on 32, 794, 816, 1142, 1203,
   2829, 3222, 3766, 4442 (all nine, the recording's), every damage event identical to the 2D golden master's, plant
   1761, defuse 3955 → 4275, "Played it like the tape: CT defuse, 0.72 s left". Against the 2D golden master
   (`fixtures/golden/round-nohuman`, `tools/fixture-diff.ts`): since G6 **identical in every line**, `sees` included

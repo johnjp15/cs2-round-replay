@@ -10,7 +10,7 @@
  * faster than its weapon allows around a rejoin; the minimum LIVE time and the calm window hold; a pawn without tape
  * (outlived) stays LIVE; a rejoined pawn's scripted events after the rejoin run; cycles; snapshots mid-approach;
  * determinism; the switch off reproduces B4 byte for byte; nobody leaves the tape in the golden round, so nothing of
- * this runs there (no path query, digest 7168c0a5 since T1's level flips; 150f77b4 after G6's sight and aim on the CS2 mesh; 63bd3d86 after M1's movement fixes, 72b58704 at G3, e9a228d9 before G3's 3D movement).
+ * this runs there (no path query, digest b63192a9 since K1's sp4rtan route and barely's arch spot; 7168c0a5 after T1's level flips; 150f77b4 after G6's sight and aim on the CS2 mesh; 63bd3d86 after M1's movement fixes, 72b58704 at G3, e9a228d9 before G3's 3D movement).
  */
 import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, SessionLog, canonicalize, parseTuning, replay, stableStringify, type LogEntry, type Observe, type PlayerId } from '../src/contracts/index';
@@ -234,16 +234,16 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     }
   });
 
-  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction)', () => {
-    expect(logDigest(before.log)).toBe('93e0dc15');
+  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; K1: e61c6c30, sp4rtan\'s route on time)', () => {
+    expect(logDigest(before.log)).toBe('e61c6c30');
     expect(rejoins(before.entries)).toEqual([]);
   });
 });
 
 describe('nobody leaves the tape: rejoin never runs', () => {
-  it('golden no-human round: no rejoin line, no path query, digest 7168c0a5 (T1; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
+  it('golden no-human round: no rejoin line, no path query, digest b63192a9 (K1; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
     const g = runHarness(data, { ...NO_HUMAN, recordWalk: true });
-    expect(logDigest(g.log)).toBe('7168c0a5');
+    expect(logDigest(g.log)).toBe('b63192a9');
     expect(g.paths).toEqual([]);
     expect(coreLogs(g.entries).some((l) => / (rejoin|REPLAY): /.test(l.text))).toBe(false);
   });
