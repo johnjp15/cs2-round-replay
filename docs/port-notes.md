@@ -265,3 +265,22 @@ gives the same acts in both hosts (tests/sim3d-golden.test.ts), so the 2D golden
   with the hit group, and the kill comes back as an ordinary scripted `damage` (attacker cart, `ak47`, `head`, lethal),
   applied with the same machinery as every other scripted damage (`TakeDamage` with an AK-47 headshot, or Route 3 with
   the `player_death` rewrite: `Headshot` true).
+
+## Weapon mechanics (src/engine/weapons, H2)
+
+What CS2 does natively vs what the module models (docs/weapons.md):
+
+| Mechanic | In CS2 (the C# Core on a server) | In the module (2D / 3D hosts) |
+| --- | --- | --- |
+| Weapon stats | `weapons.vdata` (the same file `data/weapons.json` is built from) | `parseWeaponTable`; ids map to CS2 classes via `className` (`m4a4` = `weapon_m4a1`) |
+| Fire rate, reload, deploy, zoom, burst | the weapon entity | `stepArms`; CS2 is sub-tick, the module is per tick |
+| Spread, inaccuracy, recoil, aim punch | engine, seeded by the usercmd's random seed | `fireShot` with the Core's seeded RNG; recoil tables from `m_nRecoilSeed` (`ValveUniformRandom`, NR ran1); constants in `weapons._engine` |
+| Damage, armor, hitgroups | `OnTakeDamage` on real hitboxes | `damageAfterHitgroup` (identical to sim2d) |
+| Wall penetration | engine traces with surface properties | `penetrate` with the host's `SolidQuery` (no materials on our mesh) |
+| Tagging, hit punch | engine | `applyHit` (unverified model) |
+
+The port does **not** reimplement these: the C# Core only issues inputs (aim, ATTACK, RELOAD) and reads events, so the
+module's numbers matter for the simulators and for comparing a 3D run with a CS2 run, not for the plugin. Port care if
+the module is ever transcribed: `ValveUniformRandom` uses 32-bit int maths and float32 (`Math.fround` → `float`); the
+recoil table must use float, the rest doubles; state numbers are rounded to 6 decimals like the other engines; RNG draw
+order per shot is r1, θ1, then r2, θ2 per pellet.
