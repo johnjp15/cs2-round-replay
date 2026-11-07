@@ -15,6 +15,8 @@ import clipsUrl from '../../data/geometry/mirage-clips.bin?url';
 import tracksUrl from '../../data/geometry/mirage-tracks.json?url';
 import radarUrl from '../../data/source/cs2/de_mirage.png';
 import type { World3dFiles } from '../app/session';
+import { packageUrl, packageWorldUrls } from '../app/map-packages';
+import { DEFAULT_MAP, mapPackagePaths, type MapId } from '../contracts/index';
 
 export interface PageAssets3d {
   readonly round: unknown;
@@ -23,6 +25,8 @@ export interface PageAssets3d {
   readonly world3d: World3dFiles;
   /** The CS2 radar (1024 × 1024, transparent outside the playable area). */
   readonly radar: HTMLImageElement;
+  /** X1: the package's render mesh (G2RM, src/app3d/render-package.ts), or null: the view derives one from the collision mesh and the radar. */
+  readonly render: Uint8Array | null;
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -44,15 +48,19 @@ export async function loadImage(url: string): Promise<HTMLImageElement> {
   return img;
 }
 
-export async function loadAssets3d(): Promise<PageAssets3d> {
-  const [round, nav, vision, geometry, clips, tracks, radar] = await Promise.all([
+/** X1: `map` picks the 3D world's package (`?map=`, docs/maps.md). */
+export async function loadAssets3d(map: MapId = DEFAULT_MAP): Promise<PageAssets3d> {
+  const w = map === DEFAULT_MAP ? { geometry: geometryUrl, clips: clipsUrl, tracks: tracksUrl } : packageWorldUrls(map);
+  const renderPath = mapPackagePaths(map).render;
+  const [round, nav, vision, geometry, clips, tracks, radar, render] = await Promise.all([
     fetchJson(roundUrl),
     fetchJson(navUrl),
     fetchJson(visionUrl),
-    fetchBytes(geometryUrl),
-    fetchBytes(clipsUrl),
-    fetchJson(tracksUrl),
+    fetchBytes(w.geometry),
+    fetchBytes(w.clips),
+    fetchJson(w.tracks),
     loadImage(radarUrl),
+    renderPath === null ? Promise.resolve(null) : fetchBytes(packageUrl(renderPath, map)),
   ]);
-  return { round, nav, vision, world3d: { geometry, clips, tracks }, radar };
+  return { round, nav, vision, world3d: { geometry, clips, tracks }, radar, render };
 }

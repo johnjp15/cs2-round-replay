@@ -5,6 +5,7 @@
  *   npx tsx tools/snap-tracks.ts            # data/geometry/mirage-tracks.json (+ the report on stdout)
  *   npx tsx tools/snap-tracks.ts --check    # rebuild in memory; exit 1 if the committed file is stale
  *   npm run tracks:snap                     # the first line
+ *   npx tsx tools/snap-tracks.ts --map mirage-2020 [--check]   # X1: onto the 2020 package (data/maps/mirage-2020/tracks.json)
  *
  * The recording (data/round.json) has 2D positions from a 2020 POV video and z from the 2020 nav: 21 % of samples
  * are 16–64 units inside walls, props or the Truck, and stairs are off by up to 27 in z (G2's validation). The 3D
@@ -37,9 +38,10 @@ import { MapGeometry, TRACE_SKIN, combineMeshes, decodeGeometry } from '../src/s
 import { restingState, settle, stepMove3d, type MoveState } from '../src/sim2d/movement';
 import { MeshSight, meshSightOptionsFromTuning } from '../src/sim2d/mesh-sight';
 import { hullLineClear } from '../src/sim2d/walk-query';
-import { CLIPS_PATH, NavCover, Pieces } from './extract-clips';
+import { ALLOW_ALL, NavCover, Pieces } from './extract-clips';
 import { sightPass } from './sight-snap';
-import { BIN_PATH, CS2_NAV_PATH, readCs2Nav, standLevels } from './extract-geometry';
+import { DEFAULT_MAP, mapPackagePaths, parseMapId, type MapId } from '../src/contracts/maps';
+import { CS2_NAV_PATH, readCs2Nav, standLevels } from './extract-geometry';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const TRACKS3D_PATH = 'data/geometry/mirage-tracks.json';
@@ -635,18 +637,24 @@ export interface SnapProducts {
   readonly report: string;
 }
 
-export function buildTracks(): SnapProducts {
+/**
+ * X1: `map` picks the package (docs/maps.md). The CS2 package's clips are rebuilt from the CS2 nav, so a stand level
+ * must also be allowed by the nav (`Pieces`); the 2020 package has the map's own player clips, so every level a
+ * hull fits at is allowed.
+ */
+export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
+  const paths = mapPackagePaths(map);
   const roundBytes = read('data/round.json');
-  const worldBytes = read(BIN_PATH);
-  const clipsBytes = read(CLIPS_PATH);
-  const navBytes = read(CS2_NAV_PATH);
+  const worldBytes = read(paths.geometry);
+  const clipsBytes = read(paths.clips);
+  const navBytes = map === DEFAULT_MAP ? read(CS2_NAV_PATH) : null;
   const round: RoundData = parseRound(new TextDecoder().decode(roundBytes));
   const tuning = parseTuning(JSON.parse(readFileSync(resolve(ROOT, 'data/tuning.json'), 'utf8')) as unknown);
   const m = tuning.movement;
   const worldMesh = decodeGeometry(worldBytes);
   const world = new MapGeometry(worldMesh);
   const g = new MapGeometry(combineMeshes(worldMesh, decodeGeometry(clipsBytes)));
-  const pieces = new Pieces(world, world.triangleCount, new NavCover(readCs2Nav(navBytes).areas));
+  const pieces = new Pieces(world, world.triangleCount, navBytes === null ? ALLOW_ALL : new NavCover(readCs2Nav(navBytes).areas));
   const snapper = new Snapper(g, pieces, m.stepSize, m);
   const model = new RoundModel(round);
   const schedule = new EventSchedule(round);
@@ -811,12 +819,12 @@ export function buildTracks(): SnapProducts {
     edges.map((e, k) => `${k === 0 ? '≤' : ''}${e}${k + 1 < edges.length ? '' : '+'}: ${v.filter((x) => x <= e && (k === 0 || x > (edges[k - 1] as number))).length}`).join(', ');
   const data: Tracks3d = {
     format: TRACKS3D_FORMAT,
-    note: 'Every recorded track sample of data/round.json snapped onto CS2 Mirage (world mesh + player clips): the nearest spot within 64 units where a hull stands, z = that floor; and the samples a jump takes off from. Built by tools/snap-tracks.ts (docs/geometry.md "Track snapping"); applied by applyTracks3d.',
+    note: `Every recorded track sample of data/round.json snapped onto ${map === DEFAULT_MAP ? 'CS2 Mirage' : `the ${map} map package`} (world mesh + player clips): the nearest spot within 64 units where a hull stands, z = that floor; and the samples a jump takes off from. Built by tools/snap-tracks.ts (docs/geometry.md "Track snapping"); applied by applyTracks3d.`,
     sources: [
       { file: 'data/round.json', sha256: sha256(roundBytes) },
-      { file: BIN_PATH, sha256: sha256(worldBytes) },
-      { file: CLIPS_PATH, sha256: sha256(clipsBytes) },
-      { file: CS2_NAV_PATH, sha256: sha256(navBytes) },
+      { file: paths.geometry, sha256: sha256(worldBytes) },
+      { file: paths.clips, sha256: sha256(clipsBytes) },
+      ...(navBytes === null ? [] : [{ file: CS2_NAV_PATH, sha256: sha256(navBytes) }]),
     ],
     params: SNAP_PARAMS,
     stats: {
@@ -1120,19 +1128,22 @@ function stableText(d: Tracks3d): string {
 
 function main(): void {
   const args = process.argv.slice(2);
+  const mi = args.indexOf('--map');
+  const map = parseMapId(mi >= 0 ? (args[mi + 1] ?? '') : null);
+  const out = mapPackagePaths(map).tracks;
   const t0 = process.hrtime.bigint();
-  const p = buildTracks();
+  const p = buildTracks(map);
   const ms = Number(process.hrtime.bigint() - t0) / 1e6;
   if (args.includes('--check')) {
-    if (readFileSync(resolve(ROOT, TRACKS3D_PATH), 'utf8') !== p.text) {
-      console.error(`stale: ${TRACKS3D_PATH}: run npx tsx tools/snap-tracks.ts`);
+    if (readFileSync(resolve(ROOT, out), 'utf8') !== p.text) {
+      console.error(`stale: ${out}: run npx tsx tools/snap-tracks.ts${map === DEFAULT_MAP ? '' : ` --map ${map}`}`);
       process.exit(1);
     }
-    console.log(`${TRACKS3D_PATH} is up to date (${ms.toFixed(0)} ms)`);
+    console.log(`${out} is up to date (${ms.toFixed(0)} ms)`);
     return;
   }
-  writeFileSync(resolve(ROOT, TRACKS3D_PATH), p.text, 'utf8');
-  console.log(`wrote ${TRACKS3D_PATH} (${p.text.length} bytes) in ${ms.toFixed(0)} ms\n\n${p.report}`);
+  writeFileSync(resolve(ROOT, out), p.text, 'utf8');
+  console.log(`wrote ${out} (${p.text.length} bytes) in ${ms.toFixed(0)} ms\n\n${p.report}`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main();
