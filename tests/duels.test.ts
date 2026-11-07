@@ -13,6 +13,7 @@ import { walkQueryOf } from '../src/app/index';
 import { FOLLOW_SCRIPT, playScript } from '../tools/follow-script';
 import { NO_HUMAN, ROOT, coreLogs, deaths, loadHarnessData, runHarness, type HarnessRun } from '../tools/harness';
 import { HumanBot, formatTimeline, liveSwitches, loadScenario, timeline } from '../tools/human-bot';
+import { formatViolations, reactViolations } from '../tools/react-check';
 
 const data = loadHarnessData();
 const golden = runHarness(data, NO_HUMAN);
@@ -23,8 +24,12 @@ function scenario(name: string): HarnessRun {
   const s = loadScenario(`${ROOT}/fixtures/scenarios/${name}.json`);
   const run = runHarness(data, { human: s.human, driver: HumanBot.fromScenario(data, s), lastTick: s.until === 'end' ? 'end' : tickOf(s.until), seed: s.seed, takeover: s.takeover === null ? null : tickOf(s.takeover) });
   console.log(`[scenario ${name}] ${s.description}\n${formatTimeline(timeline(run.entries).filter((t) => t.kind !== 'dropped'))}\n`);
+  reactRuns.push({ name, run });
   return run;
 }
+
+/** G7: this file's scenario runs, for the react invariant (tools/react-check.ts) at the end. */
+const reactRuns: { name: string; run: HarnessRun }[] = [];
 
 /** Every death as `tick killer>victim weapon[ HS]`, in order. */
 const killKeys = (r: HarnessRun): string[] => deaths(r.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim} ${d.weapon ?? '-'}${d.headshot ? ' HS' : ''}`);
@@ -178,5 +183,16 @@ describe('a takeover mid-duel (takeover-mid-duel, 18.6 s)', () => {
     expect(damageOn(run, 'cart', 'lokier')).toEqual([expect.objectContaining({ tick: LOKIER_KILL, scripted: true, hitgroup: 'head' })]);
     expect(liveSwitches(run.entries)).toEqual([]);
     expect(summarize(run.model, run.entries).headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
+  });
+});
+
+describe('G7: if they can attack, they do (tools/react-check.ts), over this file’s scenarios', () => {
+  it('no alive REPLAY bot has an off-script enemy in sight for more than a reaction time unless the recording covers it', () => {
+    expect(reactRuns.length).toBeGreaterThanOrEqual(3);
+    for (const { name, run } of reactRuns) {
+      const v = reactViolations(run, data.tuning);
+      console.log(`[react ${name}] ${v.length} violations${v.length > 0 ? `\n${formatViolations(v)}` : ''}`);
+      expect([name, v]).toEqual([name, []]);
+    }
   });
 });
