@@ -47,6 +47,7 @@ import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } 
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
 import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
+import { A1Mount } from './audio/mount';
 import { RadarSampler, buildRenderTiles, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
 import { decodeRenderMesh } from './render-package';
 import {
@@ -184,6 +185,8 @@ class App3D {
   private readonly world: MapGeometry;
   private readonly seed: number;
   private readonly renderer: Renderer3D;
+  /** A1: sound (Web Audio, CS2's sound events) and the first-person weapon's animation (src/app3d/audio/mount.ts). */
+  private readonly a1: A1Mount;
   private readonly hud: Hud3D;
   private readonly controls: ControlsDom;
   /** The key-binding setting (duck / walk / jump / use) and the Ctrl+W guard (fullscreen Keyboard Lock, leave-site). */
@@ -261,6 +264,8 @@ class App3D {
     this.session = this.newSession(human);
     this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), resolution);
     this.hud = new Hud3D(radar, MIRAGE_RADAR);
+    this.a1 = new A1Mount(world, data.tuning, document.getElementById('bar'));
+    this.a1.vmState = () => this.renderer.viewmodels.last;
     this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
     this.scene = this.ready(this.session);
     this.controls = new ControlsDom(canvas, {
@@ -422,6 +427,7 @@ class App3D {
     }
     this.tracers = this.tracers.filter((t) => tick - t.tick < TRACER_TICKS);
     this.scene.ingest(o, act, h.activeEffects());
+    this.a1.tick(o, h, s.human);
   }
 
   private takeControl(): void {
@@ -661,7 +667,9 @@ class App3D {
       if (p !== null) this.setZoom(p.weapon, av.zoom, av.fov4x3);
       this.look = turnView(this.look, mouse.dx, mouse.dy, effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio));
       // H2b: the input carries the plain view; the host adds the aim punch × weapon_recoil_scale and the inaccuracy cone.
-      s.setHumanInput(fpsInput(s.human as PlayerId, this.controls.controls(), this.look));
+      const inp = fpsInput(s.human as PlayerId, this.controls.controls(), this.look);
+      s.setHumanInput(inp);
+      this.a1.input(inp, p, this.scene.cur.tick, this.scene.cur.round.bomb.state === 'planted');
     } else if (this.camMode === 'free') {
       this.look = turnView(this.look, mouse.dx, mouse.dy, this.sensitivity);
       this.freePos = flyStep(this.freePos, this.look, this.controls.controls(), dt / 1000, FREE_SPEED);
@@ -764,6 +772,7 @@ class App3D {
         human: p.id === human,
         tag: p.alive && p.id !== viewId && (p.team === viewTeam || viewSees.includes(p.id)),
         hidden: (firstPerson || this.camMode === 'pov') && p.id === viewId && p.alive,
+        weapon: p.weapon,
       };
     });
     const rt = this.scene.renderTick(alpha);
@@ -778,6 +787,7 @@ class App3D {
     const scoped = firstPerson ? this.zoom > 0 : specPov && specZoom > 0;
     const sinceShot = exact ? 1 : (now - (firstPerson ? this.lastHumanShotMs : (this.lastShotMs.get(viewId) ?? -1e9))) / 1000;
     const vfovDeg = verticalFov(firstPerson ? this.currentFov4x3() : specPov ? specFov : 90);
+    const vmAnim = this.a1.frame({ eye, yaw, pitch, listener: firstPerson ? human : this.camMode === 'free' ? null : viewId, firstPerson: firstPerson ? humanPawn : null, renderTick: rt, zoom: this.zoom, nowMs: exact ? o.tick * TICK_MS : now });
     const r0 = performance.now();
     this.lastCamera = { eye: { ...eye }, yaw, pitch, viewId };
     this.renderer.render({
@@ -790,7 +800,7 @@ class App3D {
       tracers,
       effects: this.scene.effects,
       bomb,
-      viewmodel: weapon === null || scoped ? null : { weapon, sinceShot },
+      viewmodel: weapon === null || scoped ? null : { weapon, sinceShot, anim: !firstPerson ? null : exact && vmAnim !== null ? { ...vmAnim, sinceShot: 1e6 } : vmAnim, team: (firstPerson ? humanPawn?.team : vo?.team) ?? 'CT' },
       nowMs: now,
     });
     const r1 = performance.now();
