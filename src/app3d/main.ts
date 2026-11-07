@@ -18,7 +18,9 @@
  * sensitivity (mouse 2 with the AWP / SSG 08); viewmodel_fov 60 in its own camera; the eye eases between 64 and 46
  * through a duck. Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b);
  * the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
- * shake, and the crosshair sits where the next bullet goes.
+ * shake; the crosshair stays at the centre (CS2's cl_crosshair_recoil 0; "Crosshair follows recoil" puts it where the
+ * next bullet goes). W1: Q lastinv, F inspect, the knife's slash / stab, wheel jump, the round hotkeys (Enter, P,
+ * Backspace twice) and the Ctrl+W / Ctrl+scroll guards (docs/app3d.md "Controls").
  *
  * URL parameters: `?seed=<int>` (default 1), `?human=cart` plays cart from the start, `?sens=<CS2 sensitivity>`
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.

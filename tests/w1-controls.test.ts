@@ -160,7 +160,7 @@ describe('inspect and knife poses (#42, #38)', () => {
     expect(Math.sign(right.ry)).toBe(-Math.sign(left.ry));
   });
   it('the tracker cuts the inspect off with a shot, a swing or a weapon switch', () => {
-    const pawn = (weapon: string): PawnObs => ({ id: 'cart', team: 'T', pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0, hp: 100, armor: 0, alive: true, weapon, ammo: { clip: 30, reserve: 90 }, crouching: false, onGround: true, sees: [] });
+    const pawn = (weapon: PawnObs['weapon']): PawnObs => ({ id: 'cart', team: 'T', pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0, hp: 100, armor: 0, alive: true, weapon, ammo: { clip: 30, reserve: 90 }, crouching: false, onGround: true, sees: [] });
     const t = new VmTracker();
     const timers = { deployEndTick: 0, reloadEndTick: null, grenadePrimed: false };
     t.ingest(10, pawn('ak47'), timers, false, false);

@@ -26,6 +26,7 @@
     "bench:session": "tsx tools/bench-session.ts",
     "check:browser": "tsx tools/browser-check.ts",
     "check:browser:3d": "tsx tools/browser-check3d.ts",
+    "check:browser:3d:w1": "tsx tools/browser-check3d-w1.ts",
     "bench:3d": "tsx tools/bench-app3d.ts",
     "ghost": "tsx tools/ghost-round.ts",
     "scripted": "tsx tools/scripted-round.ts",

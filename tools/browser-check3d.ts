@@ -16,9 +16,10 @@
  *     is 1×; the mouse turns the view by exactly counts × 1.25 × 0.022° (pointer-lock deltas through the page's
  *     automation hook, since a headless page can't lock the pointer); aims at Lokier's head, clicks mouse 1 and checks
  *     the shot was fired (the HUD's ammo drops, a tracer); screenshot (f) first person; then (H2b) sprays ~0.8 s: the
- *     camera kicks up and the crosshair rises to where the bullets go (screenshot (g)), and both recover after release;
- *     with the "Recoil tracking" setting at 0 the camera stays still while the crosshair climbs, at 1 the camera takes
- *     all the recoil and the crosshair stays centred;
+ *     camera kicks up while the crosshair stays at the centre (W1: CS2's cl_crosshair_recoil 0; screenshot (g)), and
+ *     the camera recovers after release; with "Crosshair follows recoil" on (W1) and the "Recoil tracking" setting at
+ *     0 the camera stays still while the crosshair climbs to the bullets, at 1 the camera takes all the recoil and the
+ *     crosshair stays centred;
  *  4. U1, spectating: at the start the T radar shows no CT (nobody spotted), "show everyone" shows all ten; first
  *     person through Sp4rtaN's eyes shows his HP / armor / ammo / weapon, the crosshair, the spectator panel
  *     ("SPECTATING sp4rtan", 1st person) and "Watching"; mouse 1 / Space / mouse 2 switch player, V cycles 1st → 3rd
@@ -362,8 +363,8 @@ async function main(): Promise<void> {
     report['fire'] = { shots: t1.humanShots, hits: t1.humanHits, clip: [clipBefore, clipAfter], hp: t1.hud.hp, killfeed: feed };
     if (t1.humanShots < 1 || clipAfter === clipBefore) problems.push(`firing: ${JSON.stringify(report['fire'])}`);
     shots.push(await shot(p, 'f-first-person'));
-    // 3b. H2b: recoil on the camera and the crosshair. Spray ~0.8 s at the floor in front of cart (the bullets kick
-    // the camera up by 45 % of the punch and move the crosshair to where they go), then release: both recover.
+    // 3b. H2b: recoil on the camera. Spray ~0.8 s at the floor in front of cart (the bullets kick the camera up by 45 %
+    // of the punch; W1: the crosshair stays at the centre, CS2's cl_crosshair_recoil 0), then release: it recovers.
     const camPitch = async (): Promise<number> => (await p.evaluate(() => window.__cs2sim3d?.test.state().camera.pitch ?? null)) ?? 0;
     const crossXf = async (): Promise<string> => p.evaluate(() => document.getElementById('crosshair')?.style.transform ?? '');
     await p.waitForTimeout(1500);
@@ -386,12 +387,22 @@ async function main(): Promise<void> {
     // Source pitch: − = up. The camera kicks up at least 1.5° (45 % of ≥ 3.5° of punch after ~8 bullets) and the
     // crosshair rises above the centre; 1.5 s later both are back (within 0.2° and 2 px).
     if (!(pitchSpray < pitch0 - 1.5)) problems.push(`recoil: camera did not kick (${JSON.stringify(report['recoil'])})`);
-    if (!(crossY(xfSpray) < -5)) problems.push(`recoil: crosshair did not rise (${JSON.stringify(report['recoil'])})`);
+    if (xfSpray !== '') problems.push(`recoil: the crosshair left the centre with "Crosshair follows recoil" off (${JSON.stringify(report['recoil'])})`);
     if (!(Math.abs(pitchAfter - lookAfter) < 0.2 && Math.abs(crossY(xfAfter)) < 2)) problems.push(`recoil: did not recover (${JSON.stringify(report['recoil'])})`);
     // 3c. H2b: the "Recoil tracking" setting (view_recoil_tracking) sets the camera's share of the recoil: spray for
     // 0.5 s at 0 (camera still but for the screen shake, < 0.6°; the crosshair takes it all) and at 1 (the camera takes
     // it all; the crosshair stays within a few px of the centre: the screen shake, which the bullets don't follow).
     const tracking: Record<string, { camera: number; crosshairY: number }> = {};
+    // W1: the crosshair marks the bullets only with "Crosshair follows recoil" (cl_crosshair_recoil 1).
+    const followRecoil = async (on: boolean): Promise<void> =>
+      p.evaluate((v) => {
+        const b = document.getElementById('set-xhair-recoil');
+        if (b instanceof HTMLInputElement && b.checked !== v) {
+          b.checked = v;
+          b.dispatchEvent(new Event('change'));
+        }
+      }, on);
+    await followRecoil(true);
     for (const k of ['0', '1']) {
       await p.evaluate((v) => {
         const f = document.getElementById('set-tracking');
@@ -415,6 +426,7 @@ async function main(): Promise<void> {
     if (!(Math.abs(tracking['0']?.camera ?? 9) < 0.6 && (tracking['0']?.crosshairY ?? 0) < -10)) problems.push(`recoil tracking 0: ${JSON.stringify(report['recoilTracking'])}`);
     if (!((tracking['1']?.camera ?? 0) < -2 && Math.abs(tracking['1']?.crosshairY ?? 99) < 8)) problems.push(`recoil tracking 1: ${JSON.stringify(report['recoilTracking'])}`);
     if (stored !== 1) problems.push(`recoil tracking not persisted: ${JSON.stringify(report['recoilTracking'])}`);
+    await followRecoil(false);
     await p.evaluate(() => {
       const f = document.getElementById('set-tracking');
       if (f instanceof HTMLInputElement) {
