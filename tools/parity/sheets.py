@@ -84,7 +84,7 @@ def sheets(spec):
             label(sp, 'sim (radar, drawn from the log)', (6, 16))
         else:
             sp = fit(cv2.imread(e['sim']), PANEL_H)
-            label(sp, 'sim (2D app)', (6, 16))
+            label(sp, e.get('simLabel', 'sim (2D app)'), (6, 16))
         op = radar_panel(ov, e['dots'], zoom=True, focus=e.get('focus'))
         label(op, 'ring = video (CT: recorded route), dot = sim', (6, 16))
         label(vp, 'video', (6, 16))

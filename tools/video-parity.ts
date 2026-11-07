@@ -228,7 +228,7 @@ async function main(): Promise<void> {
     `${truth.events.killFeed.length} kill-feed entries, C4 icon ${truth.events.bombIconT ?? '–'} s, score change ${truth.events.scoreChangeT ?? '–'} s`);
 
   const reports: RunReport[] = [];
-  const sheetSpec: { focus: string | null; out: string; video: string; sim: string | null; title: string; lines: string[]; dots: unknown[]; simRadar: boolean }[] = [];
+  const sheetSpec: { focus: string | null; out: string; video: string; sim: string | null; simLabel: string; title: string; lines: string[]; dots: unknown[]; simRadar: boolean }[] = [];
   const sheetsOf = new Map<string, string>();
   let similarity: { t: number; edgeF: number; ssim: number; watched: string }[] = [];
   const sheetDir = join(OUT, 'sheets');
@@ -311,7 +311,7 @@ async function main(): Promise<void> {
         const worst = f.players.filter((p) => p.verdict === 'fail' && p.error !== null).sort((a, b) => (b.error as number) - (a.error as number))[0];
         sheetSpec.push({
           focus: worst?.id ?? null,
-          out, video: join(OUT, 'truth', 'frames', `f_${String(tt.frame).padStart(5, '0')}.jpg`), sim: shot?.path ?? null, simRadar: shot === undefined,
+          out, video: join(OUT, 'truth', 'frames', `f_${String(tt.frame).padStart(5, '0')}.jpg`), sim: shot?.path ?? null, simLabel: APP === '3d' ? `sim (3D app, ${cameraAt(round, tt.t)}'s eyes)` : 'sim (2D app)', simRadar: shot === undefined,
           title: `${name} · t ${tt.t.toFixed(3)} s · tick ${f.tick} · frame ${tt.frame} · camera ${f.watched ?? f.layout} · ${f.verdict.toUpperCase()}`,
           lines: [`HUD (video|sim): ${hudLine || '-'}`, ...(failing.length === 0 ? [] : [`FAIL ${failing.join(' · ')}`])],
           dots: f.players.filter((p) => p.video !== null || p.sim !== null).map((p) => ({ id: p.id, colour: p.source === 'video-dot' || p.source === 'recording-observed' ? COLOUR[p.id] : 'ct', video: p.source === 'video-dot' || p.source === 'recording-observed' ? p.video : null, sim: p.sim, ok: p.verdict !== 'fail' })),

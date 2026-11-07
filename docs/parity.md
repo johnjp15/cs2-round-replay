@@ -17,7 +17,7 @@ shows what got better or worse. Findings of the first run on the 2D game: [`pari
 ```sh
 npm run parity:2d     # milestone gate: build, the whole round every 0.5 s + every event/shot frame, watch and follow runs,
                       # against docs/parity/baseline-2d.json (exit 1 on a regression)
-npm run parity:3d     # the same for the 3D app (needs H1's src/app3d and npm run build:3d; exits 2 until then)
+npm run parity:3d     # the same for the 3D app (watch run, the spectated player's eyes; docs/parity/baseline-3d.json)
 npm run parity -- --app 2d --times "18.5,18.8,50.2" --runs watch --out logs/p   # a few frames
 npm run parity -- --app 2d --times "every 0.5" --out logs/parity-2d --baseline docs/parity/baseline-2d.json \
                   --update-baseline --write-docs docs/parity/<date>-2d.md        # new baseline + dated report
@@ -98,7 +98,7 @@ per HUD field, per event). `npm run parity:2d` rebuilds the app, reruns everythi
 and lists every **regression** (a check that passed in the baseline and fails now), exiting 1 if there is one. At each
 milestone:
 
-1. `npm run parity:2d` (and `npm run parity:3d` once the 3D app exists). Regressions must be explained or fixed.
+1. `npm run parity:2d` and `npm run parity:3d`. Regressions must be explained or fixed.
 2. Look at the sheets of what changed (`logs/parity-2d/index.html`).
 3. When the change is intended (a fix landed, the data was corrected), update the baseline in the same PR:
    `npm run parity -- --app 2d --out logs/parity-2d --baseline docs/parity/baseline-2d.json --update-baseline
@@ -108,32 +108,28 @@ The baseline is deterministic for the same data and code: the harness is (`docs/
 (same frames, deterministic OpenCV calls, fixed templates). Changing the detector changes the truth: regenerate the
 baseline in the same commit and say so.
 
-## The 3D mode (H1's app)
+## The 3D mode
 
-`--app 3d` drives `dist-3d/` (H1's `npm run build:3d`) with Playwright at 1920×1080 and needs these from the page
-(`tools/parity/browser.ts` `shots3d`), so H1 can expose them:
+`--app 3d` (`npm run parity:3d`) builds and serves `dist-3d/` (H1's `npm run build:3d`) on the same port and drives
+it through the deterministic test API (`window.__cs2sim3d.test`, `docs/app3d.md` "Test API"; `tools/parity/browser.ts`
+`shots3d`):
 
-- **`window.__cs2sim3d.ready`** once loaded, watching (`?human=none&seed=1`).
-- **`seek(t): Promise<void>`**: land on observe tick `round(64 t)` deterministically (the same state whatever the path:
-  the 2D Session's `seek`), resolved once that state is rendered.
-- **`spectate(id | null)`**: the first-person camera of that pawn as the video shows it: at his eye (64 standing, 46
-  crouched), his yaw and pitch, CS2/CS:GO's 90° horizontal FOV at 4:3, i.e. 106.26° at 16:9, viewmodel off or fixed;
-  `null` a free camera.
-- **`pawns()`**: `[{id, x, y, z, yaw, pitch, alive}]` at the landed tick; **`hud()`**: `{hp, armor, clip, reserve,
-  clock, bombPlanted}` of the spectated pawn as the HUD shows them.
-- **`project(x, y, z)`**: screen pixels `{x, y, visible}` of a world point through the current camera (for player
-  screen positions vs the video).
-- **Deterministic rendering**: nothing keyed to wall time (tracers, muzzle flash, smoke animation by tick), no random
-  per-frame effects, so a screenshot after `seek` is reproducible; the HUD drawn in the same places as CS2's if
-  possible (the masks of `sheets.py similarity` cover radar, kill feed, team panels and the bottom bar).
+1. `freeze(true)` once after load (the frame loop stops drawing), then the window is grown by the control bar's height
+   so the `#view` canvas is exactly 960 x 540: 16:9 like the video, so the FOV is CS:GO's 106.26 deg x 73.74 deg
+   (`state().camera` reports it; at a plain 960 x 540 window the canvas is 960 x 433 and the FOV 118 deg).
+2. Per timestamp, ascending: `seekTick(round(64 t) + 1)` (the observe the 2D comparison uses), `eyes(id)` of the
+   player the video spectates at t (round.json `pov`, death cams included: `cameraAt` in `metrics.ts`), `render()`
+   (exactly that tick: no interpolation, effects at tick x 15.625 ms), a screenshot of `#view`, and the page's pawns.
+3. The pawns are checked against a Node run of the same engine (`runHarness3d`, Sim3DHost): the run stops if any
+   differs by more than 0.01 u or a tick is off. Positions, HUD and events are then compared exactly as in 2D.
+4. The view: `sheets.py similarity` (Canny edges F-score at 3 px and SSIM of the blurred, equalized grey views at
+   480 x 270, HUD areas masked) per timestamp, summarized overall and per camera into the report and the baseline
+   (`view`, informational, not a pass/fail check). A shuffled-timestamp floor scores about the same as the matched
+   pairs today (`parity/2026-11-07-3d.md`), so the number is a baseline to diff, not a verdict.
 
-It then compares per timestamp: the view's geometry (`sheets.py similarity`: Canny edges F-score at 3 px and SSIM of
-the blurred, equalized grey views at 480×270, HUD areas masked), the spectated player's yaw (vs the recording's yaw,
-only known for the Ts on camera), the HUD numbers (from `hud()`) and the radar positions as in 2D (from `pawns()`).
-Players' screen positions need boxes in the video: detection on a 2020 CS:GO frame vs flat-shaded capsules is not
-reliable, so the plan is ~20 hand-labelled key frames (the Lokier window duel 17.4–18.8 s, Sp4rtaN behind donk
-49.9–50.3 s, the retake 58.6–66.8 s) in `tools/parity/labels-3d.json`, against `project()` of the sim's pawns. Until
-`src/app3d` is on main, `npm run parity:3d` exits 2 with a message.
+A renderer crash in the headless software-WebGL browser (seen under memory pressure) reopens the page and retries the
+shot. Not yet compared: the players' screen positions (needs hand-labelled key frames in `tools/parity/labels-3d.json`,
+against a `project()` the test API doesn't have yet) and the spectated player's yaw (the recording has none: V2).
 
 ## Limitations
 
