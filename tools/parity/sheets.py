@@ -36,10 +36,12 @@ def label(img, text, org, scale=0.45, colour=(235, 235, 235)):
     cv2.putText(img, text, org, cv2.FONT_HERSHEY_SIMPLEX, scale, colour, 1, cv2.LINE_AA)
 
 
-def radar_panel(ov, dots, rings=True, fills=True, zoom=False):
-    """The overview with the dots; zoom: cropped to the dots (at least 1,200 u across) so 40 u errors are visible."""
+def radar_panel(ov, dots, rings=True, fills=True, zoom=False, focus=None):
+    """The overview with the dots; zoom: cropped to the video's dots, or to the `focus` player's pair (the worst
+    failing one), at least 1,200 u across, so 40 u errors are visible."""
     x0, y0, side = 0.0, 0.0, 1024.0
-    pts = [q for d in dots for q in (d.get('video'), d.get('sim')) if q is not None and (rings or q is d.get('sim'))]
+    pick = [d for d in dots if d.get('id') == focus] if focus else [d for d in dots if d.get('video') is not None]
+    pts = [q for d in pick for q in (d.get('video'), d.get('sim')) if q is not None]
     if zoom and pts:
         xs = [(q[0] - POSX) / SCALE for q in pts]
         ys = [(POSY - q[1]) / SCALE for q in pts]
@@ -83,7 +85,7 @@ def sheets(spec):
         else:
             sp = fit(cv2.imread(e['sim']), PANEL_H)
             label(sp, 'sim (2D app)', (6, 16))
-        op = radar_panel(ov, e['dots'], zoom=True)
+        op = radar_panel(ov, e['dots'], zoom=True, focus=e.get('focus'))
         label(op, 'ring = video (CT: recorded route), dot = sim', (6, 16))
         label(vp, 'video', (6, 16))
         row = np.hstack([vp, np.full((PANEL_H, 4, 3), 30, np.uint8), sp, np.full((PANEL_H, 4, 3), 30, np.uint8), op])

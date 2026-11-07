@@ -527,11 +527,14 @@ def identify(dots, t, rd):
     for pid, d in by.items():
         d['id'], d['role'] = pid, 'dot'
     reds = sorted([d for d in dots if d['colour'] == 'red'], key=lambda d: -d['area'])
+    # A T's radar shows a CT's dot only while some T sees him (the breakdown's sightings); a red blob outside every
+    # sighting window is a last-known "?" or the flashing site marker.
+    seen = {s['who'] for s in rd['sightings'] if s['t0'] - 0.3 <= t <= s['t1'] + 0.3}
     taken = set()
     for d in reds:
         best = None
         for pid in team:
-            if team[pid] != 'CT' or pid in taken:
+            if team[pid] != 'CT' or pid in taken or pid not in seen:
                 continue
             dead = death[pid] is not None and t > death[pid] + 0.05
             smp = sample_at(rd, pid, min(t, death[pid]) if dead else t)

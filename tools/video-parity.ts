@@ -54,6 +54,8 @@ const BASELINE = arg('--baseline', '');
 const UPDATE_BASELINE = flag('--update-baseline');
 const WRITE_DOCS = arg('--write-docs', '');
 const SHEETS = arg('--sheets', 'all');
+/** Reuse the 2D app screenshots already in <out>/app (when all are there) instead of driving the browser again. */
+const REUSE_SHOTS = flag('--reuse-shots');
 const PYTHON = process.env['PYTHON'] ?? 'python3';
 const FOLLOW_SCRIPT = 'fixtures/scripts/cart-follows-recording.json';
 
@@ -166,7 +168,8 @@ function writeDocs(path: string, generated: string): void {
 
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
-  const round = JSON.parse(readFileSync(resolve(ROOT, 'data/round.json'), 'utf8')) as RoundLite;
+  const snapped = (JSON.parse(readFileSync(resolve(ROOT, 'data/geometry/mirage-tracks.json'), 'utf8')) as { tracks: RoundLite['snapped'] }).tracks;
+  const round = { ...(JSON.parse(readFileSync(resolve(ROOT, 'data/round.json'), 'utf8')) as RoundLite), ...(snapped === undefined ? {} : { snapped }) };
   const times = buildTimes(TIMES, round, EVENTS);
   log(`video parity (${APP}): ${times.length} timestamps, runs ${RUNS.join(', ')}, out ${relative(ROOT, OUT) || '.'}`);
   if (APP === '3d' && !existsSync(resolve(ROOT, 'src/app3d'))) {
@@ -178,7 +181,7 @@ async function main(): Promise<void> {
     `${truth.events.killFeed.length} kill-feed entries, C4 icon ${truth.events.bombIconT ?? '–'} s, score change ${truth.events.scoreChangeT ?? '–'} s`);
 
   const reports: RunReport[] = [];
-  const sheetSpec: { out: string; video: string; sim: string | null; title: string; lines: string[]; dots: unknown[]; simRadar: boolean }[] = [];
+  const sheetSpec: { focus: string | null; out: string; video: string; sim: string | null; title: string; lines: string[]; dots: unknown[]; simRadar: boolean }[] = [];
   const sheetsOf = new Map<string, string>();
   const sheetDir = join(OUT, 'sheets');
   mkdirSync(sheetDir, { recursive: true });
@@ -189,7 +192,11 @@ async function main(): Promise<void> {
     // Browser shots: the watch run only (the page plays what the Node run plays; checked per shot below).
     let shots: Map<number, Shot> = new Map();
     if (BROWSER && name === 'watch') {
-      if (APP === '2d') {
+      const cached = times.map((t) => join(OUT, 'app', `sim-${t.toFixed(3)}.jpg`));
+      if (APP === '2d' && REUSE_SHOTS && cached.every((p) => existsSync(p))) {
+        shots = new Map(times.map((t, i) => [t, { t, path: cached[i] as string, tick: tickOfT(t), pawns: [] }]));
+        log(`app screenshots: reusing ${cached.length} in ${relative(ROOT, join(OUT, 'app'))}`);
+      } else if (APP === '2d') {
         const list = await shots2d(ROOT, times, join(OUT, 'app'));
         shots = new Map(list.map((s) => [s.t, s]));
         let worst = 0;
@@ -230,11 +237,13 @@ async function main(): Promise<void> {
         const out = join(sheetDir, `${name}-${tt.t.toFixed(3)}.jpg`);
         sheetsOf.set(`${name}|${tt.t}`, relative(OUT, out));
         const failing = [
-          ...f.players.filter((p) => p.verdict === 'fail').map((p) => `${p.id}: ${p.error === null ? p.note : `${p.error} u (limit ${p.limit})`}`),
+          ...f.players.filter((p) => p.verdict === 'fail').map((p) => `${p.id}: ${p.error === null ? p.note : `${p.error} u (limit ${p.limit}${p.cause ? `, mostly ${p.cause}` : ''})`}`),
           ...f.hud.filter((h) => h.verdict === 'fail').map((h) => `${h.field}: video ${h.video ?? '-'} / sim ${h.sim ?? '-'}`),
         ];
         const hudLine = f.hud.map((h) => `${h.field} ${h.video ?? '-'}|${h.sim ?? '-'}`).join('   ');
+        const worst = f.players.filter((p) => p.verdict === 'fail' && p.error !== null).sort((a, b) => (b.error as number) - (a.error as number))[0];
         sheetSpec.push({
+          focus: worst?.id ?? null,
           out, video: join(OUT, 'truth', 'frames', `f_${String(tt.frame).padStart(5, '0')}.jpg`), sim: shot?.path ?? null, simRadar: shot === undefined,
           title: `${name} · t ${tt.t.toFixed(3)} s · tick ${f.tick} · frame ${tt.frame} · camera ${f.watched ?? f.layout} · ${f.verdict.toUpperCase()}`,
           lines: [`HUD (video|sim): ${hudLine || '-'}`, ...(failing.length === 0 ? [] : [`FAIL ${failing.join(' · ')}`])],
@@ -270,6 +279,7 @@ async function main(): Promise<void> {
     const path = resolve(BASELINE);
     if (UPDATE_BASELINE || !existsSync(path)) {
       const base: Baseline = { app: APP, runs: Object.fromEntries(reports.map((r, i) => [r.run, { summary: summaries[i] as (typeof summaries)[number], checks: checkKeys(r) }])) };
+      mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, JSON.stringify(base, null, 1) + '\n');
       log(`baseline written: ${relative(ROOT, path)}`);
     } else {

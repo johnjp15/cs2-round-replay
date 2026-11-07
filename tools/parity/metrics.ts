@@ -77,6 +77,8 @@ export interface RoundLite {
   readonly shots: readonly { t: number | null }[];
   readonly tracks: Record<string, { samples: readonly { t: number; x: number; y: number; confidence: string; uncertainty?: number }[] }>;
   readonly meta: { clock0: number };
+  /** data/geometry/mirage-tracks.json `tracks` (the samples snapped onto CS2 Mirage, one [x, y, z] per sample), if given. */
+  readonly snapped?: Record<string, readonly (readonly number[])[]>;
 }
 
 /** One pawn of the sim at a tick (from the session log's observe). */
@@ -148,14 +150,22 @@ export function watchedAt(round: RoundLite, t: number): string | null {
   return null;
 }
 
-function trackAt(round: RoundLite, id: string, t: number): { x: number; y: number; confidence: string; uncertainty: number | null } | null {
+function trackAt(round: RoundLite, id: string, t: number): { x: number; y: number; confidence: string; uncertainty: number | null; snapped: readonly number[] | null } | null {
   const s = round.tracks[id]?.samples;
   if (s === undefined || s.length === 0) return null;
   const last = s[s.length - 1] as (typeof s)[number];
   if (t > last.t + 0.05) return null;
-  let best = s[0] as (typeof s)[number];
-  for (const q of s) if (Math.abs(q.t - t) < Math.abs(best.t - t)) best = q;
-  return { x: best.x, y: best.y, confidence: best.confidence, uncertainty: best.uncertainty ?? null };
+  // Linear interpolation between the 10 Hz samples (the puppets follow the samples the same way).
+  let i = 0;
+  while (i + 1 < s.length && (s[i + 1] as (typeof s)[number]).t <= t) i++;
+  const a = s[i] as (typeof s)[number];
+  const b = (s[i + 1] ?? a) as (typeof s)[number];
+  const f = b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 0;
+  const near = f < 0.5 ? a : b;
+  const sa = round.snapped?.[id]?.[i];
+  const sb = round.snapped?.[id]?.[i + 1] ?? sa;
+  const snapped = sa === undefined || sb === undefined ? null : [(sa[0] as number) + ((sb[0] as number) - (sa[0] as number)) * f, (sa[1] as number) + ((sb[1] as number) - (sa[1] as number)) * f];
+  return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, confidence: near.confidence, uncertainty: near.uncertainty ?? null, snapped };
 }
 
 const deathT = (round: RoundLite, id: string): number | null => round.players.find((p) => p.id === id)?.deathT ?? null;
@@ -177,6 +187,13 @@ export interface PlayerCheck {
   readonly note: string;
   /** Video dot vs the recording's sample at t (round.json): how well this tool's reading agrees with the extraction. */
   readonly recError?: number | null;
+  /** The recording's sample vs its CS2-snapped/retimed version (what the puppet is told to follow). */
+  readonly snapError?: number | null;
+  /** The sim vs the snapped track: how far the puppet is from where it was told to be (lag, body blocks, snaps). */
+  readonly lagError?: number | null;
+  /** Which part dominates an error over the limit: 'recording' (video vs round.json), 'snap' (round.json vs the
+   * CS2-snapped track) or 'puppet' (sim vs the snapped track). */
+  readonly cause?: 'recording' | 'snap' | 'puppet' | null;
 }
 
 export interface HudCheck {
@@ -217,6 +234,9 @@ export function compareFrame(round: RoundLite, truth: TruthTime, sim: SimFrame, 
     const p = simOf.get(id);
     const dt = deathT(round, id);
     const recAlive = dt === null || t < dt;
+    // Within a frame of the kill-feed time either side, a sim death one or two ticks off is not a status mismatch
+    // (the event check times it).
+    const nearDeath = dt !== null && Math.abs(t - dt) < 0.05;
     const simPos = p !== undefined && p.alive ? ([p.x, p.y] as const) : null;
     const d = dots.get(id);
     if (truth.layout === 'deathcam') {
@@ -234,21 +254,26 @@ export function compareFrame(round: RoundLite, truth: TruthTime, sim: SimFrame, 
     if (d !== undefined) {
       const v = [d.x, d.y] as const;
       if (simPos === null) {
-        players.push({ id, source: 'video-dot', video: v, sim: null, error: null, limit: THRESHOLDS.observedUnits, verdict: 'fail', note: 'on the radar in the video, dead in the sim' });
+        players.push({ id, source: 'video-dot', video: v, sim: null, error: null, limit: THRESHOLDS.observedUnits, verdict: nearDeath ? 'n/a' : 'fail', note: 'on the radar in the video, dead in the sim' });
         continue;
       }
       const err = Math.hypot(v[0] - simPos[0], v[1] - simPos[1]);
       const rec = trackAt(round, id, t);
+      const recError = rec === null ? null : round1(Math.hypot(v[0] - rec.x, v[1] - rec.y));
+      const snapError = rec?.snapped == null ? null : round1(Math.hypot((rec.snapped[0] as number) - rec.x, (rec.snapped[1] as number) - rec.y));
+      const lagError = rec?.snapped == null ? null : round1(Math.hypot((rec.snapped[0] as number) - simPos[0], (rec.snapped[1] as number) - simPos[1]));
+      const parts: [NonNullable<PlayerCheck['cause']>, number | null][] = [['recording', recError], ['snap', snapError], ['puppet', lagError]];
+      const top = parts.reduce<[NonNullable<PlayerCheck['cause']>, number] | null>((m, [k, e]) => (e !== null && (m === null || e > m[1]) ? [k, e] : m), null);
       players.push({ id, source: 'video-dot', video: v, sim: simPos, error: round1(err), limit: THRESHOLDS.observedUnits,
         verdict: err <= THRESHOLDS.observedUnits ? 'pass' : 'fail', note: teamOf(round, id) === 'CT' ? 'spotted CT' : '',
-        recError: rec === null ? null : round1(Math.hypot(v[0] - rec.x, v[1] - rec.y)) });
+        recError, snapError, lagError, cause: err > THRESHOLDS.observedUnits && top !== null ? top[0] : null });
       continue;
     }
     const rec = trackAt(round, id, t);
     if (teamOf(round, id) === 'CT' && rec !== null && rec.confidence === 'inferred' && rec.uncertainty !== null) {
       // Never seen: the recording's route is a reconstruction; the sim must stay inside its stated radius.
       if (simPos === null) {
-        players.push({ id, source: 'recording-inferred', video: null, sim: null, error: null, limit: rec.uncertainty, verdict: 'fail', note: 'alive on the tape, dead in the sim' });
+        players.push({ id, source: 'recording-inferred', video: null, sim: null, error: null, limit: rec.uncertainty, verdict: nearDeath ? 'n/a' : 'fail', note: 'alive on the tape, dead in the sim' });
         continue;
       }
       const err = Math.hypot(rec.x - simPos[0], rec.y - simPos[1]);
@@ -257,7 +282,7 @@ export function compareFrame(round: RoundLite, truth: TruthTime, sim: SimFrame, 
       continue;
     }
     if (simPos === null) {
-      players.push({ id, source: 'none', video: null, sim: null, error: null, limit: null, verdict: 'fail', note: 'alive on the tape, dead in the sim' });
+      players.push({ id, source: 'none', video: null, sim: null, error: null, limit: null, verdict: nearDeath ? 'n/a' : 'fail', note: 'alive on the tape, dead in the sim' });
       continue;
     }
     players.push({ id, source: 'none', video: null, sim: simPos, error: null, limit: null, verdict: 'n/a',
@@ -288,10 +313,12 @@ export function compareFrame(round: RoundLite, truth: TruthTime, sim: SimFrame, 
     }
   }
   if (truth.layout !== 'deathcam' && t < round.bomb.defuseT) {
-    const planted = sim.bombState === 'planted' || sim.bombState === 'defusing';
+    const planted = sim.bombState === 'planted';
     if (truth.hud.clock.bombIcon || planted) {
+      const nearOk = near.some((q) => (q.bombState === 'planted') === truth.hud.clock.bombIcon);
+      const ok = truth.hud.clock.bombIcon === planted;
       hud.push({ field: 'bomb', video: truth.hud.clock.bombIcon ? 'icon' : 'clock', sim: planted ? `planted (${sim.clockText})` : sim.clockText,
-        verdict: truth.hud.clock.bombIcon === planted ? 'pass' : 'fail', note: 'the HUD swaps the clock for the C4 icon once planted' });
+        verdict: ok || nearOk ? 'pass' : 'fail', note: ok ? 'the HUD swaps the clock for the C4 icon once planted' : nearOk ? 'within one video frame' : '' });
     } else {
       const r = truth.hud.clock;
       if (r.value === null || r.score < THRESHOLDS.ocrScore) hud.push({ field: 'clock', video: r.value, sim: sim.clockText, verdict: 'n/a', note: `unread (score ${r.score})` });
@@ -373,6 +400,8 @@ export interface RunSummary {
   /** The video's dots against the recording (round.json): the ground truth's own agreement with the extraction. */
   readonly truthVsRecording: { readonly n: number; readonly rms: number | null; readonly p95: number | null };
   readonly inferred: { readonly checks: number; readonly fail: number };
+  /** Radar failures by dominant cause. */
+  readonly causes: Record<string, number>;
   readonly status: { readonly fail: number };
   readonly hud: Record<string, { readonly checks: number; readonly fail: number; readonly unread: number }>;
   readonly events: { readonly checks: number; readonly fail: number; readonly worstOffset: number | null };
@@ -382,6 +411,7 @@ export interface RunSummary {
 export function summarize(r: RunReport): RunSummary {
   const radarErr: { e: number; at: string }[] = [];
   const recErr: number[] = [];
+  const causes: Record<string, number> = {};
   let radarFail = 0;
   let infN = 0;
   let infFail = 0;
@@ -397,6 +427,7 @@ export function summarize(r: RunReport): RunSummary {
         (per[p.id] ??= []).push(p.error);
         if (p.verdict === 'fail') {
           radarFail++;
+          causes[p.cause ?? 'unknown'] = (causes[p.cause ?? 'unknown'] ?? 0) + 1;
           perFail[p.id] = (perFail[p.id] ?? 0) + 1;
         }
       } else if (p.source === 'recording-inferred') {
@@ -436,6 +467,7 @@ export function summarize(r: RunReport): RunSummary {
       return { n: r.length, rms: r.length === 0 ? null : round1(Math.sqrt(r.reduce((a, b) => a + b * b, 0) / r.length)), p95: r.length === 0 ? null : (r[Math.min(r.length - 1, Math.floor(r.length * 0.95))] as number) };
     })(),
     inferred: { checks: infN, fail: infFail },
+    causes,
     status: { fail: statusFail },
     hud,
     events: { checks: r.events.length, fail: r.events.filter((e) => e.verdict === 'fail').length, worstOffset: evOff.length === 0 ? null : Math.max(...evOff) },
@@ -498,6 +530,7 @@ export function summaryMarkdown(app: string, date: string, summaries: readonly R
   for (const r of reports) {
     const s = summaries.find((x) => x.run === r.run);
     L.push('', `### ${r.run}: radar error per player (observed dots)`, '');
+    L.push(`Radar failures by dominant cause: ${Object.entries(s?.causes ?? {}).map(([k, v]) => `${k} ${v}`).join(', ') || 'none'} (recording = the video's dot vs round.json; snap = round.json vs the CS2-snapped track the puppet follows; puppet = the sim vs that track).`, '');
     L.push('| player | samples | RMS (u) | max (u) | > 40 u |', '| --- | ---: | ---: | ---: | ---: |');
     for (const [id, p] of Object.entries(s?.perPlayer ?? {})) L.push(`| ${id} | ${p.n} | ${p.rms} | ${p.max} | ${p.fail} |`);
     L.push('', `### ${r.run}: events`, '');
@@ -508,7 +541,7 @@ export function summaryMarkdown(app: string, date: string, summaries: readonly R
     for (const f of r.frames) {
       if (onlyFails && f.verdict === 'pass') continue;
       const bad = [
-        ...f.players.filter((p) => p.verdict === 'fail').map((p) => `${p.id} ${p.error === null ? p.note : `${p.error} u${p.source === 'recording-inferred' ? ` > r ${p.limit}` : ''}`}`),
+        ...f.players.filter((p) => p.verdict === 'fail').map((p) => `${p.id} ${p.error === null ? p.note : `${p.error} u${p.source === 'recording-inferred' ? ` > r ${p.limit}` : ` (rec ${fmt(p.recError ?? null)}, snap ${fmt(p.snapError ?? null)}, puppet ${fmt(p.lagError ?? null)})`}`}`),
         ...f.hud.filter((h) => h.verdict === 'fail').map((h) => `${h.field} video ${h.video ?? '–'} sim ${h.sim ?? '–'}`),
       ];
       L.push(`| ${f.t} | ${f.tick} | ${f.watched ?? f.layout} | ${f.verdict} | ${fmt(f.worstUnits)} | ${bad.join('; ')} |`);
