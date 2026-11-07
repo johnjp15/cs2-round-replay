@@ -9,7 +9,9 @@
  * third person, or free fly (V cycles; mouse 1 / Space next player, mouse 2 previous; Z / X too), the spectator
  * panel, and the radar under CS2's spotting rules (radar3d.ts; the panel toggle shows everyone). E or "Take control of cart" hands him to the player from that tick on (a speed other than 1× drops to 1×):
  * first-person camera at his eye (64 standing, 46 crouched), pointer-lock mouse look, WASD, Space, Ctrl, Shift,
- * mouse 1, R, 1–5, E (input3d.ts). Dead, the camera goes back to spectating. Restart watches again.
+ * mouse 1, R, 1–5, E (input3d.ts; duck, walk, jump and use rebindable under Keys). ⛶ Fullscreen locks the keyboard
+ * where the browser can, so Ctrl+W crouches forward instead of closing the tab (src/app/play-guard.ts). Dead, the
+ * camera goes back to spectating. Restart watches again.
  *
  * The view is CS2's (view-cs2.ts, with sources): mouse counts × sensitivity × m_yaw / m_pitch (0.022°), no
  * acceleration; FOV 90° horizontal at 4:3, hor+ on wider screens (vertical ≈ 73.74°); scoped FOVs and the zoomed
@@ -28,6 +30,10 @@ import { Session, parseSessionData, type SessionData } from '../app/session';
 import { SummaryCache } from '../app/run-entries';
 import { weaponName } from '../app/hud-model';
 import { startHuman, takeoverButtonView } from '../app/takeover';
+import { keyMapFor } from '../app/input';
+import { KeyBindsStore, pageStorage } from '../app/keybinds';
+import { KeyBindsDom } from '../app/keybinds-dom';
+import { PlayGuard } from '../app/play-guard';
 import { anglesTo, poseHitboxes } from '../engine/hitboxes';
 import { sim3dHostFactory, worldMesh, type Sim3DHost } from '../sim3d/index';
 import type { MapGeometry } from '../sim2d/index';
@@ -87,6 +93,8 @@ export interface App3DStats {
   readonly followed: PlayerId;
   readonly look: Look;
   readonly locked: boolean;
+  /** play-guard.ts: the leave-site guard is on, the keyboard is locked (fullscreen, Chromium), the duck key. */
+  readonly guard: { readonly leaveGuard: boolean; readonly keyboardLocked: boolean; readonly fullscreen: boolean; readonly duckKey: string };
   readonly triangles: number;
   readonly humanShots: number;
   readonly humanHits: number;
@@ -202,6 +210,9 @@ class App3D {
   private readonly renderer: Renderer3D;
   private readonly hud: Hud3D;
   private readonly controls: ControlsDom;
+  /** The key-binding setting (duck / walk / jump / use) and the Ctrl+W guard (fullscreen Keyboard Lock, leave-site). */
+  private readonly keys = new KeyBindsStore(pageStorage());
+  private readonly guard: PlayGuard;
   private readonly loop: FixedLoop;
   private readonly fpsMeter = new BucketRate(1000);
   private readonly tpsMeter = new BucketRate(1000);
@@ -296,12 +307,29 @@ class App3D {
       },
       onKey: (code) => this.onKey(code),
       onFire: () => this.spectateClick(1),
+      playing: () => this.playing(),
+      keyboardLocked: () => this.guard.keyboardLocked,
       onAttack2: () => {
         const p = this.session.human === null ? null : this.scene.pawn(this.session.human);
         if (this.playing() && p !== null) this.setZoom(p.weapon, nextZoom(p.weapon, this.zoomWeapon === p.weapon ? this.zoom : 0));
         else this.spectateClick(-1);
       },
     });
+    this.controls.keyMap = keyMapFor(this.keys.binds);
+    this.keys.onChange((b) => (this.controls.keyMap = keyMapFor(b)));
+    this.guard = new PlayGuard({
+      button: document.getElementById('fullscreen') as HTMLButtonElement | null,
+      hint: document.getElementById('kbhint'),
+      // The leave-site guard is on while cart is the player's and alive (paused too).
+      playing: () => this.session.human !== null && this.phase !== 'ready' && this.scene.pawn(this.session.human)?.alive === true,
+      binds: () => this.keys.binds,
+      pointerLock: true,
+      // Under Keyboard Lock the browser no longer frees the mouse on a short Esc: do it here.
+      onEscape: () => document.exitPointerLock(),
+      onChange: () => this.updateControls(),
+    });
+    const keybinds = document.getElementById('keybinds');
+    if (keybinds !== null) new KeyBindsDom(keybinds, this.keys, this.guard.mac);
     this.wireSettings();
     this.buttons = {
       start: el('start', HTMLButtonElement),
@@ -670,6 +698,7 @@ class App3D {
     const camText = this.playing() ? 'Camera: first person' : `Camera: ${this.camMode === 'pov' ? '1st person' : this.camMode === 'follow' ? '3rd person' : 'free'}`;
     if (cam !== null && cam.textContent !== camText) cam.textContent = camText;
     b.camera.disabled = this.playing();
+    this.guard.update();
     const radarLabel = b.radar.querySelector('span');
     const radarText = this.radarRules === 'cs2' ? 'Radar: CS2 rules' : 'Radar: show everyone';
     if (radarLabel !== null && radarLabel.textContent !== radarText) radarLabel.textContent = radarText;
@@ -1104,6 +1133,7 @@ class App3D {
       followed: this.followed,
       look: this.look,
       locked: this.controls.locked,
+      guard: { leaveGuard: this.guard.guarded, keyboardLocked: this.guard.keyboardLocked, fullscreen: this.guard.fullscreen, duckKey: this.keys.binds.duck },
       triangles: this.renderer.drawnTriangles,
       humanShots: this.humanShots,
       humanHits: this.humanHits,

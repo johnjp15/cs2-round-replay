@@ -49,6 +49,12 @@
         pointer-events: none; font-size: 16px;
       }
       #status[hidden] { display: none; }
+      #kbhint {
+        position: absolute; left: 50%; top: 64px; transform: translateX(-50%); max-width: min(92%, 760px); margin: 0;
+        padding: 6px 12px; font: 13px/1.35 var(--text); text-align: center; color: var(--sand);
+        background: rgba(5, 8, 12, 0.85); border: 1px solid var(--rule); border-radius: 6px; pointer-events: none; z-index: 5;
+      }
+      #kbhint[hidden] { display: none; }
 
       /* ---------- HUD over the canvas ---------- */
       #hud { position: absolute; inset: 0; pointer-events: none; font-family: var(--display); font-variant-numeric: tabular-nums; }
@@ -189,8 +195,11 @@
       .group button { border-radius: 0; margin-left: -1px; min-width: 2.75rem; }
       .group button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
       .group button:last-child { border-radius: 0 6px 6px 0; }
+      #keybinds { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+      #keybinds .keys-label { font: 12px var(--text); color: var(--sand-dim); }
+      #keybinds button { min-height: 30px; padding: 4px 8px; font-size: 13px; }
       #help { flex-basis: 100%; margin: 0; text-align: center; font: 12px/1.4 var(--text); color: var(--sand-dim); }
-      @media (hover: none) { #help, #controls kbd, #panel-toggle kbd { display: none; } }
+      @media (hover: none) { #help, #controls kbd, #panel-toggle kbd, #keybinds { display: none; } }
 
       /* Narrow screens (phones): the map is full width, so the HUD stacks above and below it. */
       @media (max-width: 700px) {
@@ -373,6 +382,7 @@
           </footer>
         </section>
         <p id="status" role="status">Loading round…</p>
+        <p id="kbhint" role="status" hidden></p>
       </div>
       <div id="timeline" role="group" aria-label="Round timeline">
         <button id="back10" type="button" disabled>−10 s</button>
@@ -403,9 +413,11 @@
           <button type="button" data-overlay="height" aria-pressed="false" title="Map layer: the CS2 height map instead of the radar">Height<kbd>H</kbd></button>
         </span>
         <button id="takeover" type="button" aria-pressed="false" title="Play cart from this moment on (E)"><span>Take control of cart</span><kbd>E</kbd></button>
+        <button id="fullscreen" type="button" aria-pressed="false">⛶ Fullscreen</button>
+        <span id="keybinds" role="group" aria-label="Key bindings"></span>
         <button id="dl-log" type="button">Download log</button>
         <button id="dl-trace" type="button">Download trace</button>
-        <p id="help">The round plays as recorded; Take control of cart (or E) lets you play him from that moment. Playing: WASD moves (W is up on the map), the mouse aims, click fires, Shift walks, Ctrl or C crouches, Space jumps, R reloads, E uses, 1–5 switch weapons. Wheel zooms; drag pans (middle button while playing); double-click shows the whole map. Ghost is cart’s recorded position; Tracks shows everyone’s recorded path for the next 3 s; Height shows floor heights. [ and ] seek 5 s back and ahead; drag the timeline to seek (its marks are the checkpoints).</p>
+        <p id="help">The round plays as recorded; Take control of cart (or E) lets you play him from that moment. Playing: WASD moves (W is up on the map), the mouse aims, click fires, Shift walks, Ctrl or C crouches, Space jumps, R reloads, E uses, 1–5 switch weapons (Keys moves duck, walk, jump and use; ⛶ Fullscreen locks the keyboard in Chrome and Edge, so Ctrl+W crouches forward instead of closing the tab). Wheel zooms; drag pans (middle button while playing); double-click shows the whole map. Ghost is cart’s recorded position; Tracks shows everyone’s recorded path for the next 3 s; Height shows floor heights. [ and ] seek 5 s back and ahead; drag the timeline to seek (its marks are the checkpoints).</p>
       </div>
     </main>
     <script type="module" src="/src/app/main.ts"></script>
