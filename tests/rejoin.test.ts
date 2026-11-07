@@ -10,7 +10,7 @@
  * faster than its weapon allows around a rejoin; the minimum LIVE time and the calm window hold; a pawn without tape
  * (outlived) stays LIVE; a rejoined pawn's scripted events after the rejoin run; cycles; snapshots mid-approach;
  * determinism; the switch off reproduces B4 byte for byte; nobody leaves the tape in the golden round, so nothing of
- * this runs there (no path query, digest e9a228d9).
+ * this runs there (no path query, digest 72b58704; e9a228d9 before G3's 3D movement).
  */
 import { describe, expect, it } from 'vitest';
 import { PLAYER_IDS, SessionLog, canonicalize, parseTuning, replay, stableStringify, type LogEntry, type Observe, type PlayerId } from '../src/contracts/index';
@@ -101,7 +101,8 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
 
   it('ends CT bomb_defused with 0.72 s on the bomb, like the tape (B4 alone: Ts won by elimination)', () => {
     expect(roundEnd(run)).toEqual({ tick: 4275, winner: 'CT', reason: 'bomb_defused' });
-    expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.timeLeftSec).toBeCloseTo(0.71875, 6);
+    // G3: 0.83 s on the bomb, not the tape's 0.72: the plant is 7 ticks late (below), the defuse on the tape's tick.
+    expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.timeLeftSec).toBeCloseTo(0.828125, 6);
     expect(roundEnd(before)).toMatchObject({ winner: 'T', reason: 'elimination' });
   });
 
@@ -115,9 +116,12 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     near(kill(run, 'sp4rtan', 'donk'), 50.35, 0.3);
     near(kill(run, 'sp4rtan', 'barely'), 58.85, 0.3);
     near(bombTick(run, 'defused'), 66.8, 0.5);
-    // Measured: all of them on the golden master's (= the recording's) observe ticks.
+    // Measured: all of them on the golden master's (= the recording's) observe ticks but the plant. G3: on CS2 Mirage
+    // barely, LIVE after Lokier, leaves the Balcony by its west end (the 2020 drop under the Apartments window is a
+    // wall in CS2) and goes round the B-site box the recording walks through: G1's plant shift starts his USE 7 ticks
+    // after the recorded 1555, so the bomb is planted at 1768 (27.63 s, recorded 27.52 s).
     expect([bombTick(run, 'planted'), kill(run, 'barely', 'zwomp'), kill(run, 'sp4rtan', 'donk'), kill(run, 'sp4rtan', 'barely'), bombTick(run, 'defuse_start'), bombTick(run, 'defused')]).toEqual([
-      1761, 2829, 3222, 3766, 3955, 4275,
+      1768, 2829, 3222, 3766, 3955, 4275,
     ]);
     // ... and they are the scripted ones (B3), not LIVE fights.
     for (const [a, v, k] of [['barely', 'zwomp', 2829], ['sp4rtan', 'donk', 3222], ['sp4rtan', 'barely', 3766]] as const) {
@@ -141,7 +145,8 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
 
   it('sp4rtan, who kills cart on his flank, rejoins and does the recorded donk spray, barely headshot and kit defuse', () => {
     const sw = liveSwitches(run.entries).filter((s) => s.id === 'sp4rtan');
-    expect(sw).toEqual([{ id: 'sp4rtan', tick: 2564, trigger: 'sighting' }]);
+    // G3: 2 ticks later than on main (2564): cart's and sp4rtan's positions on CS2 Mirage.
+    expect(sw).toEqual([{ id: 'sp4rtan', tick: 2566, trigger: 'sighting' }]);
     expect(kill(run, 'sp4rtan', 'cart')).not.toBeNull();
     const back = rejoins(run.entries).filter((b) => b.id === 'sp4rtan');
     expect(back).toHaveLength(1);
@@ -224,16 +229,16 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     }
   });
 
-  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f)', () => {
-    expect(logDigest(before.log)).toBe('b424522f');
+  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5)', () => {
+    expect(logDigest(before.log)).toBe('7ca637e5');
     expect(rejoins(before.entries)).toEqual([]);
   });
 });
 
 describe('nobody leaves the tape: rejoin never runs', () => {
-  it('golden no-human round: no rejoin line, no path query, digest e9a228d9', () => {
+  it('golden no-human round: no rejoin line, no path query, digest 72b58704 (G3; main: e9a228d9)', () => {
     const g = runHarness(data, { ...NO_HUMAN, recordWalk: true });
-    expect(logDigest(g.log)).toBe('e9a228d9');
+    expect(logDigest(g.log)).toBe('72b58704');
     expect(g.paths).toEqual([]);
     expect(coreLogs(g.entries).some((l) => / (rejoin|REPLAY): /.test(l.text))).toBe(false);
   });

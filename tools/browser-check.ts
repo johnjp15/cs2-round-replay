@@ -590,6 +590,51 @@ async function main(): Promise<void> {
     await shoot(play, 'c-desktop-follow-zoomed');
     await play.close();
 
+    // 5b. G3: jump. Space while playing: cart leaves the floor (z up by about sv_jump_impulse²/2g ≈ 57 at the apex),
+    //     is drawn bigger with a shadow, and lands again; H swaps the radar for the height map.
+    const jump = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+    watch(jump, problems);
+    await jump.goto(ORIGIN + '/');
+    await jump.waitForFunction(() => window.__cs2replay !== undefined);
+    await jump.click('#start');
+    await jump.keyboard.press('f');
+    await jump.mouse.move(640, 430);
+    for (let i = 0; i < 3; i++) await jump.mouse.wheel(0, -100);
+    await jump.keyboard.down('s');
+    await jump.waitForTimeout(700);
+    await jump.keyboard.up('s');
+    await jump.waitForTimeout(500);
+    const z0 = await jump.evaluate(() => window.__cs2replay?.scene().pawn('cart')?.pos.z ?? null);
+    await jump.keyboard.press('Space');
+    // Pause near the apex (about 0.38 s up) for the screenshot.
+    const apex = await jump.waitForFunction(
+      (zs) => {
+        const p = window.__cs2replay?.scene().pawn('cart');
+        if (p === null || p === undefined || zs === null || p.onGround || p.vel.z > 40) return false;
+        document.getElementById('pause')?.click();
+        return { z: p.pos.z, onGround: p.onGround };
+      },
+      z0,
+      { polling: 'raf', timeout: 5000 },
+    );
+    const peak = (await apex.jsonValue()) as { z: number; onGround: boolean };
+    await jump.waitForTimeout(200);
+    await shoot(jump, 'j-desktop-jump');
+    console.log(`jump: cart z ${z0?.toFixed(1)} -> ${peak.z.toFixed(1)} near the apex (on ground ${peak.onGround})`);
+    if (z0 === null || !(peak.z - z0 > 40)) problems.push(`Space did not lift cart (z ${z0} -> ${peak.z})`);
+    await jump.click('#pause');
+    const landed = await jump.waitForFunction(() => window.__cs2replay?.scene().pawn('cart')?.onGround === true, null, { polling: 'raf', timeout: 5000 }).then(
+      () => true,
+      () => false,
+    );
+    if (!landed) problems.push('cart did not land after the jump');
+    await jump.keyboard.press('h');
+    await jump.waitForTimeout(300);
+    const layer = await jump.evaluate(() => window.__cs2replay?.stats().overlays.height ?? null);
+    if (layer !== true) problems.push(`H did not switch to the height map (${String(layer)})`);
+    await shoot(jump, 'k-desktop-height-map');
+    await jump.close();
+
     // 6. (d) Phone-sized, touch: spectate by default.
     const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
     watch(phone, problems);

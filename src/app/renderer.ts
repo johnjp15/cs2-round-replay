@@ -790,6 +790,9 @@ class RadarCache {
     g.globalCompositeOperation = 'multiply';
     g.fillStyle = RADAR_TINT;
     g.fillRect(0, 0, c.width, c.height);
+    // Keep the image's own transparency (the G3 height map is transparent off the map; the radar JPEG is opaque).
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(img, rx, ry, rw, rh, 0, 0, rw * S, rh * S);
     g.globalCompositeOperation = 'source-over';
     this.canvas = c;
     this.s = S;
