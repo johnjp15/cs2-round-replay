@@ -12,7 +12,7 @@ const boundaryZones = [
   { target: './src/core', from: './src', except: ['./core', './contracts'], message: 'src/core may import only src/contracts.' },
   // src/sim2d may import only src/contracts.
   { target: './src/sim2d', from: './src', except: ['./sim2d', './contracts'], message: 'src/sim2d may import only src/contracts.' },
-  // H1: src/engine (pure CS2 mechanics) may import only src/contracts.
+  // H1/H2: src/engine (pure CS2 mechanics shared by hosts) may import only src/contracts.
   { target: './src/engine', from: './src', except: ['./engine', './contracts'], message: 'src/engine may import only src/contracts.' },
   // H1: src/sim3d (the 3D host) may import src/contracts, src/engine and src/sim2d.
   { target: './src/sim3d', from: './src', except: ['./sim3d', './engine', './sim2d', './contracts'], message: 'src/sim3d may import only src/contracts, src/engine and src/sim2d.' },
