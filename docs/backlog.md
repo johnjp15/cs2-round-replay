@@ -9,7 +9,8 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 - 05:59 merged **#31** (radar CS2 rules + toggle, first-person spectating with HUD and crosshair, SPECTATING panel; radar timings from the CS:GO source) and **#30** (movement fixes vs CS2: sub-1 u/s zeroing, 1.1× take-off clamp, 0.25 air accel while rising slowly, MoveOptions for scoped speed/tagging, sub-tick split helper; every golden digest moved, kills/plant/defuse unchanged). Both **live** (Pages f7323b9).
 - Agents told to merge main and regenerate fixtures: G6 sight, G7 bots, V2 view fit.
 - 06:16 check-in #2: 11 agents active and pushing. PR #32 (round-end stutter: the HUD re-parsed the whole 4,500-line session log every frame after round end, 150–250 ms + 9 MB garbage per frame; now parsed incrementally and cached) is green but conflicts with #31's HUD changes — its agent is merging main; merge + deploy at the next check-in.
-- 07:02 check-in #3: a server restart at ~07:00 stopped all ten working agents; nine resumed from their transcripts, two (parity, grenades) relaunched as finishers on their nearly-done branches. **#32 merged and live** (Pages da9bc5d): no more stutter after the round ends. Next check-in 07:48.
+- 07:02 check-in #3: a server restart at ~07:00 stopped all ten working agents; nine resumed from their transcripts, two (parity, grenades) relaunched as finishers on their nearly-done branches. **#32 merged and live** (Pages da9bc5d): no more stutter after the round ends.
+- 07:20 **#33 merged and live** (Pages 1a302dd): Ctrl+W fix — ⛶ Fullscreen + Keyboard Lock in Chromium browsers (Ctrl+W just crouch-walks), a leave-site guard elsewhere, a Keys group (Duck/Walk/Jump/Use rebindable, Reset). Next check-in 07:48.
 
 ## Operating rules John set
 - Merge PRs without asking (2026-11-05). Fable orchestrates; Opus 5.5 agents do the expensive work (2026-11-07 02:02). Permission to read anything on any website (04:26). John's messages are not stop requests; agents stopped by client-side interrupts get resumed.
@@ -33,7 +34,7 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 12 | 11-07 03:26 | Frame-by-frame comparison with the original video as a milestone gate; run it on the 2D game and fix | in progress | V0 (first 2D baseline done; findings → fix agents) |
 | 13 | 11-07 03:45 | Publish what we have of the 3D one and keep working | live | web-apps #8 → `cs2/sim3d/` |
 | 14 | 11-07 03:49 | Pull in the real CS:GO Mirage files from March 2020; render them at slightly higher fidelity; 100 % accurate clipping | in progress + **needs John** | X1: BSP reader done on public data; recipe for the Steam depot download coming in its first PR; John runs it and attaches the files |
-| 15 | 11-07 04:06 | Ctrl+W closes the tab | in progress | fix-ctrlw (fullscreen Keyboard Lock, leave-site guard, rebindable keys) |
+| 15 | 11-07 04:06 | Ctrl+W closes the tab | live | #33: ⛶ Fullscreen + Keyboard Lock (Chromium); leave-site guard elsewhere; macOS ⌘W can't be captured; rebindable keys. John should try Ctrl+W in fullscreen Chrome/Edge |
 | 16 | 11-07 04:18 | Aim for 500+ fps | in progress | P1 (restarted 04:29): ≤ 2 ms frames, input at render time |
 | 17 | 11-07 04:20 | Sound with real CS2 sounds; basic gun models; reloading | in progress + **needs John** | A1: Web Audio engine + placeholders + viewmodels now; real sounds need John's CS2 extraction (recipe in `docs/cs2-sounds.md`) |
 | 18 | 11-07 04:20 | Fix the bomb plant position: "planted for catwalk", behind the cylinder stack | in progress | V0 data fix from the video's radar bomb icon |
