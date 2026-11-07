@@ -5,6 +5,8 @@
  */
 export { Session, DEFAULT_HUMAN, defaultCore, parseSessionData, walkQueryOf } from './session';
 export type { SessionConfig, SessionData, SessionSnapshot, CoreParts, CoreFactory, World3dFiles } from './session';
+export { TAKEOVER_KEY, startHuman, takeoverButtonView, youNote } from './takeover';
+export type { TakeoverButtonView } from './takeover';
 export { FixedLoop, RateMeter, TICK_HZ, TICK_MS, MIN_SPEED, MAX_SPEED, SPEEDS, DEFAULT_MAX_TICKS_PER_FRAME } from './loop';
 export type { LoopOptions } from './loop';
 export {
