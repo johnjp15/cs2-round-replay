@@ -510,20 +510,27 @@ export function stepAi(prev: AiState, ctx: AiContext): AiStep {
     weapon = plan.weapon;
     if (plan.use) buttons.push('USE');
     let faceYaw: number | null = plan.faceYaw;
-    if (plan.dest !== null) {
+    // G7: reacting to an enemy in sight, a player stops and turns to it instead of walking on (a sniper holding an
+    // angle doesn't leave it the moment a T appears in it); a plant or defuse in progress goes on.
+    const reacting = s.target !== null && s.targetPos !== null && !plan.use && ctx.sees.includes(s.target);
+    if (reacting && s.targetPos !== null) {
+      const speed = Math.hypot(self.vel.x, self.vel.y);
+      if (speed > ai.counterStrafeSpeed) move = { dirX: -self.vel.x / speed, dirY: -self.vel.y / speed, mag: 1 };
+      faceYaw = bearing(self.pos, s.targetPos);
+    } else if (plan.dest !== null) {
       const m = followPath(s, ctx, plan.dest, plan.arriveUnits);
       if (m !== null) {
         move = m;
         faceYaw ??= Math.atan2(m.dirY, m.dirX) / DEG;
       }
     }
-    if (s.lookAt !== null && tick < s.lookAt.untilTick && !plan.use) faceYaw = bearing(self.pos, s.lookAt.pos);
+    if (!reacting && s.lookAt !== null && tick < s.lookAt.untilTick && !plan.use) faceYaw = bearing(self.pos, s.lookAt.pos);
     if (faceYaw !== null) yaw = turn(self.yaw, faceYaw, rate);
     pitch = turn(self.pitch, 0, rate);
     // Reload when low and nothing is in sight.
     const gun = gunStats(self.weapon, tuning);
     if (gun !== null && s.target === null && !self.reloading && self.reserve > 0 && self.clip < gun.clip && self.clip <= gun.clip * ai.reloadClipFraction) buttons.push('RELOAD');
-    if (plan.walk && move !== null) buttons.push('WALK');
+    if (plan.walk && move !== null && !reacting) buttons.push('WALK');
   }
 
   s.attackHeld = buttons.includes('ATTACK');
