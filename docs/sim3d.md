@@ -84,14 +84,17 @@ mesh (docs/geometry.md), so they are open. When G6's `MeshSight` lands on main, 
   while the wall is between (17.81 s) stops on the wall 222 units out. Today's tracks were snapped for the 2D sight:
   through the window the mesh line from cart's eye to Lokier's head is blocked most of 17.6–19.7 s (G6's pass 5
   re-snaps the tracks so every recorded duel is in sight on the mesh; after that merge the open tick moves earlier).
-- **The follow-recording script** (`--human cart --script fixtures/scripts/cart-follows-recording.json`): in 2D cart
-  kills Lokier at 18.50 s (HS) and the round ends "Same result, different round: CT defuse, 0.72 s left; 2 kills
-  changed". In 3D his shots miss: the script's pitch is 0 (the recording has no pitch; 2D picks the hitgroup from
-  pitch bands with a 3° tolerance and lets level shots at a pawn 110 units below hit), and a level 3D ray from the
-  window passes over Lokier's head; Lokier kills cart at 21.55 s and barely kills Lokier at 22.28 s; plant 1814,
-  defuse 3955 → 4275, "Same result, different round: CT defuse, 1.55 s left; 4 kills changed". The same holds for
-  the `takeover-duel` scenario (the human-bot aims with the 2D bands). True 3D aim needs a pitch: the scripted-human
-  test aims at the head hitbox and hits. H4: give the follow script and the human-bot the 3D aim (and G5's duel rules).
+- **The follow-recording script** (`--human cart --script fixtures/scripts/cart-follows-recording.json`; numbers after
+  G5's merge): in 2D cart kills Lokier at 18.80 s (HS) and the round "Played it like the tape" (G5's recorded duels).
+  In 3D it **does not match yet**: the script's pitch is 0 (the recording has no pitch; 2D picks the hitgroup from
+  pitch bands with a 3° tolerance and a 16-unit body circle, so a level shot at a pawn 110 units below still hits),
+  a level 3D ray from the window passes over Lokier's head, so no bullet reaches him, G5 gets no `blocked_hit` for
+  the recorded duel and the round leaves the tape: barely kills Lokier at 20.45 s and the bomb explodes ("You changed
+  history: Ts win"). Two things are missing, both outside H1: the tracks are snapped for the 2D sight, and through the
+  window the mesh line from cart's eye to Lokier's head is open only at 17.61–17.63 s and from 19.86 s (G6's sight
+  snapping, pass 5, re-snaps them); and the script needs a 3D aim (a pitch and a yaw precise to the head hitbox, which
+  a 10 Hz video track isn't) — H4's card ("the follow-recording run in 3D with G5's duel rules"). The `takeover-duel`
+  scenario's human-bot aims with the 2D bands and misses the same way. True 3D aim does hit: tests/sim3d-aim.test.ts.
 - **Takeover at 30 s**: the first 1,920 lines are the watching run's, byte for byte; line 1,920 names cart the human.
 - Cost: ≈ 0.93 ms per tick in Node for the whole step (Core, host, log), as the 2D host (1.0 ms); ≈ 39 sight
   segments per tick.
