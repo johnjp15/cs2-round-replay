@@ -273,6 +273,47 @@ turns it off), and feed the mouse into `view` only (never write punch back into 
 `Sim3DHost.aimView(id, view, tracking)`. It changes only what the screen shows: the bullets and the crosshair are
 the same at every setting.
 
+## Bots and puppets compensate recoil like a player pulling down (B1, `aim.ts`)
+
+In CS2 the server applies the recoil to the bullet (view + aim punch × `recoilScale`); a player keeps a spray on target
+by pulling the mouse against the pattern, so at the moment of each shot his view is *below* (and beside) the target by
+the accumulated punch offset. Bots do this perfectly: for each shot their view is
+
+    view = desired aim − nextShotPunch(ctx, arms)        // compensatedView(desired, punch)
+
+where `nextShotPunch` is the offset `fireShot` will add to that shot (`punchOffset(decayPunch(punch, 1 tick))` before
+the host's `trackArms` of the tick, `punchOffset(punch)` after it; the same math as `crosshairAngles`). The bullet then
+leaves along the desired aim plus the inaccuracy cone only. The human's mechanics (`fireShot`, `crosshairAngles`,
+`cameraAngles`) are unchanged: he controls the recoil himself.
+
+- **LIVE bots** (src/sim2d/ai.ts): the 3D host passes `AiSelf.aimPunch` = `nextShotPunch`; the AI subtracts it from its
+  wanted yaw and pitch (and so from its fire-cone check). Its skill error is kept and stays centred on the target: the
+  acquisition offset (N(0, 2.5°), settling with a 0.15 s half-life) and the per-shot residual (N(0, 0.5°)). Its view
+  really is below the target during a spray, as a player's would be. The 2D host has no recoil and passes nothing
+  (identical runs).
+- **Puppets** (REPLAY): their scripted view is where they aim. The host fires the drawn bullet with
+  `compensatedView(scripted view, punch)`, so the tracer goes at the target instead of climbing; the **outcome** is still
+  traced along the scripted view (the tape's damage), so the no-human run is byte-identical. `Sim3DHost.aimView` of a
+  spectated puppet uses the same compensated eye: its crosshair stays on the scripted aim and its camera dips like a
+  player's.
+- **Recorded duels** (src/core/duels.ts) are the human's: unchanged.
+- Not compensated: a hit's aim punch (`applyHit`, flinch) that lands between the AI's decision and the shot in the same
+  tick (a pawn later in id order fires after it was hit); it is compensated from the next tick.
+- `Sim3DHost.setBotRecoilControl(false)` restores the old behaviour (views at the target, sprays climbing), for the
+  regression tests only.
+
+Measured (`tests/sim3d-bot-recoil.test.ts`, LIVE AK-47 bot vs a standing target on a flat floor, 20 seeds, the first
+10 bullets of the spray, hits = the hitbox trace):
+
+| | hit at 300 u | bullets 3–10 over the head (300 u) | mean height of bullet 1 → 10 (300 u) | hit at 600 u |
+| --- | ---: | ---: | --- | ---: |
+| compensated, no AI aim error (recoil control + CS2 spread) | 99 % | 0 / 160 | 52 → 52 u | 88 % |
+| uncompensated, no AI aim error | 33 % | 128 / 160 | 52 → 102 u | – |
+| compensated, the AI's skill model | 79 % | 1 / 160 | 55 → 52 u | 56 % |
+| uncompensated, the AI's skill model (before B1) | 17 % | 128 / 160 | 55 → 103 u | 5 % |
+
+A puppet's drawn AK spray (15 bullets) leaves within 0.51° of its view compensated, vs climbing to 10.3° before.
+
 ## In the 3D host (H2b)
 
 `Sim3DHost` (src/sim3d/host.ts) keeps sim2d's fire / ammo / reload machine (`stepWeapon`, so cadence, ammo and the
@@ -284,7 +325,7 @@ direction from view + punch × 2 + the cone, RNG `Rng(seed).fork('spread:<id>:<t
 | Who | Bullet | Speed |
 | --- | --- | --- |
 | The human (while controlled) and LIVE pawns | lands along the spread + recoil direction; may go through walls | `MoveOptions` (docs/movement.md): `runSpeed` = `maxSpeedOf` without tagging (the weapon's `m_flMaxSpeed` in its mode, AWP 100 scoped, × the attack factor while firing), `velocityModifier` = tagging; passed only where they differ from the table / 1 |
-| Puppets (REPLAY) | **outcome traced along the scripted view as before** (scripted damage is the truth; no recorded event changes); the drawn tracer follows the spread direction | the table's speeds (their tracks) |
+| Puppets (REPLAY) | **outcome traced along the scripted view as before** (scripted damage is the truth; no recorded event changes); the drawn tracer follows the spread direction from the recoil-compensated view (B1: it goes at the scripted aim, not above it) | the table's speeds (their tracks) |
 
 - **Tagging and hit punch**: `applyHit` on the victim of every bullet hit that lands (not on a blocked recorded pair).
 - **Scope**: ATTACK2 steps the zoom of scoped weapons; a reload or (AWP / SSG) a shot drops it until the bolt is back;

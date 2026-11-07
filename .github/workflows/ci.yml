@@ -20,5 +20,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      # H3: Mirage rebuilt through the generic map builder must be byte-identical (mesh, clips, height image, nav, facts).
+      - run: npm run map:check
       - run: npm run build
       - run: npm run build:single

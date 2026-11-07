@@ -4,7 +4,7 @@
   "shots": 181,
   "edgeF": {
    "mean": 0.566,
-   "median": 0.58,
+   "median": 0.579,
    "min": 0.225
   },
   "ssim": {
@@ -15,12 +15,12 @@
   "byCamera": {
    "barely": {
     "shots": 20,
-    "edgeF": 0.569,
+    "edgeF": 0.567,
     "ssim": 0.71
    },
    "cart": {
     "shots": 112,
-    "edgeF": 0.581,
+    "edgeF": 0.582,
     "ssim": 0.706
    },
    "donk": {
@@ -37,49 +37,49 @@
   "worst": [
    {
     "t": 33.5,
-    "edgeF": 0.2249,
+    "edgeF": 0.2251,
     "ssim": 0.5912,
     "watched": "donk"
    },
    {
     "t": 35.5,
-    "edgeF": 0.2345,
+    "edgeF": 0.2342,
     "ssim": 0.5969,
     "watched": "donk"
    },
    {
     "t": 36,
-    "edgeF": 0.2475,
+    "edgeF": 0.2465,
     "ssim": 0.5963,
     "watched": "donk"
    },
    {
     "t": 37,
-    "edgeF": 0.2549,
+    "edgeF": 0.2567,
     "ssim": 0.6021,
     "watched": "donk"
    },
    {
     "t": 34,
-    "edgeF": 0.2696,
+    "edgeF": 0.2715,
     "ssim": 0.5897,
     "watched": "donk"
    },
    {
     "t": 36.5,
-    "edgeF": 0.261,
-    "ssim": 0.6031,
+    "edgeF": 0.2621,
+    "ssim": 0.6032,
     "watched": "donk"
    },
    {
     "t": 34.5,
-    "edgeF": 0.2725,
+    "edgeF": 0.2727,
     "ssim": 0.5949,
     "watched": "donk"
    },
    {
     "t": 35,
-    "edgeF": 0.2917,
+    "edgeF": 0.2914,
     "ssim": 0.5997,
     "watched": "donk"
    }
@@ -90,12 +90,12 @@
    "summary": {
     "run": "watch",
     "timestamps": 181,
-    "pass": 57,
-    "fail": 124,
+    "pass": 56,
+    "fail": 125,
     "radar": {
      "checks": 438,
-     "fail": 139,
-     "rms": 42.3,
+     "fail": 155,
+     "rms": 43.6,
      "p95": 86.2,
      "max": 163,
      "maxAt": "barely @ 23s"
@@ -111,12 +111,12 @@
     },
     "recObserved": {
      "checks": 39,
-     "fail": 8
+     "fail": 9
     },
     "causes": {
-     "snap": 116,
+     "snap": 133,
      "recording": 13,
-     "puppet": 10
+     "puppet": 9
     },
     "status": {
      "fail": 0
@@ -156,9 +156,9 @@
     "perPlayer": {
      "barely": {
       "n": 129,
-      "rms": 47.8,
+      "rms": 51.7,
       "max": 163,
-      "fail": 42
+      "fail": 58
      },
      "cart": {
       "n": 165,
@@ -959,7 +959,7 @@
     "34.5|hud|armor": "pass",
     "34.5|hud|clip": "pass",
     "34.5|hud|bomb": "pass",
-    "35|pos|barely": "pass",
+    "35|pos|barely": "fail",
     "35|pos|cart": "fail",
     "35|pos|donk": "pass",
     "35|pos|sp4rtan": "pass",
@@ -1004,7 +1004,7 @@
     "37|hud|armor": "pass",
     "37|hud|clip": "pass",
     "37|hud|bomb": "pass",
-    "37.5|pos|barely": "pass",
+    "37.5|pos|barely": "fail",
     "37.5|pos|cart": "fail",
     "37.5|pos|donk": "pass",
     "37.5|pos|sp4rtan": "pass",
@@ -1013,7 +1013,7 @@
     "37.5|hud|armor": "pass",
     "37.5|hud|clip": "pass",
     "37.5|hud|bomb": "pass",
-    "38|pos|barely": "pass",
+    "38|pos|barely": "fail",
     "38|pos|cart": "fail",
     "38|pos|donk": "pass",
     "38|pos|sp4rtan": "pass",
@@ -1022,7 +1022,7 @@
     "38|hud|armor": "pass",
     "38|hud|clip": "pass",
     "38|hud|bomb": "pass",
-    "38.5|pos|barely": "pass",
+    "38.5|pos|barely": "fail",
     "38.5|pos|cart": "fail",
     "38.5|pos|donk": "pass",
     "38.5|pos|sp4rtan": "pass",
@@ -1031,7 +1031,7 @@
     "38.5|hud|armor": "pass",
     "38.5|hud|clip": "pass",
     "38.5|hud|bomb": "pass",
-    "39|pos|barely": "pass",
+    "39|pos|barely": "fail",
     "39|pos|cart": "fail",
     "39|pos|donk": "pass",
     "39|pos|sp4rtan": "pass",
@@ -1040,7 +1040,7 @@
     "39|hud|armor": "pass",
     "39|hud|clip": "pass",
     "39|hud|bomb": "pass",
-    "39.5|pos|barely": "pass",
+    "39.5|pos|barely": "fail",
     "39.5|pos|cart": "fail",
     "39.5|pos|donk": "pass",
     "39.5|pos|sp4rtan": "pass",
@@ -1049,7 +1049,7 @@
     "39.5|hud|armor": "pass",
     "39.5|hud|clip": "pass",
     "39.5|hud|bomb": "pass",
-    "40|pos|barely": "pass",
+    "40|pos|barely": "fail",
     "40|pos|cart": "fail",
     "40|pos|donk": "pass",
     "40|pos|sp4rtan": "pass",
@@ -1058,7 +1058,7 @@
     "40|hud|armor": "pass",
     "40|hud|clip": "pass",
     "40|hud|bomb": "pass",
-    "40.5|pos|barely": "pass",
+    "40.5|pos|barely": "fail",
     "40.5|pos|cart": "fail",
     "40.5|pos|donk": "pass",
     "40.5|pos|sp4rtan": "pass",
@@ -1067,7 +1067,7 @@
     "40.5|hud|armor": "pass",
     "40.5|hud|clip": "pass",
     "40.5|hud|bomb": "pass",
-    "41|pos|barely": "pass",
+    "41|pos|barely": "fail",
     "41|pos|cart": "fail",
     "41|pos|donk": "pass",
     "41|pos|sp4rtan": "pass",
@@ -1076,7 +1076,7 @@
     "41|hud|armor": "pass",
     "41|hud|clip": "pass",
     "41|hud|bomb": "pass",
-    "41.5|pos|barely": "pass",
+    "41.5|pos|barely": "fail",
     "41.5|pos|cart": "fail",
     "41.5|pos|donk": "pass",
     "41.5|pos|sp4rtan": "pass",
@@ -1085,7 +1085,7 @@
     "41.5|hud|armor": "pass",
     "41.5|hud|clip": "pass",
     "41.5|hud|bomb": "pass",
-    "42|pos|barely": "pass",
+    "42|pos|barely": "fail",
     "42|pos|cart": "fail",
     "42|pos|donk": "pass",
     "42|pos|sp4rtan": "pass",
@@ -1094,7 +1094,7 @@
     "42|hud|armor": "pass",
     "42|hud|clip": "pass",
     "42|hud|bomb": "pass",
-    "42.5|pos|barely": "pass",
+    "42.5|pos|barely": "fail",
     "42.5|pos|cart": "fail",
     "42.5|pos|donk": "pass",
     "42.5|pos|sp4rtan": "pass",
@@ -1103,7 +1103,7 @@
     "42.5|hud|armor": "pass",
     "42.5|hud|clip": "pass",
     "42.5|hud|bomb": "pass",
-    "43|pos|barely": "pass",
+    "43|pos|barely": "fail",
     "43|pos|cart": "fail",
     "43|pos|donk": "pass",
     "43|pos|sp4rtan": "pass",
@@ -1112,7 +1112,7 @@
     "43|hud|armor": "pass",
     "43|hud|clip": "pass",
     "43|hud|bomb": "pass",
-    "43.5|pos|barely": "pass",
+    "43.5|pos|barely": "fail",
     "43.5|pos|cart": "fail",
     "43.5|pos|donk": "pass",
     "43.5|pos|sp4rtan": "pass",
@@ -1121,7 +1121,7 @@
     "43.5|hud|armor": "pass",
     "43.5|hud|clip": "pass",
     "43.5|hud|bomb": "pass",
-    "44|pos|barely": "pass",
+    "44|pos|barely": "fail",
     "44|pos|cart": "fail",
     "44|pos|donk": "pass",
     "44|pos|sp4rtan": "pass",
@@ -1130,7 +1130,7 @@
     "44|hud|armor": "pass",
     "44|hud|clip": "pass",
     "44|hud|bomb": "pass",
-    "44.2|pos|barely": "pass",
+    "44.2|pos|barely": "fail",
     "44.2|pos|cart": "fail",
     "44.2|pos|donk": "pass",
     "44.2|pos|sp4rtan": "pass",
@@ -1138,7 +1138,7 @@
     "44.2|hud|armor": "pass",
     "44.2|hud|clip": "pass",
     "44.2|hud|bomb": "pass",
-    "44.5|pos|barely": "pass",
+    "44.5|pos|barely": "fail",
     "44.5|pos|cart": "pass",
     "44.5|pos|donk": "pass",
     "44.5|pos|sp4rtan": "pass",

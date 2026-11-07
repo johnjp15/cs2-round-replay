@@ -35,7 +35,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import jpeg from 'jpeg-js';
 import { CROUCHING_HULL, MapGeometry, STANDING_HULL, STEP_HEIGHT, TRACE_SKIN, WALKABLE_NZ, combineMeshes, decodeGeometry, encodeGeometry, type GeometryMesh, type Hull } from '../src/sim2d/geometry';
-import { BIN_PATH, CS2_NAV_PATH, Cs2NavIndex, IMAGE, loadRound, pixelCentre, previewJpeg, readCs2Nav, spawnSeeds, standLevels, worldToPixel, type Cs2NavArea } from './extract-geometry';
+import { BIN_PATH, CS2_NAV_PATH, Cs2NavIndex, IMAGE, loadRound, pixelCentre, previewJpeg, readCs2Nav, spawnSeeds, standLevels, worldToPixel, type Cs2NavArea, type ImageParams } from './extract-geometry';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const CLIPS_PATH = 'data/geometry/mirage-clips.bin';
@@ -248,8 +248,8 @@ export interface ClipLevels {
 }
 
 /** Pixels within `grow` units of any CS2 nav polygon's bounding box. */
-function navMask(areas: readonly Cs2NavArea[], grow: number): Uint8Array {
-  const N = IMAGE.size;
+function navMask(areas: readonly Cs2NavArea[], grow: number, img: ImageParams = IMAGE): Uint8Array {
+  const N = img.size;
   const mask = new Uint8Array(N * N);
   for (const a of areas) {
     let x0 = Infinity;
@@ -262,8 +262,8 @@ function navMask(areas: readonly Cs2NavArea[], grow: number): Uint8Array {
       y0 = Math.min(y0, a.corners[k + 1] as number);
       y1 = Math.max(y1, a.corners[k + 1] as number);
     }
-    const lo = worldToPixel(x0 - grow, y1 + grow);
-    const hi = worldToPixel(x1 + grow, y0 - grow);
+    const lo = worldToPixel(x0 - grow, y1 + grow, img);
+    const hi = worldToPixel(x1 + grow, y0 - grow, img);
     for (let py = Math.max(0, lo.py); py <= Math.min(N - 1, hi.py); py++) for (let px = Math.max(0, lo.px); px <= Math.min(N - 1, hi.px); px++) mask[py * N + px] = 1;
   }
   return mask;
@@ -273,16 +273,16 @@ function navMask(areas: readonly Cs2NavArea[], grow: number): Uint8Array {
  * Steps 1–3 on geometry `g` (the world mesh, or merged with clips). With `pieces` null nothing is filtered (every
  * level counts as allowed): the validation flood of step 5.
  */
-export function floodLevels(g: MapGeometry, areas: readonly Cs2NavArea[], levelAllowed: ((x: number, y: number, z: number) => boolean) | null, seeds: readonly { x: number; y: number; z: number }[]): ClipLevels {
-  const N = IMAGE.size;
-  const mask = navMask(areas, CLIP_PARAMS.maskGrow);
+export function floodLevels(g: MapGeometry, areas: readonly Cs2NavArea[], levelAllowed: ((x: number, y: number, z: number) => boolean) | null, seeds: readonly { x: number; y: number; z: number }[], img: ImageParams = IMAGE): ClipLevels {
+  const N = img.size;
+  const mask = navMask(areas, CLIP_PARAMS.maskGrow, img);
   const start = new Int32Array(N * N + 1);
   const zs: number[] = [];
   const st: number[] = [];
   for (let p = 0; p < N * N; p++) {
     start[p] = zs.length;
     if (mask[p] !== 1) continue;
-    const c = pixelCentre(p % N, Math.floor(p / N));
+    const c = pixelCentre(p % N, Math.floor(p / N), img);
     for (const l of standLevels(g, c.x, c.y, g.maxZ + 1, g.minZ - 1)) {
       zs.push(l.z);
       st.push(l.standing ? 1 : 0);
@@ -298,7 +298,7 @@ export function floodLevels(g: MapGeometry, areas: readonly Cs2NavArea[], levelA
     if (levelAllowed === null) return true;
     if (allowedCache[k] === -1) {
       const p = pixelOf[k] as number;
-      const c = pixelCentre(p % N, Math.floor(p / N));
+      const c = pixelCentre(p % N, Math.floor(p / N), img);
       allowedCache[k] = levelAllowed(c.x, c.y, z[k] as number) ? 1 : 0;
     }
     return allowedCache[k] === 1;
@@ -310,7 +310,7 @@ export function floodLevels(g: MapGeometry, areas: readonly Cs2NavArea[], levelA
   const queue: number[] = [];
   let seedsMoved = 0;
   for (const s of seeds) {
-    const { px, py } = worldToPixel(s.x, s.y);
+    const { px, py } = worldToPixel(s.x, s.y, img);
     let best = -1;
     let bestD = Infinity;
     const R = CLIP_PARAMS.seedSearchPx;
@@ -331,7 +331,7 @@ export function floodLevels(g: MapGeometry, areas: readonly Cs2NavArea[], levelA
     if (best < 0) throw new Error(`clips: no allowed level near the start position (${s.x}, ${s.y}, ${s.z})`);
     if (bestD > 0) seedsMoved++;
     const bp = pixelOf[best] as number;
-    const bc = pixelCentre(bp % N, Math.floor(bp / N));
+    const bc = pixelCentre(bp % N, Math.floor(bp / N), img);
     used.push({ x: bc.x, y: bc.y, z: z[best] as number });
     if (reach[best] === 0) {
       reach[best] = 1;
@@ -348,7 +348,7 @@ export function floodLevels(g: MapGeometry, areas: readonly Cs2NavArea[], levelA
     const py = Math.floor(p / N);
     const zk = z[k] as number;
     const hull: Hull = standing[k] === 1 ? STANDING_HULL : CROUCHING_HULL;
-    const cp = pixelCentre(px, py);
+    const cp = pixelCentre(px, py, img);
     for (const [dx, dy] of [
       [1, 0],
       [-1, 0],
@@ -359,7 +359,7 @@ export function floodLevels(g: MapGeometry, areas: readonly Cs2NavArea[], levelA
       const qy = py + dy;
       if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
       const q = qy * N + qx;
-      const cq = pixelCentre(qx, qy);
+      const cq = pixelCentre(qx, qy, img);
       targets.length = 0;
       // Walking or walking off a ledge: the hull comes to rest on the highest level at or below a step up.
       let landing = -1;
@@ -406,7 +406,7 @@ export function floodLevels(g: MapGeometry, areas: readonly Cs2NavArea[], levelA
 }
 
 /** Step 4: the forbidden support pieces of every frontier level (not yet in `done`), with their prism tops. */
-export function clipPieces(g: MapGeometry, lv: ClipLevels, pieces: Pieces, done: Set<ClipPiece>): { pieces: ClipPiece[]; stats: Record<string, number> } {
+export function clipPieces(g: MapGeometry, lv: ClipLevels, pieces: Pieces, done: Set<ClipPiece>, img: ImageParams = IMAGE): { pieces: ClipPiece[]; stats: Record<string, number> } {
   // g: the world mesh (ceilings for the prism tops); pieces: classified on it.
   const N = lv.size;
   const out: ClipPiece[] = [];
@@ -414,7 +414,7 @@ export function clipPieces(g: MapGeometry, lv: ClipLevels, pieces: Pieces, done:
   for (let p = 0; p < N * N; p++) {
     for (let k = lv.start[p] as number; k < (lv.start[p + 1] as number); k++) {
       if (lv.frontier[k] !== 1) continue;
-      const c = pixelCentre(p % N, Math.floor(p / N));
+      const c = pixelCentre(p % N, Math.floor(p / N), img);
       for (const pc of pieces.support(c.x, c.y, lv.z[k] as number)) {
         if (pc.allowed || done.has(pc)) continue;
         done.add(pc);
@@ -522,17 +522,16 @@ export function loadMovementGeometry(root: string = ROOT): MapGeometry {
   return new MapGeometry(combineMeshes(world, clips));
 }
 
-function previewImage(check: ClipLevels, pieces: readonly ClipPiece[]): Uint8Array {
+function previewImage(check: ClipLevels, pieces: readonly ClipPiece[], img: ImageParams, radarRgba: Uint8Array): Uint8Array {
   const N = check.size;
-  const radar = jpeg.decode(readFileSync(resolve(ROOT, 'data/mirage-radar.jpg')), { useTArray: true });
   const rgba = new Uint8Array(N * N * 4);
   for (let p = 0; p < N * N; p++) {
     let reached = false;
     for (let k = check.start[p] as number; k < (check.start[p + 1] as number); k++) if (check.reach[k] === 1) reached = true;
     const f = reached ? 0.75 : 0.35;
-    rgba[p * 4] = Math.round((radar.data[p * 4] as number) * f);
-    rgba[p * 4 + 1] = Math.round((radar.data[p * 4 + 1] as number) * f + (reached ? 40 : 0));
-    rgba[p * 4 + 2] = Math.round((radar.data[p * 4 + 2] as number) * f);
+    rgba[p * 4] = Math.round((radarRgba[p * 4] as number) * f);
+    rgba[p * 4 + 1] = Math.round((radarRgba[p * 4 + 1] as number) * f + (reached ? 40 : 0));
+    rgba[p * 4 + 2] = Math.round((radarRgba[p * 4 + 2] as number) * f);
     rgba[p * 4 + 3] = 255;
   }
   for (const pc of pieces) {
@@ -542,7 +541,7 @@ function previewImage(check: ClipLevels, pieces: readonly ClipPiece[]): Uint8Arr
       mx += q[0];
       my += q[1];
     }
-    const { px, py } = worldToPixel(mx / pc.poly.length, my / pc.poly.length);
+    const { px, py } = worldToPixel(mx / pc.poly.length, my / pc.poly.length, img);
     if (px < 0 || py < 0 || px >= N || py >= N) continue;
     for (const d of [0, 1, N, N + 1]) {
       const o = (py * N + px + d) * 4;
@@ -554,15 +553,131 @@ function previewImage(check: ClipLevels, pieces: readonly ClipPiece[]): Uint8Arr
   return previewJpeg(rgba, N);
 }
 
+/** H3: what one map's clip build reads and writes (tools/build-map.ts; Mirage's is `mirageClipSpec()`). */
+export interface ClipSpec {
+  /** The world mesh (G2GM) the clips are built on. */
+  readonly worldPath: string;
+  readonly navPath: string;
+  readonly clipsPath: string;
+  readonly img: ImageParams;
+  /** Flood seeds and the file they come from (a manifest source). */
+  readonly seeds: readonly { x: number; y: number; z: number }[];
+  readonly seedsPath: string;
+  /** The preview's background (RGBA, img.size²). */
+  readonly previewRgba: () => Uint8Array;
+  readonly note: string;
+  readonly root?: string;
+  /**
+   * H3: after the flood, drop every prism that stands where CS2's own nav says a player walks (a standing hull free
+   * of the world at a nav sample but not of the prisms): the nav covers stairs and ramps whose decimated surfaces lie
+   * more than `navExactDz` off it, and a prism there walls the way off. Mirage's committed clips predate this (off).
+   */
+  readonly navRelief?: boolean;
+}
+
+/** H3 `navRelief`: points of a nav area a standing player must fit at (centroid, corners and edge midpoints pulled in). */
+function navSamples(a: Cs2NavArea): { x: number; y: number; z: number }[] {
+  const c = a.corners;
+  const n = c.length / 3;
+  let cx = 0;
+  let cy = 0;
+  let cz = 0;
+  for (let k = 0; k < n; k++) {
+    cx += c[k * 3] as number;
+    cy += c[k * 3 + 1] as number;
+    cz += c[k * 3 + 2] as number;
+  }
+  cx /= n;
+  cy /= n;
+  cz /= n;
+  const out = [{ x: cx, y: cy, z: cz }];
+  const toward = (x: number, y: number, z: number, d: number): { x: number; y: number; z: number } => {
+    const l = Math.hypot(cx - x, cy - y);
+    const f = l <= d ? 1 : d / l;
+    return { x: x + (cx - x) * f, y: y + (cy - y) * f, z: z + (cz - z) * f };
+  };
+  for (let k = 0; k < n; k++) {
+    const j = (k + 1) % n;
+    out.push(toward(c[k * 3] as number, c[k * 3 + 1] as number, c[k * 3 + 2] as number, 12));
+    out.push(toward(((c[k * 3] as number) + (c[j * 3] as number)) / 2, ((c[k * 3 + 1] as number) + (c[j * 3 + 1] as number)) / 2, ((c[k * 3 + 2] as number) + (c[j * 3 + 2] as number)) / 2, 4));
+  }
+  return out;
+}
+
+/** H3 `navRelief`: the clipped pieces that wall a standing hull off where the nav has floor, removed (rounds until none). */
+function relieveNav(world: MapGeometry, worldMesh: GeometryMesh, areas: readonly Cs2NavArea[], clipped: ClipPiece[]): { pieces: ClipPiece[]; removed: number; samples: number } {
+  let pieces = clipped;
+  let removed = 0;
+  let samples = 0;
+  const hw = STANDING_HULL.halfWidth;
+  for (let round = 0; round < 4; round++) {
+    const mesh = prismMesh(pieces, worldMesh.quant).mesh;
+    const merged = new MapGeometry(combineMeshes(worldMesh, mesh));
+    const drop = new Set<ClipPiece>();
+    for (const a of areas) {
+      for (const p of navSamples(a)) {
+        const f = world.floorBelow(p.x, p.y, p.z + 24, hw, STEP_HEIGHT, 48);
+        const z = f !== null && f.walkable ? f.z : p.z;
+        if (round === 0) samples++;
+        if (world.hullBlocked(p.x, p.y, z + 0.5, STANDING_HULL) || !merged.hullBlocked(p.x, p.y, z + 0.5, STANDING_HULL)) continue;
+        for (const pc of pieces) {
+          let x0 = Infinity;
+          let x1 = -Infinity;
+          let y0 = Infinity;
+          let y1 = -Infinity;
+          let z0 = Infinity;
+          for (const q of pc.poly) {
+            x0 = Math.min(x0, q[0]);
+            x1 = Math.max(x1, q[0]);
+            y0 = Math.min(y0, q[1]);
+            y1 = Math.max(y1, q[1]);
+            z0 = Math.min(z0, q[2]);
+          }
+          if (x1 <= p.x - hw || x0 >= p.x + hw || y1 <= p.y - hw || y0 >= p.y + hw) continue;
+          if (pc.top <= z + 0.5 || z0 >= z + STANDING_HULL.height) continue;
+          drop.add(pc);
+        }
+      }
+    }
+    if (drop.size === 0) break;
+    removed += drop.size;
+    pieces = pieces.filter((pc) => !drop.has(pc));
+  }
+  return { pieces, removed, samples };
+}
+
+const MIRAGE_CLIPS_NOTE = 'Player clips for G3 movement: prisms over walkable surfaces a pawn could reach that the CS2 nav does not cover (wall tops, ledges, roofs, out-of-map floors). G2GM like mirage-geometry.bin; merged into it for movement. Built by tools/extract-clips.ts; see docs/geometry.md "Player clips".';
+
+export function mirageClipSpec(): ClipSpec {
+  return {
+    worldPath: BIN_PATH,
+    navPath: CS2_NAV_PATH,
+    clipsPath: CLIPS_PATH,
+    img: IMAGE,
+    seeds: spawnSeeds(loadRound()),
+    seedsPath: 'data/round.json',
+    previewRgba: () => jpeg.decode(readFileSync(resolve(ROOT, 'data/mirage-radar.jpg')), { useTArray: true }).data,
+    note: MIRAGE_CLIPS_NOTE,
+  };
+}
+
 export function buildClips(): ClipProducts {
-  const worldBytes = read(BIN_PATH);
-  const navBytes = read(CS2_NAV_PATH);
-  const roundBytes = read('data/round.json');
+  return buildClipsFor(mirageClipSpec());
+}
+
+/** Steps 1–5 for any map with a CS2 nav (docs/geometry.md "Player clips"). */
+export function buildClipsFor(spec: ClipSpec, worldBytesIn: Uint8Array | null = null): ClipProducts {
+  const root = spec.root ?? ROOT;
+  const rd = (path: string): Uint8Array => new Uint8Array(readFileSync(resolve(root, path)));
+  const worldBytes = worldBytesIn ?? rd(spec.worldPath);
+  const navBytes = rd(spec.navPath);
+  const seedBytes = rd(spec.seedsPath);
+  const img = spec.img;
   const worldMesh = decodeGeometry(worldBytes);
   const world = new MapGeometry(worldMesh);
   const areas = readCs2Nav(navBytes).areas;
   const nav = new NavCover(areas);
-  const seeds = spawnSeeds(loadRound());
+  const seeds = spec.seeds;
   // Steps 1–4, repeated on the world mesh merged with the clips so far until no frontier level is left: a clip only
   // stops the flood where it stands, and the next round may reach new frontier beyond a gap.
   const done = new Set<ClipPiece>();
@@ -573,9 +688,9 @@ export function buildClips(): ClipProducts {
   const pieces = new Pieces(world, world.triangleCount, nav);
   let built = prismMesh([], worldMesh.quant);
   for (let round = 0; round < CLIP_PARAMS.maxRounds; round++) {
-    const levels = floodLevels(merged, areas, (x, y, zz) => pieces.allowsLevel(x, y, zz), seeds);
+    const levels = floodLevels(merged, areas, (x, y, zz) => pieces.allowsLevel(x, y, zz), seeds, img);
     first ??= levels;
-    const add = clipPieces(world, levels, pieces, done);
+    const add = clipPieces(world, levels, pieces, done, img);
     rounds.push({ round, ...levels.stats, ...add.stats });
     if (add.pieces.length === 0) break;
     clipped.push(...add.pieces);
@@ -583,15 +698,24 @@ export function buildClips(): ClipProducts {
     merged = new MapGeometry(combineMeshes(worldMesh, built.mesh));
   }
   if (first === null) throw new Error('clips: no flood');
+  let relief: { removed: number; samples: number } | null = null;
+  if (spec.navRelief === true) {
+    const r = relieveNav(world, worldMesh, areas, clipped);
+    relief = { removed: r.removed, samples: r.samples };
+    clipped.length = 0;
+    clipped.push(...r.pieces);
+    built = prismMesh(clipped, worldMesh.quant);
+    merged = new MapGeometry(combineMeshes(worldMesh, built.mesh));
+  }
   const bin = encodeGeometry(built.mesh);
   // Step 5: flood the merged mesh with no nav filter, only stopped by the clips (a level resting on a clipped piece is
   // inside a prism); every level it reaches should be one the nav allows.
   const inClip = new Set<ClipPiece>(clipped);
-  const check = floodLevels(merged, areas, (x, y, zz) => !pieces.inClip(x, y, zz, inClip), first.seeds);
+  const check = floodLevels(merged, areas, (x, y, zz) => !pieces.inClip(x, y, zz, inClip), first.seeds, img);
   let leaks = 0;
   const leakCells = new Set<string>();
   for (let p = 0; p < check.size * check.size; p++) {
-    const c = pixelCentre(p % check.size, Math.floor(p / check.size));
+    const c = pixelCentre(p % check.size, Math.floor(p / check.size), img);
     for (let k = check.start[p] as number; k < (check.start[p + 1] as number); k++) {
       if (check.reach[k] !== 1 || pieces.allowsLevel(c.x, c.y, check.z[k] as number)) continue;
       leaks++;
@@ -600,17 +724,18 @@ export function buildClips(): ClipProducts {
   }
   const manifest = {
     format: CLIPS_FORMAT,
-    note: 'Player clips for G3 movement: prisms over walkable surfaces a pawn could reach that the CS2 nav does not cover (wall tops, ledges, roofs, out-of-map floors). G2GM like mirage-geometry.bin; merged into it for movement. Built by tools/extract-clips.ts; see docs/geometry.md "Player clips".',
-    binary: { file: CLIPS_PATH, bytes: bin.length, sha256: sha256(bin) },
+    note: spec.note,
+    binary: { file: spec.clipsPath, bytes: bin.length, sha256: sha256(bin) },
     sources: [
-      { file: BIN_PATH, sha256: sha256(worldBytes) },
-      { file: CS2_NAV_PATH, sha256: sha256(navBytes) },
-      { file: 'data/round.json', sha256: sha256(roundBytes) },
+      { file: spec.worldPath, sha256: sha256(worldBytes) },
+      { file: spec.navPath, sha256: sha256(navBytes) },
+      { file: spec.seedsPath, sha256: sha256(seedBytes) },
     ],
     params: CLIP_PARAMS,
     pieces: clipped.length,
     rounds,
     mesh: built.stats,
+    ...(relief === null ? {} : { navRelief: relief }),
     validation: {
       reachedLevels: check.stats['reachedLevels'],
       notAllowedByNav: leaks,
@@ -618,7 +743,7 @@ export function buildClips(): ClipProducts {
     },
   };
   const manifestText = JSON.stringify(manifest, null, 2) + '\n';
-  return { bin, manifestText, preview: previewImage(check, clipped), world, merged };
+  return { bin, manifestText, preview: previewImage(check, clipped, img, spec.previewRgba()), world, merged };
 }
 
 function main(): void {

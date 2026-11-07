@@ -178,3 +178,29 @@ Level portals are otherwise kept as the 2020 nav has them (narrowing them all to
 start-up and left the 2020 areas that miss CS2's corridors no better). 5 of the 1,089 areas reachable from the spawns
 are no longer reachable (they are inside CS2 props). Building the 3D nav takes about 0.25 s (Node). Paths cost about
 0.7 ms each once warm (2D: 0.4 ms).
+
+## CS2 nav (H3: `src/engine/nav/cs2-nav.ts`, any map)
+
+Free play's LIVE AI paths on **CS2's own nav** of the map (`data/maps/<id>/nav.json`, docs/maps.md), not on this
+2020 grid. The recorded round keeps the grid (its scenarios, rejoin and duel results and golden digests depend on it).
+Both are a `MapNav` to the AI (`src/sim2d/map-nav.ts`; `legacyMapNav` wraps this grid with exactly the old queries).
+
+CS2's nav is Valve's, generated from the full collision (clips included) for a 32-unit hull: convex polygons (3–4+
+corners, z per corner) with **directed** connections per edge, attribute flags (`CrouchHeight` 0x10000 and the rest of
+VRF's `NavAttributeFlags`), ladders. Mirage: 2,544 areas, 6,381 connections; Dust II: 2,242 / 6,275. No places.
+
+| query | how |
+| --- | --- |
+| `areaAt`, `isWalkable`, `zAt`, `floorsAt` | point in a convex polygon (2D, closed, 0.5-unit tolerance; 64-unit grid index); height from the fan triangulation; with stacked areas the one nearest the point's z (within 40) |
+| links | a connection's portal is the part of the edge the target polygon touches, pulled 8 units in from its ends. Far side higher than 20 at the portal: a **jump** (only if ≤ 62 up and the far side within 32 of the portal, else unusable); lower than 20: a **drop**; else a walk. Mirage: 5,586 walk / 555 drop / 197 jump; Dust II: 5,183 / 633 / 405 |
+| `path(a, b)` | A* over areas (costs between portal midpoints, 3D, + the height change, + 160 per jump; heuristic 3D distance), then a funnel (string pull) through the portals; each jump keeps its near side and a landing 12 units into the far area as waypoints, and the landing is marked (`isJumpPoint`) |
+| `segmentWalkable(a, b)` | every 4 units over an area at most a step (20) above the previous floor; lower only through a connection of the area being left; ≤ 40 units of empty space across a drop's gap |
+| `snap`, `escapeSpot` | nearest point on the nearest area (z weighted × 2); the blast escape as on the grid (Dijkstra over areas, the first area with a candidate outside the radius) |
+| sites and spawns | `map.json`: `inBombsite` = `bombsiteAt`, `bombsitePoint` = the nearest site's plant spot, `spawnCentre` = the mean of a team's spawns |
+
+The AI on a CS2 nav also **jumps** (JUMP within 48 units of a jump landing from the ground, DUCK in the air: a
+crouch jump), **ducks** through `CrouchHeight` areas, and jumps while it nudges sideways when stuck (a lip of the
+decimated mesh). None of this applies on the grid (its MapNav has no `isJumpPoint` / `isCrouchAt`).
+
+Costs (this workspace): Dust II T spawn → A 4,437 units, 34 points, 10–80 ms per path (A* over ≈ 2,200 areas); the
+AI re-plans only when its destination changes or it is stuck.
