@@ -296,3 +296,123 @@ sub-tick input; ladders (Mirage's two: the nav has no ladder links and the 3D wo
 bunny-hop speed gain beyond what the air acceleration gives; jump inaccuracy. Whether WALK and DUCK stack in CS2 is to be checked. The player
 hull is implicit against the world (nav areas are player-centre space); between pawns it is a 16-unit circle
 (C3, `docs/combat.md`, "Collision").
+
+## CS2 verification (M1, `tests/movement-cs2.test.ts`)
+
+M1 checked every movement number and formula against primary sources and pinned the model to them with a numeric
+battery. The test file transcribes the Source functions independently of the model (`refFriction`, `refAccelerate`,
+`refGroundTick`, `refAir`) and compares the model with them tick by tick; the pinned numbers below are what those
+formulas give with CS2's constants.
+
+### Sources
+
+| Id | Source | Used for |
+| --- | --- | --- |
+| C1 | CS2 convar dump: [SteamDatabase/GameTracking-CS2 `DumpSource2/convars.txt`](https://github.com/SteamDatabase/GameTracking-CS2/blob/cce7bf1f190144c1c08fb0fe75fd3c9514f2637f/DumpSource2/convars.txt) at `cce7bf1f` (2026-11-05), dumped from the game | every convar default and description quoted below |
+| C2 | CS2 `weapons.vdata` (same repo and commit; copy and table from H2, `docs/weapons.md` S1) | `m_flMaxSpeed` per item (primary / alt mode), `m_flFlinchVelocityModifierLarge/Small` |
+| S1 | [Source SDK 2013](https://github.com/ValveSoftware/source-sdk-2013) `src/game/shared/gamemovement.cpp` at `e1f1fd42` | the algorithms (CS2's movement is a descendant; CS2's own code is not public) |
+| S2 | Source SDK 2013 `src/game/shared/shareddefs.h` and `src/game/shared/tf/tf_gamemovement.cpp` at `e1f1fd42` | fall-damage constants, duck times, the bunny-hop speed clamp |
+| R1 | CS2 release notes 2026-01-21 / 01-22, as reproduced by [patched.gg](https://patched.gg/games/counter-strike-2/counter-strike-2-update-2026-01-21) ([01-22](https://patched.gg/games/counter-strike-2/counter-strike-2-update-2026-01-22)) | the 2026 jump code: "Landing time is now calculated with subtick precision", "Jumping and landing no longer affect stamina; speed penalty is now a function of landing time", `sv_bhop_time_window`, `sv_legacy_jump`; "Landing vertical velocity now affects landing speed penalties similar to sv_legacy_jump stamina" |
+| R2 | CS2 release notes 2024-10-28 ([dust2.us](https://www.dust2.us/news/54642/valve-finally-fixes-movement-issue-plaguing-cs2-since-launch)) | "Improved jump height consistency to be within 0.015625 of a unit regardless of distance from the map origin" |
+| W1 | [CS:GO Mapper's Reference](https://developer.valvesoftware.com/wiki/Counter-Strike:_Global_Offensive/Mapper%27s_Reference) (Valve Developer Community) | hulls 32×32×72 / 54, eye 64.093811 / 46.076218, block heights (jump 54 / 55 at 64 / 128 tick, jump-then-crouch 63 / 64, crouch jump 65 / 66), run-off fall damage from 223 units at 64 tick, slope limit 45.573° |
+| W2 | [zer0k-z/cs2-movement-issues](https://github.com/zer0k-z/cs2-movement-issues) `readme.md` at `26f1716d` (2026-01-21) | CS2 sub-tick splitting ("Every time a key is pressed or released, the tick simulation is split into two shorter simulations", l. 131), the 0.25 air `m_surfaceFriction` in CS2 (l. 76), 66-unit crouch-jump boxes (l. 148), the 2025-09-17 "timestep-independence of subtick movement acceleration" change (l. 169) |
+| W3 | [r/GlobalOffensive, "Analysis of movement in CS2: subtick and more"](https://www.reddit.com/r/GlobalOffensive/comments/170nzzj/analysis_of_movement_in_cs2_subtick_and_more) (2023-10-05) and a [follow-up measurement](https://lemy.lol/post/13806714) | measured: 21.48 u/s after one knife tick, 10.74 u/s for a half-tick (sub-tick) press, "0 to 250 u/s takes 35 ticks with desubticked binds"; `sv_jump_impulse 302.0728` (= √(2·800·57.03)) "restores the exact same jump height as in CS:GO" |
+| K1 | [KZGlobalTeam/cs2kz-metamod](https://github.com/KZGlobalTeam/cs2kz-metamod) `src/kz/mode/kz_mode_vnl.h`, `kz_mode_ckz.h` at `317449df` | a second copy of the vanilla convars (agrees with C1), CS2's `m_flDuckSpeed` (8 rested, 6.0234375 after a fresh duck) and `m_flVelocityModifier` fields |
+
+Not used: the leaked CS:GO source code (`cstrike15`), which turns up in code searches. Nothing here comes from it.
+
+### Convars (C1), model vs CS2
+
+| CS2 convar | CS2 default (C1) | Model | |
+| --- | ---: | ---: | --- |
+| `sv_accelerate` | 5.5 | `svAccelerate` 5.5 | ✓ |
+| `sv_accelerate_use_weapon_speed` | true | `accelScaleFloor` 1 (acceleration at the weapon's run rate) | ✓ formula: see "Ground acceleration" |
+| `sv_friction` / `sv_stopspeed` | 5.2 / 80 | 5.2 / 80 | ✓ |
+| `sv_airaccelerate` / `sv_air_max_wishspeed` | 12 / 30 | 12 / 30 | ✓ |
+| `sv_gravity` / `sv_jump_impulse` | 800 / 301.99338 ("sqrt(2*gravity*height)", so height 57) | 800 / 301.99338 | ✓ |
+| `sv_maxvelocity` / `sv_stepsize` | 3500 / 18 | 3500 / 18 | ✓ |
+| `sv_standable_normal` / `sv_walkable_normal` | 0.7 / 0.7 | `standableNormal` 0.7 | ✓ |
+| `sv_staminamax` / `sv_staminarecoveryrate` | 80 ("Maximum stamina penalty") / 60 ("units/sec") | 80 / 60 | ✓ |
+| `sv_staminalandcost` / `sv_staminajumpcost` | 0.05 / 0.08, both "sv_legacy_jump only" | `staminaLandCost` 0.05; no jump cost | see M1-8 |
+| `sv_legacy_jump` | false ("pre-2026 jump code") | — | the model follows the 2026 code where it is known (R1) |
+| `sv_enablebunnyhopping` / `sv_autobunnyhopping` | false ("Allow jump speed to exceed 1.1x max speed") / false | no clamp (**M1-2**) / one jump per press ✓ | |
+| `sv_jump_precision_enable` | true | precise take-off (no gravity before the first move) | ✓ (apex below) |
+| `sv_jump_spam_penalty_time` / `sv_bhop_time_window` | 0.015625 / 0.007812 | per-tick fresh press | equivalent at 64 Hz without sub-tick input |
+| `sv_timebetweenducks` | 0.4 ("Minimum time before recognizing consecutive duck key") | not modelled | M1-6 |
+| `sv_falldamage_scale` | 1 | 1 | ✓ |
+| `sv_min_jump_landing_sound` | 260 | `landSoundSpeed` 260 (was "estimated"; now verified) | ✓ |
+| `sv_step_move_vel_min` | 64 ("Min velocity for step move") | not modelled | M1-9 |
+| `mp_tagging_scale` | 1 ("Scalar for player tagging modifier when hit") | not modelled | M1-4 |
+| `sv_ladder_scale_speed` | 0.78 | no ladders | (known gap) |
+| `sv_wateraccelerate` | 10 | no water on Mirage | n/a |
+| `sv_maxspeed` | 320 | the item speed is always lower | n/a |
+
+Item speeds (C2 `m_flMaxSpeed`, primary / alt): knife 250, AK-47 215, M4A4 / M4A1-S 225, FAMAS 220, Galil 215, AWP 200 / **100**,
+SSG 08 230 / **230** (CS2 does not slow the scoped Scout; the task card's 150 is wrong), Deagle 230, Glock / USP-S / P2000 240,
+C4 250, grenades 245, AUG / SG 553 220 / 150 and 210 / 150, SCAR-20 / G3SG1 215 / 120, Negev 150, M249 195. Every entry of
+`runSpeedByWeapon` matches (tested); the alt (scoped) speeds are M1-5.
+
+### Ground acceleration and counter-strafing (pinned)
+
+Per tick on the ground (S1 `FullWalkMove` → `Friction` l. 1610, `WalkMove` → `Accelerate` l. 1820):
+friction `v ← v · max(v − max(v, 80) · 5.2 / 64, 0) / v`, then `v += min(5.5 / 64 · scale, wishspeed − v·wishdir) · wishdir`.
+Source's `scale` is the wish speed (l. 1841). CS2's `sv_accelerate_use_weapon_speed true` makes it the weapon's speed;
+the exact CS2 expression is not public, but the measured first tick (W3: 21.48 u/s with a knife = 5.5 × 250 / 64) and
+"0 → 250 in 35 ticks" (W3) both match this formula exactly. Walking and crouching use the same rate (`accelScaleFloor` 1).
+
+| Case (64 Hz) | Formula result | Model |
+| --- | --- | --- |
+| AK-47 from rest | +18.477 u/s first tick; 95 % (204.25) on tick 28 = 0.438 s; 215 on tick 36 | identical (tick by tick) |
+| Knife from rest | +21.484; 95 % on tick 28; 250 on tick **35** (W3 measured 35) | identical |
+| AK walk (215 × 0.52 = 111.8) | 111.8 on tick 10 (0.156 s) | identical |
+| AK crouch (215 × 0.34 = 73.1) | 73.1 on tick 6 (0.094 s) | identical |
+| **AK counter-strafe** from 215, opposite key held | 179.05, 146.03, 115.69, 87.81, **62.20** (≤ 73.1, accurate: tick 5 = 78 ms), 37.22, 12.25, then −12.73 (tick 8: moving the other way) | identical |
+| AK counter-strafe, opposite key 7 ticks then release | 5.75 on tick 8, **0 on tick 9** (141 ms), 10.09 units travelled | identical |
+| AK release only (friction) | accurate on tick 13 (203 ms), 0 on tick 24 (375 ms), 30.9 units | identical |
+| Knife counter-strafe from 250 | ≤ 85 (0.34 × 250) on tick 5 | identical |
+
+So the classic CS2 counter-strafe (tap the opposite key for about 110 ms) is exactly what the formula gives at 64 Hz:
+accurate after 5 ticks, stopped after 7–9; releasing alone takes 13 ticks to be accurate. "Accurate" uses CS2's
+movement-inaccuracy onset of 34 % of max speed (H2, `docs/weapons.md`, `moveStartFraction`). Sub-tick (below) moves
+these by a fraction of a tick, not more.
+
+### Jumping, air, falling, steps (pinned)
+
+- **Jump apex 56.9975** and landing on tick 48 (0.75 s). CS2 uses `sv_jump_precision_enable` (no half tick of gravity
+  before the first move, unlike S1 `FullWalkMove`'s `StartGravity` at l. 2027 before `CheckJumpButton` l. 2084), so the
+  apex is impulse² / 2g = 57.0 less the 64 Hz discretisation. Consistent with W3 (CS2's height is "57.03"-like) and W1/W2
+  (66-unit crouch-jump boxes = 57 + the 9-unit in-air duck, W1's jump-then-crouch +9). Not measured in-game to 0.01.
+- **Air** (S1 `AirAccelerate` l. 1705): wish capped at 30, accel `12 × wishspeed × dt × surfaceFriction` = 46.875 u/s
+  per tick for a knife. Best air-strafe angle 90°: 250 → 251.794 per tick; along the velocity nothing; against it −46.875.
+- **Gravity**: two half steps (S1 `StartGravity` l. 1257 / `FinishGravity`): from rest in the air vz −12.5, z −0.098 after a tick.
+- **Fall damage**: (v − 580) × 100 / (1024 − 580) × `sv_falldamage_scale` (S2 `shareddefs.h` l. 415–421, non-HL2
+  branch); W1's 64-tick "damage starts at 223 units" running off matches the G3 test (222 → 0, 223 → 3 HP).
+- **Steps**: an 18-unit step is climbed, 19 is not; 0.7 = 45.573° (W1).
+
+### Findings
+
+| # | Behaviour | CS2 (source) | Model before M1 | Severity |
+| --- | --- | --- | --- | --- |
+| M1-1 | Ground speed below 1 u/s | zeroed after the acceleration (S1 `WalkMove` l. 1967–1973); friction skips speeds < 0.1 (l. 1624) | kept: 7 u/s → 0.5 u/s after a tick with no input (Source: 0) | low (stop tick ±1 in rare cases; the counter-strafe numbers above are unaffected) |
+| M1-2 | Take-off speed clamp | `sv_enablebunnyhopping 0`: jump speed may not exceed 1.1 × max speed (C1 description; the crop as S2 `PreventBunnyJumping`, tf_gamemovement.cpp l. 1092–1112) | none: a 300 u/s knife take-off stays 300 (CS2: 275) | medium (bunny hops and jumps after a fast landing keep too much speed) |
+| M1-3 | Air acceleration while rising slowly | `m_surfaceFriction` 0.25 after a ground check with no ground and 0 < vz ≤ 140 (S1 `CategorizePosition` l. 3866–3877; still in CS2 per W2 l. 76), and `AirAccelerate` multiplies by it (l. 1734) | full: 250 → 251.794 per tick at 90° (CS2: 250 → 250.275) | medium (air strafing on the second half of the rise is 4× too strong) |
+| M1-4 | Tagging | hit → speed cap × `m_flFlinchVelocityModifierLarge/Small` × `mp_tagging_scale` (C1, C2; recovery rate not public) | no tagging | high for duels (a tagged AK runs 86 u/s, not 215); H2 computes the modifier, movement must take it |
+| M1-5 | Scoped / alt-mode speeds | C2 `m_flMaxSpeed[1]`: AWP 100, SCAR-20 / G3SG1 120, AUG / SG 553 150 | the primary speed always | medium (a scoped AWP walks at 200) |
+| M1-6 | Duck transition | gradual (`m_flDuckAmount` at `m_flDuckSpeed`, 8 rested / 6.02 after a fresh duck, K1; `sv_timebetweenducks` 0.4, C1); Source 2013 non-TF `TIME_TO_DUCK` 0.4 s (S2 l. 109) is not CS2's | instant | medium for crouch-peeks; **not fixed**: the rate formula is not public (plan for H4 below) |
+| M1-7 | Sub-tick input | a key change splits the tick into two simulations (W2 l. 131; W3: a half-tick knife press gives 10.74, not 21.48) | per-tick input | low–medium (≤ 1 tick of counter-strafe precision for the human) |
+| M1-8 | Landing penalty | 2026 code: no stamina on jump or landing; "speed penalty is now a function of landing time", scaled by the landing vertical velocity "similar to sv_legacy_jump stamina" (R1). Exact function not public | the legacy form: penalty += 0.05 × land speed (cap 80 %), recovers 60 %/s, ground speed × (100 − penalty) / 100; no jump cost (matches the 2026 notes) | low; **unverified** formula, kept. (The G3 text above said `(staminaMax − stamina) / staminaMax`; the code uses / 100, which fits "Maximum stamina penalty" 80 as a percentage cap) |
+| M1-9 | `sv_step_move_vel_min` 64 | "Min velocity for step move" (C1); semantics not public | always tries StepMove | low; not changed |
+| M1-10 | Eye heights | 64.093811 / 46.076218 (W1, CS:GO; CS2 not published) | `damage.eyeHeight` 64 / `crouchEyeHeight` 46 | low (0.09 units; not in the movement block, left to the damage owner) |
+| M1-11 | WALK + DUCK | not verifiable from public sources | stacks (215 × 0.52 × 0.34 = 38.0) | low; unverified, unchanged |
+| M1-12 | Doc citation | `GAMEMOVEMENT_JUMP_HEIGHT` is 21 in Source SDK 2013 (`gamemovement.h` l. 24, HL2); CS2's 57 comes from the `sv_jump_impulse` description | G3's table cited "Source's 57" | doc only |
+
+Verified and unchanged (tested in `tests/movement-cs2.test.ts`): every convar above marked ✓, every item run speed, the
+ground acceleration curve, counter-strafing and friction-only stops, walk and crouch caps and their acceleration, the
+jump apex and airtime, one jump per press, the air acceleration at every angle while falling, gravity integration,
+fall damage, steps, the slope limit.
+
+**Unverified** (CS2's code is not public and no measurement was found): the exact CS2 expression behind
+`sv_accelerate_use_weapon_speed` (matches the measured 21.48 / 35 ticks), the duck rate (M1-6), the landing-penalty
+function (M1-8), the tagging recovery rate (H2's 0.4 / s, `docs/weapons.md`), WALK + DUCK stacking (M1-11), the
+`sv_step_move_vel_min` rule (M1-9), whether tagging also slows the acceleration (the fix scales the cap only), and the
+in-game jump apex to better than about 0.1 unit.
