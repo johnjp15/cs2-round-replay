@@ -522,11 +522,6 @@ export class Sim2DHost implements IHost {
     return this.sight;
   }
 
-  /** G6: the host's sight on the CS2 mesh (`sees`, bullets, guard spot, grenade effects), or null without geometry. */
-  meshSightQuery(): MeshSight | null {
-    return this.meshSight;
-  }
-
   /** True if the 2D segment a–b crosses an active smoke at the current tick (for vision, task C4). */
   smokeBlocks(a: NavPoint, b: NavPoint): boolean {
     return smokeBlocks(this.grenades, this.tickNo, a, b, this.tuning.grenades);
