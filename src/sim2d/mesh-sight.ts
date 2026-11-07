@@ -23,7 +23,10 @@
  */
 import type { AiTuning, DamageTuning, Vec3 } from '../contracts/index';
 import type { MapGeometry } from './geometry';
-import { SEES_AB, SEES_BA, type GuardSight, type PairSight } from './vision';
+import type { GrenadeNav } from './grenades';
+import type { LosQuery } from './hitscan';
+import type { NavPoint } from './nav';
+import { SEES_AB, SEES_BA, type GrenadeSight, type GuardSight, type PairSight, type Sight } from './vision';
 
 /** Aim points per target, in the order they are tried (docs/vision.md "Aim points"). */
 export const AIM_POINTS = ['head', 'chest', 'left', 'right', 'leg'] as const;
@@ -215,5 +218,45 @@ export class MeshSight implements PairSight, GuardSight {
     if (!shared) return (ab && this.visibleFrom(a, b, false) ? SEES_AB : 0) | (ba && this.visibleFrom(b, a, false) ? SEES_BA : 0);
     if (this.segmentClear(a.pos.x, a.pos.y, a.pos.z + eyeA, b.pos.x, b.pos.y, b.pos.z + eyeB)) return (ab ? SEES_AB : 0) | (ba ? SEES_BA : 0);
     return (ab && this.visibleFrom(a, b, true) ? SEES_AB : 0) | (ba && this.visibleFrom(b, a, true) ? SEES_BA : 0);
+  }
+}
+
+/** G6: bullets on the CS2 mesh (shotClear); the 2D test stays for LosQuery's required member. */
+export class MeshShotSight implements LosQuery {
+  constructor(
+    private readonly flat: Sight,
+    private readonly mesh: MeshSight,
+  ) {}
+
+  lineOfSight(a: NavPoint, b: NavPoint): boolean {
+    return this.flat.lineOfSight(a, b);
+  }
+
+  shotClear(from: Vec3, to: Vec3): boolean {
+    return this.mesh.clear(from, to);
+  }
+}
+
+/** G6: grenades with the CS2 mesh: throws still clamp on the 2D mask (their flight is 2D), effects trace the mesh. */
+export class MeshGrenadeNav implements GrenadeNav {
+  constructor(
+    private readonly flat: GrenadeSight,
+    private readonly mesh: MeshSight,
+  ) {}
+
+  lineOfSight(a: NavPoint, b: NavPoint): boolean {
+    return this.flat.lineOfSight(a, b);
+  }
+
+  zAt(p: NavPoint): number {
+    return this.flat.zAt(p);
+  }
+
+  effectClear(from: Vec3, to: Vec3): boolean {
+    return this.mesh.clear(from, to);
+  }
+
+  effectOrigin(p: Vec3, landed: boolean): Vec3 {
+    return this.mesh.effectOrigin(p, landed);
   }
 }

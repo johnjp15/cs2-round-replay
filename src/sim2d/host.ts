@@ -56,7 +56,7 @@ import { collideMove, type CollisionNav, type Obstacle } from './collision';
 import type { MapGeometry } from './geometry';
 import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeNav, type GrenadeOutcome } from './grenades';
 import { traceShot, type LosQuery, type ScanPawn } from './hitscan';
-import { MeshSight, meshSightOptionsFromTuning } from './mesh-sight';
+import { MeshGrenadeNav, MeshShotSight, MeshSight, meshSightOptionsFromTuning } from './mesh-sight';
 import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove, stepMove3d, type MoveState, type MoveStep } from './movement';
 import type { NavMesh, NavPoint } from './nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from './round';
@@ -1159,46 +1159,6 @@ function roundMove(s: MoveState): MoveState {
 }
 
 /** collideMove's wall check in 3D: a horizontal hull trace at the pawn's height (every point counts as walkable). */
-/** G6: bullets on the CS2 mesh (shotClear); the 2D test stays for LosQuery's required member. */
-class MeshShotSight implements LosQuery {
-  constructor(
-    private readonly flat: Sight,
-    private readonly mesh: MeshSight,
-  ) {}
-
-  lineOfSight(a: NavPoint, b: NavPoint): boolean {
-    return this.flat.lineOfSight(a, b);
-  }
-
-  shotClear(from: Vec3, to: Vec3): boolean {
-    return this.mesh.clear(from, to);
-  }
-}
-
-/** G6: grenades with the CS2 mesh: throws still clamp on the 2D mask (their flight is 2D), effects trace the mesh. */
-class MeshGrenadeNav implements GrenadeNav {
-  constructor(
-    private readonly flat: GrenadeSight,
-    private readonly mesh: MeshSight,
-  ) {}
-
-  lineOfSight(a: NavPoint, b: NavPoint): boolean {
-    return this.flat.lineOfSight(a, b);
-  }
-
-  zAt(p: NavPoint): number {
-    return this.flat.zAt(p);
-  }
-
-  effectClear(from: Vec3, to: Vec3): boolean {
-    return this.mesh.clear(from, to);
-  }
-
-  effectOrigin(p: Vec3, landed: boolean): Vec3 {
-    return this.mesh.effectOrigin(p, landed);
-  }
-}
-
 class HullClamp implements CollisionNav {
   constructor(
     private readonly g: MapGeometry,

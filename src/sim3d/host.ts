@@ -11,9 +11,10 @@
  * - **Bullets**: 3D hitscan (src/sim3d/hitscan.ts): a ray from the eye along the view direction, the nearest of the
  *   world mesh and the hitboxes (src/engine/hitboxes.ts); the hitgroup is the hitbox's; damage by the same CS damage
  *   math (`bulletDamage`). No spread or recoil yet (H2).
- * - **Sight** (`sees`): eye to the target's head, chest, sides and legs on the CS2 world mesh (src/sim3d/sight.ts),
- *   FOV, flash and smoke as in 2D.
- * - Kept from sim2d as they are: weapons (cadence, reload, deploy), grenades (on the 2D sight, as in 2D), the bomb,
+ * - **Sight** (`sees`), bullets' wall test, the LIVE AI's guard spot and grenade effects: G6's MeshSight
+ *   (src/sim2d/mesh-sight.ts), the one implementation both hosts share: eye to the target's head, chest, sides and legs
+ *   on the CS2 world mesh, FOV, flash and smoke (`computeSees`, src/sim2d/vision.ts), exactly as in Sim2DHost.
+ * - Kept from sim2d as they are: weapons (cadence, reload, deploy), grenades (throws clamp on the 2D mask, effects on the mesh, as in 2D), the bomb,
  *   the round rules, hearing (sound events), the LIVE AI (src/sim2d/ai.ts on the Mirage 2D nav; H3 makes it generic).
  *
  * The class is a copy of Sim2DHost's because its phases are private and src/sim2d is not edited while G5 / G6 work
@@ -62,10 +63,10 @@ import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, t
 import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove3d, type MoveState, type MoveStep } from '../sim2d/movement';
 import type { NavMesh, NavPoint } from '../sim2d/nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from '../sim2d/round';
-import { GrenadeSight, Sight, sightOptionsFromTuning } from '../sim2d/vision';
+import { MeshGrenadeNav, MeshSight, meshSightOptionsFromTuning } from '../sim2d/mesh-sight';
+import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning } from '../sim2d/vision';
 import type { AiDebug, BlockedPair, CombatLogLine, HostNote, InventoryItem, PawnState, RosterEntry, Sim2DOptions, Sim2DVision } from '../sim2d/host';
 import { traceShot3, type Shot3, type ShotPawn } from './hitscan';
-import { MeshSight3 } from './sight';
 import {
   armorDamage,
   bulletDamage,
@@ -133,12 +134,14 @@ export class Sim3DHost implements IHost {
   private readonly nav: NavMesh;
   /** The collision mesh (world + player clips) for movement. */
   private readonly geometry: MapGeometry;
-  /** Sight (`sees`) and bullets on the world mesh. */
-  private readonly meshSight: MeshSight3;
+  /** G6: sight (`sees`), the guard spot and grenade effects on the world mesh (MeshSight, shared with Sim2DHost). */
+  private readonly meshSight: MeshSight;
   private readonly tuning: Tuning;
-  /** The 2D sight (mask + level check): the LIVE AI's queries and grenades (as in 2D), and its flat form for grenades. */
+  /** The 2D sight (mask + level check): only grenade throws clamp on it (their flight is 2D), as in Sim2DHost. */
   private readonly sight: Sight;
   private readonly grenadeSight: GrenadeSight;
+  /** Grenades: throws on the 2D mask, effects (flash, HE) on the mesh. */
+  private readonly grenadeNav: MeshGrenadeNav;
   private aiSeed: number;
   /** `sees` of the current state (pawn order), or null when it must be recomputed. */
   private seesCache: PlayerId[][] | null = null;
@@ -185,7 +188,8 @@ export class Sim3DHost implements IHost {
     this.tuning = tuning;
     this.sight = new Sight(vision?.mask ?? null, nav, sightOptionsFromTuning(tuning));
     this.grenadeSight = new GrenadeSight(this.sight, nav);
-    this.meshSight = new MeshSight3(world.world, { fovDeg: tuning.ai.fovDeg, eyeHeight: tuning.damage.eyeHeight, crouchEyeHeight: tuning.damage.crouchEyeHeight });
+    this.meshSight = new MeshSight(world.world, meshSightOptionsFromTuning(tuning));
+    this.grenadeNav = new MeshGrenadeNav(this.grenadeSight, this.meshSight);
     this.aiSeed = vision?.seed ?? 0;
     if (!Number.isInteger(this.aiSeed)) throw new Error(`Sim3DHost: AI seed must be an integer, got ${this.aiSeed}`);
     this.pawns = [...roster].sort((a, b) => compareOrdinal(a.id, b.id)).map((r) => spawnPawn(r));
@@ -357,7 +361,7 @@ export class Sim3DHost implements IHost {
   }
 
   /** H1: the sight and bullet mesh (the world, no player clips). */
-  world(): MeshSight3 {
+  world(): MeshSight {
     return this.meshSight;
   }
 
@@ -439,7 +443,7 @@ export class Sim3DHost implements IHost {
     return i < 0 ? [] : [...(this.currentSees()[i] ?? [])];
   }
 
-  /** The 2D sight query (mask plus level check) the LIVE AI and grenades use (Sim2DHost's surface). `world()` is the 3D sight. */
+  /** The 2D sight query (mask plus level check): grenade throws and tests (Sim2DHost's surface). `world()` is the 3D sight. */
   sightQuery(): Sight {
     return this.sight;
   }
@@ -476,12 +480,15 @@ export class Sim3DHost implements IHost {
 
   // ---- tick phases ---------------------------------------------------------------------------
 
-  /** `sees` for the current state (contract F5; src/sim3d/sight.ts), cached until the state changes. */
+  /** `sees` for the current state (contract F5; vision.ts computeSees on MeshSight, as Sim2DHost), cached until the state changes. */
   private currentSees(): PlayerId[][] {
     if (this.seesCache === null) {
-      this.seesCache = this.meshSight.computeSees(
-        this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick })),
+      const d = this.tuning.damage;
+      this.seesCache = computeSees(
+        this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick, busy: this.bomb.plant?.id === p.id || this.bomb.defuse?.id === p.id })),
+        this.meshSight,
         this,
+        { fovDeg: this.tuning.ai.fovDeg, eyeHeight: d.eyeHeight, crouchEyeHeight: d.crouchEyeHeight },
       );
     }
     return this.seesCache;
@@ -531,7 +538,7 @@ export class Sim3DHost implements IHost {
         bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick },
         round: { phase: roundPhase(this.round, isTicking(this.bomb)) },
         nav: this.nav,
-        sight: this.sight,
+        sight: this.meshSight,
         tuning: this.tuning,
         rng: root.fork('ai:' + p.id),
       });
@@ -652,7 +659,7 @@ export class Sim3DHost implements IHost {
   private stepGrenades(t: number): void {
     if (this.grenades.length === 0) return;
     const r = stepGrenades(this.grenades, t, {
-      nav: this.grenadeSight,
+      nav: this.grenadeNav,
       pawns: this.pawns.map((p) => ({ id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, alive: p.alive })),
       grenades: this.tuning.grenades,
       damage: this.tuning.damage,

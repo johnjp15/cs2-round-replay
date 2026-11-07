@@ -3,8 +3,8 @@
  *
  * - Nobody plays: the round reproduces the recording exactly (all 9 kills on their ticks, every recorded damage, the
  *   plant on 1761, the defuse 3955 → 4275, "Played it like the tape: CT defuse, 0.72 s left"), and against the 2D
- *   golden master (fixtures/golden/round-nohuman) every Core act and every observed field but `sees` is identical:
- *   the engines differ only in how they decide who sees whom (mesh traces vs the radar mask).
+ *   golden master (fixtures/golden/round-nohuman) every Core act and every observed field is identical, `sees`
+ *   included: since G6 both hosts decide who sees whom with the same MeshSight on the CS2 mesh.
  * - A takeover at 30 s: the first 1,920 log lines are the watching run's, byte for byte.
  */
 import { readFileSync } from 'node:fs';
@@ -60,16 +60,16 @@ describe('Sim3DHost, nobody plays (H1)', () => {
     expect(summarize(watching.model, watching.entries).headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
   });
 
-  it('matches the 2D golden master in every act and every observed field but sees', () => {
+  it('matches the 2D golden master in every act and every observed field, sees included (G6: one MeshSight)', () => {
     const d = diffLogs(goldenEntries, watching.entries);
     expect(d.lines).toEqual({ old: 4517, new: 4517 });
     expect(d.acts.count).toBe(0);
     expect(d.controls).toBe(0);
-    expect(Object.keys(d.pawnFields)).toEqual(['sees']);
+    expect(d.pawnFields).toEqual({});
     expect(d.events).toEqual({});
     expect(d.round.count).toBe(0);
-    expect(d.seesOnly).toBe(d.pawnFields['sees']?.count);
-    console.log(`3D vs 2D golden: ${d.seesOnly} of 4517 lines differ, only in sees (first tick ${d.pawnFields['sees']?.first}); digest ${golden?.digest} (2D) vs ${watching.log.digest()} (3D)`);
+    expect(d.seesOnly).toBe(0);
+    console.log(`3D vs 2D golden: identical; digest ${golden?.digest} (2D) vs ${watching.log.digest()} (3D)`);
   });
 
   it('fires the puppets’ bullets in 3D but blocks their damage (the scripted damage is the recording)', () => {
