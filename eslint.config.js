@@ -12,13 +12,17 @@ const boundaryZones = [
   { target: './src/core', from: './src', except: ['./core', './contracts'], message: 'src/core may import only src/contracts.' },
   // src/sim2d may import only src/contracts.
   { target: './src/sim2d', from: './src', except: ['./sim2d', './contracts'], message: 'src/sim2d may import only src/contracts.' },
-  // src/app may import anything.
+  // H1: src/engine (pure CS2 mechanics) may import only src/contracts.
+  { target: './src/engine', from: './src', except: ['./engine', './contracts'], message: 'src/engine may import only src/contracts.' },
+  // H1: src/sim3d (the 3D host) may import src/contracts, src/engine and src/sim2d.
+  { target: './src/sim3d', from: './src', except: ['./sim3d', './engine', './sim2d', './contracts'], message: 'src/sim3d may import only src/contracts, src/engine and src/sim2d.' },
+  // src/app and src/app3d may import anything.
 ];
 
 const nondeterminism = 'Non-deterministic: use the seeded PRNG in src/contracts/rng.ts and integer ticks.';
 
 export default tseslint.config(
-  { ignores: ['dist/', 'dist-single/', 'node_modules/', 'logs/', 'coverage/'] },
+  { ignores: ['dist/', 'dist-single/', 'dist-3d/', 'dist-single-3d/', 'node_modules/', 'logs/', 'coverage/'] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {
@@ -37,7 +41,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/core/**/*.ts', 'src/contracts/**/*.ts'],
+    files: ['src/core/**/*.ts', 'src/contracts/**/*.ts', 'src/engine/**/*.ts', 'src/sim3d/**/*.ts'],
     rules: {
       'no-restricted-properties': [
         'error',
