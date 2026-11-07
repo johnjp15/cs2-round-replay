@@ -32,8 +32,8 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
   weapon / ammo of the pawn being viewed, the mode line, fps and ticks/s, and the end-of-round summary line 2 s after
   the round end. While spectating: the spectator panel and an edge vignette (below).
 - **Bar**: Start, Pause, Restart, Take control of cart (E), Camera (V), Radar (CS2 rules / show everyone), speed
-  0.25–4×, and the CS2 settings (sensitivity, zoom_sensitivity_ratio, viewmodel_fov; these and the radar toggle are
-  kept in localStorage).
+  0.25–4×, and the settings (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov, and **Recoil tracking**; these
+  and the radar toggle are kept in localStorage, `cs2-sim3d-settings`).
 
 ## Controls
 
@@ -41,9 +41,22 @@ Watching (default, every device) and dead: spectating, as CS2 (below). P pause.
 
 **E** or the button takes control of cart from that tick (the speed drops to 1×; the pointer is locked): mouse look,
 W / S forward / back and A / D strafe relative to the view (CS2's), Space jump, Ctrl or C duck, Shift walk, mouse 1
-fire / throw, mouse 2 scope (AWP, SSG 08; the engine itself has no scope state yet, so scoped movement speed and
-accuracy come with H2), R reload, 1–5 weapon slots (as the 2D app), E use (plant, defuse). Esc frees the mouse. Dead,
+fire / throw, mouse 2 scope (the input's ATTACK2: the scope is the engine's, H2b: levels and FOVs from
+data/weapons.json, scoped accuracy and speed, a reload or a bolt cycle drops it), R reload, 1–5 weapon slots (as the 2D app), E use (plant, defuse). Esc frees the mouse. Dead,
 the camera spectates again (your living teammates first, as CS2 competitive's mp_forcecamera 1). G (drop) is not implemented: the engine has no dropped weapons yet (H4).
+
+Duck, walk, jump and use are rebindable under **Keys** in the bar (one localStorage setting
+with the 2D page; Reset keys = CS2's defaults).
+
+**Ctrl+W** (crouch forward) is "close tab" on Windows and Linux. **⛶ Fullscreen** in the bar enters fullscreen and,
+in Chromium browsers (Chrome, Edge, Opera, Brave; feature-detected `navigator.keyboard.lock`), locks the keyboard, so
+Ctrl+W / S / T / N reach the page and are blocked there: Ctrl+W just crouches forward. Under the lock a **short Esc
+frees the mouse** (the page does it, the browser no longer does) and **holding Esc leaves fullscreen** (a hint line
+says so); leaving fullscreen unlocks. Firefox and Safari have no Keyboard Lock: there, and anywhere outside fullscreen,
+a `beforeunload` guard while you control a living pawn makes Ctrl+W (or ⌘W on a Mac) show the "Leave site?" dialog
+instead of closing the tab; moving Duck to C or Alt avoids it entirely. On macOS Ctrl+W is no shortcut, and **⌘W can't
+be captured by any page**, so only the dialog stands between it and the tab. Details and the per-browser table:
+docs/app.md "Ctrl+W, fullscreen and key bindings".
 
 ## Spectating (U1)
 
@@ -61,9 +74,9 @@ the camera spectates again (your living teammates first, as CS2 competitive's mp
 - **First person** is through the spectated player's eyes exactly as they'd see it: their eye height (duck eased),
   view angles (interpolated), their viewmodel (the box gun, flashing when they fire), their HP / armor / weapon /
   ammo in the HUD, and their crosshair at their aim, moving with the recoil-tracked camera, the scope overlay
-  instead while scoped. The angles, crosshair and scope come from `Sim3DHost.aimView(id, view)` once H2b's weapon
-  mechanics land (camera = view + punch, crosshair = where the next bullet goes; `spectatedView` in main.ts);
-  until then the view itself, crosshair centred, no scope. The crosshair offset is the projection of the aim
+  instead while scoped. The angles, crosshair and scope come from `Sim3DHost.aimView(id, view, tracking)` (H2b's
+  weapon mechanics: camera = view + tracking × the recoil + the screen shake, crosshair = where the next bullet goes;
+  `spectatedView` in main.ts, with the viewer's Recoil tracking setting). The crosshair offset is the projection of the aim
   direction through the camera (`aimOffsetPx`). No crosshair in third person or free fly.
 - **Who**: watching, every living player in id order; dead, your living teammates (everyone once they're dead).
   When the spectated player dies the camera moves on after 2 s.
@@ -112,7 +125,7 @@ code isn't public; it shows the same "?" and fading X, but the timings are **unv
 | Scoped FOVs | AWP 40 / 10, SSG 08 40 / 15, AUG and SG 553 45, autosnipers 40 / 15 (4:3 degrees) | CS:GO weapon data `zoom_fov_1/2` as documented by players | **unverified** for CS2; H2's table replaces them |
 | Zoomed sensitivity | sensitivity × (zoomed FOV / 90) × zoom_sensitivity_ratio (linear in the FOV) | [SDK] view.cpp (`m_flFOVSensitivityAdjust`); [CVARS] `zoom_sensitivity_ratio 1` (0.01–3) | rule: Source; the default: yes |
 | viewmodel_fov | 60, 60–68 (a 4:3 FOV, hor+ like the world's) | [CVARS] `viewmodel_fov 60 (min 60, max 68)`; [SDK] `fovViewmodel = ScaleFOVByWidthRatio(...)` | yes (CS:GO allowed 54) |
-| Aim punch | bullets: view + punch × weapon_recoil_scale (2); camera: view + punch × 2 × view_recoil_tracking (0.45); the punch is zero until H2 / H4 | CS:GO cvars | **unverified** (both are hidden in CS2: not in the dump) |
+| Aim punch | bullets: view + punch × weapon_recoil_scale (2) + the inaccuracy cone; camera: view + punch × 2 × view_recoil_tracking (default 0.45, the **Recoil tracking** setting, 0–1) + the view punch (screen shake); crosshair: at the bullets' direction (view + punch × 2). The punch is H2's (src/engine/weapons), in the host since H2b | CS:GO cvars | **unverified** (both are hidden in CS2: not in the dump) |
 | Eye height | 64 standing, 46 ducked | Source view offsets (`damage.eyeHeight`) | as the sim |
 | Duck transition (camera) | 0.4 s down, 0.2 s up, SimpleSpline (3x² − 2x³) | [SDK] TIME_TO_DUCK, TIME_TO_UNDUCK, SetDuckedEyeOffset | **unverified** for CS2 (the shared movement ducks the hull at once; M1 owns that) |
 
@@ -122,8 +135,18 @@ like CS2's raw input; `view().raw` says whether it was granted); Safari and Fire
 there the deltas are the OS pointer's pixels: with the OS acceleration off and 1:1 pointer scaling one pixel is one
 count. DPI changes counts per inch, not this formula (cm/360 = 360 / (0.022 × sensitivity × DPI) × 2.54).
 
-**Firing.** The human's input carries the firing angles (view + 2 × punch: the view while the punch is zero); the
-headless host consumes only yaw and pitch, so nothing in it depends on the view code.
+**Firing (H2b).** The human's input carries the plain view (yaw, pitch). The host's weapon mechanics
+(src/engine/weapons, docs/weapons.md) add the aim punch × 2 and the inaccuracy / spread cone to every bullet, punch
+the view, tag on hits and own the scope; the app only draws what `Sim3DHost.aimView` returns, so nothing in the
+headless host depends on the view code.
+
+**Recoil tracking** (settings field, 0–1, default 0.45; CS:GO's `view_recoil_tracking`, hidden in CS2): how much of
+the recoil the camera follows, i.e. "how much the screen moves vs how much the crosshair moves". The bullets don't
+change: they always go to view + punch × 2, and the crosshair is drawn there. At 0.45 (CS:GO / CS2 feel) the camera
+climbs with 45 % of the spray and the crosshair climbs the rest on screen; at 0 the screen stays still (only the
+screen shake) and the crosshair alone climbs the full pattern; at 1 the camera follows the bullets and the crosshair
+stays at the centre. Kept in localStorage with the sensitivity (`recoilTracking`). `npm run check:browser:3d` checks
+the kick and recovery (screenshot app3d-g-spray-kick.jpg) and the 0 / 1 ends of the setting.
 
 ## Frames
 

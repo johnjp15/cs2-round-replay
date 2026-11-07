@@ -4,8 +4,12 @@
  * hitgroup comes from `pitch`: the band (head, chest, stomach, leg) whose aim pitch is closest to the
  * shooter's pitch, within `damage.hitToleranceDeg`, else the bullet passes over or under that pawn and
  * flies on. Bullets ignore smoke. Pitch is Source's: degrees, positive = looking down. docs/combat.md.
- * Cover (boxes; docs/vision.md "Cover"): once the band is known, the line from the shooter's eye to that band's
- * point on the victim must also pass the sight's cover rule, or the box stops the bullet.
+ *
+ * The wall test, G6 (3D, `LosQuery.shotClear`): the straight segment from the shooter's eye to the impact point at the
+ * band's height on the victim must cross no wall of the CS2 mesh (MeshSight), or the wall stops the bullet: it hits
+ * neither that pawn nor anyone behind it. No wall penetration. Without `shotClear` (2D movement, tests) it is the 2D
+ * sight: `lineOfSight` to the impact point, then the cover rule (boxes; docs/vision.md "Cover") from the eye to the
+ * band's point.
  */
 import { roundNumber, type DamageTuning, type PlayerId, type Team, type Vec3 } from '../contracts/index';
 import type { NavPoint } from './nav';
@@ -30,13 +34,16 @@ export interface ScanPawn {
 }
 
 /**
- * The sight query hitscan uses: Sim2DHost passes its Sight (the radar mask plus the level check, C4), so bullets go
- * through windows; NavMesh fits too (2D, z ignored). Both ends carry their floor z. `coverClear` (Sight's cover
- * rule) is optional: without it nothing is cover.
+ * The sight query hitscan uses. G6: with the CS2 mesh Sim2DHost passes `shotClear` (MeshSight: the eye-to-impact
+ * segment against the world triangles), which replaces the other two. Without it: its 2D Sight (the radar mask plus
+ * the level check, C4), so bullets go through windows; NavMesh fits too (2D, z ignored). Both ends carry their floor
+ * z. `coverClear` (Sight's cover rule) is optional: without it nothing is cover.
  */
 export interface LosQuery {
   lineOfSight(a: NavPoint, b: NavPoint): boolean;
   coverClear?(a: { readonly pos: Vec3; readonly height: number; readonly low: boolean }, b: { readonly pos: Vec3; readonly height: number; readonly low: boolean }): boolean;
+  /** G6: true if the segment from the shooter's eye `from` to the impact point `to` crosses no wall. */
+  shotClear?(from: Vec3, to: Vec3): boolean;
 }
 
 export interface ShotHit {
@@ -88,9 +95,11 @@ export function pickBand(pitch: number, from: Body, to: Body, d: DamageTuning): 
 /**
  * Trace one bullet from `shooter` through `pawns` (any order; candidates are taken by ray distance, then
  * id). Skips the shooter, dead pawns and (friendly fire off) teammates. Returns the first pawn hit, or
- * null. A pawn the ray crosses but `sight.lineOfSight(shooter, impact)` rejects is behind a wall, and so is
- * everything further along the ray. A pawn whose band the bullet would hit but `sight.coverClear` (eye to that
- * band's point, crouched / planting / defusing ends low) rejects is behind a box, which stops the bullet too.
+ * null. G6 (`nav.shotClear`): a pawn whose band the bullet would hit but whose impact point (the ray's entry into
+ * its circle, at the band's height) the eye can't see is behind a wall, which stops the bullet: null. 2D: a pawn the
+ * ray crosses but `sight.lineOfSight(shooter, impact)` rejects is behind a wall, and so is everything further along
+ * the ray; a pawn whose band the bullet would hit but `sight.coverClear` (eye to that band's point, crouched /
+ * planting / defusing ends low) rejects is behind a box, which stops the bullet too.
  */
 export function traceShot(shooter: ScanPawn, pawns: readonly ScanPawn[], nav: LosQuery, d: DamageTuning): ShotHit | null {
   const rad = shooter.yaw / DEG;
@@ -118,6 +127,20 @@ export function traceShot(shooter: ScanPawn, pawns: readonly ScanPawn[], nav: Lo
   const eyeZ = shooter.pos.z + eyeHeight(shooter.crouching, d);
   for (const c of cands) {
     const impact2 = { x: shooter.pos.x + dx * c.enter, y: shooter.pos.y + dy * c.enter, z: c.p.pos.z };
+    if (nav.shotClear !== undefined) {
+      // 3D (G6): the band first (a bullet over or under this pawn flies on), then the wall test to its impact point.
+      const band3 = pickBand(shooter.pitch, shooter, c.p, d);
+      if (band3 === null) continue;
+      const aimZ3 = c.p.pos.z + bandHeight(band3, c.p.crouching, d);
+      if (!nav.shotClear({ x: shooter.pos.x, y: shooter.pos.y, z: eyeZ }, { x: impact2.x, y: impact2.y, z: aimZ3 })) break;
+      const flat3 = Math.hypot(c.p.pos.x - shooter.pos.x, c.p.pos.y - shooter.pos.y);
+      return {
+        victim: c.p.id,
+        hitgroup: band3,
+        distance: roundNumber(Math.hypot(flat3, aimZ3 - eyeZ)),
+        impact: { x: roundNumber(impact2.x), y: roundNumber(impact2.y), z: roundNumber(aimZ3) },
+      };
+    }
     if (!nav.lineOfSight(shooter.pos, impact2)) break;
     const band = pickBand(shooter.pitch, shooter, c.p, d);
     if (band === null) continue;

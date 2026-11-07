@@ -61,7 +61,7 @@ const SNAPS: [PlayerId, number][] = [
   ['sp4rtan', 1229], // main's sp4rtan 1248: the same inferred 700 u/s stretch, split in two by the snapping
   ['sp4rtan', 1245],
   ['donk', 1344], // new (main's donk 923 is gone): Apartments, CS2 has a raised (+32) floor where the 2020 one is flat; the track climbs it in one step (a jump would do)
-  ['cart', 1393], // main's cart 1350: the recording's discontinuity (1344–1350), snapped later
+  ['cart', 1392], // main's cart 1350: the recording's discontinuity (1344–1350), snapped later (G6: a tick earlier, 1393 before: he comes off the window duel's track, docs/vision.md "Recorded duels")
   ['cart', 1880], // new: A site, the recording walks through a box CS2 has there (the snapping finds no way round in time)
   ['barely', 2299], // new, on purpose: the recording drops from B short's corridor into the underpass (35.1 s); no way down in CS2 near by
   ['barely', 2880], // main's barely 2879: the recording's own discontinuity (back up from the underpass)

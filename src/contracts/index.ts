@@ -160,3 +160,5 @@ export type { ReplayTrace, TraceSample, TraceKill, TraceEvent, TracePlayer } fro
 
 export { KILL_STATUSES } from './summary';
 export type { KillStatus, KillRow, SwitchRow, RoundResult, BombSummary, PlayerStats, SummaryVerdict, RoundSummary } from './summary';
+export { MAP_IDS, DEFAULT_MAP, MapIdError, isMapId, parseMapId, mapPackagePaths } from './maps';
+export type { MapId, MapPackagePaths } from './maps';

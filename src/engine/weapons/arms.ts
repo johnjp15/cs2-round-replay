@@ -217,22 +217,13 @@ export function stepArms(ctx: ArmsContext, s0: ArmsState, inp: ArmsInput, rng: U
   const w = weaponDef(ctx.table, s0.weapon);
   const m = ctx.model;
   const tps = ctx.ticksPerSec;
-  const dt = 1 / tps;
   const t = inp.tick;
   const mot = inp.motion;
   let s: ArmsState = s0;
-  let mode = modeOf(w, s);
+  let mode: 0 | 1;
 
-  // 1. take-off / landing
-  let penalty = s.penalty;
-  if (s.wasOnGround && !mot.onGround && !mot.onLadder) penalty += w.inaccuracy.jumpInitial * m.airSpreadScale;
-  else if (!s.wasOnGround && mot.onGround) penalty += w.inaccuracy.land[mode] * m.airSpreadScale;
-  // 2. penalty and recoil index decay
-  const reloading = s.reload !== null;
-  penalty = decayPenalty(penalty, penaltyFloor(w, mode, mot, reloading, m), recoveryTime(w, mot.crouched, s.recoilIndex), dt, m);
-  let recoilIndex = s.recoilIndex;
-  if (t > s.lastShotTick + m.recoilIndexDelayCycles * w.cycleTime[mode] * tps + TICK_EPS) recoilIndex = roundNumber(recoilIndex * Math.exp(-m.recoilIndexDecay * dt));
-  s = { ...s, penalty, recoilIndex, wasOnGround: mot.onGround || mot.onLadder };
+  // 1–2. take-off / landing, penalty and recoil index decay
+  s = preTick(ctx, w, s, t, mot, s.reload !== null);
 
   let shot: Shot | null = null;
   let reloadStarted = false;
@@ -314,9 +305,88 @@ export function stepArms(ctx: ArmsContext, s0: ArmsState, inp: ArmsInput, rng: U
   if (!inp.attack) s = { ...s, shotThisPress: false };
   if (!inp.attack2) s = { ...s, altThisPress: false };
   // 7. punch decay, tagging recovery
-  const vm = Math.min(1, s.velocityModifier + m.taggingRecoveryPerSec * dt);
-  s = { ...s, punch: decayPunch(s.punch, dt, m), velocityModifier: roundNumber(vm) };
+  s = postTick(ctx, s);
   return { state: s, shot, reloadStarted, reloadDone, dryFire };
+}
+
+/** Steps 1–2 of stepArms: take-off / landing penalties, the penalty's decay toward its floor, the recoil index decay. */
+function preTick(ctx: ArmsContext, w: WeaponDef, s: ArmsState, t: number, mot: Motion, reloading: boolean): ArmsState {
+  const m = ctx.model;
+  const tps = ctx.ticksPerSec;
+  const dt = 1 / tps;
+  const mode = modeOf(w, s);
+  let penalty = s.penalty;
+  if (s.wasOnGround && !mot.onGround && !mot.onLadder) penalty += w.inaccuracy.jumpInitial * m.airSpreadScale;
+  else if (!s.wasOnGround && mot.onGround) penalty += w.inaccuracy.land[mode] * m.airSpreadScale;
+  penalty = decayPenalty(penalty, penaltyFloor(w, mode, mot, reloading, m), recoveryTime(w, mot.crouched, s.recoilIndex), dt, m);
+  let recoilIndex = s.recoilIndex;
+  if (t > s.lastShotTick + m.recoilIndexDelayCycles * w.cycleTime[mode] * tps + TICK_EPS) recoilIndex = roundNumber(recoilIndex * Math.exp(-m.recoilIndexDecay * dt));
+  return { ...s, penalty, recoilIndex, wasOnGround: mot.onGround || mot.onLadder };
+}
+
+/** Step 7 of stepArms: aim / view punch decay and tagging recovery. */
+function postTick(ctx: ArmsContext, s: ArmsState): ArmsState {
+  const m = ctx.model;
+  const dt = 1 / ctx.ticksPerSec;
+  const vm = Math.min(1, s.velocityModifier + m.taggingRecoveryPerSec * dt);
+  return { ...s, punch: decayPunch(s.punch, dt, m), velocityModifier: roundNumber(vm) };
+}
+
+// ---- for hosts that keep their own fire / ammo / reload machine (Sim3DHost keeps sim2d's stepWeapon) ----------
+
+export interface TrackInput {
+  readonly tick: number;
+  /** The weapon the pawn holds now (a switch resets the per-weapon parts, see `syncWeapon`). */
+  readonly weapon: string;
+  readonly attack2: boolean;
+  /** The host's own machine is reloading (adds the reload inaccuracy, cancels the scope). */
+  readonly reloading: boolean;
+  /** The host's own machine: the held weapon may fire at or after this tick (re-zoom after a bolt cycle). */
+  readonly nextAttackTick: number;
+  readonly motion: Motion;
+}
+
+/**
+ * Switch the per-weapon parts to `weapon` if it isn't the one held (penalty, recoil index, zoom reset; punch and
+ * tagging kept), without the deploy timers (the host's machine owns those).
+ */
+export function syncWeapon(ctx: ArmsContext, s: ArmsState, weapon: string): ArmsState {
+  if (s.weapon === weapon) return s;
+  const w = weaponDef(ctx.table, weapon);
+  return { ...s, weapon, altMode: false, zoom: 0, resumeZoom: 0, burstLeft: 0, penalty: w.inaccuracy.stand[0], recoilIndex: 0, lastShotTick: NEVER, altThisPress: false };
+}
+
+/**
+ * One tick of everything but firing, for a host with its own fire machine: weapon sync, penalties and decay, the
+ * scope (ATTACK2 steps the zoom of scoped weapons, a reload drops it, re-zoom after a bolt cycle), punch decay and
+ * tagging recovery. Call it once per tick before the host's fire step; on a shot call `trackShot`.
+ */
+export function trackArms(ctx: ArmsContext, s0: ArmsState, inp: TrackInput): ArmsState {
+  let s = syncWeapon(ctx, s0, inp.weapon);
+  const w = weaponDef(ctx.table, s.weapon);
+  const t = inp.tick;
+  s = preTick(ctx, w, s, t, inp.motion, inp.reloading);
+  s = { ...s, nextAttackTick: inp.nextAttackTick };
+  if (inp.reloading && (s.zoom > 0 || s.resumeZoom > 0)) s = { ...s, zoom: 0, resumeZoom: 0 };
+  if (s.resumeZoom > 0 && reached(t, s.nextAttackTick)) s = { ...s, zoom: s.resumeZoom, resumeZoom: 0 };
+  if (inp.attack2 && !s.altThisPress && w.zoom.levels > 0 && !inp.reloading && reached(t, s.nextAltTick)) {
+    s = { ...s, zoom: (s.zoom + 1) % (w.zoom.levels + 1), resumeZoom: 0, nextAltTick: roundNumber(t + w.zoom.times[1] * ctx.ticksPerSec) };
+  }
+  s = { ...s, altThisPress: inp.attack2 };
+  return postTick(ctx, s);
+}
+
+/**
+ * A shot the host's machine fired this tick (call after `trackArms` of the same tick): `fireShot` (direction from the
+ * view + punch + cone, penalty, recoil index, kick), then a sniper that unzooms after a shot drops its scope until
+ * `nextAttackTick` (the host's next-shot tick).
+ */
+export function trackShot(ctx: ArmsContext, s: ArmsState, rng: UniformSource, view: Angle2, motion: Motion, tick: number, nextAttackTick: number): { state: ArmsState; shot: Shot } {
+  const w = weaponDef(ctx.table, s.weapon);
+  const r = fireShot(ctx, s, rng, view, motion, tick);
+  let st: ArmsState = { ...r.state, nextAttackTick };
+  if (w.zoom.unzoomsAfterShot && st.zoom > 0) st = { ...st, resumeZoom: st.zoom, zoom: 0 };
+  return { state: st, shot: r.shot };
 }
 
 /**
@@ -352,12 +422,13 @@ export function crosshairAngles(ctx: ArmsContext, s: ArmsState, view: Angle2): A
 }
 
 /**
- * The first-person camera: view + aim punch × recoilScale × viewRecoilTracking + view punch (screen shake). The camera
+ * The first-person camera: view + aim punch × recoilScale × tracking (default viewRecoilTracking 0.45, CS:GO's
+ * `view_recoil_tracking`; the 3D app lets the player set it, 0–1) + view punch (screen shake). The camera
  * moves less than the bullets, so with a fixed crosshair (cl_crosshair_recoil false) the spray drifts off the centre.
  */
-export function cameraAngles(ctx: ArmsContext, s: ArmsState, view: Angle2): Angle2 {
+export function cameraAngles(ctx: ArmsContext, s: ArmsState, view: Angle2, tracking: number = ctx.model.viewRecoilTracking): Angle2 {
   const o = punchOffset(s.punch, ctx.model);
-  const k = ctx.model.viewRecoilTracking;
+  const k = Math.max(0, Math.min(1, tracking));
   return { pitch: roundNumber(view.pitch + o.pitch * k + s.punch.view.pitch), yaw: roundNumber(view.yaw + o.yaw * k + s.punch.view.yaw) };
 }
 

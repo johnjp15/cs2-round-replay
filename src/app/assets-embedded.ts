@@ -9,6 +9,7 @@
  */
 import embedded from 'virtual:cs2-embedded-assets';
 import type { PageAssets } from './assets';
+import { DEFAULT_MAP, type MapId } from '../contracts/index';
 
 function bytesOf(base64: string): Uint8Array<ArrayBuffer> {
   const s = atob(base64);
@@ -42,7 +43,9 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
   return img;
 }
 
-export async function loadAssets(): Promise<PageAssets> {
+/** X1: this page embeds only the default map package; another `?map=` needs the normal build (docs/maps.md). */
+export async function loadAssets(map: MapId = DEFAULT_MAP): Promise<PageAssets> {
+  if (map !== DEFAULT_MAP) throw new Error(`this page embeds only the ${DEFAULT_MAP} map package, not "${map}"`);
   const [round, nav, vision, radar, geometry, clips, tracks, height] = await Promise.all([
     text(embedded.round),
     text(embedded.nav),
