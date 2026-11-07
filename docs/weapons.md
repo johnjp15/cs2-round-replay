@@ -235,6 +235,39 @@ not be read from this environment: the egress proxy refuses the host (HTTP 403 t
 `sprays` holds, for the 16 spray weapons (full magazine) and 10 pistols (10 shots at the cycle time), the per-bullet
 `[pitch, yaw]` offsets in degrees (pitch − = up) of the deterministic part of the shot; inaccuracy is added on top.
 
+## Gunplay conformance (R1, #54 / #55)
+
+John (#55): "everything about the gunplay should be the exact same". Each line below gives the rule with its source,
+what the sim does, the test that pins it, and its status. Sources:
+- **S1**: CS2's weapon fields (`weapons.vdata`).
+- **S2**: CS2's convar dump.
+- **S9**: CS:GO's 2020 code, which reads those fields.
+
+CS2's code isn't public, so where CS2 hides a constant (no convar) the CS:GO value is the best available and is marked
+"CS:GO source". Status: **fixed** (wrong before #55, now matches the source), **matches**, or **finding** (a
+mismatch I couldn't settle or that belongs to another agent, with a proposed fix). Tests are in
+`tests/weapons-engine.test.ts`, `describe('gunplay conformance checklist')` and `describe('recoil tables and spray
+patterns')`, unless named otherwise.
+
+| # | What | Rule and number (source) | Sim | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| G0 | Recoil pattern | Table from `m_flRecoil*` + `m_nRecoilSeed` (S1) by `GenerateRecoilTable`; kick `(−cos a, −sin a) × m` (S9) | as Valve's (PR #50) | AK table entries 1–10, handedness, 500 u height | fixed in #50 (mirrored, suppression) |
+| G1 | Recoil index advances | `Recoil(mode); m_flRecoilIndex += 1` once per round fired, after the bullet; not on dry fire; no fire during a magazine reload (S9 `weapon_csbasegun.cpp`) | `fireShot` only when a round leaves | G1 | matches |
+| G2 | Recoil index decay | Only once `curtime > lastShot + 1.1 × cycle` (`WEAPON_RECOIL_DECAY_THRESHOLD`), then `index = lerp(e^(−dt·ln 10·2), 0, index)` per tick, with `weapon_recoil_decay_coefficient` 2: a tenth every 0.5 s (S9). `weapon_recoil_cooldown` 0.55 is "DEPRECATED" in S9 and unused. | `× e^(−ln 10 × recoilIndexDecay × dt)` after 1.1 cycles | G2 | **fixed**: was `e^(−2 dt)`, 2.3× too slow |
+| G3 | First bullet after a pause | Follows G2: the pattern restarts at bullet 1 when ⌊index⌋ = 0. After a full AK magazine that takes 0.86 s; after 0.5 s the next spray resumes at entry 5 (bullet 6's kick) | same | G3 | **fixed** (was 1.8 s) |
+| G4 | 2–3 round bursts | A 3-round AK burst, then a 0.25 s pause: the next burst starts at entry 1, its first bullet sits on the decayed punch (G2 + G8) | same | G4 | matches (after G2) |
+| G5 | Fire inaccuracy and recovery | `penalty += m_flInaccuracyFire` per shot; per tick `penalty = lerp(e^(−dt·ln 10 / T), floor, penalty)` when above the floor, else it jumps to the floor. T = `m_flRecoveryTimeStand/Crouch`, moving to `…Final` between `m_nRecoveryTransitionStart/EndBullet` of the **integer** index (`int nRecoilIndex`), unless the final time is −1; on a ladder T = stand (S9 `GetRecoveryTime`) | same | G5, "accuracy penalty" | **fixed**: the transition used the fractional index; ladder now uses stand |
+| G6 | Semi-automatic kicks | `seed = IsFullAuto() ? (int) m_flRecoilIndex : GetPredictionRandomSeed()`, entry `% 64` (S9 `Recoil`): pistols kick with a random entry of their table | random entry from the shot's RNG, drawn after the cone | G6 | **fixed** (pistols walked the table in order). `sprays` for pistols still lists the table in order. |
+| G7 | Spread vs inaccuracy | Two independent cones, inaccuracy (penalty + movement + air) and `m_flSpread`, summed (`fFinalInaccuracy = fInaccuracy + fSpread`, S9). `weapon_accuracy_nospread false` and `weapon_accuracy_shotgun_spread_patterns true` (S2) | two cones from the seeded RNG | G7, `weapons-spray` | matches the structure. Finding: CS:GO seeds each shot from the command's random seed `& 255` and draws inside code that isn't in the published source, so the sim's per-shot cone values are its own (same distribution); shotgun spread patterns are not modelled |
+| G8 | Aim / view punch | `HybridDecay(aim, 8, 18)` (× e^(−8 dt), then length −18 dt), velocity half-steps with `e^(−4.5 dt)`; view punch += kick × 0.055, decays with `view_punch_decay` 18 (S9; 18 verified in S2) | same | `weapons-spray` "camera, crosshair and punch" | matches |
+| G9 | Air, take-off, landing | S9 (2020): floor stand + `m_flInaccuracyJump` × `weapon_air_spread_scale`; air term `RemapVal(√\|vz\|, 0.25√J, √J, 0, m_flInaccuracyJumpInitial)`, clamped to [0, 2 × JumpInitial]; recovery in the air = crouch × 4; no take-off penalty (`OnJump` is empty); landing adds `m_flInaccuracyLand × fall speed` and an aim punch | floor stand + `JumpApex`; take-off adds `JumpInitial`; air term `airScale × m_flInaccuracyJump`; landing adds `Land × airSpreadScale` | `weapons-engine` "jump and land" | **finding**: CS2 has `m_flInaccuracyJumpApex`, which the 2020 code doesn't read, so CS2's air model changed and S9 doesn't settle it. Proposed: take S9's air term (JumpInitial, 2× cap) and landing (× fall speed) once a CS2 measurement of a jump shot exists |
+| G10 | Moving inaccuracy | `RemapValClamped(speed, max × 0.34, max × 0.95, 0, 1)`, then `^ MOVEMENT_CURVE01_EXPONENT` = **0.25** unless walking (shift: linear), × `m_flInaccuracyMove` (S9) | exponent `moveCurveExponent` 1 | `weapons-engine` "inaccuracy model" | **finding for W3** (owns the move-inaccuracy curve): exponent 0.25 when not walking. At half the band that is 84 % of the move inaccuracy, not 50 % |
+| G11 | Inaccuracy cap | `fAccuracy ≤ 1` (S9) | `maxInaccuracy` 1 | — | matches |
+| G12 | Fire rate | `m_flCycleTime` (S1; AK 0.1 s). Held fire: next attack = previous + cycle, served on the tick it falls in (64 tick: AK on ticks 0, 7, 13, 20, …) | same, fractional cadence | "AK-47 held for 1.0 s" | matches at 64 tick. Finding: CS2's sub-tick timestamps each shot inside the tick; the punch and decay in between are then sub-tick too. The sim fires on tick boundaries (≤ 1/64 s early or late per shot) |
+| G13 | Scoped weapons | Per-mode inaccuracy and spread (scoped = alt mode, S1); `m_nZoomLevels`, `m_nZoomFOV1/2`, `m_bUnzoomsAfterShot` (S1) | same, from the table | `weapons-engine` scope tests | matches. `m_flInaccuracyAltSoundThreshold` only affects sound: not modelled |
+| G14 | Tagging | `m_flFlinchVelocityModifierLarge/Small` (S1), `mp_tagging_scale 1` (S2); recovery rate and the hit punch are not in any source | table values; recovery 0.4 / s and punches unverified | `weapons-engine` tagging | matches the fields; recovery unverified |
+| G15 | Recoil scale and tracking | `weapon_recoil_scale` 2.0, `view_recoil_tracking` 0.45 (S9; no CS2 convar) | 1.884 (fitted to S5), 0.45 | `weapons-engine` envelopes; the in-app 0.4500 check (`tools/spray-wall3d.ts`) | scale fitted (see "Recoil"), tracking matches S9 |
+
 ## Spraying: what the 3D game must reproduce (`tests/weapons-spray.test.ts`)
 
 **How CS2 randomizes a spray.** The recoil pattern is **fixed** per weapon: the 64-entry table is generated once from
@@ -478,7 +511,7 @@ passed beside that frame: it is a position error of the recording, not a wallban
 | recoilSuppressionShots / Factor | 4 / 0.75 | S9 `weapon_recoil_suppression_shots/_factor` | CS:GO source |
 | recoilYawSign | −1 | S9 `KickBack` (yaw velocity −sin a × m); S6 (AK swings right after bullet 10) | CS:GO source + community |
 | viewPunchDecay | 18 | S2 `view_punch_decay` | verified |
-| recoilIndexDecay / recoilIndexDelayCycles | 2 / 1.1 | M | unverified |
+| recoilIndexDecay / recoilIndexDelayCycles | 2 / 1.1 | S9 `weapon_recoil_decay_coefficient` (× ln 10 per second) / `WEAPON_RECOIL_DECAY_THRESHOLD` | CS:GO source (G2) |
 | burstShots | 3 | common knowledge | unverified |
 | moveStartFraction / moveFullFraction / moveCurveExponent | 0.34 / 0.95 / 1 | M (0.34 = CS duck speed modifier, same as `movement.crouchFactor`) | unverified |
 | airSpreadScale | 1 | S2 `weapon_air_spread_scale` | verified |
