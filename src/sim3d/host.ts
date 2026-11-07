@@ -60,11 +60,14 @@ import {
   applyHit,
   armsContext,
   cameraAngles,
+  compensatedView,
   crosshairAngles,
   damageAfterHitgroup,
   freshArms,
   maxSpeedOf,
+  nextShotPunch,
   parseWeaponTable,
+  punchOffset,
   trackArms,
   trackShot,
   weaponDef,
@@ -198,6 +201,8 @@ export class Sim3DHost implements IHost {
   private arms: ArmsState[] = [];
   /** H2b: the solids along a bullet on the world mesh, for wall penetration (built on first use). */
   private solids: SolidQuery | null = null;
+  /** B1: bots (LIVE AI) and puppets compensate recoil (docs/weapons.md); off only for tests of the old behaviour. */
+  private botRecoilControl = true;
 
   /**
    * @param options score before the round and the round clock at tick 0; default 0 – 0 and `tuning.round.timeSec`.
@@ -570,6 +575,7 @@ export class Sim3DHost implements IHost {
           ready: reached(t, w.nextAttackTick) && reached(t, w.deployEndTick) && !reloading,
           reloading,
           defuseEndTick: this.bomb.defuse?.id === p.id ? this.bomb.defuse.endTick : null,
+          ...(this.botRecoilControl && this.armsCtx !== null && this.arms[i] !== undefined ? { aimPunch: nextShotPunch(this.armsCtx, this.arms[i] as ArmsState) } : {}),
         },
         goal,
         others: others.filter((q) => q.id !== p.id),
@@ -705,7 +711,24 @@ export class Sim3DHost implements IHost {
     if (a === null || ctx === null) return { camera: view, crosshair: view, zoom: 0, fov4x3: 90 };
     const w = ctx.table.weapons[a.weapon];
     const fov = w === undefined || a.zoom <= 0 ? 90 : (w.zoom.fov[Math.min(a.zoom, 2) - 1] ?? 90);
-    return { camera: cameraAngles(ctx, a, view, tracking ?? ctx.model.viewRecoilTracking), crosshair: crosshairAngles(ctx, a, view), zoom: a.zoom, fov4x3: fov };
+    // B1: a spectated puppet pulls against its recoil (its scripted view is where its bullets go), so its eye is
+    // the view minus the punch: the crosshair stays on the scripted aim and the camera dips like a player's.
+    const p = this.pawn(id);
+    const eye = p !== null && this.compensates(p) ? compensatedView(view, punchOffset(a.punch, ctx.model)) : view;
+    return { camera: cameraAngles(ctx, a, eye, tracking ?? ctx.model.viewRecoilTracking), crosshair: crosshairAngles(ctx, a, eye), zoom: a.zoom, fov4x3: fov };
+  }
+
+  /**
+   * B1: bots and puppets compensate recoil like a player pulling down (docs/weapons.md). On by default; `false`
+   * restores the old behaviour (views aimed at the target, sprays climbing over it) for regression tests.
+   */
+  setBotRecoilControl(on: boolean): void {
+    this.botRecoilControl = on;
+  }
+
+  /** B1: the host applies recoil control to this pawn's fire angles: a puppet (REPLAY and not the human's). */
+  private compensates(p: PawnState): boolean {
+    return this.botRecoilControl && this.armsCtx !== null && !this.mechanical(p);
   }
 
   private stepPawnWeapon(p: PawnState, t: number): void {
@@ -747,7 +770,12 @@ export class Sim3DHost implements IHost {
       let dir: Vec3 | null = null;
       if (ctx !== null && ai >= 0) {
         const rng = new Rng(this.aiSeed).fork(`spread:${p.id}:${t}`);
-        const r = trackShot(ctx, this.arms[ai] as ArmsState, rng, { pitch: p.move.pitch, yaw: p.move.yaw }, motion, t, p.wpn.nextAttackTick);
+        const view = { pitch: p.move.pitch, yaw: p.move.yaw };
+        // B1: a puppet's scripted view is where it aims: it pulls against the recoil like a player, so the drawn
+        // bullet goes there (its outcome below is still traced along the scripted view: the tape's). A LIVE bot's
+        // view already has it (the AI aims at target − punch, `AiSelf.aimPunch`); the human's view is the human's.
+        const fireView = this.compensates(p) ? compensatedView(view, nextShotPunch(ctx, this.arms[ai] as ArmsState, true)) : view;
+        const r = trackShot(ctx, this.arms[ai] as ArmsState, rng, fireView, motion, t, p.wpn.nextAttackTick);
         this.arms[ai] = r.state;
         dir = r.shot.pellets[0] ?? null;
       }

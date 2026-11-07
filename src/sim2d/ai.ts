@@ -100,6 +100,13 @@ export interface AiSelf {
   readonly reloading: boolean;
   /** This pawn's defuse in progress completes on this tick (its progress bar), or null if it isn't defusing. */
   readonly defuseEndTick: number | null;
+  /**
+   * B1: where the weapon will put this tick's bullet relative to the view (degrees, Source pitch + = down, yaw + =
+   * left): the aim punch × recoilScale the host's weapon mechanics add (3D host; the 2D host has no recoil and leaves
+   * it out). The bot compensates like a player pulling the mouse against the spray: it aims its view at the target
+   * minus this offset, so the bullet (view + offset) goes at the target. Absent = zero.
+   */
+  readonly aimPunch?: { readonly pitch: number; readonly yaw: number };
 }
 
 /** Another pawn as the AI can see it (only pawns in `sees` are read for position). */
@@ -473,6 +480,8 @@ function pathLength2d(points: readonly Vec3[]): number {
   return len;
 }
 
+const NO_PUNCH = { pitch: 0, yaw: 0 } as const;
+
 // ---- the step -------------------------------------------------------------------------------------------
 
 /** One tick of LIVE AI for one pawn. Pure apart from the returned state (the input state is not mutated). */
@@ -500,8 +509,11 @@ export function stepAi(prev: AiState, ctx: AiContext): AiStep {
     const crouching = visible && tgt !== null ? tgt.crouching : false;
     const tau = (tick - s.acquiredTick - s.reactTicks) / TICKS_PER_SEC;
     const settle = Math.pow(0.5, tau / ai.aimSettleSec);
-    const wantYaw = bearing(self.pos, aimAt) + s.aimYawErr * settle;
-    const wantPitch = aimPitch({ pos: self.pos, crouching: self.crouching }, { pos: aimAt, crouching }, s.aimBand, tuning.damage) + s.aimPitchErr * settle;
+    // B1: recoil control. The bot's error (acquisition offset, settling, per-shot residual) stays centred on the
+    // target; the view itself is pulled against the weapon's punch so the bullet (view + punch) lands there.
+    const punch = self.aimPunch ?? NO_PUNCH;
+    const wantYaw = bearing(self.pos, aimAt) + s.aimYawErr * settle - punch.yaw;
+    const wantPitch = aimPitch({ pos: self.pos, crouching: self.crouching }, { pos: aimAt, crouching }, s.aimBand, tuning.damage) + s.aimPitchErr * settle - punch.pitch;
     yaw = turn(self.yaw, wantYaw, rate);
     pitch = turn(self.pitch, wantPitch, rate);
     // Counter-strafe: push against the current velocity until nearly stopped, then stand still.

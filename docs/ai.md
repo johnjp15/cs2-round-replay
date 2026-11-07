@@ -90,6 +90,9 @@ escaping rejoining` (G1: `rejoining` for the `rejoin` role, moving or waiting).
   probability `ai.headshotAimRatio` (0.35), else chest (pitch from `aimPitch`, `docs/combat.md`). The offset halves
   every `ai.aimSettleSec` (0.15 s) once it is engaged. Each shot adds a fresh N(0, `ai.aimResidualDeg` = 0.5°) to yaw and
   pitch for that tick only.
+- **Recoil control (B1, 3D host):** the wanted yaw and pitch are the target's minus `self.aimPunch` (the weapon's aim
+  punch × recoilScale the next shot will get), so the spray stays on the target like a player pulling down; the errors
+  above stay centred on the target. The 2D host has no recoil and passes none (docs/weapons.md).
 - **Fire:** when the view is within `ai.fireConeDeg` (1.5°) of the aim point and the settling offset is within the
   target's angular radius (asin(16 / distance); pitch: `damage.hitToleranceDeg`):
   - automatic guns hold ATTACK, starting within `ai.sprayStartFactor` (2) × that radius;
