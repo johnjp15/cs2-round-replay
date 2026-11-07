@@ -164,7 +164,7 @@ function tapeAfterLokier(run: HarnessRun): (string | number)[][] {
 
 describe('scenario files', () => {
   it('parse, and bad ones are refused with the path', () => {
-    for (const n of ['lokier-late', 'never-peeks', 'mid-zwomp', 'flank-sp4rtan', 'cart-dies', 'block-barely', 'block-sp4rtan', 'smoke-window', 'cart-goes-a', 'miss-lokier-shop', 'takeover-duel']) {
+    for (const n of ['lokier-late', 'never-peeks', 'mid-zwomp', 'flank-sp4rtan', 'cart-dies', 'block-barely', 'block-sp4rtan', 'smoke-window', 'cart-goes-a', 'miss-lokier-shop', 'takeover-duel', 'duel-perfect-aim', 'early-peek-lokier', 'takeover-mid-duel']) {
       expect(loadScenario(`${ROOT}/fixtures/scenarios/${n}.json`).name).toBe(n);
     }
     expect(() => parseScenario({ steps: [{ do: 'dance' }] })).toThrow(ScenarioError);
@@ -183,7 +183,7 @@ describe('1. no-op guard', () => {
     expect(golden.entries.some((e) => e.act.status.some((s) => s.mode === 'HUMAN' || s.trigger !== null))).toBe(false);
   });
 
-  it('cart follows his recording: nobody goes LIVE, and the round ends CT bomb_defused 12 – 15 like the tape', () => {
+  it('cart follows his recording: nobody goes LIVE, and the round is the tape (G5: every kill on its recorded tick)', () => {
     const run = playScript(data, readFileSync(`${ROOT}/${FOLLOW_SCRIPT}`, 'utf8'));
     const sw = switches(run);
     console.log(`[no-op guard, cart-follows-recording] switches:\n${sw.map((s) => `  ${s.tick} (${(s.tick / 64).toFixed(2)} s) ${s.text}`).join('\n')}\n${formatTimeline(timeline(run.entries))}\n`);
@@ -196,15 +196,16 @@ describe('1. no-op guard', () => {
     const end = expectRoundEndByRules(run);
     expect(end).toEqual({ tick: 4275, winner: 'CT', reason: 'bomb_defused' });
     expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.score).toEqual({ ct: 12, t: 15 });
-    // Lokier: the encounter starts when he sees cart at the window, but cart's real AK headshot (E1's re-check: with C4's
-    // sight mask his bullets do reach Lokier through the Apartments window) kills him before the scripted hit is due.
+    // G5: Lokier sees cart at the window on course, so his hit lands on the recorded tick (18.50 s, 73 / 7); cart is in
+    // the recorded duel, his bullets on Lokier are blocked and his spray lands the recorded kill on 18.80 s (before G5
+    // his first real AK headshot killed Lokier at 18.50 s, before the hit, and the round had 2 kills changed). Every
+    // kill is the golden master's, the post-round one on cart included (tests/duels.test.ts has the details).
     const seen = seenTick(run);
     expect(seen).not.toBeNull();
-    const lokier = deaths(run.entries).find((d) => d.victim === 'lokier');
-    expect(lokier).toMatchObject({ attacker: 'cart', headshot: true });
-    expect(lokier?.tick).toBeLessThan(LOKIER_DEATH);
-    expect((lokier?.tick ?? 0) < (seen ?? 0) + Math.round(tuning.replay.encounterDelaySec * 64)).toBe(true);
-    expect(damages(run.entries).some((d) => d.attacker === 'lokier' && d.victim === 'cart')).toBe(false);
+    const key = (r: HarnessRun): string[] => deaths(r.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim} ${d.weapon ?? '-'}${d.headshot ? ' HS' : ''}`);
+    expect(key(run)).toEqual(key(golden));
+    expect(deaths(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ tick: LOKIER_DEATH, attacker: 'cart', headshot: true });
+    expect(damages(run.entries).filter((d) => d.attacker === 'lokier' && d.victim === 'cart')).toEqual([expect.objectContaining({ tick: 1184, amount: 73, armor: 7, scripted: true })]);
     // Lokier saw cart earlier too (10.9 s, down the corridor from Truck), with cart on course: no divergence.
     expect(run.entries.some((e) => e.observe.tick < 800 && pawnAt(e, 'lokier').sees.includes('cart'))).toBe(true);
     expectUntouchedReplay(run);
@@ -232,7 +233,9 @@ describe('2. cart kills Lokier about 3 s late', () => {
     expect((run.entries[seen + delay] as LogEntry).observe.events.some((e) => e.type === 'shot' && e.shooter === 'lokier')).toBe(true);
     const kill = deaths(run.entries).find((d) => d.victim === 'lokier');
     expect(kill).toMatchObject({ attacker: 'cart' });
-    expect(damages(run.entries).find((d) => d.victim === 'lokier')?.scripted).toBe(false);
+    // G5: the kill is the recorded duel's (scripted), on the recorded kill's tick shifted with the encounter's hit
+    // (18.80 s + 2.64 s); before G5 his real headshot killed Lokier one tick earlier.
+    expect(damages(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ scripted: true, attacker: 'cart', hitgroup: 'head', tick: LOKIER_DEATH + (seen + delay - 1184) });
     const late = ((kill?.tick ?? 0) - LOKIER_DEATH) / 64;
     console.log(`[lokier-late] seen ${seen}, scripted hit ${seen + delay}, kill ${kill?.tick} (${late.toFixed(2)} s after the recorded 18.80 s)`);
     expect(late).toBeGreaterThan(2);
@@ -528,9 +531,16 @@ describe('10. cart misses Lokier at the window and hides in Shop (G1)', () => {
 
   it('the scripted hit lands, cart’s spray misses, Lokier lives on and outlives his recording', () => {
     const hit = damages(run.entries).filter((d) => d.attacker === 'lokier' && d.victim === 'cart');
-    expect(hit).toEqual([expect.objectContaining({ amount: 73, armor: 7, scripted: true })]);
+    // G5: on the recorded tick (he plays his recording up to the window: on course at the sighting; before G5 1190).
+    expect(hit).toEqual([expect.objectContaining({ tick: 1184, amount: 73, armor: 7, scripted: true })]);
     expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'shot' && ev.shooter === 'cart'))).toBe(true);
     expect(damages(run.entries).some((d) => d.attacker === 'cart')).toBe(false);
+    // G5: he is in the recorded duel, but none of his shots would hit Lokier, so nothing is forced: Lokier lives.
+    expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'blocked_hit'))).toBe(false);
+    expect(coreLogs(run.entries).filter((l) => l.text.startsWith('duel cart -> lokier')).map((l) => l.text)).toEqual([
+      'duel cart -> lokier: in the recorded duel from tick 1126 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203',
+      'duel cart -> lokier: over at tick 1217, the recorded duel is over; 0 would-hit shots blocked',
+    ]);
     expect(switches(run).find((s) => s.id === 'lokier')).toMatchObject({ tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });
   });
 

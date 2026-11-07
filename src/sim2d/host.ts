@@ -698,6 +698,8 @@ export class Sim2DHost implements IHost {
       if (hit !== null) {
         const victim = this.pawn(hit.victim) as PawnState;
         const dmg = bulletDamage(gun, hit.distance, hit.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
+        // G5: the human's bullet on a blocked pair (a recorded duel, docs/core.md): report where it would have hit.
+        if (p.id === this.human && this.isBlocked(p.id, victim.id)) this.outbox.push({ type: 'blocked_hit', attacker: p.id, victim: victim.id, weapon: p.weapon, hitgroup: hit.hitgroup });
         this.engineDamage(p.id, victim, p.weapon, hit.hitgroup, dmg);
       }
     }

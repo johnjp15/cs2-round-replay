@@ -31,6 +31,7 @@ const EVENTS: { readonly [K in ObsEvent['type']]: Extract<ObsEvent, { type: K }>
   sound: { type: 'sound', source: 'donk', pos: v(1.5, -2.25, 0), kind: 'footstep' },
   bomb: { type: 'bomb', phase: 'planted', id: 'cart', pos: v(-1800, 300, -160) },
   round_end: { type: 'round_end', winner: 'CT', reason: 'bomb_defused' },
+  blocked_hit: { type: 'blocked_hit', attacker: 'cart', victim: 'lokier', weapon: 'ak47', hitgroup: 'head' },
 };
 
 const ACTIONS: { readonly [K in ActionType]: Extract<Action, { type: K }> } = {
@@ -129,7 +130,7 @@ describe('contract types', () => {
       expect(parseJsonLine(text)).toEqual(value);
       expect(stableStringify(parseJsonLine(text))).toBe(text);
     }
-    expect(Object.keys(EVENTS)).toHaveLength(6);
+    expect(Object.keys(EVENTS)).toHaveLength(7);
     expect(Object.keys(ACTIONS)).toHaveLength(15);
     expect(Object.keys(CONTROLS)).toHaveLength(8);
   });
