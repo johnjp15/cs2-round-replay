@@ -140,12 +140,12 @@ export async function a1Checks(_browser: Browser, ctx: A1Context, problems: stri
   }
   await p.evaluate(() => window.__cs2a1?.preview(null));
   await p.close();
-  // World models: watching, third person, at the start.
+  // World models: watching.
   const w = await ctx.open(1280, 720);
-  await w.evaluate(() => window.__cs2sim3d?.fly(-300, -400, 120, 140, 12));
-  await ctx.seek(w, 3);
-  await w.evaluate(() => window.__cs2sim3d?.camera('follow', 'cart'));
-  await w.waitForTimeout(400);
+  // Sp4rtaN's eyes at 49.95 s (the browser check's (d)): donk in front of him with his AK-47.
+  await ctx.seek(w, 49.95);
+  await w.evaluate(() => window.__cs2sim3d?.camera('pov', 'sp4rtan'));
+  await w.waitForTimeout(600);
   await shotTo(w, ctx, 'world', shots);
   await w.close();
   r['screenshots'] = shots;

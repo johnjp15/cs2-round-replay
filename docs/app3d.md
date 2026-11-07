@@ -165,7 +165,7 @@ USP-S (suppressor), P2000, knife, C4 (bricks, keypad, display), HE, flashbang, s
 ![AK-47](img/app3d-viewmodel-ak47-idle.jpg)
 ![AK-47 mid-reload, mag out](img/app3d-viewmodel-ak47-reload.jpg)
 
-Also `app3d-viewmodel-{ak47-fire,m4a1s,awp,deagle,usps,knife,c4,he,world}.jpg` in docs/img.
+Also `app3d-viewmodel-{ak47-fire,m4a1s,awp,deagle,usps,knife,c4,he}.jpg` in docs/img, and `app3d-viewmodel-world.jpg`: spectating Sp4rtaN in first person (CT sleeves; U1's spectator view shows the spectated player's viewmodel). The reload screenshot shows a dead player's dropped AK-47 on the floor.
 
 ## Frames
 
