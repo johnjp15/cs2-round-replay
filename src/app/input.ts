@@ -10,6 +10,7 @@
  * - Shift = WALK, Ctrl or C = DUCK, Space = JUMP (G3; held, it jumps once: the movement wants a fresh press, as CS2
  *   with sv_autobunnyhopping 0), left button = ATTACK, right button = ATTACK2, R = RELOAD, E = USE. Duck, walk, jump and use can
  *   move to other keys (keyMapFor; the setting is keybinds.ts).
+ * - G (3D page) = DROP: drop the active gun (W2; the 2D page keeps G for its overlay).
  * - 1–5 select a weapon slot. That is not a PawnInput button: the app turns the request into a
  *   `set_weapon` action for the human pawn through the Session's small action queue
  *   (Session.requestWeaponSlot). In CS2 the human switches weapons natively, so these never go
@@ -31,6 +32,8 @@ export interface HeldControls {
   readonly attack2: boolean;
   readonly use: boolean;
   readonly reload: boolean;
+  /** W2: G, the `drop` command (3D page only; the 2D page keeps G for its overlay). */
+  readonly drop: boolean;
 }
 
 export type HeldControl = keyof HeldControls;
@@ -47,6 +50,7 @@ export const NO_CONTROLS: HeldControls = {
   attack2: false,
   use: false,
   reload: false,
+  drop: false,
 };
 
 /** CS2 weapon slots: 1 primary, 2 pistol, 3 knife, 4 grenades (repeat to cycle), 5 bomb. */
@@ -279,6 +283,7 @@ export function buttonsFor(c: HeldControls): Button[] {
   if (c.walk) b.push('WALK');
   if (c.jump) b.push('JUMP');
   if (c.reload) b.push('RELOAD');
+  if (c.drop) b.push('DROP');
   return sortButtons(b);
 }
 
@@ -290,8 +295,8 @@ export function humanInput(id: PlayerId, c: HeldControls, yawDeg: number, pitchD
 
 /** Weapons per slot, in the order a repeated press cycles through them (slot 4 order not checked against CS2). */
 export const SLOT_WEAPONS: { readonly [S in WeaponSlot]: readonly WeaponId[] } = {
-  1: ['ak47', 'm4a4', 'awp', 'ssg08'],
-  2: ['deagle', 'glock'],
+  1: ['ak47', 'm4a4', 'm4a1s', 'awp', 'ssg08'],
+  2: ['deagle', 'glock', 'usps', 'p2000'],
   3: ['knife'],
   4: ['he', 'flash', 'smoke', 'molotov'],
   5: ['c4'],

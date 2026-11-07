@@ -577,7 +577,7 @@ describe('determinism', () => {
 
 describe('tuning: weapons._engine', () => {
   it('parses into tuning.weaponModel and leaves the gun table alone', () => {
-    expect(Object.keys(tuning.weapons)).toEqual(['ak47', 'awp', 'deagle', 'glock', 'm4a4', 'ssg08']);
+    expect(Object.keys(tuning.weapons)).toEqual(['ak47', 'awp', 'deagle', 'glock', 'm4a4', 'ssg08', 'usps']); // W2: CTs carry a USP-S
     expect(model.recoilScale).toBe(1.884);
     expect(model.jumpImpulse).toBe(tuning.movement.jumpImpulse);
   });

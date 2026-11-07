@@ -14,7 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 7168c0a5 (T1's level flips)
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 9f07df0b (W2's pistols)
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
@@ -160,7 +160,7 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `7168c0a5` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `9f07df0b` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `72d1547f` |
 | `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `fb19a2fa` |
 | `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `6cd197f2` |
@@ -305,6 +305,11 @@ tested (no WebKit here).
 
 ## History
 
+- W2 (every pawn gets a pistol in the setup: the recorded one, else Glock-18 T / USP-S CT, docs/core.md "Start state"):
+  no-human `7168c0a5` → `9f07df0b`, cart-idle `12bf92f7` → `384e6c75`, cart-takeover `53e00fa6` → `f49d323c`; never-peeks without rejoin
+  `93e0dc15` → `b861137b`. `tools/fixture-diff.ts` on all three: one act differs (tick 0: eight more `give`s, glock
+  20/120 for barely, cart, eradicate, snarlbot; usps 12/24 for incredibad, lokier, snakelore, zwomp), every observe
+  line identical (no pawn field, event or round state moves), walk oracles unchanged.
 - T1 (`tools/snap-tracks.ts` pass 0, barely back on Catwalk 35.1–44.7 s): on G6's base no-human `150f77b4` → `7168c0a5`
   (walk oracle `8d41dc25` → `29adfc6e`), cart-idle `8f471b88` → `5770cd34` (`f9a434ca` → `7fae11b5`), cart-takeover
   unchanged (`cae23207`, it ends at tick 1536). `tools/fixture-diff.ts`, no-human: only barely's pawn fields differ (pos from tick

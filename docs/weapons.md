@@ -390,6 +390,14 @@ direction from view + aim punch × `recoilScale` (1.884) + the cone, RNG `Rng(se
 | The human (while controlled) and LIVE pawns | lands along the spread + recoil direction; may go through walls | `MoveOptions` (docs/movement.md): `runSpeed` = `maxSpeedOf` without tagging (the weapon's `m_flMaxSpeed` in its mode, AWP 100 scoped, × the attack factor while firing), `velocityModifier` = tagging; passed only where they differ from the table / 1 |
 | Puppets (REPLAY) | **outcome traced along the scripted view as before** (scripted damage is the truth; no recorded event changes); the drawn tracer follows the spread direction from the recoil-compensated view (B1: it goes at the scripted aim, not above it) | the table's speeds (their tracks) |
 
+- **W2, CS2's guns for mechanical pawns** (`src/sim3d/guns.ts`, V1's audit finding 5): the human (while controlled)
+  and LIVE pawns fire, reload and deploy with the weapon table's numbers, not the 2D table's: rpm = 60 / `cycleTime`,
+  `clip` / `reserve` (AWP 5 / 10, USP-S 12 / 24, Desert Eagle 7 / 21, Glock-18 20 / 60), `reloadTime`, `deployTime`,
+  `fullAuto`, damage and armor (`armorRatio` / 2) from the table, for every gun in it (M4A1-S, USP-S, the SMGs,
+  shotguns, …; `tableId` maps an item id to its table id in one place). A gun a mechanical pawn holds is cut to the
+  table's magazine and reserve (the kit's AWP 10 / 30 from the 2020 recording becomes 5 / 10). Puppets keep the 2D
+  table: their fire ticks are the tape's and a run nobody plays stays the 2D golden master byte for byte.
+  `tests/w2-guns.test.ts` draws, fires, cycles and reloads every table gun as the human.
 - **Tagging and hit punch**: `applyHit` on the victim of every bullet hit that lands (not on a blocked recorded pair).
 - **Scope**: ATTACK2 steps the zoom of scoped weapons; a reload or (AWP / SSG) a shot drops it until the bolt is back;
   `aimView` reports the level and its FOV from the table.
