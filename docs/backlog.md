@@ -75,6 +75,8 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 41 | 11-07 11:02 | Q switches to the last used item | queued | `lastinv` slot history |
 | 42 | 11-07 11:02 | F inspects the weapon | queued | inspect animation per viewmodel (`+lookatweapon`) |
 | 43 | 11-07 11:02 | Higher-fidelity knife model (classic CS feeling); 250 u/s on knife | queued | knife viewmodel detail; `maxSpeedOf(knife)` = 250 verified |
+| 44 | 11-07 11:03 | Fix the sound — "it's really bad right now" | queued | A2: the synthesized placeholder bank + mix (levels, clipping, distance curve, footstep cadence, occlusion); real CS2 sounds still need John's extraction (#17) |
+| 45 | 11-07 11:03 | cart's smoke into Market is still wrong | queued | S1: what the live hosts actually render at 25.8–45 s vs the video (window covered from outside; where the bloom sits); the data landing (#44) vs the host's own throw; wire the grenade engine's smoke for this throw if the host uses something else |
 
 ## Queued (not started)
 - **H3** generic maps + scenarios + free play + LIVE AI on the CS2 nav (plan card).
