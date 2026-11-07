@@ -355,10 +355,13 @@ export class Session {
    * multiple it takes an automatic checkpoint (not logged; it changes nothing).
    */
   step(): Act {
-    if (this.resyncObserve === null && this.tick % this.checkpointTicks === 0 && !this.checkpoints.hasAt(this.tick)) this.takeCheckpoint(autoCheckpointId(this.tick), true);
+    // P1: one observe per step (the tick is read from it; `this.tick` builds a whole observe each time). observe() is a
+    // read: building it before the checkpoint changes nothing (the old code built one there too, via this.tick).
+    const resync = this.resyncObserve;
+    const o = resync ?? canonicalize(this.host.observe());
+    if (resync === null && o.tick % this.checkpointTicks === 0 && !this.checkpoints.hasAt(o.tick)) this.takeCheckpoint(autoCheckpointId(o.tick), true);
     // Played live: the run goes its own way from here, and the old future is gone.
     if (!this.replaying && this.tapeUntil !== null) this.dropTape();
-    const o = this.resyncObserve ?? canonicalize(this.host.observe());
     this.resyncObserve = null;
     const controls = this.pending;
     this.pending = [];

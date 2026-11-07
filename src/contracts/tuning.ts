@@ -316,6 +316,173 @@ export interface RoundTuning {
   timeSec: number;
 }
 
+/**
+ * H5: CS2 grenade mechanics for the pure engine module `src/engine/grenades` (docs/grenades.md cites every value and
+ * marks the unverified ones). Stored as `grenades.cs2` in data/tuning.json. Seconds, Source units, degrees.
+ */
+export interface GrenadeCs2Tuning {
+  // --- throw (memorin.app "Grenade throw speed and release", weapons.vdata m_flThrowVelocity) ---
+  /** Weapon throw velocity (vdata `m_flThrowVelocity`, 750 for every grenade). */
+  throwVelocity: number;
+  /** Base speed = clamp(throwVelocity × throwVelocityScale, throwVelocityMin, throwVelocityMax). */
+  throwVelocityScale: number;
+  throwVelocityMin: number;
+  throwVelocityMax: number;
+  /** Speed factor = strengthBase + strengthScale × strength (strength 1 = left click, 0 = right click, 0.5 = both). */
+  strengthBase: number;
+  strengthScale: number;
+  /** The thrower's velocity is added × this. */
+  playerVelocityScale: number;
+  /** Level aim throws this many degrees up: pitch' = pitch − (90 − |pitch|) × offset / 90. */
+  throwPitchOffsetDeg: number;
+  /** Spawn: from the eye (lowered by spawnDropUnderhand × (1 − strength)) trace the grenade hull spawnTrace forward, back off spawnBackoff. */
+  spawnTrace: number;
+  spawnBackoff: number;
+  spawnDropUnderhand: number;
+  /** Jump-throw latch: the pose and velocity are taken this long after the jump. */
+  jumpThrowLatchSec: number;
+  /** Vertical speed right after the jump tick (before the latch's gravity). */
+  jumpVzStart: number;
+  /** Standing eye height above the feet. */
+  eyeHeight: number;
+  // --- projectile ---
+  /** sv_gravity. */
+  gravity: number;
+  /** Grenade gravity = gravity × gravityScale. */
+  gravityScale: number;
+  /** Integration substeps per 64 Hz tick. */
+  substeps: number;
+  /** Half extent of the grenade's collision box. */
+  hullHalf: number;
+  /** Bounce: v' = elasticity × reflect(v, n) off the world; × playerElasticity more off a player. */
+  elasticity: number;
+  playerElasticity: number;
+  /** Comes to rest when a bounce leaves less than restSpeed on a surface with normal z above restNormalZ. */
+  restSpeed: number;
+  restNormalZ: number;
+  // --- fuses ---
+  heFuseSec: number;
+  flashFuseSec: number;
+  /** Smoke and decoy: first rest check this long after the throw, then every restCheckSec until at rest. */
+  smokeFuseSec: number;
+  decoyFuseSec: number;
+  restCheckSec: number;
+  /** Molotov / incendiary: bursts on a surface within molotovMaxSlopeDeg of flat, or after molotovFuseSec in the air. */
+  molotovFuseSec: number;
+  molotovMaxSlopeDeg: number;
+  /** An air burst makes a fire only if the floor is at most this far below. */
+  molotovAirburstDrop: number;
+  // --- smoke volume ---
+  /** Voxel edge and grid size (cells per axis). */
+  smokeVoxel: number;
+  smokeGridCells: number;
+  /** Flood budget (voxels) and furthest voxel (cost distance from the detonation). */
+  smokeMaxVoxels: number;
+  smokeMaxRadius: number;
+  /** Cost multiplier for climbing a voxel (> 1 flattens the cloud). */
+  smokeUpCost: number;
+  /** The cloud reaches its full extent this long after the pop (voxels appear by cost distance). */
+  smokeGrowSec: number;
+  /** Full density for smokeFullSec after the pop, then a linear fade over smokeFadeSec. */
+  smokeFullSec: number;
+  smokeFadeSec: number;
+  /** A sight line is blocked once it has crossed this much full-density smoke. */
+  smokeOpaqueLength: number;
+  /** Bullet holes: voxels within bulletHoleRadius of the bullet's path are clear for bulletHoleSec. */
+  bulletHoleRadius: number;
+  bulletHoleSec: number;
+  /** HE holes (memorin "Smoke voxel system"): core, feather end, influence limit, residual density, regrowth. */
+  heHoleCore: number;
+  heHoleFeather: number;
+  heHoleInfluence: number;
+  heHoleResidual: number;
+  heHoleRegrowStartSec: number;
+  heHoleRegrowEndSec: number;
+  heHoleRegrowExp: number;
+  heHoleMaxSec: number;
+  // --- flash ---
+  flashRadius: number;
+  /** Blind seconds per unit of adjusted strength (strength = flashBase × (1 − d / flashRadius) × exposure). */
+  flashBase: number;
+  /** Facing bands: dot ≥ flashFrontDot front, ≥ flashSideDot side, else back. Fade (total) and hold per band. */
+  flashFrontDot: number;
+  flashSideDot: number;
+  flashFrontFade: number;
+  flashFrontHold: number;
+  flashSideFade: number;
+  flashSideHold: number;
+  flashBackFade: number;
+  flashBackHold: number;
+  /** Peak white (0–1) when facing away. */
+  flashBackAlpha: number;
+  /** Partial exposure: each of three offset points (right, left, up, flashProbeOffset from the eye) adds this. */
+  flashProbeOffset: number;
+  flashProbeWeight: number;
+  /** Exposure multiplier when the line passes through smoke (1 = smoke does not protect). */
+  flashSmokeFactor: number;
+  /** A pawn counts as blind while its flash alpha is at least this (sv_flashed_amount_for_blind_kill). */
+  flashBlindAlpha: number;
+  // --- fire (inferno convars) ---
+  infernoMaxFlames: number;
+  infernoFlameSpacing: number;
+  infernoMaxRange: number;
+  infernoMaxRangeCt: number;
+  infernoLifetime: number;
+  infernoLifetimeCt: number;
+  /** Flames die between lifetime − lifetimeJitter and lifetime after the burst. */
+  infernoLifetimeJitter: number;
+  infernoInitialSpawnInterval: number;
+  /** Spawn interval growth per new flame (fit to ~1.83 s to full spread). */
+  infernoSpawnGrowth: number;
+  infernoMaxSpawnInterval: number;
+  infernoSpreadSpeedMult: number;
+  infernoSpreadSpeedMultCt: number;
+  infernoMaxDepth: number;
+  infernoSurfaceOffset: number;
+  infernoVelocityFactor: number;
+  infernoVelocityDecay: number;
+  /** Climb allowance and drop limit for a new flame relative to its parent. */
+  infernoClimb: number;
+  infernoDrop: number;
+  /** A pawn burns if its feet are within flameRadius (xy) of a flame and between flame z − 8 and z + flameHeight. */
+  flameRadius: number;
+  flameHeight: number;
+  infernoDamage: number;
+  infernoDamageCt: number;
+  infernoDamageTimer: number;
+  /** An inferno dies when more than this fraction of its flames are in smoke. */
+  infernoSmokeFraction: number;
+  molotovArmorRatio: number;
+  incendiaryArmorRatio: number;
+  molotovFlinchSmall: number;
+  molotovFlinchLarge: number;
+  incendiaryFlinchSmall: number;
+  incendiaryFlinchLarge: number;
+  // --- HE ---
+  heDamage: number;
+  heRadius: number;
+  heArmorRatio: number;
+  /** Gaussian falloff sigma = heRadius × heSigmaFraction (when heGaussian), else linear (Source SDK). */
+  heSigmaFraction: number;
+  heFlinchSmall: number;
+  heFlinchLarge: number;
+  /** ff_damage_reduction_grenade (teammates, with friendly fire) and ff_damage_reduction_grenade_self. */
+  teamDamageScale: number;
+  selfDamageScale: number;
+  // --- decoy ---
+  decoyDurationSec: number;
+  decoyDamage: number;
+  decoyRadius: number;
+  decoyBurstMin: number;
+  decoyBurstMax: number;
+  decoyGapMinSec: number;
+  decoyGapMaxSec: number;
+  /** Fallback shot interval when the host gives none for the thrower's weapon. */
+  decoyShotIntervalSec: number;
+  heGaussian: boolean;
+  fireUsesArmor: boolean;
+}
+
 /** Grenades (docs/combat.md, Grenades). Seconds, Source units, degrees. */
 export interface GrenadeTuning {
   /** How long a smoke blocks vision after it pops. */
@@ -359,6 +526,8 @@ export interface GrenadeTuning {
   flashEdgeFactor: number;
   /** true = an active smoke between a pawn and the flash protects the pawn. */
   smokeBlocksFlash: boolean;
+  /** H5: the CS2 mechanics for `src/engine/grenades` (`grenades.cs2`). */
+  cs2: GrenadeCs2Tuning;
 }
 
 /** Hitscan and damage rules (docs/combat.md). */
@@ -663,6 +832,118 @@ const GRENADE_KEYS = [
   'flashRange',
   'flashEdgeFactor',
 ] as const;
+const GRENADE_CS2_KEYS = [
+  'throwVelocity',
+  'throwVelocityScale',
+  'throwVelocityMin',
+  'throwVelocityMax',
+  'strengthBase',
+  'strengthScale',
+  'playerVelocityScale',
+  'throwPitchOffsetDeg',
+  'spawnTrace',
+  'spawnBackoff',
+  'spawnDropUnderhand',
+  'jumpThrowLatchSec',
+  'jumpVzStart',
+  'eyeHeight',
+  'gravity',
+  'gravityScale',
+  'substeps',
+  'hullHalf',
+  'elasticity',
+  'playerElasticity',
+  'restSpeed',
+  'restNormalZ',
+  'heFuseSec',
+  'flashFuseSec',
+  'smokeFuseSec',
+  'decoyFuseSec',
+  'restCheckSec',
+  'molotovFuseSec',
+  'molotovMaxSlopeDeg',
+  'molotovAirburstDrop',
+  'smokeVoxel',
+  'smokeGridCells',
+  'smokeMaxVoxels',
+  'smokeMaxRadius',
+  'smokeUpCost',
+  'smokeGrowSec',
+  'smokeFullSec',
+  'smokeFadeSec',
+  'smokeOpaqueLength',
+  'bulletHoleRadius',
+  'bulletHoleSec',
+  'heHoleCore',
+  'heHoleFeather',
+  'heHoleInfluence',
+  'heHoleResidual',
+  'heHoleRegrowStartSec',
+  'heHoleRegrowEndSec',
+  'heHoleRegrowExp',
+  'heHoleMaxSec',
+  'flashRadius',
+  'flashBase',
+  'flashFrontDot',
+  'flashSideDot',
+  'flashFrontFade',
+  'flashFrontHold',
+  'flashSideFade',
+  'flashSideHold',
+  'flashBackFade',
+  'flashBackHold',
+  'flashBackAlpha',
+  'flashProbeOffset',
+  'flashProbeWeight',
+  'flashSmokeFactor',
+  'flashBlindAlpha',
+  'infernoMaxFlames',
+  'infernoFlameSpacing',
+  'infernoMaxRange',
+  'infernoMaxRangeCt',
+  'infernoLifetime',
+  'infernoLifetimeCt',
+  'infernoLifetimeJitter',
+  'infernoInitialSpawnInterval',
+  'infernoSpawnGrowth',
+  'infernoMaxSpawnInterval',
+  'infernoSpreadSpeedMult',
+  'infernoSpreadSpeedMultCt',
+  'infernoMaxDepth',
+  'infernoSurfaceOffset',
+  'infernoVelocityFactor',
+  'infernoVelocityDecay',
+  'infernoClimb',
+  'infernoDrop',
+  'flameRadius',
+  'flameHeight',
+  'infernoDamage',
+  'infernoDamageCt',
+  'infernoDamageTimer',
+  'infernoSmokeFraction',
+  'molotovArmorRatio',
+  'incendiaryArmorRatio',
+  'molotovFlinchSmall',
+  'molotovFlinchLarge',
+  'incendiaryFlinchSmall',
+  'incendiaryFlinchLarge',
+  'heDamage',
+  'heRadius',
+  'heArmorRatio',
+  'heSigmaFraction',
+  'heFlinchSmall',
+  'heFlinchLarge',
+  'teamDamageScale',
+  'selfDamageScale',
+  'decoyDurationSec',
+  'decoyDamage',
+  'decoyRadius',
+  'decoyBurstMin',
+  'decoyBurstMax',
+  'decoyGapMinSec',
+  'decoyGapMaxSec',
+  'decoyShotIntervalSec',
+] as const;
 const DAMAGE_KEYS = [
   'falloffUnits',
   'armorBonus',
@@ -743,6 +1024,7 @@ export function parseTuning(json: unknown): Tuning {
   const grenades: GrenadeTuning = {
     ...pickNumbers(grenadesObj, GRENADE_KEYS, 'grenades'),
     smokeBlocksFlash: asBoolean(grenadesObj['smokeBlocksFlash'], 'grenades.smokeBlocksFlash'),
+    cs2: parseGrenadeCs2(asObject(grenadesObj['cs2'], 'grenades.cs2')),
   };
   const damage: DamageTuning = {
     ...pickNumbers(damageObj, DAMAGE_KEYS, 'damage'),
@@ -787,6 +1069,24 @@ function checkReplay(r: ReplayTuning): ReplayTuning {
   // G7: the drift and the encounter window are seconds >= 0 (0: exactly the recording's tick).
   for (const k of ['onCourseDriftSec', 'encounterWindowSec', 'closeRangeUnits'] as const) if (!(r[k] >= 0)) throw new TuningError(`replay.${k}: must be >= 0, got ${r[k]}`);
   return r;
+}
+
+/** H5: `grenades.cs2`, with the ranges the engine relies on. */
+function parseGrenadeCs2(obj: Record<string, unknown>): GrenadeCs2Tuning {
+  const g: GrenadeCs2Tuning = {
+    ...pickNumbers(obj, GRENADE_CS2_KEYS, 'grenades.cs2'),
+    heGaussian: asBoolean(obj['heGaussian'], 'grenades.cs2.heGaussian'),
+    fireUsesArmor: asBoolean(obj['fireUsesArmor'], 'grenades.cs2.fireUsesArmor'),
+  };
+  const positive = ['throwVelocity', 'gravity', 'gravityScale', 'hullHalf', 'smokeVoxel', 'smokeOpaqueLength', 'flashRadius', 'infernoFlameSpacing', 'infernoDamageTimer', 'heRadius', 'restCheckSec', 'infernoInitialSpawnInterval'] as const;
+  for (const k of positive) if (!(g[k] > 0)) throw new TuningError(`grenades.cs2.${k}: must be > 0, got ${g[k]}`);
+  const counts = ['substeps', 'smokeGridCells', 'smokeMaxVoxels', 'infernoMaxFlames', 'infernoMaxDepth', 'decoyBurstMin', 'decoyBurstMax'] as const;
+  for (const k of counts) if (!(Number.isInteger(g[k]) && g[k] >= 1)) throw new TuningError(`grenades.cs2.${k}: must be an integer >= 1, got ${g[k]}`);
+  const unit = ['elasticity', 'playerElasticity', 'heHoleResidual', 'flashBackAlpha', 'flashBlindAlpha', 'infernoSmokeFraction', 'flashSmokeFactor'] as const;
+  for (const k of unit) if (!(g[k] >= 0 && g[k] <= 1)) throw new TuningError(`grenades.cs2.${k}: must be in [0, 1], got ${g[k]}`);
+  if (g.decoyBurstMax < g.decoyBurstMin) throw new TuningError('grenades.cs2.decoyBurstMax: must be >= decoyBurstMin');
+  if (g.decoyGapMaxSec < g.decoyGapMinSec) throw new TuningError('grenades.cs2.decoyGapMaxSec: must be >= decoyGapMinSec');
+  return g;
 }
 
 /** H2: ranges of the weapon model's constants (most only need to be numbers ≥ 0). */

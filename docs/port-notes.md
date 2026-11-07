@@ -316,3 +316,21 @@ module's numbers matter for the simulators and for comparing a 3D run with a CS2
 the module is ever transcribed: `ValveUniformRandom` uses 32-bit int maths and float32 (`Math.fround` → `float`); the
 recoil table must use float, the rest doubles; state numbers are rounded to 6 decimals like the other engines; RNG draw
 order per shot is r1, θ1, then r2, θ2 per pellet.
+## Grenades (`src/engine/grenades`, H5; docs/grenades.md)
+
+What CS2 provides natively, so the port does not run this module on a CS2 server:
+
+| engine piece | CS2 native |
+| --- | --- |
+| `throwGrenade` (release law, jump latch) | the weapon's own throw (`CBaseCSGrenade` → `C*Projectile` entities `smokegrenade_projectile`, `flashbang_projectile`, `hegrenade_projectile`, `molotov_projectile`, `decoy_projectile`); a bot throws by pressing ATTACK / ATTACK2 with the view angles set, the server does the rest |
+| `stepProjectile` (gravity, bounces, rest) | the projectile entity's physics; `grenade_bounce` game event per bounce |
+| fuses and detonation | `hegrenade_detonate`, `flashbang_detonate`, `smokegrenade_detonate`, `molotov_detonate`, `decoy_started` / `decoy_detonate`, `decoy_firing` events |
+| smoke volume, `smokeBlocks`, bullet / HE holes | the server's volumetric smoke (`C_SmokeGrenadeProjectile` voxel data); sight checks use `smokegrenade_detonate` / `smokegrenade_expired` plus a line-vs-volume test (CS2 has no exported "is this line smoked" call: approximate with spheres around the detonation, or keep this module's flood fed by CS2 traces) |
+| flash blindness | `player_blind` event (`blind_duration`) and `m_flFlashDuration` / `m_flFlashMaxAlpha` on the pawn |
+| fire spread and damage | the `inferno` entity (`m_fireXDelta`… / `m_bFireIsBurning`, `inferno_startburn` / `inferno_expire` / `inferno_extinguish` events) and the engine's own damage (`player_hurt` with weapon `inferno`) |
+| HE damage | the engine's radius damage (`player_hurt` with weapon `hegrenade`) |
+
+Port care, if the module is ported to C# for an offline host: `hashRandom` is uint32 murmur mixing (`Math.imul` →
+`unchecked` uint multiply, `>>> 0` → uint casts); the smoke flood's heap breaks cost ties by voxel index; every list
+is iterated by seq / id (ordinal); `GrenadeState` is plain data (serialize the arrays in order; `path` can be
+dropped from snapshots).
