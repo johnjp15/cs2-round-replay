@@ -76,13 +76,14 @@ describe('tape-identical input reproduces the tape (fixtures/scripts/cart-follow
     expect(blocked.length).toBeGreaterThan(0);
     for (const b of blocked) expect(b.tick).toBeLessThan(LOKIER_KILL);
     const logs = duelLogs(run).filter((l) => l.text.startsWith('duel cart -> lokier'));
-    // G6: from 1138 (1126 before): on the CS2 mesh Lokier first sees him at the window then, on the duel track.
-    expect(logs.map((l) => l.tick)).toEqual([1138, LOKIER_KILL - 1, LOKIER_KILL]);
-    expect(logs[0]?.text).toBe('duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203');
+    // V2: from 1133 (G6: 1138; 1126 before): Lokier first sees him through the first Apartments window, where cart's
+    // first-person frames put him (docs/viewfit.md "Engagement positions").
+    expect(logs.map((l) => l.tick)).toEqual([1133, LOKIER_KILL - 1, LOKIER_KILL]);
+    expect(logs[0]?.text).toBe('duel cart -> lokier: in the recorded duel from tick 1133 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203');
     expect(logs[1]?.text).toMatch(/^duel cart -> lokier: his spray is on lokier through the recorded kill \(ak47, head\) \(on target at tick \d+, still firing at tick \d+\): it lands at tick 1203 \(recorded 1203\)$/);
     // The block is in force from the sighting at the window to the kill.
     const blocks = run.entries.flatMap((e) => e.act.actions.filter((a) => (a.type === 'block_damage' || a.type === 'unblock_damage') && a.attacker === 'cart' && a.victim === 'lokier').map((a) => `${e.observe.tick} ${a.type}`));
-    expect(blocks).toEqual(['1138 block_damage', `${LOKIER_KILL} unblock_damage`]);
+    expect(blocks).toEqual(['1133 block_damage', `${LOKIER_KILL} unblock_damage`]);
   });
 
   it('the sprays at sp4rtan (the defuse, after the round) do no damage, as on the tape: he defuses and kills cart after the round', () => {
