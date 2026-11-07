@@ -163,11 +163,11 @@ describe('AK-47 sprayed in the 3D host at a wall 1,024 u away (1,000 seeded maga
     expect(pct(0.5)).toBeLessThan(8.5);
     expect(pct(0.95)).toBeLessThan(18);
     expect(r[r.length - 1]).toBeLessThan(21);
-    // Without control the same 10 bullets climb out of that group (H2: median ~112 u).
+    // Without control the same 10 bullets climb out of that group (median ~94 u; Valve's suppression slows bullets 2–8).
     const u: number[] = [];
     for (const run of free) for (let i = 0; i < 10; i++) u.push((Math.hypot((run[i] as Hit).pitch, (run[i] as Hit).yaw) / DEG) * WALL);
     u.sort((a, b) => a - b);
-    expect(u[Math.floor(u.length / 2)]).toBeGreaterThan(100);
+    expect(u[Math.floor(u.length / 2)]).toBeGreaterThan(85);
     let worst = 0;
     for (let i = 0; i < 30; i++) worst = Math.max(worst, Math.hypot(meanOf(controlled, i).pitch, meanOf(controlled, i).yaw));
     console.log(

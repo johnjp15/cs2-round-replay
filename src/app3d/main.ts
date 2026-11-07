@@ -949,7 +949,7 @@ class App3D {
       eye = vp === null ? this.freePos : { x: vp.x, y: vp.y, z: vp.z + this.eyeZ };
       if (firstPerson) {
         // H2b: the camera follows `recoilTracking` (view_recoil_tracking, default 0.45) of the recoil plus the screen
-        // shake; the crosshair sits where the next bullet goes (view + aim punch × 2).
+        // shake; `aim` is where the next bullet goes (view + aim punch × 2), the crosshair only with follow-recoil on.
         const v = this.aimView(human as PlayerId, this.look);
         yaw = v.camera.yaw;
         pitch = v.camera.pitch;

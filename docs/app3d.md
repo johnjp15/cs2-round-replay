@@ -198,11 +198,14 @@ count. DPI changes counts per inch, not this formula (cm/360 = 360 / (0.022 × s
 the view, tag on hits and own the scope; the app only draws what `Sim3DHost.aimView` returns, so nothing in the
 headless host depends on the view code.
 
-**The crosshair shows the view, not the bullet (W1, #32).** CS2's default `cl_crosshair_recoil 0`: the crosshair
-stays at the centre of the screen while the view kicks; the bullets still go where CS2 puts them (view + aim punch ×
-weapon_recoil_scale + the cone: the host's `fireShot`, unchanged), so in a spray they land above the crosshair, exactly
-as in CS2. **Crosshair follows recoil** (checkbox, off by default; cl_crosshair_recoil 1) draws it where the next
-bullet goes instead (input3d.ts `crosshairOffsetPx`). The same holds for a spectated player's first-person crosshair.
+**The crosshair shows the view, not the bullet (W1, #32 / #77).** CS2's default `cl_crosshair_recoil 0`: the
+crosshair stays at the centre of the screen while the view kicks; the bullets still go where CS2 puts them (view +
+aim punch × weapon_recoil_scale + the cone: the host's `fireShot`, unchanged), so in a spray they land above the
+crosshair, exactly as in CS2. **Crosshair follows recoil** (checkbox, off by default; cl_crosshair_recoil 1) draws it
+where the next bullet goes instead (input3d.ts `crosshairOffsetPx`; kept in the settings as `crosshairRecoil`). The
+same holds for a spectated player's first-person crosshair. `npm run check:browser:3d:crosshair` (after
+`npm run build:3d`) holds mouse 1 for 10+ AK shots and checks the crosshair's style and on-screen box never change
+while the camera kicks, then that it moves with the setting on.
 
 **Recoil tracking** (settings field, 0–1, default 0.45; CS:GO's `view_recoil_tracking`, hidden in CS2): how much of
 the recoil the camera follows. The bullets don't change: they always go to view + punch × 2. At 0.45 (CS:GO / CS2

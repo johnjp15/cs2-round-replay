@@ -65,7 +65,7 @@ export function flyStep(pos: { x: number; y: number; z: number }, look: Look, c:
 // ---- W1: crosshair, wheel jump, lastinv ---------------------------------------------------------------------------
 
 /**
- * W1 (#32): the crosshair's offset from the screen centre in pixels. CS2's default `cl_crosshair_recoil 0`: the
+ * W1 (#32, #77): the crosshair's offset from the screen centre in pixels. CS2's default `cl_crosshair_recoil 0`: the
  * crosshair stays at the centre while the view kicks (by `view_recoil_tracking`); the bullet still leaves along
  * view + aim punch × weapon_recoil_scale, so the crosshair shows the view, not the bullet. `follow` (the "Crosshair
  * follows recoil" setting, cl_crosshair_recoil 1) puts it where the next bullet goes (`offset` computes that).
