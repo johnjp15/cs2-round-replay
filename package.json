@@ -31,7 +31,8 @@
     "tracks:snap": "tsx tools/snap-tracks.ts",
     "vision": "tsx tools/vision-labels.ts",
     "stage:web-apps": "bash tools/stage-web-apps.sh",
-    "check:locked": "tsx tools/e2e-locked.ts"
+    "check:locked": "tsx tools/e2e-locked.ts",
+    "harness3d": "tsx tools/harness3d.ts"
   },
   "repository": {
     "type": "git",
