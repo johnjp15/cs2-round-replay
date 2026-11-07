@@ -8,7 +8,8 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 - 05:27 check-in #1: four agents (V0 parity, X1 map, Ctrl+W, audio) and later two more (weapons integration, barely's stairs) turned out to have been stopped by the client-side interrupts around 04:27–04:38; all six relaunched on their branches/worktrees (nothing lost; everything committed was pushed).
 - 05:59 merged **#31** (radar CS2 rules + toggle, first-person spectating with HUD and crosshair, SPECTATING panel; radar timings from the CS:GO source) and **#30** (movement fixes vs CS2: sub-1 u/s zeroing, 1.1× take-off clamp, 0.25 air accel while rising slowly, MoveOptions for scoped speed/tagging, sub-tick split helper; every golden digest moved, kills/plant/defuse unchanged). Both **live** (Pages f7323b9).
 - Agents told to merge main and regenerate fixtures: G6 sight, G7 bots, V2 view fit.
-- 06:16 check-in #2: 11 agents active and pushing. PR #32 (round-end stutter: the HUD re-parsed the whole 4,500-line session log every frame after round end, 150–250 ms + 9 MB garbage per frame; now parsed incrementally and cached) is green but conflicts with #31's HUD changes — its agent is merging main; merge + deploy at the next check-in. Next check-in 07:01.
+- 06:16 check-in #2: 11 agents active and pushing. PR #32 (round-end stutter: the HUD re-parsed the whole 4,500-line session log every frame after round end, 150–250 ms + 9 MB garbage per frame; now parsed incrementally and cached) is green but conflicts with #31's HUD changes — its agent is merging main; merge + deploy at the next check-in.
+- 07:02 check-in #3: a server restart at ~07:00 stopped all ten working agents; nine resumed from their transcripts, two (parity, grenades) relaunched as finishers on their nearly-done branches. **#32 merged and live** (Pages da9bc5d): no more stutter after the round ends. Next check-in 07:48.
 
 ## Operating rules John set
 - Merge PRs without asking (2026-11-05). Fable orchestrates; Opus 5.5 agents do the expensive work (2026-11-07 02:02). Permission to read anything on any website (04:26). John's messages are not stop requests; agents stopped by client-side interrupts get resumed.
@@ -41,7 +42,7 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 21 | 11-07 04:21 | cart's smoke should block the Market window, not land deep inside Market; check the video | in progress | V0 data fix: measured landing spots for every grenade |
 | 22 | 11-07 04:24 | Recoil: the 0–1 ratio for crosshair/screen movement (view_recoil_tracking 0.45) as a setting | in progress | H2b |
 | 23 | 11-07 04:25 | barely's position: no jump from underpass to catwalk; a radar level overlap | in progress | T1 |
-| 24 | 11-07 04:27 | The game gets laggy and stuttery when the round ends | in progress | P1 priority 1, own small PR |
+| 24 | 11-07 04:27 | The game gets laggy and stuttery when the round ends | live | P1 #32: the HUD re-parsed the whole session log every frame after round end; now incremental + cached |
 | 25 | 11-07 04:32 | Bots act like normal players: if cart peeks the bot before eradicate, it should shoot back; stick to the script only while it makes sense | in progress | G7 |
 | 26 | 11-07 04:34 | View angles from the video: e.g. cart staring at the ceiling when barely dies | in progress | V2 (yaw+pitch fit per frame) |
 | 27 | 11-07 04:35 | Without takeover, cart aim-locks and shoots Lokier through the wall; audit positions; maybe the 2020 map fixes it | in progress | G6 (aim only on visible targets + through-geometry audit list), V2 (position refinement at engagements), X1 |
