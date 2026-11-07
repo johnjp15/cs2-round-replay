@@ -279,6 +279,35 @@ describe('blocked pairs and scripted damage', () => {
     run(host, 20);
     const again = fireAt(host, 'chest');
     expect(eventsOf(again, 'damage')[0]).toMatchObject({ attacker: 'cart', victim: 'sp4rtan', amount: 27 });
+    expect(eventsOf(again, 'blocked_hit')).toEqual([]);
+  });
+
+  it('G5: a blocked bullet of the human is reported (blocked_hit: victim, hitgroup) after its shot and sound; nobody else’s is', () => {
+    // The host's human is cart (Sim2DHost's default).
+    const host = duel('ak47', 300);
+    host.apply(act([{ type: 'block_damage', attacker: 'cart', victim: 'sp4rtan' }]));
+    const o = fireAt(host, 'head');
+    expect(o.events.map((e) => e.type)).toEqual(['shot', 'sound', 'blocked_hit']);
+    expect(eventsOf(o, 'blocked_hit')).toEqual([{ type: 'blocked_hit', attacker: 'cart', victim: 'sp4rtan', weapon: 'ak47', hitgroup: 'head' }]);
+    expect(pawn(o, 'sp4rtan')).toMatchObject({ hp: 100, armor: 100 });
+    host.apply(act([]));
+    run(host, 20);
+    expect(eventsOf(fireAt(host, 'leg'), 'blocked_hit')).toEqual([{ type: 'blocked_hit', attacker: 'cart', victim: 'sp4rtan', weapon: 'ak47', hitgroup: 'leg' }]);
+    // A miss is not reported.
+    host.apply(act([]));
+    run(host, 20);
+    const o2 = host.observe();
+    host.apply(act([], [input('cart', 30, aimPitch(pawn(o2, 'cart'), pawn(o2, 'sp4rtan'), 'head', d), ['ATTACK'])]));
+    host.tick();
+    expect(host.observe().events.map((e) => e.type)).toEqual(['shot', 'sound']);
+
+    // The same blocked hit with nobody playing (cart a puppet, as under B3's round-start blocks) is not reported.
+    const bots = duel('ak47', 300);
+    bots.setHuman(null);
+    bots.apply(act([{ type: 'block_damage', attacker: 'cart', victim: 'sp4rtan' }]));
+    const ob = fireAt(bots, 'head');
+    expect(ob.events.map((e) => e.type)).toEqual(['shot', 'sound']);
+    expect(bots.combatLog()).toHaveLength(1);
   });
 
   it('scripted damage applies exactly, flagged scripted; lethal forces HP to 0 and death carries the headshot', () => {

@@ -61,6 +61,7 @@ export type {
   SoundEvent,
   BombEvent,
   RoundEndEvent,
+  BlockedHitEvent,
   ObsEvent,
   Score,
   BombObs,

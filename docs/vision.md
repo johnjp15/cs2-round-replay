@@ -210,7 +210,8 @@ does show is cart looking elsewhere: his recorded view yaw during the spray trac
 within 0.8° RMS, 17–22° off sp4rtan's spot, while he walks west at 150–200 u/s (an AK that inaccurate at 570 units
 misses anyway). B3 aims every recorded shot at its target; for the human's "perfect" follow script the shots the tape
 shows missing now use his recorded view instead (`tools/follow-aim.ts`, `docs/golden.md`), and that run has no LIVE
-switch. The radar sighting window points the same way, mirrored: sp4rtan is on cart's radar until 65.2 s and off it
+switch. G5: the spray is also one of the human's recorded duels (`docs/core.md` "Recorded duels of the human"): from
+his recorded spot his bullets on sp4rtan are blocked during it whatever the aim, so it hits nothing either way. The radar sighting window points the same way, mirrored: sp4rtan is on cart's radar until 65.2 s and off it
 during the spray; in 2D the B-site stack hides the defusing sp4rtan from cart at the Shop door 64.5–65.1 s and opens as
 cart walks west. A few tens of units of difference in the CS:GO 2020 box or sp4rtan's spot would explain both.
 

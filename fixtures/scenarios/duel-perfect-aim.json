@@ -1,0 +1,14 @@
+{
+  "name": "duel-perfect-aim",
+  "description": "G5: cart plays his recording into the Apartments, stops at 18.0 s (0.5 s before his recorded first shot), aims at Lokier's head and fires, every shot on target from the first. Lokier's recorded hit lands first (18.50 s), cart's shots before the recorded kill do nothing, and the kill (AK-47, head) lands on the recorded tick (18.80 s), not on his first shot. Then he plays his recording again to the end.",
+  "human": "cart",
+  "seed": 1,
+  "until": "end",
+  "steps": [
+    {"do": "followRecording", "until": 18.0},
+    {"do": "aimAt", "id": "lokier"},
+    {"do": "fire", "untilDead": true, "maxSec": 2},
+    {"do": "aimAt", "id": null},
+    {"do": "followRecording", "until": 70.6}
+  ]
+}

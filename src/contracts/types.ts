@@ -188,8 +188,23 @@ export interface RoundEndEvent {
   readonly reason: RoundEndReason;
 }
 
+/**
+ * G5: a bullet of the human's pawn (`Observe.human`) hit `victim` while `block_damage {attacker, victim}` was in force,
+ * so the engine applied no damage (no `damage` event); this reports that it would have hit, and where. It follows that
+ * shot's `shot` and `sound`. Only the human's bullets are reported (the puppets' blocked hits are not: their damage is
+ * scripted), and grenades never. CS2: OnTakeDamage blocked the hit. docs/core.md "Recorded duels of the human".
+ */
+export interface BlockedHitEvent {
+  readonly type: 'blocked_hit';
+  readonly attacker: PlayerId;
+  readonly victim: PlayerId;
+  readonly weapon: WeaponId;
+  /** Where the bullet would have hit (CS2: the hit group of the trace). */
+  readonly hitgroup: Hitgroup;
+}
+
 /** Events since the previous tick, in engine emission order (not sorted). */
-export type ObsEvent = DamageEvent | ShotEvent | DeathEvent | SoundEvent | BombEvent | RoundEndEvent;
+export type ObsEvent = DamageEvent | ShotEvent | DeathEvent | SoundEvent | BombEvent | RoundEndEvent | BlockedHitEvent;
 
 /** Rounds won per side. */
 export interface Score {
