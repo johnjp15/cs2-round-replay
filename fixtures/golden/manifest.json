@@ -3,7 +3,7 @@
   "fixtures": [
     {
       "bytes": 966125,
-      "commit": "67454d8dba7a422406c3dc498e5c697e17ac102e",
+      "commit": "4067b35de1be8c713aaa299f77d571734ec2d5b0",
       "description": "The golden master: no human, the Core drives all ten pawns for the whole round (npm run harness -- --human none --until end).",
       "digest": "e9a228d9",
       "file": "round-nohuman.jsonl.gz",
@@ -18,6 +18,7 @@
       "scriptHash": null,
       "seed": 1,
       "sourceDirty": false,
+      "takeover": null,
       "ticks": 4517,
       "tuningHash": "411b04b5",
       "until": "end",
@@ -29,7 +30,7 @@
     },
     {
       "bytes": 605544,
-      "commit": "f1adda824422d5f3574b8e9a310578f5bd28b5eb",
+      "commit": "4067b35de1be8c713aaa299f77d571734ec2d5b0",
       "description": "Human cart stands still in Back Alley (fixtures/scripts/cart-idle.json) for 45 s: the Core skips him and his scripted damage; Lokier outlives his recording, barely kills him and rejoins (G1), sp4rtan kills cart on his flank and rejoins, barely hears it, goes LIVE and rejoins again (rejoin path queries in the walk oracle).",
       "digest": "2923a71d",
       "file": "round-cart-idle.jsonl.gz",
@@ -44,6 +45,7 @@
       "scriptHash": "4577d8df",
       "seed": 1,
       "sourceDirty": false,
+      "takeover": null,
       "ticks": 2881,
       "tuningHash": "411b04b5",
       "until": 45,
@@ -52,6 +54,33 @@
       "walkCalls": 20464,
       "walkDigest": "25917ddf",
       "walkFile": "round-cart-idle.walk.jsonl.gz"
+    },
+    {
+      "bytes": 381204,
+      "commit": "4067b35de1be8c713aaa299f77d571734ec2d5b0",
+      "description": "G4: nobody plays until 15 s, where the player takes control of cart in the Apartments and then stands still (npm run harness -- --takeover 15 --until 24): ticks 0–959 are the golden master; on tick 960 observe.human becomes cart and the Core lifts his 11 damage blocks and activates Lokier’s encounter (waiting); Lokier outlives his recording, barely kills him and rejoins (G1).",
+      "digest": "2ad2eb5c",
+      "file": "round-cart-takeover.jsonl.gz",
+      "firstTick": 0,
+      "human": "cart",
+      "lastTick": 1536,
+      "name": "round-cart-takeover",
+      "navHash": "8f831148",
+      "rawBytes": 6202279,
+      "roundHash": "e67b3c25",
+      "script": null,
+      "scriptHash": null,
+      "seed": 1,
+      "sourceDirty": false,
+      "takeover": 15,
+      "ticks": 1537,
+      "tuningHash": "411b04b5",
+      "until": 24,
+      "visionHash": "ceb1157b",
+      "walkBytes": 176654,
+      "walkCalls": 15927,
+      "walkDigest": "431e4f8a",
+      "walkFile": "round-cart-takeover.walk.jsonl.gz"
     }
   ],
   "version": 1
