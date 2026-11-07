@@ -26,7 +26,7 @@
 import tuningJson from '../../data/tuning.json';
 import { parseMapId, type Observe, type PlayerId, type Team, type Vec3, type WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
-import { FixedLoop, RateMeter, TICK_MS } from '../app/loop';
+import { FixedLoop, TICK_MS } from '../app/loop';
 import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
 import { Session, parseSessionData, type SessionData } from '../app/session';
 import { SummaryCache } from '../app/run-entries';
@@ -43,10 +43,14 @@ import { loadAssets3d } from './assets3d';
 import { ControlsDom } from './controls-dom';
 import { MIRAGE_RADAR } from './coords';
 import { Hud3D } from './hud3d';
+import { runBench } from './bench3d';
+import { FPS_PRESETS, FrameDriver, parseFpsLimit, type FpsLimit } from './frame-driver';
+import { BucketRate, FrameProbe, Ring, displayHz, meterText } from './perf';
 import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
 import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
+import { A1Mount } from './audio/mount';
 import { RadarSampler, buildRenderTiles, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
 import { decodeRenderMesh } from './render-package';
 import {
@@ -125,6 +129,8 @@ declare global {
       summary: () => string;
       /** The renderer (debugging, benchmarks). */
       debug: () => Renderer3D;
+      /** P1: the per-frame phase timings and the frame driver (tools/bench-app3d.ts, `?bench=1`). */
+      perf: PerfHooks;
       /** Deterministic test API (docs/app3d.md "Test API"; V0's video comparison). */
       test: {
         /** Stop (true) or resume (false) the frame loop's drawing; freezing also pauses a running round. */
@@ -144,6 +150,24 @@ declare global {
 }
 
 const SETTINGS_KEY = 'cs2-sim3d-settings';
+
+/** P1: what the bench (bench3d.ts) drives. */
+export interface PerfHooks {
+  readonly probe: FrameProbe;
+  /**
+   * 'manual': the page's loop stops and the caller runs frames with `step`; an FPS limit: the page's loop with that
+   * limit ('vsync': requestAnimationFrame); 'page': the page's loop with the user's setting.
+   */
+  driver(mode: 'manual' | 'page' | FpsLimit): void;
+  /** Run one frame now (manual driver). */
+  step(now: number): void;
+  /** Called after every frame (both drivers). */
+  onFrame: (() => void) | null;
+  speed(x: number): void;
+  start(): void;
+  /** Three.js renderer counters of the last frame. */
+  info(): { calls: number; triangles: number; programs: number; geometries: number; textures: number };
+}
 
 /** What the test API reports: the tick and the camera of the last frame drawn. */
 export interface TestState {
@@ -184,14 +208,31 @@ class App3D {
   private readonly world: MapGeometry;
   private readonly seed: number;
   private readonly renderer: Renderer3D;
+  /** A1: sound (Web Audio, CS2's sound events) and the first-person weapon's animation (src/app3d/audio/mount.ts). */
+  private readonly a1: A1Mount;
   private readonly hud: Hud3D;
   private readonly controls: ControlsDom;
   /** The key-binding setting (duck / walk / jump / use) and the Ctrl+W guard (fullscreen Keyboard Lock, leave-site). */
   private readonly keys = new KeyBindsStore(pageStorage());
   private readonly guard: PlayGuard;
   private readonly loop: FixedLoop;
-  private readonly fpsMeter = new RateMeter(1000);
-  private readonly tpsMeter = new RateMeter(1000);
+  private readonly fpsMeter = new BucketRate(1000);
+  private readonly tpsMeter = new BucketRate(1000);
+  /** P1: the frame loop (frame-driver.ts) and its settings: the FPS limit, the low-latency canvas, the render scale. */
+  private readonly driver: FrameDriver;
+  private fpsLimit: FpsLimit = 'uncapped';
+  private lowLatency = false;
+  private resScale = 1;
+  /** requestAnimationFrame intervals (ms): the display's refresh, whatever the loop does. */
+  private readonly vsync = new Ring(120);
+  private readonly vsyncScratch = new Float64Array(120);
+  private lastVsync: number | null = null;
+  /** The tick and time of the last HUD update. */
+  private hudTick = -1;
+  private hudAt = -1e9;
+  /** The headroom meter line, rebuilt at 4 Hz. */
+  private meter = '';
+  private meterAt = -1e9;
   private readonly touchOnly = isTouchOnly();
   /** CS2 settings: sensitivity, zoom_sensitivity_ratio, viewmodel_fov (the settings fields; localStorage). */
   private sensitivity: number;
@@ -241,26 +282,35 @@ class App3D {
   private seekResume: Phase | null = null;
   /** Smoothed per-frame costs (ms): the ticks, the whole draw, the WebGL render call, the HUD. */
   private cost = { sim: 0, draw: 0, render: 0, hud: 0 };
+  /** P1: per-frame phase timings (perf.ts). */
+  private readonly probe = new FrameProbe(600);
+  private probing = false;
+  private hooks: PerfHooks | null = null;
   /** P1: the end-of-round summary, computed once (run-entries.ts). */
   private readonly summaryCache = new SummaryCache();
   /** The last summary line shown (kept while a refresh catches up). */
   private summaryLine: string | null = null;
   private readonly buttons: { start: HTMLButtonElement; pause: HTMLButtonElement; restart: HTMLButtonElement; takeover: HTMLButtonElement; camera: HTMLButtonElement; radar: HTMLButtonElement; speeds: HTMLButtonElement[] };
 
-  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number, render: Uint8Array | null = null) {
+  constructor(data: SessionData, world: MapGeometry, radar: HTMLImageElement, seed: number, human: PlayerId | null, sensitivity: number | null, resolution: number | null, lowLatency: boolean | null, render: Uint8Array | null = null) {
     this.data = data;
     this.world = world;
     this.seed = seed;
     this.sensitivity = sensitivity ?? DEFAULT_SENSITIVITY;
     this.loadSettings(sensitivity !== null);
+    if (resolution !== null) this.resScale = resolution;
+    if (lowLatency !== null) this.lowLatency = lowLatency;
+    this.driver = new FrameDriver((now) => this.runFrame(now), this.fpsLimit);
     const canvas = el('view', HTMLCanvasElement);
     const rgba = rgbaOf(radar);
     const art = floorArt(rgba);
     // X1: a map package with its own render mesh (?map=mirage-2020) draws that; else the collision mesh coloured from the radar.
     const tiles = render === null ? buildWorldTiles(world, new RadarSampler(art, MIRAGE_RADAR), MIRAGE_RADAR, rgba).tiles : buildRenderTiles(decodeRenderMesh(render));
     this.session = this.newSession(human);
-    this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), resolution);
+    this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), { resolution: this.resScale, desynchronized: this.lowLatency });
     this.hud = new Hud3D(radar, MIRAGE_RADAR);
+    this.a1 = new A1Mount(world, data.tuning, document.getElementById('bar'));
+    this.a1.vmState = () => this.renderer.viewmodels.last;
     this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
     this.scene = this.ready(this.session);
     this.controls = new ControlsDom(canvas, {
@@ -340,6 +390,7 @@ class App3D {
       seek: (t) => this.startSeek(t),
       summary: () => summarize(this.session.model, this.session.log()).headline,
       debug: () => this.renderer,
+      perf: this.perfHooks(),
       test: {
         freeze: (on) => {
           this.frozen = on;
@@ -363,7 +414,25 @@ class App3D {
         state: () => this.testState(),
       },
     };
-    requestAnimationFrame(this.frame);
+    this.driver.start();
+    requestAnimationFrame(this.onVsync);
+  }
+
+  /** P1: one rAF per display refresh, only to measure it (the frames come from the driver). */
+  private readonly onVsync = (t: number): void => {
+    if (this.lastVsync !== null && t - this.lastVsync < 250) this.vsync.push(t - this.lastVsync);
+    this.lastVsync = t;
+    requestAnimationFrame(this.onVsync);
+  };
+
+  /** The headroom meter (docs/app3d.md "Performance"): main-thread ms per frame, its fps-equivalent, the loop's rate, the display. */
+  private meterLine(now: number): string {
+    if (now - this.meterAt < 250 && now >= this.meterAt) return this.meter;
+    this.meterAt = now;
+    const hz = displayHz(this.vsync.median(this.vsyncScratch));
+    const limit = this.driver.mode === 'uncapped' ? 'uncapped' : this.driver.mode === 'vsync' ? 'vsync' : `cap ${String(this.driver.limit)}`;
+    this.meter = `${meterText(this.probe.medianFrameMs(), this.fpsMeter.rate(now), hz, limit)} · ${this.tpsMeter.rate(now).toFixed(0)} ticks/s · ${this.loop.speed}×`;
+    return this.meter;
   }
 
   private host(s: Session = this.session): Sim3DHost {
@@ -422,6 +491,7 @@ class App3D {
     }
     this.tracers = this.tracers.filter((t) => tick - t.tick < TRACER_TICKS);
     this.scene.ingest(o, act, h.activeEffects());
+    this.a1.tick(o, h, s.human);
   }
 
   private takeControl(): void {
@@ -648,7 +718,9 @@ class App3D {
     for (const sb of b.speeds) sb.setAttribute('aria-pressed', String(Number(sb.dataset['speed']) === this.loop.speed));
   }
 
-  private readonly frame = (now: number): void => {
+  private runFrame(now: number): void {
+    this.probe.begin(performance.now());
+    this.probing = true;
     const dt = this.lastFrame === null ? 0 : Math.min(100, now - this.lastFrame);
     this.lastFrame = now;
     if (this.seekResume !== null) this.advanceSeek();
@@ -661,7 +733,9 @@ class App3D {
       if (p !== null) this.setZoom(p.weapon, av.zoom, av.fov4x3);
       this.look = turnView(this.look, mouse.dx, mouse.dy, effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio));
       // H2b: the input carries the plain view; the host adds the aim punch × weapon_recoil_scale and the inaccuracy cone.
-      s.setHumanInput(fpsInput(s.human as PlayerId, this.controls.controls(), this.look));
+      const inp = fpsInput(s.human as PlayerId, this.controls.controls(), this.look);
+      s.setHumanInput(inp);
+      this.a1.input(inp, p, this.scene.cur.tick, this.scene.cur.round.bomb.state === 'planted');
     } else if (this.camMode === 'free') {
       this.look = turnView(this.look, mouse.dx, mouse.dy, this.sensitivity);
       this.freePos = flyStep(this.freePos, this.look, this.controls.controls(), dt / 1000, FREE_SPEED);
@@ -669,17 +743,54 @@ class App3D {
       this.orbit = turnView(this.orbit, mouse.dx, mouse.dy, this.sensitivity);
     }
     const t0 = performance.now();
+    this.probe.mark('input', t0);
     const n = this.loop.advance(dt);
     const t1 = performance.now();
+    this.probe.mark('sim', t1);
     this.frames++;
     this.fpsMeter.add(now, 1);
     this.tpsMeter.add(now, n);
     if (n > 0 || this.frames % 30 === 0) this.updateControls();
+    this.probe.mark('hud', performance.now());
     if (!this.frozen) this.draw(now);
     const t2 = performance.now();
+    this.probing = false;
+    this.probe.end(n);
     this.cost = { sim: this.cost.sim * 0.95 + (t1 - t0) * 0.05, draw: this.cost.draw * 0.95 + (t2 - t1) * 0.05, render: this.cost.render, hud: this.cost.hud };
-    requestAnimationFrame(this.frame);
-  };
+    this.hooks?.onFrame?.();
+  }
+
+  private perfHooks(): PerfHooks {
+    const hooks: PerfHooks = {
+      probe: this.probe,
+      driver: (mode) => {
+        this.lastFrame = null;
+        if (mode === 'manual') this.driver.stop();
+        else {
+          this.driver.limit = mode === 'page' ? this.fpsLimit : mode;
+          this.driver.start();
+        }
+      },
+      step: (now) => this.runFrame(now),
+      onFrame: null,
+      speed: (x) => {
+        this.loop.speed = x;
+        this.session.control({ type: 'speed', x });
+        this.updateControls();
+      },
+      start: () => {
+        if (this.phase === 'ready') this.start();
+        else if (this.phase === 'paused') this.togglePause();
+        this.updateControls();
+      },
+      info: () => {
+        const i = this.renderer.renderer.info;
+        return { calls: i.render.calls, triangles: i.render.triangles, programs: i.programs?.length ?? 0, geometries: i.memory.geometries, textures: i.memory.textures };
+      },
+    };
+    this.hooks = hooks;
+    return hooks;
+  }
 
   /** Camera, pawns and effects for this frame. */
   private draw(now: number, exact = false): void {
@@ -764,6 +875,7 @@ class App3D {
         human: p.id === human,
         tag: p.alive && p.id !== viewId && (p.team === viewTeam || viewSees.includes(p.id)),
         hidden: (firstPerson || this.camMode === 'pov') && p.id === viewId && p.alive,
+        weapon: p.weapon,
       };
     });
     const rt = this.scene.renderTick(alpha);
@@ -778,7 +890,9 @@ class App3D {
     const scoped = firstPerson ? this.zoom > 0 : specPov && specZoom > 0;
     const sinceShot = exact ? 1 : (now - (firstPerson ? this.lastHumanShotMs : (this.lastShotMs.get(viewId) ?? -1e9))) / 1000;
     const vfovDeg = verticalFov(firstPerson ? this.currentFov4x3() : specPov ? specFov : 90);
+    const vmAnim = this.a1.frame({ eye, yaw, pitch, listener: firstPerson ? human : this.camMode === 'free' ? null : viewId, firstPerson: firstPerson ? humanPawn : null, renderTick: rt, zoom: this.zoom, nowMs: exact ? o.tick * TICK_MS : now });
     const r0 = performance.now();
+    if (this.probing) this.probe.mark('scene', r0);
     this.lastCamera = { eye: { ...eye }, yaw, pitch, viewId };
     this.renderer.render({
       pawns,
@@ -790,10 +904,11 @@ class App3D {
       tracers,
       effects: this.scene.effects,
       bomb,
-      viewmodel: weapon === null || scoped ? null : { weapon, sinceShot },
+      viewmodel: weapon === null || scoped ? null : { weapon, sinceShot, anim: !firstPerson ? null : exact && vmAnim !== null ? { ...vmAnim, sinceShot: 1e6 } : vmAnim, team: (firstPerson ? humanPawn?.team : vo?.team) ?? 'CT' },
       nowMs: now,
     });
     const r1 = performance.now();
+    if (this.probing) this.probe.mark('render', r1);
     const over = o.round.phase === 'over' && o.round.endTick !== null && o.tick > o.round.endTick + 128;
     // P1: the summary line once per (round end, deaths), from log entries parsed a few per frame since the round
     // ended (run-entries.ts); it used to be summarize(model, log) on every frame (~200 ms each).
@@ -817,7 +932,13 @@ class App3D {
     // The crosshair sits where the next bullet goes (off centre only with a punch; clientHeight read only then).
     const off = (firstPerson || specPov) && !scoped && (aim.yaw !== yaw || aim.pitch !== pitch) ? aimOffsetPx({ yaw, pitch }, aim, vfovDeg, r.clientHeight) : { x: 0, y: 0 };
     const radarTeam = firstPerson ? (humanPawn?.team ?? null) : viewTeam;
-    this.hud.update({
+    // P1: the HUD (DOM) at most once per sim tick or every 15.6 ms, not on every frame of an uncapped loop.
+    const hudDue = exact || o.tick !== this.hudTick || now - this.hudAt >= TICK_MS || now < this.hudAt;
+    if (hudDue) {
+      this.hudTick = o.tick;
+      this.hudAt = now;
+    }
+    if (hudDue) this.hud.update({
       scene: this.scene,
       clock: s.clock,
       viewer: viewId,
@@ -831,12 +952,13 @@ class App3D {
       radar: { tracker: this.radar, team: radarTeam, rules: this.radarRules },
       spectate: spec,
       hit: exact || this.lastHit === null ? null : { ageMs: now - this.lastHit.ms, head: this.lastHit.head },
-      perf: `${this.fpsMeter.rate(now).toFixed(0)} fps · ${this.tpsMeter.rate(now).toFixed(0)} ticks/s · ${this.loop.speed}×`,
+      perf: this.meterLine(now),
       summary: over ? summary : null,
       tick: o.tick,
       nowMs: now,
     });
     const r2 = performance.now();
+    if (this.probing) this.probe.mark('hud', r2);
     this.cost.render = this.cost.render * 0.95 + (r1 - r0) * 0.05;
     this.cost.hud = this.cost.hud * 0.95 + (r2 - r1) * 0.05;
   }
@@ -919,7 +1041,10 @@ class App3D {
   /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
   private loadSettings(sensFromUrl: boolean): void {
     try {
-      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; recoilTracking?: number };
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatency?: boolean; res?: number; recoilTracking?: number };
+      this.fpsLimit = parseFpsLimit(j.fps);
+      if (typeof j.lowLatency === 'boolean') this.lowLatency = j.lowLatency;
+      if (typeof j.res === 'number' && Number.isFinite(j.res)) this.resScale = clamp(j.res, 0.25, 2);
       if (j.radar === 'cs2' || j.radar === 'all') this.radarRules = j.radar;
       if (!sensFromUrl && typeof j.sensitivity === 'number') this.sensitivity = clamp(j.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX);
       if (typeof j.recoilTracking === 'number' && Number.isFinite(j.recoilTracking)) this.recoilTracking = clamp(j.recoilTracking, 0, 1);
@@ -932,7 +1057,7 @@ class App3D {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatency: this.lowLatency, res: this.resScale }));
     } catch {
       // ignore
     }
@@ -957,6 +1082,60 @@ class App3D {
     field('set-zoom', () => this.zoomRatio, (v) => (this.zoomRatio = clamp(v, 0.01, 3)));
     field('set-vmfov', () => this.viewmodelFov, (v) => (this.viewmodelFov = clamp(v, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX)));
     field('set-tracking', () => this.recoilTracking, (v) => (this.recoilTracking = clamp(v, 0, 1)));
+    this.wirePerfSettings(field);
+  }
+
+  /** P1: the FPS limit (frame-driver.ts: presets, a custom number), the render scale and the low-latency canvas. */
+  private wirePerfSettings(field: (id: string, get: () => number, set: (v: number) => void) => void): void {
+    field('set-res', () => this.resScale, (v) => {
+      this.resScale = clamp(v, 0.25, 2);
+      this.renderer.setResolution(this.resScale);
+    });
+    const menu = document.getElementById('set-fps');
+    const custom = document.getElementById('set-fps-custom');
+    if (menu instanceof HTMLSelectElement && custom instanceof HTMLInputElement) {
+      const show = (): void => {
+        const l = this.fpsLimit;
+        const preset = typeof l !== 'number' || FPS_PRESETS.includes(l);
+        menu.value = preset ? String(l) : 'custom';
+        custom.hidden = preset;
+        custom.value = typeof l === 'number' ? String(l) : '';
+      };
+      const apply = (v: unknown): void => {
+        this.fpsLimit = parseFpsLimit(v);
+        this.driver.limit = this.fpsLimit;
+        this.saveSettings();
+        show();
+      };
+      show();
+      menu.addEventListener('change', () => {
+        if (menu.value === 'custom') {
+          custom.hidden = false;
+          custom.focus();
+        } else {
+          apply(menu.value);
+          menu.blur();
+        }
+      });
+      custom.addEventListener('change', () => {
+        apply(custom.value);
+        custom.blur();
+      });
+      // Typing a value mustn't move the player.
+      custom.addEventListener('keydown', (e) => e.stopPropagation());
+      menu.addEventListener('keydown', (e) => e.stopPropagation());
+    }
+    const low = document.getElementById('set-lowlat');
+    if (low instanceof HTMLInputElement) {
+      low.checked = this.lowLatency;
+      low.title += this.renderer.desynchronized ? ' (on now)' : this.lowLatency ? ' (not supported by this browser)' : '';
+      low.addEventListener('change', () => {
+        this.lowLatency = low.checked;
+        this.saveSettings();
+        // The context's attributes are fixed when it is made: reload to apply.
+        window.location.reload();
+      });
+    }
   }
 
   private stats(): App3DStats {
@@ -996,12 +1175,15 @@ async function boot(): Promise<void> {
     const seed = Number.isInteger(seedParam) ? seedParam : 1;
     const sensParam = params.get('sens');
     const sens = sensParam === null ? NaN : Number(sensParam);
-    const res = Number(params.get('res') ?? '1');
+    const resParam = params.get('res');
+    const res = resParam === null ? NaN : Number(resParam);
+    const lowParam = params.get('lowlatency');
     const a = await loadAssets3d(parseMapId(params.get('map')));
     const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
     const world = worldMesh(a.world3d.geometry);
-    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : 1, a.render);
+    new App3D(data, world, a.radar, seed, startHuman(params.get('human')), Number.isFinite(sens) && sens > 0 ? clamp(sens, SENSITIVITY_MIN, SENSITIVITY_MAX) : null, Number.isFinite(res) && res >= 0.25 && res <= 2 ? res : null, lowParam === null ? null : lowParam !== '0', a.render);
     status.hidden = true;
+    if (params.get('bench') !== null) void runBench(params);
   } catch (err) {
     status.textContent = `Could not start: ${err instanceof Error ? err.message : String(err)}`;
     throw err;

@@ -18,6 +18,7 @@ import {
   type Confidence,
   type Damage,
   type GrenadeId,
+  type GrenadeLanding,
   type Kill,
   type Kit,
   type LastKnown,
@@ -40,6 +41,16 @@ import {
   type WeaponTimelinePoint,
   type YawSample,
 } from '../src/contracts/index';
+
+/**
+ * V0: grenade landings measured from the recording (the page has none), keyed "<t> <thrower> <kind>"; a recorded throw
+ * whose landing the video never shows gets null. Sources and frames: docs/round-data.md "Grenade landings".
+ */
+const MEASURED_LANDINGS: Readonly<Record<string, GrenadeLanding>> = {
+  // cart's B-site smoke: the trajectory line ends on the counter just inside the Market window (cart's POV 26.0-27.3 s
+  // and from inside Shop 29.5-31 s, the cloud filling the window); counter top z -94 on the CS2 mesh.
+  '25.8 cart smoke': { x: -2035, y: -305, z: -94, uncertainty: 35 },
+};
 
 // ---------- source shapes (the web-apps page's embedded JSON) ----------
 
@@ -605,6 +616,7 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
       kind: grenade(u.kind),
       place: u.place,
       throwPos: vec3(u.pos),
+      landing: MEASURED_LANDINGS[`${u.t} ${pid(u.who)} ${grenade(u.kind)}`] ?? null,
       radio: u.radio,
     }),
   );

@@ -10,3 +10,4 @@ logs/
 .vite/
 __pycache__/
 *.pyc
+local/

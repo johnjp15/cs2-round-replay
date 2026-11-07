@@ -24,7 +24,9 @@
  *     ("SPECTATING sp4rtan", 1st person) and "Watching"; mouse 1 / Space / mouse 2 switch player, V cycles 1st → 3rd
  *     (no crosshair) → free → 1st; then the round plays at 4× until an enemy spotted earlier shows as the "?" ghost;
  *     screenshots app3d-spectate-*.jpg;
- *  5. fails on page errors, console errors or requests to other origins.
+ *  5. A1 (tools/browser-check3d-a1.ts): audio starts on a click, firing schedules a sound, the AK reload animation
+ *     runs for its reload time; viewmodel screenshots (docs/img/app3d-viewmodel-*.jpg);
+ *  6. fails on page errors, console errors or requests to other origins.
  * Port: `--port <n>` or CHECK3D_PORT (default 4180).
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
  */
@@ -34,6 +36,7 @@ import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cpus, loadavg } from 'node:os';
 import { chromium, type Browser, type Page } from 'playwright-core';
+import { a1Checks } from './browser-check3d-a1';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const PORT = Number(process.argv.includes('--port') ? process.argv[process.argv.indexOf('--port') + 1] : (process.env['CHECK3D_PORT'] ?? '4180'));
@@ -43,6 +46,7 @@ function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(name);
   return i >= 0 ? (process.argv[i + 1] ?? fallback) : fallback;
 }
+
 const SINGLE = process.argv.includes('--single');
 const OUT = resolve(ROOT, arg('--out', 'docs/img'));
 const SECONDS = Number(arg('--seconds', '4'));
@@ -422,6 +426,8 @@ async function main(): Promise<void> {
     // 4. Spectating (U1).
     report['spectate'] = await spectateChecks(browser, problems, shots);
     report['screenshots'] = shots.map((x) => x.replace(ROOT + '/', ''));
+    // 5. A1: sound and the viewmodels.
+    await a1Checks(browser, { open: (w, h) => open(browser, w, h, problems), seek, out: OUT, root: ROOT }, problems, report);
   } finally {
     await browser.close();
     server.close();
