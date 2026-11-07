@@ -41,6 +41,11 @@ export class SessionLog {
     return this.entries.length === 0 ? '' : this.entries.join('\n') + '\n';
   }
 
+  /** The stored line at an index (no parse), or undefined. */
+  line(index: number): string | undefined {
+    return this.entries[index];
+  }
+
   /** Parsed entry at line index, or null. */
   at(index: number): LogEntry | null {
     const line = this.entries[index];

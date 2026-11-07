@@ -58,6 +58,16 @@ interface Scenario {
   setup(api: Api): void;
   /** Before each frame (e.g. mouse movement). */
   perFrame?(api: Api, i: number): void;
+  /** Warm-up lasts until this holds too (e.g. the round has ended). */
+  ready?(api: Api): boolean;
+  /**
+   * A synthetic display rate (Hz): the manual driver steps the page's clock by 1000 / hz per frame instead of reading
+   * the wall clock, so a scenario covers a fixed span of round time (`frames` / hz seconds) however slow the frames
+   * are, and the sim runs the ticks that span owes (64 per round second at 1×).
+   */
+  readonly hz?: number;
+  /** Fixed frame count (overrides `&frames=`). */
+  readonly frames?: number;
 }
 
 type Api = NonNullable<Window['__cs2sim3d']>;
@@ -89,7 +99,36 @@ const SCENARIOS: readonly Scenario[] = [
     // A steady mouse sweep: the view turns every frame (the latency path).
     perFrame: (a, i) => a.mouse(i % 200 < 100 ? 3 : -3, i % 50 < 25 ? 1 : -1),
   },
+  // The round-end regression (John: "when the round ends, the game gets super laggy"): 5 s of round time at a
+  // synthetic 120 Hz, watching, just before the round end and just after it (summary line, post-round AI, effects).
+  {
+    name: 'inround-5s-120hz',
+    driver: 'uncapped',
+    hz: 120,
+    frames: 600,
+    setup: (a) => watchFrom(a, endTick(a) - 7 * 64),
+  },
+  {
+    name: 'postend-5s-120hz',
+    driver: 'uncapped',
+    hz: 120,
+    frames: 600,
+    setup: (a) => watchFrom(a, endTick(a) - 64),
+    ready: (a) => a.session().observe().round.phase === 'over',
+  },
 ];
+
+/** The recorded round's end tick (the no-human run ends on it or a tick or two off). */
+function endTick(a: Api): number {
+  return a.session().model.meta.roundEndTick;
+}
+
+function watchFrom(a: Api, tick: number): void {
+  a.test.seekTick(Math.max(0, tick));
+  a.camera('follow', 'cart' as PlayerId);
+  a.perf.start();
+  a.perf.speed(1);
+}
 
 function watch(a: Api, speed: number): void {
   a.test.seekTick(10 * 64);
@@ -120,8 +159,8 @@ async function runScenario(api: Api, sc: Scenario, frames: number): Promise<Benc
   document.getElementById('restart')?.click();
   sc.setup(api);
   const perf = api.perf;
-  const n = sc.driver === 'raf' ? Math.max(30, Math.round(frames / 5)) : frames;
-  const warm = Math.min(120, Math.round(n / 5));
+  const n = sc.frames ?? (sc.driver === 'raf' ? Math.max(30, Math.round(frames / 5)) : frames);
+  let warm = Math.min(120, Math.round(n / 5));
   let grown = 0;
   let gcs = 0;
   let last = heap();
@@ -136,6 +175,8 @@ async function runScenario(api: Api, sc: Scenario, frames: number): Promise<Benc
   };
   const record = (): void => {
     i++;
+    // Hold the warm-up until the scenario is ready (bounded: 20 s of frames).
+    if (i === warm && sc.ready !== undefined && !sc.ready(api) && warm < 2400) warm++;
     if (i === warm) {
       perf.probe.reset();
       grown = 0;
@@ -153,10 +194,12 @@ async function runScenario(api: Api, sc: Scenario, frames: number): Promise<Benc
     }
   } else {
     perf.driver('manual');
+    let clock = performance.now();
     while (i < warm + n) {
       if (i === warm) t0 = performance.now();
       sc.perFrame?.(api, i);
-      perf.step(performance.now());
+      clock = sc.hz === undefined ? performance.now() : clock + 1000 / sc.hz;
+      perf.step(clock);
       record();
       await nextTask();
     }

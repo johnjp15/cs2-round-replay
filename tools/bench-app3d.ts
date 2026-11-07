@@ -1,7 +1,7 @@
 /**
  * P1: frame-time benchmark of the 3D page in headless Chromium (docs/app3d.md "Performance").
  *
- *   npm run build:3d && npm run bench:3d [-- --frames 1500] [--size 1280x720] [--query "&dpr=1"] [--out <file.json>] [--label <name>]
+ *   npm run build:3d && npm run bench:3d [-- --frames 1500] [--only <scenario,…>] [--size 1280x720] [--query "&dpr=1"] [--out <file.json>] [--label <name>]
  *
  * Serves dist-3d/ on port 4182, opens `?bench=1` (src/app3d/bench3d.ts: the page runs its scenarios itself) in
  * headless Chromium with --enable-precise-memory-info (exact heap readings) and prints, per scenario, the
@@ -43,7 +43,8 @@ function serve(dir: string): Server {
     const file = join(dir, path.endsWith('/') ? path + 'index.html' : path);
     try {
       if (!file.startsWith(dir) || !statSync(file).isFile()) throw new Error('not found');
-      res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
+      // Cross-origin isolated: performance.now() at 5 µs resolution instead of 100 µs.
+      res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'require-corp' });
       res.end(readFileSync(file));
     } catch {
       res.writeHead(404);
@@ -86,7 +87,7 @@ async function main(): Promise<void> {
       if (m.type() === 'error') problems.push(`console error: ${m.text()}`);
     });
     const load0 = loadavg()[0] ?? 0;
-    await page.goto(`${ORIGIN}/?bench=1&frames=${FRAMES}${QUERY}`);
+    await page.goto(`${ORIGIN}/?bench=${arg('--only', '1')}&frames=${FRAMES}${QUERY}`);
     await page.waitForFunction(() => window.__cs2bench?.done === true, null, { timeout: 900_000, polling: 500 });
     const out = await page.evaluate(() => window.__cs2bench);
     if (out === undefined || out.result === null) throw new Error(`bench failed: ${out?.error ?? 'no result'}`);
