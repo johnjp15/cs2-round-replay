@@ -87,8 +87,10 @@ logged (`script: scripted hit through geometry`, `combatLog()`), as in 2D.
   head hitbox and fires: the bullet enters `head` 512 units away (an AK-47 headshot that kills, by `bulletDamage`).
   G6: with pass 5's tracks the window opens before cart's recorded spray, inside his recorded duel with Lokier (G5), so
   the engine reports the hit as `blocked_hit {cart, lokier, ak47, head}` and the duel lands the tape's kill (before G6
-  the open tick was 19.86 s, after the duel). The same shot 10° off misses everyone; a shot at his head while the wall
-  is between stops on the wall.
+  the open tick was 19.86 s, after the duel). The same shot 10° off misses everyone. H2b: with CS2's spread cart first
+  stands still 16 ticks (running, the AK's cone is too wide for a head at 500 u) and the bullet enters `head` 502 u
+  away; a shot at his head while the window wall is between goes through it (one surface, 23 of 36 damage left, hits
+  the chest) and, inside the duel, is a `blocked_hit` with no damage.
 - **The follow-recording script** (`--human cart --script fixtures/scripts/cart-follows-recording.json`; numbers after
   G5's merge): in 2D cart kills Lokier at 18.80 s (HS) and the round "Played it like the tape" (G5's recorded duels).
   In 3D it **does not match yet**: the script's pitch is 0 (the recording has no pitch; 2D picks the hitgroup from
