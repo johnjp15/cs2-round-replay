@@ -21,6 +21,8 @@ import clipsUrl from '../../data/geometry/mirage-clips.bin?url';
 import tracksUrl from '../../data/geometry/mirage-tracks.json?url';
 import heightUrl from '../../data/geometry/mirage-height.png';
 import type { World3dFiles } from './session';
+import { DEFAULT_MAP, type MapId } from '../contracts/index';
+import { packageWorldUrls } from './map-packages';
 
 /** The JSON values (or their text: parseSessionData takes either) and the decoded radar. */
 export interface PageAssets {
@@ -53,15 +55,17 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
   return img;
 }
 
-export async function loadAssets(): Promise<PageAssets> {
+/** X1: `map` picks the 3D world's package (`?map=`); the round, nav, sight mask, radar and height map are shared. */
+export async function loadAssets(map: MapId = DEFAULT_MAP): Promise<PageAssets> {
+  const w = map === DEFAULT_MAP ? { geometry: geometryUrl, clips: clipsUrl, tracks: tracksUrl } : packageWorldUrls(map);
   const [round, nav, vision, radar, geometry, clips, tracks, height] = await Promise.all([
     fetchJson(roundUrl),
     fetchJson(navUrl),
     fetchJson(visionUrl),
     loadImage(radarUrl),
-    fetchBytes(geometryUrl),
-    fetchBytes(clipsUrl),
-    fetchJson(tracksUrl),
+    fetchBytes(w.geometry),
+    fetchBytes(w.clips),
+    fetchJson(w.tracks),
     loadImage(heightUrl),
   ]);
   return { round, nav, vision, radar, world3d: { geometry, clips, tracks }, height };
