@@ -167,6 +167,8 @@ export interface RecordedThrow {
   readonly kind: 'smoke' | 'flash' | 'he' | 'molotov';
   readonly place: string;
   readonly throwPos: Vec3;
+  /** V0's landing measured on the video (#39), null where the video never shows it. */
+  readonly landing: (Vec3 & { readonly uncertainty: number }) | null;
 }
 
 export function recordedUtility(): RecordedThrow[] {
@@ -189,8 +191,9 @@ export const RECORDED_AIM: readonly { target: Vec3; why: string }[] = [
   { target: { x: -900, y: 640, z: -80 }, why: 'donk, Back Alley: flash ahead into the Apartments corridor' },
   { target: { x: -1800, y: 600, z: -100 }, why: 'barely, Apartments: HE toward the B balcony / truck' },
   { target: { x: -1700, y: 800, z: -60 }, why: 'donk, Apartments: molotov down the corridor to the exit' },
-  // John (backlog 21): cart's smoke blocks the Market window. The window on the mesh: wall face y = −264, open over
-  // x −1948…−1894, z −126 (sill) up; the target is the B-site floor 64 in front of it.
+  // John (backlog 21): cart's smoke blocks the Market window. The window on the CS2 mesh: wall face y = −264, open over
+  // x −1946…−1890, z −126 (sill) … −14; the target is the B-site floor 64 in front of it. V0's measured landing
+  // (−2035, −305, −94) is on the counter behind the solid wall west of the opening: unreachable on this mesh (docs).
   { target: MARKET_WINDOW_FRONT, why: 'cart, B site: smoke onto the Market window' },
   { target: { x: -2250, y: 0, z: -160 }, why: 'barely, B site: smoke toward the CT / Market side' },
 ];

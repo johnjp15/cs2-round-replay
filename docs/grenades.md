@@ -213,12 +213,12 @@ physics, all land in their callouts.
 
 ## The recorded round's utility (plausible aim)
 
-`data/round.json` has only the thrower and the spot at the radio call. Recorded spots are often inside walls
+`data/round.json` has the thrower and the spot at the radio call, and since V0 (#39) a measured `landing` for the one throw the video shows (cart's B-site smoke; below). Recorded spots are often inside walls
 (docs/geometry.md (b)), so each throw starts from the nearest free standing spot within 64 units; the yaw points at
 a plausible target and the pitch is the one in −45…+10° (5° steps) that lands nearest it. These are assumptions,
 not data.
 
-| t | thrower | grenade | recorded → stand | target (assumed) | pitch, yaw | detonation | callout | time | miss |
+| t | thrower | grenade | recorded → stand | target (assumed) | pitch, yaw | detonation | callout | time | miss (xy, to the target) |
 | ---: | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |
 | 4.8 | cart | smoke | (−468, 924, −80) → (−464, 888, −72) | west down the Apartments approach | 10°, −176° | (−75, 864, −134) | Back Alley / House | 2.53 s | 1225 |
 | 5.6 | snarlbot | smoke | (718, −1274, −264) | the A ramp | 10°, −142° | (634, −1359, −260) | Palace Alley | 1.72 s | 412 |
@@ -230,15 +230,24 @@ not data.
 | 29.8 | barely | smoke | (−1729, 410, −168) | CT / Market side | −40°, −142° | (−2202, −10, −166) | Bombsite B | 6.19 s | 49 |
 
 **Market window** (measured on the mesh): the wall between Bombsite B and Shop (Market) has its face at y = −264,
-the window open over x −1948…−1894 from the sill at z −126 (40 above the B floor at −166) up; the door is the full-
-height gap at x −2356…−2292. cart's B-site smoke is aimed at the floor 64 in front of the window and lands 26 from it;
-the test asserts that it blocks the clear line from a CT in Market (−1921, −330, −104) out through the window to
-(−1921, −100, −104) 3 s after the pop and not after 21 s. V0 is measuring the real landing spots from the video
-(backlog 21); once `data/round.json` has them, the hosts aim at those and these assumed targets go.
+the window open over x −1946…−1890 from the sill at z −126 (40 above the B floor at −166) to the lintel at −14; the
+door is the full-height gap at x −2356…−2292. cart's B-site smoke is aimed at the floor 64 in front of the window and
+lands 26 from it; the test asserts that it blocks the clear line from a CT in Market (−1921, −330, −104) out through
+the window to (−1921, −100, −104) 3 s after the pop and not after 21 s, and the cloud fills the opening.
+
+**V0's measured landing** (#39, `data/round.json` `utility[].landing`; only this throw has one): (−2035, −305, −94)
+± 35, on the counter "just inside the window". On the CS2 mesh that counter (z −94, x −2040…−1980, y ≤ −290) is
+behind **solid** wall: at x −2074…−2018 the wall only steps out to y −248 and has no opening, so the spot V0 places
+"in the window" is ~90 units west of the mesh's only opening. Of 4,880 throws from cart's spot (yaw ±30° around the
+landing, pitch −60…+20 in 2.5° steps, strengths 1 / 0.5 / 0) none lands within 35 of it; the nearest is 89 away, on
+the B side of the wall. The replay (aimed at the window) detonates 165 from it (148 in xy) and the cloud does not
+reach the counter spot. Either V0's x is off by about one window width or the mesh's window differs from the video;
+worth a second look by V0 before the hosts aim at it.
 
 Throws from Back Alley and Palace Alley (cramped, roofed or overhung spots) come back off nearby geometry for every
-pitch tried; the open-site throws reach their targets. The real landing spots are unknown (not visible in the
-video), so these rows are an illustration, not a check.
+pitch tried (cart's 4.8 s smoke, aimed west, pops 390 units east of him); the open-site throws reach their targets.
+Apart from cart's B-site smoke the real landing spots are unknown (V0: not visible in the video), so these rows are an
+illustration, not a check.
 
 ## Known gaps
 
@@ -256,5 +265,8 @@ video), so these rows are an illustration, not a check.
 - **Decoy**: the burst schedule, damage and radius are guesses; no fake radar blip.
 - **Throw**: the jump latch window and the "+7 tick" construction delay are host / not modelled; sub-tick release
   timing is quantized to the tick.
+- **World bounds**: the mesh has no skybox or map-edge clip, so a high throw out over the map edge falls forever and
+  never detonates (9 of the 4,880 search throws above; `simulateThrow` gives up at 30 s, a host's projectile lives on).
+  A host should drop projectiles below the map's lowest floor.
 - Not modelled: grenades breaking glass or hitting breakables, grenades pushed by explosions, water, the HE's
   effect on molotov fires (none in CS2 as far as known), smoke colours.

@@ -90,4 +90,14 @@ describe("the recorded round's 8 throws (plausible aim)", () => {
     expect(smokeBlocks(s, inMarket, onSite, pop + 64 * 3, t)).toBe(true);
     expect(smokeBlocks(s, inMarket, onSite, pop + 64 * 21, t)).toBe(false);
   });
+  it('only cart\'s B-site smoke has a measured landing (V0); the replay misses it by the window-to-counter offset', () => {
+    const u = recordedUtility();
+    expect(u.map((x) => x.landing !== null)).toEqual([false, false, false, false, false, false, true, false]);
+    const l = u[6]?.landing;
+    const aim = RECORDED_AIM[6];
+    if (l === null || l === undefined || u[6] === undefined || aim === undefined) throw new Error('no landing');
+    const r = runRecorded(u[6], aim, world, t);
+    // 165 units: the measured counter spot is ~90 west of the mesh's window opening, behind solid wall (docs).
+    expect(Math.hypot(r.pos.x - l.x, r.pos.y - l.y, r.pos.z - l.z)).toBeLessThan(200);
+  });
 });
