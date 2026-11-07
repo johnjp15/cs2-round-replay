@@ -1,0 +1,8909 @@
+{
+ "source": {
+  "repo": "SteamDatabase/GameTracking-CS2",
+  "commit": "cce7bf1f190144c1c08fb0fe75fd3c9514f2637f",
+  "date": "2026-11-05T00:55:25+00:00"
+ },
+ "events": {
+  "Announcer.BombDefused.CS2_Classic": {
+   "files": [
+    "sounds/vo/announcer/cs2_classic/bombdef.vsnd"
+   ],
+   "volume": 0.6,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     300,
+     1,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "UI",
+   "local": false,
+   "children": [],
+   "defined": "vo/announcer/game_sounds_cs2_classic.vsndevts"
+  },
+  "Announcer.BombPlanted.CS2_Classic": {
+   "files": [
+    "sounds/vo/announcer/cs2_classic/bombpl.vsnd"
+   ],
+   "volume": 0.6,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     300,
+     1,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "UI",
+   "local": false,
+   "children": [],
+   "defined": "vo/announcer/game_sounds_cs2_classic.vsndevts"
+  },
+  "Announcer.CTWin.CS2_Classic": {
+   "files": [
+    "sounds/vo/announcer/cs2_classic/ctwin.vsnd"
+   ],
+   "volume": 0.6,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.5,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     300,
+     1,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "UI",
+   "local": false,
+   "children": [],
+   "defined": "vo/announcer/game_sounds_cs2_classic.vsndevts"
+  },
+  "Announcer.TWin.CS2_Classic": {
+   "files": [
+    "sounds/vo/announcer/cs2_classic/terwin.vsnd"
+   ],
+   "volume": 0.6,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.5,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     300,
+     1,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "UI",
+   "local": false,
+   "children": [],
+   "defined": "vo/announcer/game_sounds_cs2_classic.vsndevts"
+  },
+  "BaseExplosionEffect.Sound": {
+   "files": [
+    "sounds/common/explosions/explo_gas_can_01.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "BaseGrenade.Explode": {
+   "files": [
+    "sounds/weapons/hegrenade/hegrenade_detonate_02.vsnd",
+    "sounds/weapons/hegrenade/hegrenade_detonate_03.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     231.428574,
+     1,
+     -0.000553,
+     -0.000553,
+     1,
+     1
+    ],
+    [
+     779.142883,
+     0.569231,
+     -0.000405,
+     -0.000405,
+     1,
+     1
+    ],
+    [
+     2700,
+     0,
+     -0.000096,
+     -0.000096,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.3,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Explosions",
+   "local": false,
+   "children": [
+    "BaseGrenade.ExplodeDistant",
+    "BaseExplosionEffect.Sound"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "BaseGrenade.ExplodeDistant": {
+   "files": [
+    "sounds/weapons/hegrenade/hegrenade_distant_detonate_01.vsnd",
+    "sounds/weapons/hegrenade/hegrenade_distant_detonate_02.vsnd",
+    "sounds/weapons/hegrenade/hegrenade_distant_detonate_03.vsnd"
+   ],
+   "volume": 1.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     504,
+     0,
+     0,
+     0.002273,
+     0,
+     0
+    ],
+    [
+     944,
+     1,
+     0.002273,
+     -0.000354,
+     0,
+     0
+    ],
+    [
+     2800,
+     0.343348,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "ExplosionsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "BaseSmokeEffect.Sound": {
+   "files": [
+    "sounds/weapons/smokegrenade/smoke_emit.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.2,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     194.285721,
+     1,
+     -0.001206,
+     -0.001206,
+     2,
+     3
+    ],
+    [
+     678.857178,
+     0.253846,
+     -0.000527,
+     -0.000527,
+     3,
+     1
+    ],
+    [
+     2090.571533,
+     0,
+     -0.000109,
+     -0.000109,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Explosions",
+   "local": false,
+   "children": [
+    "BaseSmokeEffect.SoundDistant"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "BaseSmokeEffect.SoundDistant": {
+   "files": [
+    "sounds/weapons/smokegrenade/sg_explode_distant.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.3,
+   "curve": [
+    [
+     616,
+     0,
+     0,
+     0.001407,
+     0,
+     0
+    ],
+    [
+     944,
+     0.461538,
+     0.001407,
+     -0.000195,
+     0,
+     0
+    ],
+    [
+     2800,
+     0.1,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "ExplosionsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "BulletBy.Supersonic.Crack": {
+   "files": [
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_01.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_03.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_04.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_05.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_06.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_07.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.5,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     1000,
+     1,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [
+    "BulletBy.Supersonic.TailM"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "BulletBy.Supersonic.TailM": {
+   "files": [
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_01.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_02.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_03.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_04.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_05.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_06.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_07.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_08.vsnd",
+    "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_09.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     24.857143,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     1000,
+     1,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "C4.PlantSound": {
+   "files": [
+    "sounds/weapons/c4/c4_beep2.vsnd"
+   ],
+   "volume": 0.9,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     -0.000968,
+     -0.000968,
+     2,
+     3
+    ],
+    [
+     1300,
+     0,
+     -0.000867,
+     -0.000867,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.2,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "CT_Concrete.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/concrete_ct_01.vsnd",
+    "sounds/player/footsteps/concrete_ct_02.vsnd",
+    "sounds/player/footsteps/concrete_ct_03.vsnd",
+    "sounds/player/footsteps/concrete_ct_04.vsnd",
+    "sounds/player/footsteps/concrete_ct_05.vsnd",
+    "sounds/player/footsteps/concrete_ct_06.vsnd",
+    "sounds/player/footsteps/concrete_ct_07.vsnd",
+    "sounds/player/footsteps/concrete_ct_08.vsnd",
+    "sounds/player/footsteps/concrete_ct_09.vsnd",
+    "sounds/player/footsteps/concrete_ct_10.vsnd",
+    "sounds/player/footsteps/concrete_ct_11.vsnd",
+    "sounds/player/footsteps/concrete_ct_12.vsnd",
+    "sounds/player/footsteps/concrete_ct_13.vsnd",
+    "sounds/player/footsteps/concrete_ct_14.vsnd",
+    "sounds/player/footsteps/concrete_ct_15.vsnd",
+    "sounds/player/footsteps/concrete_ct_16.vsnd",
+    "sounds/player/footsteps/concrete_ct_17.vsnd"
+   ],
+   "volume": 0.9,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "CT_Sand.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/sand_01.vsnd",
+    "sounds/player/footsteps/sand_02.vsnd",
+    "sounds/player/footsteps/sand_03.vsnd",
+    "sounds/player/footsteps/sand_04.vsnd",
+    "sounds/player/footsteps/sand_05.vsnd",
+    "sounds/player/footsteps/sand_06.vsnd",
+    "sounds/player/footsteps/sand_07.vsnd",
+    "sounds/player/footsteps/sand_08.vsnd",
+    "sounds/player/footsteps/sand_09.vsnd",
+    "sounds/player/footsteps/sand_10.vsnd",
+    "sounds/player/footsteps/sand_11.vsnd",
+    "sounds/player/footsteps/sand_12.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.07,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "CT_SolidMetal.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/metal_solid_35.vsnd",
+    "sounds/player/footsteps/metal_solid_36.vsnd",
+    "sounds/player/footsteps/metal_solid_37.vsnd",
+    "sounds/player/footsteps/metal_solid_38.vsnd",
+    "sounds/player/footsteps/metal_solid_39.vsnd",
+    "sounds/player/footsteps/metal_solid_40.vsnd",
+    "sounds/player/footsteps/metal_solid_41.vsnd",
+    "sounds/player/footsteps/metal_solid_42.vsnd",
+    "sounds/player/footsteps/metal_solid_43.vsnd",
+    "sounds/player/footsteps/metal_solid_44.vsnd",
+    "sounds/player/footsteps/metal_solid_45.vsnd",
+    "sounds/player/footsteps/metal_solid_46.vsnd",
+    "sounds/player/footsteps/metal_solid_47.vsnd",
+    "sounds/player/footsteps/metal_solid_48.vsnd",
+    "sounds/player/footsteps/metal_solid_49.vsnd",
+    "sounds/player/footsteps/metal_solid_50.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 0.98,
+   "pitchRandom": [
+    -0.07,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "CT_Tile.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/tile_01.vsnd",
+    "sounds/player/footsteps/tile_02.vsnd",
+    "sounds/player/footsteps/tile_03.vsnd",
+    "sounds/player/footsteps/tile_04.vsnd",
+    "sounds/player/footsteps/tile_05.vsnd",
+    "sounds/player/footsteps/tile_06.vsnd",
+    "sounds/player/footsteps/tile_07.vsnd",
+    "sounds/player/footsteps/tile_08.vsnd",
+    "sounds/player/footsteps/tile_09.vsnd",
+    "sounds/player/footsteps/tile_10.vsnd",
+    "sounds/player/footsteps/tile_11.vsnd",
+    "sounds/player/footsteps/tile_12.vsnd",
+    "sounds/player/footsteps/tile_13.vsnd",
+    "sounds/player/footsteps/tile_14.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 0.98,
+   "pitchRandom": [
+    -0.07,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "CT_Wood.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/wood_01.vsnd",
+    "sounds/player/footsteps/wood_02.vsnd",
+    "sounds/player/footsteps/wood_03.vsnd",
+    "sounds/player/footsteps/wood_04.vsnd",
+    "sounds/player/footsteps/wood_05.vsnd",
+    "sounds/player/footsteps/wood_06.vsnd",
+    "sounds/player/footsteps/wood_07.vsnd",
+    "sounds/player/footsteps/wood_08.vsnd",
+    "sounds/player/footsteps/wood_10.vsnd",
+    "sounds/player/footsteps/wood_11.vsnd",
+    "sounds/player/footsteps/wood_12.vsnd",
+    "sounds/player/footsteps/wood_13.vsnd",
+    "sounds/player/footsteps/wood_14.vsnd",
+    "sounds/player/footsteps/wood_15.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 0.98,
+   "pitchRandom": [
+    -0.07,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "Concrete.BulletImpact": {
+   "files": [
+    "sounds/physics/concrete/concrete_impact_bullet1.vsnd",
+    "sounds/physics/concrete/concrete_impact_bullet2.vsnd",
+    "sounds/physics/concrete/concrete_impact_bullet3.vsnd",
+    "sounds/physics/concrete/concrete_impact_bullet4.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.1,
+   "pitchRandom": [
+    -0.01,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     40,
+     1,
+     0,
+     -0.003722,
+     0,
+     0
+    ],
+    [
+     219.428574,
+     0.332226,
+     -0.003722,
+     -0.001786,
+     0,
+     1
+    ],
+    [
+     600,
+     0,
+     -0.000873,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.8,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "BulletImpacts",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_physics.vsndevts"
+  },
+  "Decoy.Draw": {
+   "files": [
+    "sounds/weapons/decoy/decoy_draw_01.vsnd",
+    "sounds/weapons/decoy/decoy_draw_02.vsnd",
+    "sounds/weapons/decoy/decoy_draw_03.vsnd"
+   ],
+   "volume": 0.01,
+   "pitch": 1.1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Decoy.PullPin_Grenade": {
+   "files": [
+    "sounds/weapons/decoy/pinpull.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     82.223686,
+     1,
+     0,
+     -0.002568,
+     0,
+     0
+    ],
+    [
+     354.194336,
+     0.301471,
+     -0.000976,
+     -0.000976,
+     1,
+     1
+    ],
+    [
+     1106.8573,
+     0,
+     -0.000401,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Decoy.Throw": {
+   "files": [
+    "sounds/weapons/decoy/decoy_throw_06.vsnd"
+   ],
+   "volume": 0.7,
+   "pitch": 1.1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     47.142857,
+     1,
+     0,
+     -0.001997,
+     0,
+     0
+    ],
+    [
+     399.142853,
+     0.29697,
+     -0.001997,
+     -0.00095,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000424,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Default.ClipEmpty_Pistol": {
+   "files": [
+    "sounds/weapons/clipempty_pistol.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     34.57143,
+     1,
+     0,
+     -0.002029,
+     0,
+     0
+    ],
+    [
+     370.857147,
+     0.317597,
+     -0.002029,
+     -0.000939,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000436,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Default.ClipEmpty_Rifle": {
+   "files": [
+    "sounds/weapons/clipempty_rifle.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     34.57143,
+     1,
+     0,
+     -0.002029,
+     0,
+     0
+    ],
+    [
+     370.857147,
+     0.317597,
+     -0.002029,
+     -0.000939,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000436,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Default.WalkJump": {
+   "files": [
+    "sounds/player/footsteps/jump_launch_01.vsnd"
+   ],
+   "volume": 0.1,
+   "pitch": 1.1,
+   "pitchRandom": [
+    -0.01,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     40,
+     1,
+     0,
+     -0.006361,
+     0,
+     0
+    ],
+    [
+     155.714294,
+     0.263889,
+     -0.002204,
+     -0.002204,
+     1,
+     1
+    ],
+    [
+     493.714294,
+     0,
+     -0.000781,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    30
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "FX_RicochetSound.Ricochet": {
+   "files": [
+    "sounds/weapons/fx/rics/bullet_ric_01.vsnd",
+    "sounds/weapons/fx/rics/bullet_ric_02.vsnd",
+    "sounds/weapons/fx/rics/bullet_ric_03.vsnd",
+    "sounds/weapons/fx/rics/bullet_ric_04.vsnd",
+    "sounds/weapons/fx/rics/bullet_ric_05.vsnd",
+    "sounds/weapons/fx/rics/bullet_ric_06.vsnd"
+   ],
+   "volume": 1.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     41.14286,
+     1,
+     -0.001407,
+     -0.001407,
+     2,
+     3
+    ],
+    [
+     236.571442,
+     0,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 1,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "BulletImpacts",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Flashbang.Bounce": {
+   "files": [
+    "sounds/weapons/flashbang/grenade_hit1.vsnd"
+   ],
+   "volume": 0.8,
+   "pitch": 1.1,
+   "pitchRandom": [
+    -0.06,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     28.285715,
+     1,
+     0,
+     -0.002604,
+     0,
+     0
+    ],
+    [
+     306,
+     0.276923,
+     -0.000686,
+     -0.000686,
+     2,
+     3
+    ],
+    [
+     791.714294,
+     0.053846,
+     -0.000199,
+     -0.000199,
+     3,
+     1
+    ],
+    [
+     1700,
+     0,
+     -0.000085,
+     -0.000085,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Flashbang.Draw": {
+   "files": [
+    "sounds/weapons/flashbang/flashbang_throw_03.vsnd"
+   ],
+   "volume": 0.2,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Flashbang.Explode": {
+   "files": [
+    "sounds/weapons/flashbang/flashbang_explode1.vsnd",
+    "sounds/weapons/flashbang/flashbang_explode2.vsnd"
+   ],
+   "volume": 0.4,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     84,
+     1,
+     -0.000365,
+     -0.000365,
+     1,
+     1
+    ],
+    [
+     2740,
+     0,
+     -0.000226,
+     -0.000226,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Explosions",
+   "local": false,
+   "children": [
+    "Flashbang.ExplodeDistant"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Flashbang.ExplodeDistant": {
+   "files": [
+    "sounds/weapons/flashbang/flashbang_explode1_distant.vsnd",
+    "sounds/weapons/flashbang/flashbang_explode2_distant.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     504,
+     0.709559,
+     0,
+     0.00066,
+     0,
+     0
+    ],
+    [
+     944,
+     1,
+     0.00066,
+     -0.000539,
+     0,
+     0
+    ],
+    [
+     2800,
+     0,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "ExplosionsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Flashbang.PullPin_Grenade": {
+   "files": [
+    "sounds/weapons/flashbang/pinpull.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     82.223686,
+     1,
+     0,
+     -0.002568,
+     0,
+     0
+    ],
+    [
+     354.194336,
+     0.301471,
+     -0.000976,
+     -0.000976,
+     1,
+     1
+    ],
+    [
+     1106.8573,
+     0,
+     -0.000401,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Flashbang.Throw": {
+   "files": [
+    "sounds/weapons/flashbang/flashbang_throw_03.vsnd"
+   ],
+   "volume": 1.4,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     47.142857,
+     1,
+     0,
+     -0.001997,
+     0,
+     0
+    ],
+    [
+     399.142853,
+     0.29697,
+     -0.001997,
+     -0.00095,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000424,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Flesh.BulletImpact": {
+   "files": [
+    "sounds/physics/flesh/flesh_impact_bullet1.vsnd",
+    "sounds/physics/flesh/flesh_impact_bullet2.vsnd",
+    "sounds/physics/flesh/flesh_impact_bullet3.vsnd",
+    "sounds/physics/flesh/flesh_impact_bullet4.vsnd",
+    "sounds/physics/flesh/flesh_impact_bullet5.vsnd"
+   ],
+   "volume": 0.7,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.01,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     40,
+     1,
+     0,
+     -0.00258,
+     0,
+     0
+    ],
+    [
+     248.571442,
+     0.461806,
+     -0.00258,
+     -0.001786,
+     0,
+     1
+    ],
+    [
+     600,
+     0,
+     -0.001314,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.8,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_physics.vsndevts"
+  },
+  "Grenade.Throw.Gear": {
+   "files": [
+    "sounds/weapons/foley/gear_throw_10.vsnd",
+    "sounds/weapons/foley/gear_throw_07.vsnd"
+   ],
+   "volume": 0.2,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     47.142857,
+     1,
+     0,
+     -0.001997,
+     0,
+     0
+    ],
+    [
+     399.142853,
+     0.29697,
+     -0.001997,
+     -0.00095,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000424,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "HEGrenade.Bounce": {
+   "files": [
+    "sounds/weapons/hegrenade/he_bounce-1.vsnd"
+   ],
+   "volume": 0.8,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     28.285715,
+     1,
+     0,
+     -0.002604,
+     0,
+     0
+    ],
+    [
+     306,
+     0.276923,
+     -0.000686,
+     -0.000686,
+     2,
+     3
+    ],
+    [
+     791.714294,
+     0.053846,
+     -0.000199,
+     -0.000199,
+     3,
+     1
+    ],
+    [
+     1700,
+     0,
+     -0.000085,
+     -0.000085,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "HEGrenade.Draw": {
+   "files": [
+    "sounds/weapons/hegrenade/hegrenade_draw_06.vsnd"
+   ],
+   "volume": 0.05,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "HEGrenade.PullPin_Grenade": {
+   "files": [
+    "sounds/weapons/hegrenade/pinpull.vsnd"
+   ],
+   "volume": 0.7,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     82.223686,
+     1,
+     0,
+     -0.002568,
+     0,
+     0
+    ],
+    [
+     354.194336,
+     0.301471,
+     -0.000976,
+     -0.000976,
+     1,
+     1
+    ],
+    [
+     1106.8573,
+     0,
+     -0.000401,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "HEGrenade.Throw": {
+   "files": [
+    "sounds/items/weapon_hegrenade_throw.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.1,
+   "curve": [
+    [
+     47.142857,
+     1,
+     0,
+     -0.001997,
+     0,
+     0
+    ],
+    [
+     399.142853,
+     0.29697,
+     -0.001997,
+     -0.00095,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000424,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [
+    "Grenade.Throw.Gear"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "IncGrenade.Bounce": {
+   "files": [
+    "sounds/physics/weapons/weapon_incendiary_impact_01.vsnd",
+    "sounds/physics/weapons/weapon_incendiary_impact_02.vsnd",
+    "sounds/physics/weapons/weapon_incendiary_impact_03.vsnd",
+    "sounds/physics/weapons/weapon_incendiary_impact_04.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     28.285715,
+     1,
+     0,
+     -0.002604,
+     0,
+     0
+    ],
+    [
+     306,
+     0.276923,
+     -0.000686,
+     -0.000686,
+     2,
+     3
+    ],
+    [
+     791.714294,
+     0.053846,
+     -0.000199,
+     -0.000199,
+     3,
+     1
+    ],
+    [
+     1700,
+     0,
+     -0.000085,
+     -0.000085,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [
+    "IncGrenade.Bounce_M"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "IncGrenade.Bounce_M": {
+   "files": [
+    "sounds/weapons/incgrenade/inc_grenade_bounce_m.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     28.285715,
+     1,
+     0,
+     -0.002604,
+     0,
+     0
+    ],
+    [
+     306,
+     0.276923,
+     -0.000686,
+     -0.000686,
+     2,
+     3
+    ],
+    [
+     791.714294,
+     0.053846,
+     -0.000199,
+     -0.000199,
+     3,
+     1
+    ],
+    [
+     1700,
+     0,
+     -0.000085,
+     -0.000085,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "IncGrenade.Draw": {
+   "files": [
+    "sounds/weapons/hegrenade/hegrenade_draw_01.vsnd"
+   ],
+   "volume": 0.1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0.08
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "IncGrenade.PullPin_Grenade": {
+   "files": [
+    "sounds/weapons/incgrenade/pinpull.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     82.223686,
+     1,
+     0,
+     -0.002568,
+     0,
+     0
+    ],
+    [
+     354.194336,
+     0.301471,
+     -0.000976,
+     -0.000976,
+     1,
+     1
+    ],
+    [
+     1106.8573,
+     0,
+     -0.000401,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "IncGrenade.Throw": {
+   "files": [
+    "sounds/weapons/incgrenade/inc_grenade_throw_fire_01.vsnd",
+    "sounds/weapons/incgrenade/inc_grenade_throw_fire_02.vsnd",
+    "sounds/weapons/incgrenade/inc_grenade_throw_fire_03.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     47.142857,
+     1,
+     0,
+     -0.001997,
+     0,
+     0
+    ],
+    [
+     399.142853,
+     0.29697,
+     -0.001997,
+     -0.00095,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000424,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [
+    "Grenade.Throw.Gear"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Inferno.Fire.Ignite": {
+   "files": [
+    "sounds/weapons/molotov/fire_ignite_1.vsnd",
+    "sounds/weapons/molotov/fire_ignite_4.vsnd",
+    "sounds/weapons/molotov/fire_ignite_5.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.07,
+    0.07
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     128.571426,
+     1,
+     0,
+     -0.001148,
+     0,
+     0
+    ],
+    [
+     1000,
+     0,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Inferno.Loop": {
+   "files": [
+    "sounds/weapons/molotov/fire_loop_1.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     1200,
+     0,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Land.Thud": {
+   "files": [
+    "sounds/player/footsteps/land_concrete_01.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.06,
+    0.06
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     3,
+     1
+    ],
+    [
+     37.42857,
+     1,
+     -0.002865,
+     -0.002865,
+     2,
+     3
+    ],
+    [
+     429.10892,
+     0.445141,
+     -0.000903,
+     -0.000903,
+     3,
+     1
+    ],
+    [
+     1090,
+     0.05,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ],
+    [
+     1100,
+     0,
+     -0.005,
+     -0.005,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "Land_Concrete.StepLeft": {
+   "files": [
+    "sounds/player/land2.vsnd",
+    "sounds/player/land3.vsnd",
+    "sounds/player/land4.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.06,
+   "pitchRandom": [
+    -0.06,
+    0.06
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     3,
+     1
+    ],
+    [
+     37.42857,
+     1,
+     -0.002865,
+     -0.002865,
+     2,
+     3
+    ],
+    [
+     429.10892,
+     0.445141,
+     -0.000903,
+     -0.000903,
+     3,
+     1
+    ],
+    [
+     1090,
+     0.05,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ],
+    [
+     1100,
+     0,
+     -0.005,
+     -0.005,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [
+    "Land.Thud"
+   ],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "Land_Sand.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/land_sand_01.vsnd",
+    "sounds/player/footsteps/land_sand_02.vsnd",
+    "sounds/player/footsteps/land_sand_03.vsnd",
+    "sounds/player/footsteps/land_sand_04.vsnd",
+    "sounds/player/footsteps/land_sand_05.vsnd",
+    "sounds/player/footsteps/land_sand_06.vsnd"
+   ],
+   "volume": 1.2,
+   "pitch": 1.01,
+   "pitchRandom": [
+    -0.06,
+    0.06
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     3,
+     1
+    ],
+    [
+     37.42857,
+     1,
+     -0.002865,
+     -0.002865,
+     2,
+     3
+    ],
+    [
+     429.10892,
+     0.445141,
+     -0.000903,
+     -0.000903,
+     3,
+     1
+    ],
+    [
+     1090,
+     0.05,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ],
+    [
+     1100,
+     0,
+     -0.005,
+     -0.005,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [
+    "Land.Thud"
+   ],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "Land_SolidMetal.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/land_metal_solid_01.vsnd",
+    "sounds/player/footsteps/land_metal_solid_02.vsnd",
+    "sounds/player/footsteps/land_metal_solid_03.vsnd",
+    "sounds/player/footsteps/land_metal_solid_04.vsnd",
+    "sounds/player/footsteps/land_metal_solid_05.vsnd",
+    "sounds/player/footsteps/land_metal_solid_06.vsnd"
+   ],
+   "volume": 0.9,
+   "pitch": 1.01,
+   "pitchRandom": [
+    -0.06,
+    0.06
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     3,
+     1
+    ],
+    [
+     37.42857,
+     1,
+     -0.002865,
+     -0.002865,
+     2,
+     3
+    ],
+    [
+     429.10892,
+     0.445141,
+     -0.000903,
+     -0.000903,
+     3,
+     1
+    ],
+    [
+     1090,
+     0.05,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ],
+    [
+     1100,
+     0,
+     -0.005,
+     -0.005,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [
+    "Land.Thud"
+   ],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "Land_Tile.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/land_tile_01.vsnd",
+    "sounds/player/footsteps/land_tile_02.vsnd",
+    "sounds/player/footsteps/land_tile_03.vsnd",
+    "sounds/player/footsteps/land_tile_04.vsnd",
+    "sounds/player/footsteps/land_tile_05.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.01,
+   "pitchRandom": [
+    -0.06,
+    0.06
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     3,
+     1
+    ],
+    [
+     37.42857,
+     1,
+     -0.002865,
+     -0.002865,
+     2,
+     3
+    ],
+    [
+     429.10892,
+     0.445141,
+     -0.000903,
+     -0.000903,
+     3,
+     1
+    ],
+    [
+     1090,
+     0.05,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ],
+    [
+     1100,
+     0,
+     -0.005,
+     -0.005,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [
+    "Land.Thud"
+   ],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "Land_Wood.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/wood_01.vsnd",
+    "sounds/player/footsteps/wood_02.vsnd",
+    "sounds/player/footsteps/wood_03.vsnd",
+    "sounds/player/footsteps/wood_04.vsnd",
+    "sounds/player/footsteps/wood_05.vsnd",
+    "sounds/player/footsteps/wood_06.vsnd",
+    "sounds/player/footsteps/wood_07.vsnd",
+    "sounds/player/footsteps/wood_08.vsnd",
+    "sounds/player/footsteps/wood_09.vsnd",
+    "sounds/player/footsteps/wood_10.vsnd",
+    "sounds/player/footsteps/wood_11.vsnd",
+    "sounds/player/footsteps/wood_12.vsnd",
+    "sounds/player/footsteps/wood_13.vsnd",
+    "sounds/player/footsteps/wood_14.vsnd",
+    "sounds/player/footsteps/wood_15.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.01,
+   "pitchRandom": [
+    -0.06,
+    0.06
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     3,
+     1
+    ],
+    [
+     37.42857,
+     1,
+     -0.002865,
+     -0.002865,
+     2,
+     3
+    ],
+    [
+     429.10892,
+     0.445141,
+     -0.000903,
+     -0.000903,
+     3,
+     1
+    ],
+    [
+     1090,
+     0.05,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ],
+    [
+     1100,
+     0,
+     -0.005,
+     -0.005,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [
+    "Land.Thud"
+   ],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "Molotov.Bounce": {
+   "files": [
+    "sounds/physics/glass/glass_bottle_impact_hard1.vsnd",
+    "sounds/physics/glass/glass_bottle_impact_hard2.vsnd",
+    "sounds/physics/glass/glass_bottle_impact_hard3.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.06,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     28.285715,
+     1,
+     0,
+     -0.002604,
+     0,
+     0
+    ],
+    [
+     306,
+     0.276923,
+     -0.000686,
+     -0.000686,
+     2,
+     3
+    ],
+    [
+     791.714294,
+     0.053846,
+     -0.000199,
+     -0.000199,
+     3,
+     1
+    ],
+    [
+     1700,
+     0,
+     -0.000085,
+     -0.000085,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Molotov.Draw": {
+   "files": [
+    "sounds/weapons/molotov/molotov_draw_03.vsnd"
+   ],
+   "volume": 0.03,
+   "pitch": 1.3,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     98.035927,
+     1,
+     0,
+     -0.000991,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.000991,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Molotov.Extinguish": {
+   "files": [
+    "sounds/weapons/molotov/molotov_extinguish.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.06,
+    0.06
+   ],
+   "volumeRandom": [
+    -0.5,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     2500,
+     0,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.7,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Explosions",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Molotov.PreThrow": {
+   "files": [
+    "sounds/weapons/molotov/molotov_throw_01.vsnd",
+    "sounds/weapons/molotov/molotov_throw_02.vsnd",
+    "sounds/weapons/molotov/molotov_throw_03.vsnd",
+    "sounds/weapons/molotov/molotov_throw_04.vsnd",
+    "sounds/weapons/molotov/molotov_throw_05.vsnd",
+    "sounds/weapons/molotov/molotov_throw_06.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1.1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     47.142857,
+     1,
+     0,
+     -0.001997,
+     0,
+     0
+    ],
+    [
+     399.142853,
+     0.29697,
+     -0.001997,
+     -0.00095,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000424,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Molotov.Throw": {
+   "files": [
+    "sounds/weapons/molotov/molotov_throw_01.vsnd",
+    "sounds/weapons/molotov/molotov_throw_02.vsnd",
+    "sounds/weapons/molotov/molotov_throw_03.vsnd",
+    "sounds/weapons/molotov/molotov_throw_04.vsnd",
+    "sounds/weapons/molotov/molotov_throw_05.vsnd",
+    "sounds/weapons/molotov/molotov_throw_06.vsnd"
+   ],
+   "volume": 0.6,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     -0.003419,
+     0,
+     0
+    ],
+    [
+     114.303177,
+     0.609155,
+     -0.003419,
+     -0.002185,
+     0,
+     1
+    ],
+    [
+     349.63324,
+     0.235915,
+     -0.001586,
+     -0.000618,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000314,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Music.BombPlanted.valve_cs2_01": {
+   "files": [
+    "sounds/music/valve_cs2_01/bombplanted.vsnd"
+   ],
+   "volume": 0.8,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "",
+   "local": false,
+   "children": [],
+   "defined": "music/valve_cs2_01/game_sounds_music.vsndevts"
+  },
+  "Music.LostRound.valve_cs2_01": {
+   "files": [
+    "sounds/music/valve_cs2_01/lostround.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "",
+   "local": false,
+   "children": [],
+   "defined": "music/valve_cs2_01/game_sounds_music.vsndevts"
+  },
+  "Music.StartRound.valve_cs2_01": {
+   "files": [
+    "sounds/music/valve_cs2_01/startround_01.vsnd"
+   ],
+   "volume": 0.9,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "BuyMusic",
+   "local": false,
+   "children": [],
+   "defined": "music/valve_cs2_01/game_sounds_music.vsndevts"
+  },
+  "Music.WonRound.valve_cs2_01": {
+   "files": [
+    "sounds/music/valve_cs2_01/wonround.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "",
+   "local": false,
+   "children": [],
+   "defined": "music/valve_cs2_01/game_sounds_music.vsndevts"
+  },
+  "Player.DamageBody.VictimFlesh": {
+   "files": [
+    "sounds/physics/surfaces/mud_impact_bullet1.vsnd",
+    "sounds/physics/surfaces/mud_impact_bullet2.vsnd",
+    "sounds/physics/surfaces/mud_impact_bullet3.vsnd",
+    "sounds/physics/surfaces/mud_impact_bullet4.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.3,
+   "pitchRandom": [
+    -0.01,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.05,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     600,
+     1,
+     0,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DamageHeadShot.AttackerFeedback": {
+   "files": [
+    "sounds/player/headshot_noarmor_01.vsnd",
+    "sounds/player/headshot_noarmor_02.vsnd",
+    "sounds/player/headshot_noarmor_03.vsnd",
+    "sounds/player/headshot_noarmor_04.vsnd",
+    "sounds/player/headshot_noarmor_05.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     104.432915,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     1100,
+     0.768382,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerAttackerFeedback",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DamageHeadShot.Onlooker": {
+   "files": [
+    "sounds/player/headshot_noarmor_01.vsnd",
+    "sounds/player/headshot_noarmor_02.vsnd",
+    "sounds/player/headshot_noarmor_03.vsnd",
+    "sounds/player/headshot_noarmor_04.vsnd",
+    "sounds/player/headshot_noarmor_05.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     22,
+     1,
+     -0.002066,
+     -0.002066,
+     1,
+     1
+    ],
+    [
+     298.285736,
+     0.429185,
+     -0.000954,
+     -0.000954,
+     1,
+     1
+    ],
+    [
+     1070,
+     0,
+     -0.000556,
+     -0.000556,
+     1,
+     1
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DamageHeadShot.Victim": {
+   "files": [
+    "sounds/player/headshot_noarmor_01.vsnd",
+    "sounds/player/headshot_noarmor_02.vsnd",
+    "sounds/player/headshot_noarmor_03.vsnd",
+    "sounds/player/headshot_noarmor_04.vsnd",
+    "sounds/player/headshot_noarmor_05.vsnd"
+   ],
+   "volume": 0.49,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     22,
+     1,
+     0,
+     0,
+     1,
+     1
+    ],
+    [
+     1070,
+     1,
+     0,
+     0,
+     1,
+     1
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerVictim",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DamageHeadShotArmor.AttackerFeedback": {
+   "files": [
+    "sounds/player/headshot_armor_e1.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     104.432915,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     1100,
+     0.768382,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerAttackerFeedback",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DamageHeadShotArmor.Onlooker": {
+   "files": [
+    "sounds/player/headshot_armor_e1.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     22,
+     1,
+     -0.002066,
+     -0.002066,
+     1,
+     1
+    ],
+    [
+     298.285736,
+     0.429185,
+     -0.000944,
+     -0.000944,
+     1,
+     1
+    ],
+    [
+     1070,
+     0,
+     -0.000548,
+     -0.000548,
+     1,
+     1
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DamageHeadShotArmor.Victim": {
+   "files": [
+    "sounds/player/headshot_armor_e1.vsnd"
+   ],
+   "volume": 0.75,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     22,
+     1,
+     0,
+     0,
+     1,
+     1
+    ],
+    [
+     1300,
+     1,
+     0,
+     0,
+     1,
+     1
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerVictim",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DamageKevlar": {
+   "files": [
+    "sounds/player/kevlar1.vsnd",
+    "sounds/player/kevlar2.vsnd",
+    "sounds/player/kevlar3.vsnd",
+    "sounds/player/kevlar4.vsnd",
+    "sounds/player/kevlar5.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     0,
+     0
+    ],
+    [
+     35.314026,
+     1,
+     -0.000714,
+     -0.00308,
+     2,
+     2
+    ],
+    [
+     594,
+     0,
+     -0.000364,
+     -0.000364,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.6,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DeathBody.AttackerFeedback": {
+   "files": [
+    "sounds/physics/surfaces/mud_impact_bullet1.vsnd",
+    "sounds/physics/surfaces/mud_impact_bullet2.vsnd",
+    "sounds/physics/surfaces/mud_impact_bullet3.vsnd",
+    "sounds/physics/surfaces/mud_impact_bullet4.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     21.4,
+     1,
+     -0.00139,
+     -0.00139,
+     2,
+     3
+    ],
+    [
+     1065.895142,
+     0.577181,
+     -0.000098,
+     -0.000405,
+     2,
+     1
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerAttackerFeedback",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DeathBody.Flesh": {
+   "files": [
+    "sounds/physics/surfaces/mud_impact_bullet1.vsnd",
+    "sounds/physics/surfaces/mud_impact_bullet2.vsnd",
+    "sounds/physics/surfaces/mud_impact_bullet3.vsnd",
+    "sounds/physics/surfaces/mud_impact_bullet4.vsnd"
+   ],
+   "volume": 2,
+   "pitch": 1.3,
+   "pitchRandom": [
+    -0.01,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.1,
+   "curve": [
+    [
+     45.985714,
+     1,
+     0,
+     -0.004924,
+     0,
+     0
+    ],
+    [
+     187.00856,
+     0.305556,
+     -0.004924,
+     -0.000974,
+     0,
+     1
+    ],
+    [
+     1073,
+     0,
+     -0.000345,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.7,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DeathBody.Onlooker": {
+   "files": [
+    "sounds/player/player_damagebody_04.vsnd",
+    "sounds/player/player_damagebody_05.vsnd",
+    "sounds/player/player_damagebody_06.vsnd",
+    "sounds/player/player_damagebody_07.vsnd",
+    "sounds/player/player_damagebody_08.vsnd"
+   ],
+   "volume": 2,
+   "pitch": 0.8,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     51.971428,
+     1,
+     -0.001582,
+     -0.001582,
+     1,
+     1
+    ],
+    [
+     400.485718,
+     0.448529,
+     -0.000982,
+     -0.000982,
+     1,
+     1
+    ],
+    [
+     1070,
+     0,
+     -0.00067,
+     -0.00067,
+     1,
+     1
+    ]
+   ],
+   "occlusion": 0.7,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [
+    "Player.DeathBody.Flesh"
+   ],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DeathBody.Victim": {
+   "files": [
+    "sounds/player/player_damagebody_04.vsnd",
+    "sounds/player/player_damagebody_05.vsnd",
+    "sounds/player/player_damagebody_06.vsnd",
+    "sounds/player/player_damagebody_07.vsnd",
+    "sounds/player/player_damagebody_08.vsnd"
+   ],
+   "volume": 2,
+   "pitch": 0.8,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     51.971428,
+     1,
+     0,
+     0,
+     1,
+     1
+    ],
+    [
+     1070,
+     1,
+     0,
+     0,
+     1,
+     1
+    ]
+   ],
+   "occlusion": 0.7,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerVictim",
+   "local": false,
+   "children": [
+    "Player.DeathBody.Flesh"
+   ],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DeathHeadShot.AttackerFeedback": {
+   "files": [
+    "sounds/player/headshot_noarmor_01.vsnd",
+    "sounds/player/headshot_noarmor_02.vsnd",
+    "sounds/player/headshot_noarmor_03.vsnd",
+    "sounds/player/headshot_noarmor_04.vsnd",
+    "sounds/player/headshot_noarmor_05.vsnd"
+   ],
+   "volume": 0.4,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     104.432915,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     738.571411,
+     0.805147,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerAttackerFeedback",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "Player.DeathHeadShot.Onlooker": {
+   "files": [
+    "sounds/player/headshot_noarmor_01.vsnd",
+    "sounds/player/headshot_noarmor_02.vsnd",
+    "sounds/player/headshot_noarmor_03.vsnd",
+    "sounds/player/headshot_noarmor_04.vsnd",
+    "sounds/player/headshot_noarmor_05.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     22,
+     1,
+     -0.002066,
+     -0.002066,
+     1,
+     1
+    ],
+    [
+     298.285736,
+     0.429185,
+     -0.000954,
+     -0.000954,
+     1,
+     1
+    ],
+    [
+     1070,
+     0,
+     -0.000556,
+     -0.000556,
+     1,
+     1
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "PlayerDamage",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_player.vsndevts"
+  },
+  "SmokeGrenade.Bounce": {
+   "files": [
+    "sounds/weapons/smokegrenade/grenade_hit1.vsnd"
+   ],
+   "volume": 0.6,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.03,
+    0.02
+   ],
+   "volumeRandom": [
+    -0.1,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     28.285715,
+     1,
+     0,
+     -0.002604,
+     0,
+     0
+    ],
+    [
+     306,
+     0.276923,
+     -0.000686,
+     -0.000686,
+     2,
+     3
+    ],
+    [
+     791.714294,
+     0.053846,
+     -0.000199,
+     -0.000199,
+     3,
+     1
+    ],
+    [
+     1700,
+     0,
+     -0.000085,
+     -0.000085,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [
+    "SmokeGrenade.Bounce_Can"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "SmokeGrenade.Bounce_Can": {
+   "files": [
+    "sounds/weapons/smokegrenade/can_01.vsnd",
+    "sounds/weapons/smokegrenade/can_02.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     28.285715,
+     1,
+     0,
+     -0.002604,
+     0,
+     0
+    ],
+    [
+     306,
+     0.276923,
+     -0.000686,
+     -0.000686,
+     2,
+     3
+    ],
+    [
+     791.714294,
+     0.053846,
+     -0.000199,
+     -0.000199,
+     3,
+     1
+    ],
+    [
+     1700,
+     0,
+     -0.000085,
+     -0.000085,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "SmokeGrenade.Draw": {
+   "files": [
+    "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_01.vsnd",
+    "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_03.vsnd",
+    "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_04.vsnd",
+    "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_05.vsnd",
+    "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_06.vsnd",
+    "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_08.vsnd",
+    "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_09.vsnd",
+    "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_11.vsnd"
+   ],
+   "volume": 0.1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "SmokeGrenade.PullPin_Grenade": {
+   "files": [
+    "sounds/weapons/smokegrenade/pinpull.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     82.223686,
+     1,
+     0,
+     -0.002568,
+     0,
+     0
+    ],
+    [
+     354.194336,
+     0.301471,
+     -0.000976,
+     -0.000976,
+     1,
+     1
+    ],
+    [
+     1106.8573,
+     0,
+     -0.000401,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "SmokeGrenade.Throw": {
+   "files": [
+    "sounds/weapons/smokegrenade/smoke_grenade_throw_04.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     47.142857,
+     1,
+     0,
+     -0.001997,
+     0,
+     0
+    ],
+    [
+     399.142853,
+     0.29697,
+     -0.001997,
+     -0.00095,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000424,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [
+    "Grenade.Throw.Gear"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "T_Concrete.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/concrete_ct_01.vsnd",
+    "sounds/player/footsteps/concrete_ct_02.vsnd",
+    "sounds/player/footsteps/concrete_ct_03.vsnd",
+    "sounds/player/footsteps/concrete_ct_04.vsnd",
+    "sounds/player/footsteps/concrete_ct_05.vsnd",
+    "sounds/player/footsteps/concrete_ct_06.vsnd",
+    "sounds/player/footsteps/concrete_ct_07.vsnd",
+    "sounds/player/footsteps/concrete_ct_08.vsnd",
+    "sounds/player/footsteps/concrete_ct_09.vsnd",
+    "sounds/player/footsteps/concrete_ct_10.vsnd",
+    "sounds/player/footsteps/concrete_ct_11.vsnd",
+    "sounds/player/footsteps/concrete_ct_12.vsnd",
+    "sounds/player/footsteps/concrete_ct_13.vsnd",
+    "sounds/player/footsteps/concrete_ct_14.vsnd",
+    "sounds/player/footsteps/concrete_ct_15.vsnd",
+    "sounds/player/footsteps/concrete_ct_16.vsnd",
+    "sounds/player/footsteps/concrete_ct_17.vsnd"
+   ],
+   "volume": 0.9,
+   "pitch": 1.1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "T_Sand.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/sand_01.vsnd",
+    "sounds/player/footsteps/sand_02.vsnd",
+    "sounds/player/footsteps/sand_03.vsnd",
+    "sounds/player/footsteps/sand_04.vsnd",
+    "sounds/player/footsteps/sand_05.vsnd",
+    "sounds/player/footsteps/sand_06.vsnd",
+    "sounds/player/footsteps/sand_07.vsnd",
+    "sounds/player/footsteps/sand_08.vsnd",
+    "sounds/player/footsteps/sand_09.vsnd",
+    "sounds/player/footsteps/sand_10.vsnd",
+    "sounds/player/footsteps/sand_11.vsnd",
+    "sounds/player/footsteps/sand_12.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.07,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "T_SolidMetal.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/metal_solid_35.vsnd",
+    "sounds/player/footsteps/metal_solid_36.vsnd",
+    "sounds/player/footsteps/metal_solid_37.vsnd",
+    "sounds/player/footsteps/metal_solid_38.vsnd",
+    "sounds/player/footsteps/metal_solid_39.vsnd",
+    "sounds/player/footsteps/metal_solid_40.vsnd",
+    "sounds/player/footsteps/metal_solid_41.vsnd",
+    "sounds/player/footsteps/metal_solid_42.vsnd",
+    "sounds/player/footsteps/metal_solid_43.vsnd",
+    "sounds/player/footsteps/metal_solid_44.vsnd",
+    "sounds/player/footsteps/metal_solid_45.vsnd",
+    "sounds/player/footsteps/metal_solid_46.vsnd",
+    "sounds/player/footsteps/metal_solid_47.vsnd",
+    "sounds/player/footsteps/metal_solid_48.vsnd",
+    "sounds/player/footsteps/metal_solid_49.vsnd",
+    "sounds/player/footsteps/metal_solid_50.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.07,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "T_Tile.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/tile_01.vsnd",
+    "sounds/player/footsteps/tile_02.vsnd",
+    "sounds/player/footsteps/tile_03.vsnd",
+    "sounds/player/footsteps/tile_04.vsnd",
+    "sounds/player/footsteps/tile_05.vsnd",
+    "sounds/player/footsteps/tile_06.vsnd",
+    "sounds/player/footsteps/tile_07.vsnd",
+    "sounds/player/footsteps/tile_08.vsnd",
+    "sounds/player/footsteps/tile_09.vsnd",
+    "sounds/player/footsteps/tile_10.vsnd",
+    "sounds/player/footsteps/tile_11.vsnd",
+    "sounds/player/footsteps/tile_12.vsnd",
+    "sounds/player/footsteps/tile_13.vsnd",
+    "sounds/player/footsteps/tile_14.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.07,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "T_Wood.StepLeft": {
+   "files": [
+    "sounds/player/footsteps/wood_01.vsnd",
+    "sounds/player/footsteps/wood_02.vsnd",
+    "sounds/player/footsteps/wood_03.vsnd",
+    "sounds/player/footsteps/wood_04.vsnd",
+    "sounds/player/footsteps/wood_05.vsnd",
+    "sounds/player/footsteps/wood_06.vsnd",
+    "sounds/player/footsteps/wood_07.vsnd",
+    "sounds/player/footsteps/wood_08.vsnd",
+    "sounds/player/footsteps/wood_09.vsnd",
+    "sounds/player/footsteps/wood_10.vsnd",
+    "sounds/player/footsteps/wood_11.vsnd",
+    "sounds/player/footsteps/wood_12.vsnd",
+    "sounds/player/footsteps/wood_13.vsnd",
+    "sounds/player/footsteps/wood_14.vsnd",
+    "sounds/player/footsteps/wood_15.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.07,
+    0.01
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     49.591427,
+     0.45,
+     0.010452,
+     0.010452,
+     3,
+     1
+    ],
+    [
+     116.563492,
+     1,
+     -0.001429,
+     -0.001429,
+     2,
+     3
+    ],
+    [
+     402.285736,
+     0.488971,
+     -0.000991,
+     -0.000991,
+     3,
+     1
+    ],
+    [
+     1095,
+     0.03,
+     -0.000701,
+     -0.000701,
+     1,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000476,
+     -0.000476,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.375,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Footsteps",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_footsteps.vsndevts"
+  },
+  "Weapon_AK47.BoltPull": {
+   "files": [
+    "sounds/weapons/ak47/ak47_boltpull_01.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0.05
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     37.714287,
+     1,
+     0,
+     -0.003004,
+     0,
+     0
+    ],
+    [
+     242,
+     0.386266,
+     -0.003004,
+     -0.000941,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.00045,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AK47.Clipin": {
+   "files": [
+    "sounds/weapons/magazine_slide_01.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0.05
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AK47.Clipout": {
+   "files": [
+    "sounds/weapons/ak47/ak47_clipout_01.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0.05
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AK47.Draw": {
+   "files": [
+    "sounds/weapons/ak47/ak47_draw.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AK47.Single": {
+   "files": [
+    "sounds/weapons/ak47/ak47_02.vsnd",
+    "sounds/weapons/ak47/ak47_01.vsnd",
+    "sounds/weapons/ak47/ak47_04.vsnd"
+   ],
+   "volume": 1.1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     25,
+     0.8,
+     0.04,
+     0.04,
+     1,
+     1
+    ],
+    [
+     30,
+     1,
+     0.001327,
+     0.001327,
+     1,
+     1
+    ],
+    [
+     175.714279,
+     1,
+     -0.000949,
+     -0.000646,
+     2,
+     1
+    ],
+    [
+     440,
+     0.735294,
+     -0.000602,
+     -0.000602,
+     1,
+     1
+    ],
+    [
+     1288,
+     0.330882,
+     -0.00035,
+     -0.00035,
+     1,
+     1
+    ],
+    [
+     2500,
+     0.014706,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.6,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [
+    "Weapon_AK47.SingleDistant"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AK47.SingleDistant": {
+   "files": [
+    "sounds/weapons/ak47/ak47_distant.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.02,
+    0.02
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     800,
+     0,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     2335.836914,
+     0.540441,
+     0.000046,
+     -0.000835,
+     1,
+     0
+    ],
+    [
+     2868.571533,
+     0.095588,
+     -0.000835,
+     -0.000835,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "WeaponsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AWP.BoltBack": {
+   "files": [
+    "sounds/weapons/awp/awp_boltback.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     37.714287,
+     1,
+     0,
+     -0.003004,
+     0,
+     0
+    ],
+    [
+     242,
+     0.386266,
+     -0.003004,
+     -0.000941,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.00045,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AWP.BoltForward": {
+   "files": [
+    "sounds/weapons/awp/awp_boltforward.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     37.714287,
+     1,
+     0,
+     -0.003004,
+     0,
+     0
+    ],
+    [
+     242,
+     0.386266,
+     -0.003004,
+     -0.000941,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.00045,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AWP.Clipin": {
+   "files": [
+    "sounds/weapons/awp/awp_clipin.vsnd"
+   ],
+   "volume": 0.75,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AWP.Clipout": {
+   "files": [
+    "sounds/weapons/awp/awp_clipout.vsnd"
+   ],
+   "volume": 0.75,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AWP.Draw": {
+   "files": [
+    "sounds/weapons/awp/awp_draw.vsnd"
+   ],
+   "volume": 0.05,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AWP.Single": {
+   "files": [
+    "sounds/weapons/awp/awp_01.vsnd",
+    "sounds/weapons/awp/awp_02.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.03,
+    0.03
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     175.714279,
+     1,
+     -0.000949,
+     -0.001002,
+     2,
+     1
+    ],
+    [
+     440,
+     0.735294,
+     -0.000602,
+     -0.000602,
+     1,
+     1
+    ],
+    [
+     1288,
+     0.330882,
+     -0.000291,
+     -0.000291,
+     1,
+     1
+    ],
+    [
+     2800,
+     0.047794,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.6,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [
+    "Weapon_AWP.SingleDistant"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AWP.SingleDistant": {
+   "files": [
+    "sounds/weapons/awp/awp_distant.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.03,
+    0.03
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     800,
+     0,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     2354.285645,
+     0.336806,
+     0.000046,
+     -0.000469,
+     1,
+     0
+    ],
+    [
+     2868.571533,
+     0.095588,
+     -0.000469,
+     -0.000469,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.1,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "WeaponsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AWP.Zoom": {
+   "files": [
+    "sounds/weapons/awp/zoom.vsnd"
+   ],
+   "volume": 0.1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     40.857143,
+     1,
+     0,
+     -0.002667,
+     0,
+     0
+    ],
+    [
+     242,
+     0.463519,
+     -0.002667,
+     -0.001798,
+     0,
+     1
+    ],
+    [
+     597.142883,
+     0,
+     -0.001305,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_AWP.ZoomOut": {
+   "files": [
+    "sounds/weapons/awp/zoom.vsnd"
+   ],
+   "volume": 0.1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     40.857143,
+     1,
+     0,
+     -0.002667,
+     0,
+     0
+    ],
+    [
+     242,
+     0.463519,
+     -0.002667,
+     -0.001798,
+     0,
+     1
+    ],
+    [
+     597.142883,
+     0,
+     -0.001305,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_DEagle.Clipin": {
+   "files": [
+    "sounds/weapons/magazine_slide_01.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_DEagle.Clipout": {
+   "files": [
+    "sounds/weapons/deagle/de_clipout.vsnd"
+   ],
+   "volume": 0.9,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_DEagle.Draw": {
+   "files": [
+    "sounds/weapons/deagle/de_draw.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_DEagle.Single": {
+   "files": [
+    "sounds/weapons/deagle/deagle_01.vsnd",
+    "sounds/weapons/deagle/deagle_02.vsnd"
+   ],
+   "volume": 0.9,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.03,
+    0.03
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     25,
+     0.8,
+     0.04,
+     0.04,
+     1,
+     1
+    ],
+    [
+     30,
+     1,
+     0.001327,
+     0.001327,
+     1,
+     1
+    ],
+    [
+     175.714279,
+     1,
+     -0.000949,
+     -0.000646,
+     2,
+     1
+    ],
+    [
+     440,
+     0.735294,
+     -0.000602,
+     -0.000602,
+     1,
+     1
+    ],
+    [
+     1288,
+     0.330882,
+     -0.00035,
+     -0.00035,
+     1,
+     1
+    ],
+    [
+     2500,
+     0.014706,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.6,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [
+    "Weapon_DEagle.SingleDistant"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_DEagle.SingleDistant": {
+   "files": [
+    "sounds/weapons/deagle/deagle-1-distant.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 0.9,
+   "pitchRandom": [
+    -0.02,
+    0.02
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.01,
+   "curve": [
+    [
+     800,
+     0,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     2354.285645,
+     0.336806,
+     0.000046,
+     -0.000469,
+     1,
+     0
+    ],
+    [
+     2868.571533,
+     0.095588,
+     -0.000469,
+     -0.000469,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.15,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "WeaponsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_DEagle.Slideback": {
+   "files": [
+    "sounds/weapons/deagle/de_slideback.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     53.428574,
+     1,
+     0,
+     -0.004495,
+     0,
+     0
+    ],
+    [
+     204.285721,
+     0.321888,
+     -0.004495,
+     -0.000956,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000359,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_DEagle.Slideforward": {
+   "files": [
+    "sounds/weapons/deagle/de_slideforward.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     53.428574,
+     1,
+     0,
+     -0.004495,
+     0,
+     0
+    ],
+    [
+     204.285721,
+     0.321888,
+     -0.004495,
+     -0.000956,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000359,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Glock.Clipin": {
+   "files": [
+    "sounds/weapons/glock18/glock_clipin.vsnd"
+   ],
+   "volume": 0.599976,
+   "pitch": 0.93,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Glock.Clipout": {
+   "files": [
+    "sounds/weapons/glock18/glock_clipout.vsnd"
+   ],
+   "volume": 0.599976,
+   "pitch": 0.93,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Glock.Draw": {
+   "files": [
+    "sounds/weapons/glock18/glock_draw.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 0.995,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Glock.Element_CRB": {
+   "files": [
+    "sounds/weapons/glock18/glock_element_crb_01.vsnd",
+    "sounds/weapons/glock18/glock_element_crb_02.vsnd"
+   ],
+   "volume": 0.2,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.02,
+    0.02
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     175.714279,
+     1,
+     -0.000949,
+     -0.001202,
+     2,
+     1
+    ],
+    [
+     552,
+     0.547794,
+     -0.000757,
+     -0.000757,
+     1,
+     1
+    ],
+    [
+     1240,
+     0.194853,
+     -0.000244,
+     -0.000244,
+     1,
+     1
+    ],
+    [
+     2800,
+     0,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Glock.Element_Click": {
+   "files": [
+    "sounds/weapons/glock18/glock_element_click_01.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 0.995,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     34.57143,
+     1,
+     0,
+     -0.003767,
+     0,
+     0
+    ],
+    [
+     300,
+     0,
+     -0.003767,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Glock.Single": {
+   "files": [
+    "sounds/weapons/glock18/glock_02.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 0.9,
+   "pitchRandom": [
+    -0.03,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     25,
+     0.8,
+     0.04,
+     0.04,
+     1,
+     1
+    ],
+    [
+     30,
+     1,
+     0.001327,
+     0.001327,
+     1,
+     1
+    ],
+    [
+     175.714279,
+     1,
+     -0.000949,
+     -0.000646,
+     2,
+     1
+    ],
+    [
+     440,
+     0.735294,
+     -0.000602,
+     -0.000602,
+     1,
+     1
+    ],
+    [
+     1288,
+     0.330882,
+     -0.000357,
+     -0.000357,
+     1,
+     1
+    ],
+    [
+     2500,
+     0,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.6,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [
+    "Weapon_Glock.SingleDistant",
+    "Weapon_Glock.Element_CRB",
+    "Weapon_Glock.Element_Click"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Glock.SingleDistant": {
+   "files": [
+    "sounds/weapons/glock18/glock18-1-distant.vsnd"
+   ],
+   "volume": 0.7,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.02,
+    0.02
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     800,
+     0,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     2354.285645,
+     0.336806,
+     0.000046,
+     -0.000469,
+     1,
+     0
+    ],
+    [
+     2868.571533,
+     0.095588,
+     -0.000469,
+     -0.000469,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "WeaponsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Glock.Slideback": {
+   "files": [
+    "sounds/weapons/glock18/glock_slideback.vsnd"
+   ],
+   "volume": 0.599976,
+   "pitch": 0.93,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     53.428574,
+     1,
+     0,
+     -0.004495,
+     0,
+     0
+    ],
+    [
+     204.285721,
+     0.321888,
+     -0.004495,
+     -0.000956,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000359,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Glock.Sliderelease": {
+   "files": [
+    "sounds/weapons/glock18/glock_sliderelease.vsnd"
+   ],
+   "volume": 0.7,
+   "pitch": 0.93,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     53.428574,
+     1,
+     0,
+     -0.004495,
+     0,
+     0
+    ],
+    [
+     204.285721,
+     0.321888,
+     -0.004495,
+     -0.000956,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000359,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Knife.Deploy": {
+   "files": [
+    "sounds/weapons/knife/knife_deploy1.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     -0.000909,
+     0,
+     0
+    ],
+    [
+     1100,
+     0,
+     -0.000909,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Knife.Hit": {
+   "files": [
+    "sounds/weapons/knife/knife_hit1.vsnd",
+    "sounds/weapons/knife/knife_hit2.vsnd"
+   ],
+   "volume": 0.599609,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     62.857143,
+     1,
+     -0.00239,
+     -0.00239,
+     1,
+     1
+    ],
+    [
+     302.857147,
+     0.426471,
+     -0.001067,
+     -0.001067,
+     1,
+     1
+    ],
+    [
+     1000,
+     0,
+     -0.000612,
+     -0.000612,
+     1,
+     1
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Knife.HitWall": {
+   "files": [
+    "sounds/weapons/knife/knife_hit_01.vsnd",
+    "sounds/weapons/knife/knife_hit_02.vsnd",
+    "sounds/weapons/knife/knife_hit_03.vsnd",
+    "sounds/weapons/knife/knife_hit_04.vsnd",
+    "sounds/weapons/knife/knife_hit_05.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.09,
+   "curve": [
+    [
+     62.857143,
+     1,
+     -0.00239,
+     -0.00239,
+     1,
+     1
+    ],
+    [
+     302.857147,
+     0.426471,
+     -0.001067,
+     -0.001067,
+     1,
+     1
+    ],
+    [
+     1000,
+     0,
+     -0.000612,
+     -0.000612,
+     1,
+     1
+    ]
+   ],
+   "occlusion": 1,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_Knife.Slash": {
+   "files": [
+    "sounds/weapons/knife/knife_slash1.vsnd",
+    "sounds/weapons/knife/knife_slash2.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1.01,
+   "pitchRandom": [
+    -0.06,
+    0.06
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     72,
+     1,
+     0,
+     -0.00256,
+     0,
+     0
+    ],
+    [
+     352,
+     0.283088,
+     -0.001471,
+     -0.001471,
+     1,
+     1
+    ],
+    [
+     800,
+     0,
+     -0.000708,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_M4A1.BoltBack": {
+   "files": [
+    "sounds/weapons/m4a1/m4a1_boltback.vsnd"
+   ],
+   "volume": 0.799805,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     37.714287,
+     1,
+     0,
+     -0.003004,
+     0,
+     0
+    ],
+    [
+     242,
+     0.386266,
+     -0.003004,
+     -0.000941,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.00045,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_M4A1.BoltForward": {
+   "files": [
+    "sounds/weapons/m4a1/m4a1_boltforward.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     37.714287,
+     1,
+     0,
+     -0.003004,
+     0,
+     0
+    ],
+    [
+     242,
+     0.386266,
+     -0.003004,
+     -0.000941,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.00045,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_M4A1.Clipin": {
+   "files": [
+    "sounds/weapons/m4a1/m4a1_clipin.vsnd"
+   ],
+   "volume": 0.35,
+   "pitch": 1.025,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_M4A1.Clipout": {
+   "files": [
+    "sounds/weapons/m4a1/m4a1_clipout.vsnd"
+   ],
+   "volume": 0.6,
+   "pitch": 1.005,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_M4A1.Draw": {
+   "files": [
+    "sounds/weapons/m4a1/m4a1_draw.vsnd"
+   ],
+   "volume": 0.2,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_M4A1.Silenced": {
+   "files": [
+    "sounds/weapons/m4a1/m4a1_silencer_01.vsnd"
+   ],
+   "volume": 0.8,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     25,
+     0.7,
+     0.06,
+     0.06,
+     1,
+     1
+    ],
+    [
+     30,
+     1,
+     0.002158,
+     0.002158,
+     1,
+     1
+    ],
+    [
+     164,
+     1,
+     -0.000949,
+     -0.000958,
+     2,
+     1
+    ],
+    [
+     428,
+     0.618557,
+     -0.001208,
+     -0.001208,
+     1,
+     1
+    ],
+    [
+     804,
+     0.226804,
+     -0.000652,
+     -0.000652,
+     1,
+     1
+    ],
+    [
+     1300,
+     0.05,
+     -0.000381,
+     -0.000381,
+     1,
+     1
+    ],
+    [
+     1400,
+     0,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.55,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_M4A4.Single": {
+   "files": [
+    "sounds/weapons/m4a1/m4a1_01.vsnd",
+    "sounds/weapons/m4a1/m4a1_02.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1.2,
+   "pitchRandom": [
+    -0.03,
+    0.03
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     25,
+     0.8,
+     0.04,
+     0.04,
+     1,
+     1
+    ],
+    [
+     30,
+     1,
+     0.001327,
+     0.001327,
+     1,
+     1
+    ],
+    [
+     175.714279,
+     1,
+     -0.000949,
+     -0.000646,
+     2,
+     1
+    ],
+    [
+     440,
+     0.735294,
+     -0.000602,
+     -0.000602,
+     1,
+     1
+    ],
+    [
+     1288,
+     0.330882,
+     -0.000348,
+     -0.000348,
+     1,
+     1
+    ],
+    [
+     2500,
+     0.018382,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.6,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [
+    "Weapon_M4A4.SingleDistant"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_M4A4.SingleDistant": {
+   "files": [
+    "sounds/weapons/m4a1/m4a1_distant_01.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.02,
+    0.02
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     800,
+     0,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     2354.285645,
+     0.336806,
+     0.000046,
+     -0.000469,
+     1,
+     0
+    ],
+    [
+     2868.571533,
+     0.095588,
+     -0.000469,
+     -0.000469,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.15,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "WeaponsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_SSG08.BoltBack": {
+   "files": [
+    "sounds/weapons/ssg08/ssg08_boltback.vsnd"
+   ],
+   "volume": 0.75,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    -0.25,
+    0.25
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     37.714287,
+     1,
+     0,
+     -0.003004,
+     0,
+     0
+    ],
+    [
+     242,
+     0.386266,
+     -0.003004,
+     -0.000941,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.00045,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_SSG08.BoltForward": {
+   "files": [
+    "sounds/weapons/ssg08/ssg08_boltforward.vsnd"
+   ],
+   "volume": 0.75,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    -0.25,
+    0.25
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     37.714287,
+     1,
+     0,
+     -0.003004,
+     0,
+     0
+    ],
+    [
+     242,
+     0.386266,
+     -0.003004,
+     -0.000941,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.00045,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_SSG08.Clipin": {
+   "files": [
+    "sounds/weapons/ssg08/ssg08_clipin.vsnd"
+   ],
+   "volume": 0.75,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_SSG08.Clipout": {
+   "files": [
+    "sounds/weapons/ssg08/ssg08_clipout.vsnd"
+   ],
+   "volume": 0.75,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_SSG08.Draw": {
+   "files": [
+    "sounds/weapons/ssg08/ssg08_draw.vsnd"
+   ],
+   "volume": 0.15,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_SSG08.Single": {
+   "files": [
+    "sounds/weapons/ssg08/ssg08_01.vsnd"
+   ],
+   "volume": 0.8,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.03,
+    0.03
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     25,
+     0.8,
+     0.04,
+     0.04,
+     1,
+     1
+    ],
+    [
+     30,
+     1,
+     0.001327,
+     0.001327,
+     1,
+     1
+    ],
+    [
+     175.714279,
+     1,
+     -0.000949,
+     -0.000429,
+     2,
+     1
+    ],
+    [
+     578.571411,
+     0.764706,
+     -0.000523,
+     -0.000523,
+     1,
+     1
+    ],
+    [
+     1342.857178,
+     0.389706,
+     -0.000381,
+     -0.000381,
+     1,
+     1
+    ],
+    [
+     2500,
+     0.033088,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.6,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [
+    "Weapon_SSG08.SingleDistant"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_SSG08.SingleDistant": {
+   "files": [
+    "sounds/weapons/ssg08/ssg08_distant.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.02,
+    0.02
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     524.538818,
+     0,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     2016.196045,
+     0.341912,
+     0.000041,
+     -0.000289,
+     1,
+     0
+    ],
+    [
+     2868.571533,
+     0.095588,
+     -0.000289,
+     -0.000289,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.1,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "WeaponsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_SSG08.Zoom": {
+   "files": [
+    "sounds/weapons/ssg08/ssg08_zoom_in.vsnd"
+   ],
+   "volume": 0.1,
+   "pitch": 1.1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     40.857143,
+     1,
+     0,
+     -0.002667,
+     0,
+     0
+    ],
+    [
+     242,
+     0.463519,
+     -0.002667,
+     -0.001798,
+     0,
+     1
+    ],
+    [
+     597.142883,
+     0,
+     -0.001305,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_SSG08.ZoomOut": {
+   "files": [
+    "sounds/weapons/weapon_zoom_out_03.vsnd"
+   ],
+   "volume": 0.1,
+   "pitch": 1.1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     40.857143,
+     1,
+     0,
+     -0.002667,
+     0,
+     0
+    ],
+    [
+     242,
+     0.463519,
+     -0.002667,
+     -0.001798,
+     0,
+     1
+    ],
+    [
+     597.142883,
+     0,
+     -0.001305,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_USP.Clipin": {
+   "files": [
+    "sounds/weapons/usp/usp_clipin_02.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_USP.Clipout": {
+   "files": [
+    "sounds/weapons/usp/usp_clipout_01.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_USP.Draw": {
+   "files": [
+    "sounds/weapons/usp/usp_draw.vsnd"
+   ],
+   "volume": 0.2,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_USP.SilencedShot": {
+   "files": [
+    "sounds/weapons/usp/usp_01.vsnd",
+    "sounds/weapons/usp/usp_02.vsnd",
+    "sounds/weapons/usp/usp_03.vsnd"
+   ],
+   "volume": 0.6,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     25,
+     0.8,
+     0.04,
+     0.04,
+     1,
+     1
+    ],
+    [
+     30,
+     1,
+     0.001439,
+     0.001439,
+     1,
+     1
+    ],
+    [
+     164,
+     1,
+     -0.000949,
+     -0.000958,
+     2,
+     1
+    ],
+    [
+     428,
+     0.618557,
+     -0.001208,
+     -0.001208,
+     1,
+     1
+    ],
+    [
+     804,
+     0.226804,
+     -0.000652,
+     -0.000652,
+     1,
+     1
+    ],
+    [
+     1300,
+     0.05,
+     -0.000381,
+     -0.000381,
+     1,
+     1
+    ],
+    [
+     1400,
+     0,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.55,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_USP.Slideback": {
+   "files": [
+    "sounds/weapons/usp/usp_slideback_01.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     53.428574,
+     1,
+     0,
+     -0.004495,
+     0,
+     0
+    ],
+    [
+     204.285721,
+     0.321888,
+     -0.004495,
+     -0.000956,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000359,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_USP.Sliderelease": {
+   "files": [
+    "sounds/weapons/usp/usp_sliderelease_01.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     53.428574,
+     1,
+     0,
+     -0.004495,
+     0,
+     0
+    ],
+    [
+     204.285721,
+     0.321888,
+     -0.004495,
+     -0.000956,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000359,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_hkp2000.Clipin": {
+   "files": [
+    "sounds/weapons/hkp2000/hkp2000_clipin.vsnd"
+   ],
+   "volume": 0.599976,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_hkp2000.Clipout": {
+   "files": [
+    "sounds/weapons/hkp2000/hkp2000_clipout.vsnd"
+   ],
+   "volume": 0.599976,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     50.285717,
+     1,
+     0,
+     -0.002969,
+     0,
+     0
+    ],
+    [
+     267.142853,
+     0.356223,
+     -0.002969,
+     -0.000953,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000428,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_hkp2000.Draw": {
+   "files": [
+    "sounds/weapons/hkp2000/hkp2000_draw.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_hkp2000.Single": {
+   "files": [
+    "sounds/weapons/hkp2000/hkp2000_01.vsnd",
+    "sounds/weapons/hkp2000/hkp2000_02.vsnd",
+    "sounds/weapons/hkp2000/hkp2000_03.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 1,
+   "pitchRandom": [
+    -0.05,
+    0.05
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     25,
+     0.8,
+     0.04,
+     0.04,
+     1,
+     1
+    ],
+    [
+     30,
+     1,
+     0.001327,
+     0.001327,
+     1,
+     1
+    ],
+    [
+     175.714279,
+     1,
+     -0.000949,
+     -0.000646,
+     2,
+     1
+    ],
+    [
+     440,
+     0.735294,
+     -0.000602,
+     -0.000602,
+     1,
+     1
+    ],
+    [
+     1288,
+     0.330882,
+     -0.000346,
+     -0.000346,
+     1,
+     1
+    ],
+    [
+     2500,
+     0.022059,
+     -0.000156,
+     -0.000156,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.6,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [
+    "Weapon_hkp2000.SingleDistant"
+   ],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_hkp2000.SingleDistant": {
+   "files": [
+    "sounds/weapons/hkp2000/hkp2000-1-distant.vsnd"
+   ],
+   "volume": 1,
+   "pitch": 0.995,
+   "pitchRandom": [
+    -0.02,
+    0.02
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     458.971466,
+     0,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     2335.836914,
+     0.584559,
+     0.00004,
+     -0.000918,
+     1,
+     0
+    ],
+    [
+     2868.571533,
+     0.095588,
+     -0.000918,
+     -0.000918,
+     0,
+     1
+    ]
+   ],
+   "occlusion": 0.1,
+   "offset": [
+    0,
+    0,
+    60
+   ],
+   "mixgroup": "WeaponsDistant",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_hkp2000.Slideback": {
+   "files": [
+    "sounds/weapons/hkp2000/hkp2000_slideback.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     53.428574,
+     1,
+     0,
+     -0.004495,
+     0,
+     0
+    ],
+    [
+     204.285721,
+     0.321888,
+     -0.004495,
+     -0.000956,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000359,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "Weapon_hkp2000.Sliderelease": {
+   "files": [
+    "sounds/weapons/hkp2000/hkp2000_sliderelease.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1.01,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     53.428574,
+     1,
+     0,
+     -0.004495,
+     0,
+     0
+    ],
+    [
+     204.285721,
+     0.321888,
+     -0.004495,
+     -0.000956,
+     0,
+     1
+    ],
+    [
+     1100,
+     0,
+     -0.000359,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 0.4,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "c4.disarmfinish": {
+   "files": [
+    "sounds/weapons/c4/c4_disarmfinish.vsnd"
+   ],
+   "volume": 0.699707,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     200,
+     1,
+     -0.000817,
+     -0.000817,
+     3,
+     1
+    ],
+    [
+     657.142883,
+     0.463235,
+     -0.000556,
+     -0.000556,
+     1,
+     1
+    ],
+    [
+     2000,
+     0,
+     -0.000299,
+     -0.000299,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "c4.disarmstart": {
+   "files": [
+    "sounds/weapons/c4/c4_disarmstart.vsnd"
+   ],
+   "volume": 0.699707,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     200,
+     1,
+     -0.000817,
+     -0.000817,
+     3,
+     1
+    ],
+    [
+     657.142883,
+     0.463235,
+     -0.000556,
+     -0.000556,
+     1,
+     1
+    ],
+    [
+     2000,
+     0,
+     -0.000299,
+     -0.000299,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.3,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "c4.draw": {
+   "files": [
+    "sounds/weapons/c4/c4_draw_04.vsnd",
+    "sounds/weapons/c4/c4_draw_06.vsnd",
+    "sounds/weapons/c4/c4_draw_07.vsnd",
+    "sounds/weapons/c4/c4_draw_01.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     396.868561,
+     1,
+     0,
+     -0.001408,
+     0,
+     0
+    ],
+    [
+     1106.8573,
+     0,
+     -0.001408,
+     0,
+     0,
+     0
+    ]
+   ],
+   "occlusion": 1,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "c4.explode": {
+   "files": [
+    "sounds/weapons/c4/c4_explode1.vsnd"
+   ],
+   "volume": 0.5,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     3
+    ],
+    [
+     1100,
+     1,
+     0,
+     0,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "c4.initiate": {
+   "files": [
+    "sounds/weapons/c4/c4_initiate.vsnd"
+   ],
+   "volume": 0.799805,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     0
+    ],
+    [
+     103.897484,
+     1,
+     0,
+     -0.001002,
+     0,
+     0
+    ],
+    [
+     1101.942993,
+     0,
+     -0.001002,
+     -0.001002,
+     0,
+     3
+    ]
+   ],
+   "occlusion": 0.5,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "c4.keypressquiet": {
+   "files": [
+    "sounds/weapons/c4/key_press1.vsnd",
+    "sounds/weapons/c4/key_press2.vsnd",
+    "sounds/weapons/c4/key_press3.vsnd",
+    "sounds/weapons/c4/key_press4.vsnd",
+    "sounds/weapons/c4/key_press5.vsnd",
+    "sounds/weapons/c4/key_press6.vsnd",
+    "sounds/weapons/c4/key_press7.vsnd"
+   ],
+   "volume": 0.3,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     0
+    ],
+    [
+     69.264992,
+     1,
+     0,
+     -0.000968,
+     0,
+     0
+    ],
+    [
+     1101.942993,
+     0,
+     -0.000968,
+     -0.000968,
+     0,
+     3
+    ]
+   ],
+   "occlusion": 0.3,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Foley",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "c4.plant": {
+   "files": [
+    "sounds/weapons/c4/c4_plant.vsnd"
+   ],
+   "volume": 0.599609,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0,
+   "curve": [
+    [
+     0,
+     1,
+     0,
+     0,
+     2,
+     0
+    ],
+    [
+     105.428574,
+     1,
+     -0.000553,
+     -0.000553,
+     1,
+     1
+    ],
+    [
+     1089.428589,
+     0.397059,
+     -0.00025,
+     -0.00025,
+     1,
+     1
+    ],
+    [
+     4100,
+     0,
+     -0.000132,
+     -0.000132,
+     0,
+     3
+    ]
+   ],
+   "occlusion": 0.3,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "defined": "game_sounds_weapons.vsndevts"
+  }
+ },
+ "files": {
+  "sounds/common/explosions/explo_gas_can_01.vsnd_c": -1,
+  "sounds/items/weapon_hegrenade_throw.vsnd_c": 6720,
+  "sounds/music/valve_cs2_01/bombplanted.vsnd_c": 672574,
+  "sounds/music/valve_cs2_01/lostround.vsnd_c": 174977,
+  "sounds/music/valve_cs2_01/startround_01.vsnd_c": 589923,
+  "sounds/music/valve_cs2_01/wonround.vsnd_c": 102377,
+  "sounds/physics/concrete/concrete_impact_bullet1.vsnd_c": 68720,
+  "sounds/physics/concrete/concrete_impact_bullet2.vsnd_c": 144830,
+  "sounds/physics/concrete/concrete_impact_bullet3.vsnd_c": 150098,
+  "sounds/physics/concrete/concrete_impact_bullet4.vsnd_c": 114538,
+  "sounds/physics/flesh/flesh_impact_bullet1.vsnd_c": 81746,
+  "sounds/physics/flesh/flesh_impact_bullet2.vsnd_c": 100714,
+  "sounds/physics/flesh/flesh_impact_bullet3.vsnd_c": 88978,
+  "sounds/physics/flesh/flesh_impact_bullet4.vsnd_c": 96490,
+  "sounds/physics/flesh/flesh_impact_bullet5.vsnd_c": 103062,
+  "sounds/physics/glass/glass_bottle_impact_hard1.vsnd_c": 21848,
+  "sounds/physics/glass/glass_bottle_impact_hard2.vsnd_c": 23662,
+  "sounds/physics/glass/glass_bottle_impact_hard3.vsnd_c": 25742,
+  "sounds/physics/surfaces/mud_impact_bullet1.vsnd_c": 49481,
+  "sounds/physics/surfaces/mud_impact_bullet2.vsnd_c": 68338,
+  "sounds/physics/surfaces/mud_impact_bullet3.vsnd_c": 45874,
+  "sounds/physics/surfaces/mud_impact_bullet4.vsnd_c": 47698,
+  "sounds/physics/weapons/weapon_incendiary_impact_01.vsnd_c": 39464,
+  "sounds/physics/weapons/weapon_incendiary_impact_02.vsnd_c": 47088,
+  "sounds/physics/weapons/weapon_incendiary_impact_03.vsnd_c": 37184,
+  "sounds/physics/weapons/weapon_incendiary_impact_04.vsnd_c": 32228,
+  "sounds/player/footsteps/concrete_ct_01.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_02.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_03.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_04.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_05.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_06.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_07.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_08.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_09.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_10.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_11.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_12.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_13.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_14.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_15.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_16.vsnd_c": 50308,
+  "sounds/player/footsteps/concrete_ct_17.vsnd_c": 50308,
+  "sounds/player/footsteps/jump_launch_01.vsnd_c": 48368,
+  "sounds/player/footsteps/land_concrete_01.vsnd_c": 30824,
+  "sounds/player/footsteps/land_metal_solid_01.vsnd_c": 53668,
+  "sounds/player/footsteps/land_metal_solid_02.vsnd_c": 30328,
+  "sounds/player/footsteps/land_metal_solid_03.vsnd_c": 23864,
+  "sounds/player/footsteps/land_metal_solid_04.vsnd_c": 66966,
+  "sounds/player/footsteps/land_metal_solid_05.vsnd_c": 42880,
+  "sounds/player/footsteps/land_metal_solid_06.vsnd_c": 24552,
+  "sounds/player/footsteps/land_sand_01.vsnd_c": 66950,
+  "sounds/player/footsteps/land_sand_02.vsnd_c": 66950,
+  "sounds/player/footsteps/land_sand_03.vsnd_c": 66950,
+  "sounds/player/footsteps/land_sand_04.vsnd_c": 66950,
+  "sounds/player/footsteps/land_sand_05.vsnd_c": 66950,
+  "sounds/player/footsteps/land_sand_06.vsnd_c": 66950,
+  "sounds/player/footsteps/land_tile_01.vsnd_c": 33116,
+  "sounds/player/footsteps/land_tile_02.vsnd_c": 23614,
+  "sounds/player/footsteps/land_tile_03.vsnd_c": 63370,
+  "sounds/player/footsteps/land_tile_04.vsnd_c": 28024,
+  "sounds/player/footsteps/land_tile_05.vsnd_c": 24960,
+  "sounds/player/footsteps/metal_solid_35.vsnd_c": 40240,
+  "sounds/player/footsteps/metal_solid_36.vsnd_c": 38128,
+  "sounds/player/footsteps/metal_solid_37.vsnd_c": 32830,
+  "sounds/player/footsteps/metal_solid_38.vsnd_c": 34192,
+  "sounds/player/footsteps/metal_solid_39.vsnd_c": 39318,
+  "sounds/player/footsteps/metal_solid_40.vsnd_c": 48108,
+  "sounds/player/footsteps/metal_solid_41.vsnd_c": 53668,
+  "sounds/player/footsteps/metal_solid_42.vsnd_c": 48412,
+  "sounds/player/footsteps/metal_solid_43.vsnd_c": 40736,
+  "sounds/player/footsteps/metal_solid_44.vsnd_c": 49444,
+  "sounds/player/footsteps/metal_solid_45.vsnd_c": 41816,
+  "sounds/player/footsteps/metal_solid_46.vsnd_c": 43416,
+  "sounds/player/footsteps/metal_solid_47.vsnd_c": 45512,
+  "sounds/player/footsteps/metal_solid_48.vsnd_c": 48136,
+  "sounds/player/footsteps/metal_solid_49.vsnd_c": 46960,
+  "sounds/player/footsteps/metal_solid_50.vsnd_c": 47920,
+  "sounds/player/footsteps/sand_01.vsnd_c": 44900,
+  "sounds/player/footsteps/sand_02.vsnd_c": 44900,
+  "sounds/player/footsteps/sand_03.vsnd_c": 66950,
+  "sounds/player/footsteps/sand_04.vsnd_c": 66950,
+  "sounds/player/footsteps/sand_05.vsnd_c": 44900,
+  "sounds/player/footsteps/sand_06.vsnd_c": 44900,
+  "sounds/player/footsteps/sand_07.vsnd_c": 66950,
+  "sounds/player/footsteps/sand_08.vsnd_c": 66950,
+  "sounds/player/footsteps/sand_09.vsnd_c": 66950,
+  "sounds/player/footsteps/sand_10.vsnd_c": 89000,
+  "sounds/player/footsteps/sand_11.vsnd_c": 66950,
+  "sounds/player/footsteps/sand_12.vsnd_c": 73040,
+  "sounds/player/footsteps/tile_01.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_02.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_03.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_04.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_05.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_06.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_07.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_08.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_09.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_10.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_11.vsnd_c": 35270,
+  "sounds/player/footsteps/tile_12.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_13.vsnd_c": 44900,
+  "sounds/player/footsteps/tile_14.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_01.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_02.vsnd_c": 44728,
+  "sounds/player/footsteps/wood_03.vsnd_c": 45244,
+  "sounds/player/footsteps/wood_04.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_05.vsnd_c": 44728,
+  "sounds/player/footsteps/wood_06.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_07.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_08.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_09.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_10.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_11.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_12.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_13.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_14.vsnd_c": 44900,
+  "sounds/player/footsteps/wood_15.vsnd_c": 66950,
+  "sounds/player/headshot_armor_e1.vsnd_c": 72144,
+  "sounds/player/headshot_noarmor_01.vsnd_c": 186036,
+  "sounds/player/headshot_noarmor_02.vsnd_c": 217788,
+  "sounds/player/headshot_noarmor_03.vsnd_c": 192244,
+  "sounds/player/headshot_noarmor_04.vsnd_c": 204260,
+  "sounds/player/headshot_noarmor_05.vsnd_c": 205872,
+  "sounds/player/kevlar1.vsnd_c": 21696,
+  "sounds/player/kevlar2.vsnd_c": 31972,
+  "sounds/player/kevlar3.vsnd_c": 34674,
+  "sounds/player/kevlar4.vsnd_c": 33152,
+  "sounds/player/kevlar5.vsnd_c": 32986,
+  "sounds/player/land2.vsnd_c": 12867,
+  "sounds/player/land3.vsnd_c": 16520,
+  "sounds/player/land4.vsnd_c": 14537,
+  "sounds/player/player_damagebody_04.vsnd_c": 41792,
+  "sounds/player/player_damagebody_05.vsnd_c": 31360,
+  "sounds/player/player_damagebody_06.vsnd_c": 30064,
+  "sounds/player/player_damagebody_07.vsnd_c": 55294,
+  "sounds/player/player_damagebody_08.vsnd_c": 21528,
+  "sounds/vo/announcer/cs2_classic/bombdef.vsnd_c": 39968,
+  "sounds/vo/announcer/cs2_classic/bombpl.vsnd_c": 34089,
+  "sounds/vo/announcer/cs2_classic/ctwin.vsnd_c": 42197,
+  "sounds/vo/announcer/cs2_classic/terwin.vsnd_c": 37084,
+  "sounds/weapons/ak47/ak47_01.vsnd_c": 432687,
+  "sounds/weapons/ak47/ak47_02.vsnd_c": 344019,
+  "sounds/weapons/ak47/ak47_04.vsnd_c": 404455,
+  "sounds/weapons/ak47/ak47_boltpull_01.vsnd_c": 34422,
+  "sounds/weapons/ak47/ak47_clipout_01.vsnd_c": 65492,
+  "sounds/weapons/ak47/ak47_distant.vsnd_c": 354084,
+  "sounds/weapons/ak47/ak47_draw.vsnd_c": 41157,
+  "sounds/weapons/awp/awp_01.vsnd_c": 729164,
+  "sounds/weapons/awp/awp_02.vsnd_c": 729164,
+  "sounds/weapons/awp/awp_boltback.vsnd_c": 30164,
+  "sounds/weapons/awp/awp_boltforward.vsnd_c": 19734,
+  "sounds/weapons/awp/awp_clipin.vsnd_c": 7361,
+  "sounds/weapons/awp/awp_clipout.vsnd_c": 5069,
+  "sounds/weapons/awp/awp_distant.vsnd_c": 890884,
+  "sounds/weapons/awp/awp_draw.vsnd_c": 65750,
+  "sounds/weapons/awp/zoom.vsnd_c": 41768,
+  "sounds/weapons/c4/c4_beep2.vsnd_c": 14152,
+  "sounds/weapons/c4/c4_disarmfinish.vsnd_c": 265400,
+  "sounds/weapons/c4/c4_disarmstart.vsnd_c": 221300,
+  "sounds/weapons/c4/c4_draw_01.vsnd_c": 12173,
+  "sounds/weapons/c4/c4_draw_04.vsnd_c": 12366,
+  "sounds/weapons/c4/c4_draw_06.vsnd_c": 12174,
+  "sounds/weapons/c4/c4_draw_07.vsnd_c": 11756,
+  "sounds/weapons/c4/c4_explode1.vsnd_c": 1055524,
+  "sounds/weapons/c4/c4_initiate.vsnd_c": 338224,
+  "sounds/weapons/c4/c4_plant.vsnd_c": 48866,
+  "sounds/weapons/c4/key_press1.vsnd_c": 5382,
+  "sounds/weapons/c4/key_press2.vsnd_c": 6428,
+  "sounds/weapons/c4/key_press3.vsnd_c": 5889,
+  "sounds/weapons/c4/key_press4.vsnd_c": 7574,
+  "sounds/weapons/c4/key_press5.vsnd_c": 6426,
+  "sounds/weapons/c4/key_press6.vsnd_c": 7153,
+  "sounds/weapons/c4/key_press7.vsnd_c": 5800,
+  "sounds/weapons/clipempty_pistol.vsnd_c": 12128,
+  "sounds/weapons/clipempty_rifle.vsnd_c": 12128,
+  "sounds/weapons/deagle/de_clipout.vsnd_c": 24588,
+  "sounds/weapons/deagle/de_draw.vsnd_c": 88106,
+  "sounds/weapons/deagle/de_slideback.vsnd_c": 17232,
+  "sounds/weapons/deagle/de_slideforward.vsnd_c": 12426,
+  "sounds/weapons/deagle/deagle-1-distant.vsnd_c": 246122,
+  "sounds/weapons/deagle/deagle_01.vsnd_c": 544152,
+  "sounds/weapons/deagle/deagle_02.vsnd_c": 544112,
+  "sounds/weapons/decoy/decoy_draw_01.vsnd_c": 9139,
+  "sounds/weapons/decoy/decoy_draw_02.vsnd_c": 11123,
+  "sounds/weapons/decoy/decoy_draw_03.vsnd_c": 11540,
+  "sounds/weapons/decoy/decoy_throw_06.vsnd_c": 8613,
+  "sounds/weapons/decoy/pinpull.vsnd_c": 70796,
+  "sounds/weapons/flashbang/flashbang_explode1.vsnd_c": 426464,
+  "sounds/weapons/flashbang/flashbang_explode1_distant.vsnd_c": 469296,
+  "sounds/weapons/flashbang/flashbang_explode2.vsnd_c": 426652,
+  "sounds/weapons/flashbang/flashbang_explode2_distant.vsnd_c": 461836,
+  "sounds/weapons/flashbang/flashbang_throw_03.vsnd_c": 9654,
+  "sounds/weapons/flashbang/grenade_hit1.vsnd_c": 68600,
+  "sounds/weapons/flashbang/pinpull.vsnd_c": 70796,
+  "sounds/weapons/foley/gear_throw_07.vsnd_c": 16026,
+  "sounds/weapons/foley/gear_throw_10.vsnd_c": 15705,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_01.vsnd_c": 33184,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_03.vsnd_c": 82252,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_04.vsnd_c": 132816,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_05.vsnd_c": 64712,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_06.vsnd_c": 66936,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_crack_07.vsnd_c": 25716,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_01.vsnd_c": 173032,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_02.vsnd_c": 140208,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_03.vsnd_c": 61308,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_04.vsnd_c": 53948,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_05.vsnd_c": 76156,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_06.vsnd_c": 94440,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_07.vsnd_c": 32700,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_08.vsnd_c": 73020,
+  "sounds/weapons/fx/nearmiss/bulletby_supersonic_tail_09.vsnd_c": 56348,
+  "sounds/weapons/fx/rics/bullet_ric_01.vsnd_c": 138372,
+  "sounds/weapons/fx/rics/bullet_ric_02.vsnd_c": 120008,
+  "sounds/weapons/fx/rics/bullet_ric_03.vsnd_c": 98736,
+  "sounds/weapons/fx/rics/bullet_ric_04.vsnd_c": 117744,
+  "sounds/weapons/fx/rics/bullet_ric_05.vsnd_c": 212948,
+  "sounds/weapons/fx/rics/bullet_ric_06.vsnd_c": 142656,
+  "sounds/weapons/glock18/glock18-1-distant.vsnd_c": 203744,
+  "sounds/weapons/glock18/glock_02.vsnd_c": 337816,
+  "sounds/weapons/glock18/glock_clipin.vsnd_c": 27372,
+  "sounds/weapons/glock18/glock_clipout.vsnd_c": 27372,
+  "sounds/weapons/glock18/glock_draw.vsnd_c": 88106,
+  "sounds/weapons/glock18/glock_element_click_01.vsnd_c": 386016,
+  "sounds/weapons/glock18/glock_element_crb_01.vsnd_c": 288048,
+  "sounds/weapons/glock18/glock_element_crb_02.vsnd_c": 170016,
+  "sounds/weapons/glock18/glock_slideback.vsnd_c": 22866,
+  "sounds/weapons/glock18/glock_sliderelease.vsnd_c": 30420,
+  "sounds/weapons/hegrenade/he_bounce-1.vsnd_c": 131336,
+  "sounds/weapons/hegrenade/hegrenade_detonate_02.vsnd_c": 858704,
+  "sounds/weapons/hegrenade/hegrenade_detonate_03.vsnd_c": 817024,
+  "sounds/weapons/hegrenade/hegrenade_distant_detonate_01.vsnd_c": 401392,
+  "sounds/weapons/hegrenade/hegrenade_distant_detonate_02.vsnd_c": 401392,
+  "sounds/weapons/hegrenade/hegrenade_distant_detonate_03.vsnd_c": 401390,
+  "sounds/weapons/hegrenade/hegrenade_draw_01.vsnd_c": 10288,
+  "sounds/weapons/hegrenade/hegrenade_draw_06.vsnd_c": 9869,
+  "sounds/weapons/hegrenade/pinpull.vsnd_c": 70796,
+  "sounds/weapons/hkp2000/hkp2000-1-distant.vsnd_c": 193448,
+  "sounds/weapons/hkp2000/hkp2000_01.vsnd_c": 386676,
+  "sounds/weapons/hkp2000/hkp2000_02.vsnd_c": 397700,
+  "sounds/weapons/hkp2000/hkp2000_03.vsnd_c": 397700,
+  "sounds/weapons/hkp2000/hkp2000_clipin.vsnd_c": 4129,
+  "sounds/weapons/hkp2000/hkp2000_clipout.vsnd_c": 23488,
+  "sounds/weapons/hkp2000/hkp2000_draw.vsnd_c": 88106,
+  "sounds/weapons/hkp2000/hkp2000_slideback.vsnd_c": 29652,
+  "sounds/weapons/hkp2000/hkp2000_sliderelease.vsnd_c": 14496,
+  "sounds/weapons/incgrenade/inc_grenade_bounce_m.vsnd_c": 46860,
+  "sounds/weapons/incgrenade/inc_grenade_throw_fire_01.vsnd_c": 34169,
+  "sounds/weapons/incgrenade/inc_grenade_throw_fire_02.vsnd_c": 35419,
+  "sounds/weapons/incgrenade/inc_grenade_throw_fire_03.vsnd_c": 50222,
+  "sounds/weapons/incgrenade/pinpull.vsnd_c": 70796,
+  "sounds/weapons/knife/knife_deploy1.vsnd_c": 28874,
+  "sounds/weapons/knife/knife_hit1.vsnd_c": 55082,
+  "sounds/weapons/knife/knife_hit2.vsnd_c": 27112,
+  "sounds/weapons/knife/knife_hit_01.vsnd_c": 17472,
+  "sounds/weapons/knife/knife_hit_02.vsnd_c": 13614,
+  "sounds/weapons/knife/knife_hit_03.vsnd_c": 15701,
+  "sounds/weapons/knife/knife_hit_04.vsnd_c": 29983,
+  "sounds/weapons/knife/knife_hit_05.vsnd_c": 20809,
+  "sounds/weapons/knife/knife_slash1.vsnd_c": 17040,
+  "sounds/weapons/knife/knife_slash2.vsnd_c": 15464,
+  "sounds/weapons/m4a1/m4a1_01.vsnd_c": 563868,
+  "sounds/weapons/m4a1/m4a1_02.vsnd_c": 328876,
+  "sounds/weapons/m4a1/m4a1_boltback.vsnd_c": 8613,
+  "sounds/weapons/m4a1/m4a1_boltforward.vsnd_c": 8509,
+  "sounds/weapons/m4a1/m4a1_clipin.vsnd_c": 4009,
+  "sounds/weapons/m4a1/m4a1_clipout.vsnd_c": 8508,
+  "sounds/weapons/m4a1/m4a1_distant_01.vsnd_c": 325702,
+  "sounds/weapons/m4a1/m4a1_draw.vsnd_c": 17769,
+  "sounds/weapons/m4a1/m4a1_silencer_01.vsnd_c": 249584,
+  "sounds/weapons/magazine_slide_01.vsnd_c": 4529,
+  "sounds/weapons/molotov/fire_ignite_1.vsnd_c": 168240,
+  "sounds/weapons/molotov/fire_ignite_4.vsnd_c": 162608,
+  "sounds/weapons/molotov/fire_ignite_5.vsnd_c": 134064,
+  "sounds/weapons/molotov/fire_loop_1.vsnd_c": 401778,
+  "sounds/weapons/molotov/molotov_draw_03.vsnd_c": 15503,
+  "sounds/weapons/molotov/molotov_extinguish.vsnd_c": 226486,
+  "sounds/weapons/molotov/molotov_throw_01.vsnd_c": 11323,
+  "sounds/weapons/molotov/molotov_throw_02.vsnd_c": 15178,
+  "sounds/weapons/molotov/molotov_throw_03.vsnd_c": 12886,
+  "sounds/weapons/molotov/molotov_throw_04.vsnd_c": 11740,
+  "sounds/weapons/molotov/molotov_throw_05.vsnd_c": 13720,
+  "sounds/weapons/molotov/molotov_throw_06.vsnd_c": 9654,
+  "sounds/weapons/smokegrenade/can_01.vsnd_c": 15018,
+  "sounds/weapons/smokegrenade/can_02.vsnd_c": 12860,
+  "sounds/weapons/smokegrenade/grenade_hit1.vsnd_c": 68600,
+  "sounds/weapons/smokegrenade/pinpull.vsnd_c": 70796,
+  "sounds/weapons/smokegrenade/sg_explode_distant.vsnd_c": 619560,
+  "sounds/weapons/smokegrenade/smoke_emit.vsnd_c": 2501592,
+  "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_01.vsnd_c": 15096,
+  "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_03.vsnd_c": 19692,
+  "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_04.vsnd_c": 12389,
+  "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_05.vsnd_c": 15937,
+  "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_06.vsnd_c": 15413,
+  "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_08.vsnd_c": 14162,
+  "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_09.vsnd_c": 11136,
+  "sounds/weapons/smokegrenade/smoke_grenade_draw_exp_11.vsnd_c": 11138,
+  "sounds/weapons/smokegrenade/smoke_grenade_throw_04.vsnd_c": 8300,
+  "sounds/weapons/ssg08/ssg08_01.vsnd_c": 397700,
+  "sounds/weapons/ssg08/ssg08_boltback.vsnd_c": 7883,
+  "sounds/weapons/ssg08/ssg08_boltforward.vsnd_c": 7885,
+  "sounds/weapons/ssg08/ssg08_clipin.vsnd_c": 4444,
+  "sounds/weapons/ssg08/ssg08_clipout.vsnd_c": 7361,
+  "sounds/weapons/ssg08/ssg08_distant.vsnd_c": 191916,
+  "sounds/weapons/ssg08/ssg08_draw.vsnd_c": 18702,
+  "sounds/weapons/ssg08/ssg08_zoom_in.vsnd_c": 42340,
+  "sounds/weapons/usp/usp_01.vsnd_c": 284264,
+  "sounds/weapons/usp/usp_02.vsnd_c": 285008,
+  "sounds/weapons/usp/usp_03.vsnd_c": 284636,
+  "sounds/weapons/usp/usp_clipin_02.vsnd_c": 6110,
+  "sounds/weapons/usp/usp_clipout_01.vsnd_c": 6630,
+  "sounds/weapons/usp/usp_draw.vsnd_c": 88106,
+  "sounds/weapons/usp/usp_slideback_01.vsnd_c": 4546,
+  "sounds/weapons/usp/usp_sliderelease_01.vsnd_c": 6112,
+  "sounds/weapons/weapon_zoom_out_03.vsnd_c": 95488
+ },
+ "missing": []
+}
