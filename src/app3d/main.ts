@@ -18,7 +18,8 @@
  * sensitivity (mouse 2 with the AWP / SSG 08); viewmodel_fov 60 in its own camera; the eye eases between 64 and 46
  * through a duck. Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b);
  * the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
- * shake, and the crosshair sits where the next bullet goes.
+ * shake; the crosshair stays at the screen centre (CS2's cl_crosshair_recoil 0; "Crosshair follows recoil" puts it
+ * where the next bullet goes).
  *
  * URL parameters: `?seed=<int>` (default 1), `?human=cart` plays cart from the start, `?sens=<CS2 sensitivity>`
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
@@ -46,7 +47,7 @@ import { Hud3D } from './hud3d';
 import { runBench } from './bench3d';
 import { FPS_PRESETS, FrameDriver, parseFpsLimit, type FpsLimit } from './frame-driver';
 import { BucketRate, FrameProbe, Ring, displayHz, meterText } from './perf';
-import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
+import { DEFAULT_SENSITIVITY, crosshairOffsetPx, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
 import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
@@ -252,6 +253,11 @@ class App3D {
    * setting, 0–1): 0 = the screen stays still and only the crosshair climbs; 1 = the camera follows the bullets.
    */
   private recoilTracking = VIEW_RECOIL_TRACKING;
+  /**
+   * W1 (#32, #77): CS2's cl_crosshair_recoil (default 0: the crosshair stays at the centre, the view kicks by the
+   * recoil tracking; the bullet still goes where the aim punch puts it). The "Crosshair follows recoil" setting.
+   */
+  private crosshairRecoil = false;
   /** The camera's duck amount (0..1, view-cs2.ts duckStep). */
   private duck = 0;
   private session: Session;
@@ -846,7 +852,7 @@ class App3D {
       eye = vp === null ? this.freePos : { x: vp.x, y: vp.y, z: vp.z + this.eyeZ };
       if (firstPerson) {
         // H2b: the camera follows `recoilTracking` (view_recoil_tracking, default 0.45) of the recoil plus the screen
-        // shake; the crosshair sits where the next bullet goes (view + aim punch × 2).
+        // shake; `aim` is where the next bullet goes (view + aim punch × 2), the crosshair only with follow-recoil on.
         const v = this.aimView(human as PlayerId, this.look);
         yaw = v.camera.yaw;
         pitch = v.camera.pitch;
@@ -951,8 +957,9 @@ class App3D {
     const canTake = human === null && s.takeControlBlocked(this.takeTarget()) === null && !this.touchOnly;
     const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake, this.takeTarget() ?? 'cart');
     const r = this.renderer.renderer.domElement;
-    // The crosshair sits where the next bullet goes (off centre only with a punch; clientHeight read only then).
-    const off = (firstPerson || specPov) && !scoped && (aim.yaw !== yaw || aim.pitch !== pitch) ? aimOffsetPx({ yaw, pitch }, aim, vfovDeg, r.clientHeight) : { x: 0, y: 0 };
+    // W1 (#32, #77): the crosshair stays at the centre (CS2's cl_crosshair_recoil 0: it shows the view, the bullet goes
+    // where the aim punch puts it); with "Crosshair follows recoil" it sits where the next bullet goes.
+    const off = (firstPerson || specPov) && !scoped ? crosshairOffsetPx(this.crosshairRecoil, { yaw, pitch }, aim, (c, a) => aimOffsetPx(c, a, vfovDeg, r.clientHeight)) : { x: 0, y: 0 };
     const radarTeam = firstPerson ? (humanPawn?.team ?? null) : viewTeam;
     // P1: the HUD (DOM) at most once per sim tick or every 15.6 ms, not on every frame of an uncapped loop.
     const hudDue = exact || o.tick !== this.hudTick || now - this.hudAt >= TICK_MS || now < this.hudAt;
@@ -1063,7 +1070,8 @@ class App3D {
   /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
   private loadSettings(sensFromUrl: boolean): void {
     try {
-      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatency?: boolean; res?: number; recoilTracking?: number };
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatency?: boolean; res?: number; recoilTracking?: number; crosshairRecoil?: boolean };
+      if (typeof j.crosshairRecoil === 'boolean') this.crosshairRecoil = j.crosshairRecoil;
       this.fpsLimit = parseFpsLimit(j.fps);
       if (typeof j.lowLatency === 'boolean') this.lowLatency = j.lowLatency;
       if (typeof j.res === 'number' && Number.isFinite(j.res)) this.resScale = clamp(j.res, 0.25, 2);
@@ -1079,7 +1087,7 @@ class App3D {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatency: this.lowLatency, res: this.resScale }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatency: this.lowLatency, res: this.resScale, crosshairRecoil: this.crosshairRecoil }));
     } catch {
       // ignore
     }
@@ -1104,6 +1112,15 @@ class App3D {
     field('set-zoom', () => this.zoomRatio, (v) => (this.zoomRatio = clamp(v, 0.01, 3)));
     field('set-vmfov', () => this.viewmodelFov, (v) => (this.viewmodelFov = clamp(v, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX)));
     field('set-tracking', () => this.recoilTracking, (v) => (this.recoilTracking = clamp(v, 0, 1)));
+    const xhair = document.getElementById('set-xhair-recoil');
+    if (xhair instanceof HTMLInputElement) {
+      xhair.checked = this.crosshairRecoil;
+      xhair.addEventListener('change', () => {
+        this.crosshairRecoil = xhair.checked;
+        this.saveSettings();
+        xhair.blur();
+      });
+    }
     this.wirePerfSettings(field);
   }
 

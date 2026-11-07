@@ -61,3 +61,14 @@ export function flyStep(pos: { x: number; y: number; z: number }, look: Look, c:
   const k = speed * dt * (c.walk ? 3 : 1);
   return { x: pos.x + (fx * m.forward + rx * m.side) * k, y: pos.y + (fy * m.forward + ry * m.side) * k, z: pos.z + (fz * m.forward + up) * k };
 }
+
+/**
+ * W1 (#32, #77): the crosshair's offset from the screen centre in pixels. CS2's default `cl_crosshair_recoil 0`: the
+ * crosshair stays at the centre while the view kicks (by `view_recoil_tracking`); the bullet still leaves along
+ * view + aim punch × weapon_recoil_scale, so the crosshair shows the view, not the bullet. `follow` (the "Crosshair
+ * follows recoil" setting, cl_crosshair_recoil 1) puts it where the next bullet goes (`offset` computes that).
+ */
+export function crosshairOffsetPx(follow: boolean, camera: Look, aim: Look, offset: (camera: Look, aim: Look) => { x: number; y: number }): { x: number; y: number } {
+  if (!follow || (camera.yaw === aim.yaw && camera.pitch === aim.pitch)) return { x: 0, y: 0 };
+  return offset(camera, aim);
+}

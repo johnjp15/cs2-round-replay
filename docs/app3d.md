@@ -79,7 +79,8 @@ docs/app.md "Ctrl+W, fullscreen and key bindings".
   view angles (interpolated), their viewmodel (the box gun, flashing when they fire), their HP / armor / weapon /
   ammo in the HUD, and their crosshair at their aim, moving with the recoil-tracked camera, the scope overlay
   instead while scoped. The angles, crosshair and scope come from `Sim3DHost.aimView(id, view, tracking)` (H2b's
-  weapon mechanics: camera = view + tracking × the recoil + the screen shake, crosshair = where the next bullet goes;
+  weapon mechanics: camera = view + tracking × the recoil + the screen shake, crosshair = the screen centre, or where
+  the next bullet goes with Crosshair follows recoil (W1);
   `spectatedView` in main.ts, with the viewer's Recoil tracking setting). The crosshair offset is the projection of the aim
   direction through the camera (`aimOffsetPx`). No crosshair in third person or free fly.
 - **Who**: watching, every living player in id order; dead, your living teammates (everyone once they're dead).
@@ -129,7 +130,7 @@ code isn't public; it shows the same "?" and fading X, but the timings are **unv
 | Scoped FOVs | AWP 40 / 10, SSG 08 40 / 15, AUG and SG 553 45, autosnipers 40 / 15 (4:3 degrees) | CS:GO weapon data `zoom_fov_1/2` as documented by players | **unverified** for CS2; H2's table replaces them |
 | Zoomed sensitivity | sensitivity × (zoomed FOV / 90) × zoom_sensitivity_ratio (linear in the FOV) | [SDK] view.cpp (`m_flFOVSensitivityAdjust`); [CVARS] `zoom_sensitivity_ratio 1` (0.01–3) | rule: Source; the default: yes |
 | viewmodel_fov | 60, 60–68 (a 4:3 FOV, hor+ like the world's) | [CVARS] `viewmodel_fov 60 (min 60, max 68)`; [SDK] `fovViewmodel = ScaleFOVByWidthRatio(...)` | yes (CS:GO allowed 54) |
-| Aim punch | bullets: view + punch × weapon_recoil_scale (2) + the inaccuracy cone; camera: view + punch × 2 × view_recoil_tracking (default 0.45, the **Recoil tracking** setting, 0–1) + the view punch (screen shake); crosshair: at the bullets' direction (view + punch × 2). The punch is H2's (src/engine/weapons), in the host since H2b | CS:GO cvars | **unverified** (both are hidden in CS2: not in the dump) |
+| Aim punch | bullets: view + punch × weapon_recoil_scale (2) + the inaccuracy cone; camera: view + punch × 2 × view_recoil_tracking (default 0.45, the **Recoil tracking** setting, 0–1) + the view punch (screen shake); crosshair: at the screen centre (cl_crosshair_recoil 0, W1), or at the bullets' direction (view + punch × 2) with **Crosshair follows recoil**. The punch is H2's (src/engine/weapons), in the host since H2b | CS:GO cvars | **unverified** (both are hidden in CS2: not in the dump) |
 | Eye height | 64 standing, 46 ducked | Source view offsets (`damage.eyeHeight`) | as the sim |
 | Duck transition (camera) | 0.4 s down, 0.2 s up, SimpleSpline (3x² − 2x³) | [SDK] TIME_TO_DUCK, TIME_TO_UNDUCK, SetDuckedEyeOffset | **unverified** for CS2 (the shared movement ducks the hull at once; M1 owns that) |
 
@@ -144,12 +145,20 @@ count. DPI changes counts per inch, not this formula (cm/360 = 360 / (0.022 × s
 the view, tag on hits and own the scope; the app only draws what `Sim3DHost.aimView` returns, so nothing in the
 headless host depends on the view code.
 
+**The crosshair shows the view, not the bullet (W1, #32 / #77).** CS2's default `cl_crosshair_recoil 0`: the
+crosshair stays at the centre of the screen while the view kicks; the bullets still go where CS2 puts them (view +
+aim punch × weapon_recoil_scale + the cone: the host's `fireShot`, unchanged), so in a spray they land above the
+crosshair, exactly as in CS2. **Crosshair follows recoil** (checkbox, off by default; cl_crosshair_recoil 1) draws it
+where the next bullet goes instead (input3d.ts `crosshairOffsetPx`; kept in the settings as `crosshairRecoil`). The
+same holds for a spectated player's first-person crosshair. `npm run check:browser:3d:crosshair` (after
+`npm run build:3d`) holds mouse 1 for 10+ AK shots and checks the crosshair's style and on-screen box never change
+while the camera kicks, then that it moves with the setting on.
+
 **Recoil tracking** (settings field, 0–1, default 0.45; CS:GO's `view_recoil_tracking`, hidden in CS2): how much of
-the recoil the camera follows, i.e. "how much the screen moves vs how much the crosshair moves". The bullets don't
-change: they always go to view + punch × 2, and the crosshair is drawn there. At 0.45 (CS:GO / CS2 feel) the camera
-climbs with 45 % of the spray and the crosshair climbs the rest on screen; at 0 the screen stays still (only the
-screen shake) and the crosshair alone climbs the full pattern; at 1 the camera follows the bullets and the crosshair
-stays at the centre. Kept in localStorage with the sensitivity (`recoilTracking`). `npm run check:browser:3d` checks
+the recoil the camera follows. The bullets don't change: they always go to view + punch × 2. At 0.45 (CS:GO / CS2
+feel) the camera climbs with 45 % of the spray and the bullets climb the rest above the crosshair; at 0 the screen
+stays still (only the screen shake); at 1 the camera follows the bullets, which then land on the crosshair. With
+Crosshair follows recoil on, the crosshair marks the bullets at every setting. Kept in localStorage with the sensitivity (`recoilTracking`). `npm run check:browser:3d` checks
 the kick and recovery (screenshot app3d-g-spray-kick.jpg) and the 0 / 1 ends of the setting.
 
 ## Viewmodels (A1)
