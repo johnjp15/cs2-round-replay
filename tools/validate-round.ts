@@ -50,6 +50,26 @@ export function validateRound(round: RoundData, csvRows?: number): string[] {
       const b = tr.yaw[i];
       if (a !== undefined && b !== undefined && !(b.t > a.t)) errs.push(`${id}: yaw not strictly increasing at ${b.t}`);
     }
+    // V2: fitted views (docs/viewfit.md): only while the camera watches this player, inside the track, by time.
+    const pov = round.pov.filter((p) => p.target === id);
+    const view = tr.view ?? [];
+    view.forEach((v, i) => {
+      if (v.tick !== toTick(v.t)) errs.push(`${id}: view ${i} tick ${v.tick} != round(${v.t} * 64)`);
+      if (i > 0 && !(v.t > (view[i - 1] as typeof v).t)) errs.push(`${id}: view not strictly increasing at ${v.t}`);
+      if (!Number.isFinite(v.yaw) || v.yaw <= -180 || v.yaw > 180) errs.push(`${id}: view yaw ${v.yaw} at ${v.t} outside (-180, 180]`);
+      if (v.pitch !== null && (!Number.isFinite(v.pitch) || Math.abs(v.pitch) > 89)) errs.push(`${id}: view pitch ${v.pitch} at ${v.t} outside ±89`);
+      if (v.source !== 'video' && v.source !== 'radar') errs.push(`${id}: view source ${String(v.source)} at ${v.t}`);
+      if (v.source === 'radar' && v.pitch !== null) errs.push(`${id}: radar view with a pitch at ${v.t}`);
+      if (!CONFIDENCES.includes(v.confidence)) errs.push(`${id}: bad view confidence ${v.confidence} at ${v.t}`);
+      if (v.confidence === 'inferred' ? v.source !== 'video' : false) errs.push(`${id}: inferred view must be a held video view at ${v.t}`);
+      if (v.t > tr.endT + 1e-9) errs.push(`${id}: view at ${v.t} after the track ends (${tr.endT})`);
+      // Watched at t; a held (inferred) view may precede its segment by up to 0.6 s.
+      const lead = v.confidence === 'inferred' ? 0.6 : 0;
+      if (!pov.some((p) => v.t >= p.t0 - lead - 1e-9 && v.t <= p.t1 + 1e-9)) errs.push(`${id}: view at ${v.t} outside every camera segment of ${id}`);
+    });
+    tr.samples.forEach((s) => {
+      if (s.refined !== undefined && s.refined !== 'viewfit') errs.push(`${id}: bad refined tag ${String(s.refined)} at t=${s.t}`);
+    });
   }
   for (const id of trackIds) if (!ids.includes(id as (typeof ids)[number])) errs.push(`track ${id} has no player`);
 

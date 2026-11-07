@@ -143,6 +143,56 @@ class GridFrame:
         self.contrast = float(np.sqrt(self.total / max(len(self.col), 1)))
 
 
+# Cube faces for the label cube: camera-frame (forward, left, up) basis per face, as world axes rows.
+_FACES = [
+    np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], float),  # +x
+    np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]], float),  # -x
+    np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]], float),  # +y
+    np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]], float),  # -y
+    np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], float),  # +z (up)
+    np.array([[0, 0, -1], [0, 1, 0], [1, 0, 0]], float),  # -z (down)
+]
+
+# Region labels are hashed into this many bins per candidate (a view sees a few hundred regions at most).
+LABEL_BINS = 4093
+DEPTH_EDGES = np.array([300.0, 900.0, 2500.0])
+
+
+class LabelCube:
+    """The labels around one eye as a cube map, so every rotation of a view from that eye is a lookup (the visible
+    surfaces from a fixed eye don't depend on the rotation)."""
+
+    def __init__(self, scene: Scene, region: np.ndarray, eye: np.ndarray, face: int = 160):
+        cam = Camera(face, face, vfov_deg=90.0)
+        vv, uu = np.mgrid[0:face, 0:face]
+        dc = cam.pixel_dirs_cam(uu + 0.5, vv + 0.5)
+        self.face = face
+        dirs = np.concatenate([(dc @ b).reshape(-1, 3) for b in _FACES])
+        dist, prim = scene.cast(np.broadcast_to(eye, dirs.shape), dirs)
+        db = np.searchsorted(DEPTH_EDGES, dist)
+        self.labels = np.where(prim >= 0, region[np.maximum(prim, 0)] * 4 + db, 0).reshape(6, face, face)
+
+    def lookup(self, d: np.ndarray) -> np.ndarray:
+        """Labels for world directions d (..., 3)."""
+        ax = np.abs(d)
+        m = np.argmax(ax, axis=-1)
+        neg = np.take_along_axis(d, m[..., None], -1)[..., 0] < 0
+        fi = m * 2 + neg
+        res = np.zeros(d.shape[:-1], np.int64)
+        half = self.face / 2
+        for k, basis in enumerate(_FACES):
+            sel = fi == k
+            if not sel.any():
+                continue
+            c = d[sel] @ basis.T
+            u = half - half * c[:, 1] / c[:, 0]
+            v = half - half * c[:, 2] / c[:, 0]
+            ui = np.clip(u.astype(np.int64), 0, self.face - 1)
+            vi = np.clip(v.astype(np.int64), 0, self.face - 1)
+            res[sel] = self.labels[k, vi, ui]
+        return res
+
+
 class GridScorer:
     """Scores candidate views by casting one ray per grid sample.
 
@@ -158,40 +208,53 @@ class GridScorer:
         self.region = region
         self.gf = gf
 
-    def labels(self, eyes: np.ndarray, yaws: np.ndarray, pitches: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def labels(self, eyes: np.ndarray, yaws: np.ndarray, pitches: np.ndarray) -> np.ndarray:
+        """Region labels (K, n) of the grid samples for K views, by ray casts."""
         from scene import rotations
 
         Rs = rotations(np.asarray(yaws, float), np.asarray(pitches, float))
-        dw = np.einsum('nj,kji->kni', self.gf.dirs_cam, Rs)
+        dw = np.matmul(self.gf.dirs_cam[None, :, :], Rs)
         K, n = dw.shape[:2]
         o = np.broadcast_to(np.asarray(eyes, float).reshape(-1, 1, 3), (K, n, 3))
         dist, prim = self.scene.cast(o.reshape(-1, 3), dw.reshape(-1, 3))
         dist = dist.reshape(K, n)
         prim = prim.reshape(K, n)
-        db = np.searchsorted(np.array([300.0, 900.0, 2500.0]), dist)
-        lab = np.where(prim >= 0, self.region[np.maximum(prim, 0)] * 4 + db, 0)
-        return lab, dist, prim
+        db = np.searchsorted(DEPTH_EDGES, dist)
+        return np.where(prim >= 0, self.region[np.maximum(prim, 0)] * 4 + db, 0)
+
+    def cube_labels(self, cube: LabelCube, yaws: np.ndarray, pitches: np.ndarray) -> np.ndarray:
+        """Region labels (K, n) for K rotations of the view from the cube's eye, by lookups."""
+        from scene import rotations
+
+        Rs = rotations(np.asarray(yaws, float), np.asarray(pitches, float))
+        dw = np.matmul(self.gf.dirs_cam[None, :, :], Rs)
+        return cube.lookup(dw)
 
     def score(self, eyes: np.ndarray, yaws: np.ndarray, pitches: np.ndarray, parts: bool = False):
+        return self.score_labels(self.labels(eyes, yaws, pitches), parts)
+
+    def score_labels(self, lab_all: np.ndarray, parts: bool = False):
+        if lab_all.shape[0] > 256:
+            outs = [self.score_labels(lab_all[i:i + 256], parts) for i in range(0, lab_all.shape[0], 256)]
+            if parts:
+                return tuple(np.concatenate([o[j] for o in outs]) for j in range(3))
+            return np.concatenate(outs)
         gf = self.gf
-        lab_all, _, _ = self.labels(eyes, yaws, pitches)
         K = lab_all.shape[0]
-        lab = lab_all[:, gf.keep]
+        lab = lab_all[:, gf.keep] % LABEL_BINS
         n = lab.shape[1]
-        big = int(lab_all.max()) + 1
-        key = lab + (np.arange(K)[:, None] * big)
-        uk, inv = np.unique(key.ravel(), return_inverse=True)
-        cnt = np.bincount(inv).astype(np.float64)
+        key = (lab + (np.arange(K)[:, None] * LABEL_BINS)).ravel()
+        cnt = np.bincount(key, minlength=K * LABEL_BINS).astype(np.float64).reshape(K, LABEL_BINS)
         col = gf.col
         mean = col.mean(0)
-        between = np.zeros(len(uk))
+        between = np.zeros(K)
+        nz = cnt > 0
         for ch in range(3):
-            s = np.bincount(inv, weights=np.tile(col[:, ch], K))
-            between += cnt * (s / cnt - mean[ch]) ** 2
-        cand = uk // big
-        b = np.bincount(cand, weights=between, minlength=K)
-        nl = np.bincount(cand, minlength=K)
-        eta = b / max(gf.total, 1e-9) - (nl - 1) / max(n, 1)
+            s = np.bincount(key, weights=np.tile(col[:, ch], K), minlength=K * LABEL_BINS).reshape(K, LABEL_BINS)
+            m = np.where(nz, s / np.maximum(cnt, 1), 0.0)
+            between += (cnt * (m - mean[ch]) ** 2 * nz).sum(1)
+        nl = nz.sum(1)
+        eta = between / max(gf.total, 1e-9) - (nl - 1) / max(n, 1)
         L = lab_all.reshape(K, gf.gh, gf.gw)
         cH = (L[:, :, :-1] != L[:, :, 1:]).reshape(K, -1) & gf.kH[None, :]
         cV = (L[:, :-1, :] != L[:, 1:, :]).reshape(K, -1) & gf.kV[None, :]
@@ -227,10 +290,11 @@ class LineSet:
         ln = np.linalg.norm(p2 - p1, axis=1)
         mid = (p1 + p2) / 2
         h, w = mask.shape
-        mi = np.clip(mid.astype(np.int64), 0, [w - 1, h - 1])
+        lim = np.array([w - 1, h - 1])
+        mi = np.clip(mid.astype(np.int64), 0, lim)
         # Both ends and the middle must be unmasked (the HUD has many straight lines).
-        e1 = np.clip(p1.astype(np.int64), 0, [w - 1, h - 1])
-        e2 = np.clip(p2.astype(np.int64), 0, [w - 1, h - 1])
+        e1 = np.clip(p1.astype(np.int64), 0, lim)
+        e2 = np.clip(p2.astype(np.int64), 0, lim)
         ok = (ln >= self.MIN_LEN) & (mask[mi[:, 1], mi[:, 0]] > 0) & (mask[e1[:, 1], e1[:, 0]] > 0) & (mask[e2[:, 1], e2[:, 0]] > 0)
         self.mid = mid[ok]
         self.dir = ((p2 - p1) / np.maximum(ln, 1e-9)[:, None])[ok]
@@ -239,7 +303,7 @@ class LineSet:
 
     def score(self, yaws: np.ndarray, pitches: np.ndarray) -> np.ndarray:
         """Length-weighted share of segments that point at a vanishing point of a world axis, minus the share a
-        random view gets (about 3 x the angular window / 90 deg)."""
+        random view gets (about 3 x the angular window / 180 deg), damped when the frame has few segments."""
         from scene import rotations
 
         K = len(yaws)
@@ -249,7 +313,7 @@ class LineSet:
         c = self.cam
         best = np.zeros((K, len(self.len)))
         for ax in range(3):
-            d = Rs[:, :, ax]  # world axis in camera frame (fwd, left, up)
+            d = Rs[:, :, ax]  # world axis in the camera frame (fwd, left, up)
             qx = c.cx * d[:, 0] - c.f * d[:, 1]
             qy = c.cy * d[:, 0] - c.f * d[:, 2]
             qw = d[:, 0]

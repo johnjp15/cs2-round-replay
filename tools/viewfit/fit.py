@@ -27,7 +27,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from features import GridFrame, GridScorer, LineSet, hud_mask, is_scoped, plane_ids  # noqa: E402
+from features import GridFrame, GridScorer, LabelCube, LineSet, hud_mask, is_scoped, plane_ids  # noqa: E402
 from scene import EYE_STAND, ROOT, VFOV_DEG, Camera, Scene  # noqa: E402
 
 W, H = 480, 270
@@ -195,6 +195,9 @@ class FrameFit:
         vfovs = SCOPE_VFOVS if self.scoped else [VFOV_DEG]
         self.scorers = [(v, GridScorer(scene, region, GridFrame(bgr, mask, Camera(W, H, v), step=STEP))) for v in vfovs]
         self.lines = [LineSet(bgr, mask, Camera(W, H, v)) for v in vfovs]
+        self.scene = scene
+        self.region = region
+        self.cubes: dict[tuple[int, int, int], LabelCube] = {}
         self.contrast = self.scorers[0][1].gf.contrast
         self.samples = int(self.scorers[0][1].gf.keep.sum())
 
@@ -205,6 +208,21 @@ class FrameFit:
         p = np.clip(X[:, 4], -89, 89)
         s = self.scorers[fi][1].score(eyes, X[:, 3], p)
         return s + MANHATTAN_WEIGHT * self.lines[fi].score(X[:, 3], p) - prior(X)
+
+    def score_rot(self, X: np.ndarray, fi: int = 0) -> np.ndarray:
+        """Like `score`, for rows that share one eye offset (X[0, :3]): one cube map and lookups."""
+        X = np.atleast_2d(X)
+        key = (int(round(X[0, 0])), int(round(X[0, 1])), int(round(X[0, 2])))
+        cube = self.cubes.get(key)
+        if cube is None:
+            cube = LabelCube(self.scene, self.region, self.base + [key[0], key[1], EYE_STAND + key[2]])
+            self.cubes[key] = cube
+        Xr = X.copy()
+        Xr[:, 0], Xr[:, 1], Xr[:, 2] = key
+        p = np.clip(Xr[:, 4], -89, 89)
+        sc = self.scorers[fi][1]
+        s = sc.score_labels(sc.cube_labels(cube, Xr[:, 3], p))
+        return s + MANHATTAN_WEIGHT * self.lines[fi].score(Xr[:, 3], p) - prior(Xr)
 
     def parts(self, x: np.ndarray, fi: int = 0) -> tuple[float, float, float, float]:
         """(mesh score, eta, edge, manhattan) of one view."""
@@ -242,7 +260,7 @@ def grid(off: np.ndarray, yaw0: float, yaw_half: float, yaw_step: float, p0: flo
     return np.c_[np.tile(off[:3], (n, 1)), Y.ravel(), P.ravel()]
 
 
-def refine(ff: FrameFit, x0: np.ndarray, s0: float, fi: int, rng: np.random.Generator, iters: int = 7, batch: int = 40) -> tuple[np.ndarray, float]:
+def refine(ff: FrameFit, x0: np.ndarray, s0: float, fi: int, rng: np.random.Generator, iters: int = 7, batch: int = 36) -> tuple[np.ndarray, float]:
     x = x0.copy()
     best = s0
     step = np.array([10.0, 10.0, 5.0, 1.6, 1.6])
@@ -297,19 +315,20 @@ def fit_frame(ff: FrameFit, prev: list[tuple[float, np.ndarray, int]], radar: fl
                 px[4] = -px[4]
                 cands.append(grid(px, px[3], 10, 2.5, px[4] - 7.5, px[4] + 7.5, 2.5))
         X = clamp(np.concatenate(cands))
-        s = ff.score(X, fi)
+        s = np.concatenate([ff.score_rot(c, fi) for c in (clamp(c) for c in cands)])
         order = np.argsort(-s)
         picked: list[tuple[float, np.ndarray, int]] = []
         for k in order:
             h = (float(s[k]), X[k], fi)
             if all(angdist(h[1][3:5], o[1][3:5]) > DISTINCT_DEG for o in picked):
                 picked.append(h)
-            if len(picked) >= (6 if first else 4):
+            if len(picked) >= (6 if first else 3):
                 break
         seeds.extend(picked)
     out = []
     for (s0, x0, fi) in seeds:
-        x, s = refine(ff, x0, s0, fi, rng, iters=10 if first else 7)
+        s0 = float(ff.score(x0[None], fi)[0])  # the exact score (the cube is a lookup)
+        x, s = refine(ff, x0, s0, fi, rng, iters=10 if first else 6)
         out.append((s, x, fi))
     return distinct(out, 5)
 

@@ -104,7 +104,7 @@ export { ALL_CAPABILITIES, CS2_CAPABILITIES } from './host';
 export type { IHost, ICore, HostSnapshot, CoreSnapshot, HostCapabilities } from './host';
 export type { WalkQuery } from './walk';
 
-export { TICKS_PER_SEC, toTick, CONFIDENCES, GRENADE_IDS, SHOT_KINDS, RoundDataError, parseRound } from './round';
+export { TICKS_PER_SEC, toTick, CONFIDENCES, GRENADE_IDS, SHOT_KINDS, VIEW_SOURCES, RoundDataError, parseRound } from './round';
 export { TRACKS3D_FORMAT, Tracks3dError, applyTracks3d, parseTracks3d } from './tracks3d';
 export type { Tracks3d, Tracks3dJump } from './tracks3d';
 export type {
@@ -119,6 +119,8 @@ export type {
   Player,
   TrackSample,
   YawSample,
+  ViewSample,
+  ViewSource,
   Track,
   Shot,
   Kill,
