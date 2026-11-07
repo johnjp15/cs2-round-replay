@@ -52,7 +52,8 @@ import { DEFAULT_SENSITIVITY, LastInv, WheelJump, crosshairOffsetPx, flyStep, fp
 import { HotkeyMatcher, parseHotkeys, type PageHotkey } from './hotkeys3d';
 import { HotkeysDom } from './hotkeys-dom';
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
-import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
+import { Renderer3D, type DrawPawn } from './renderer3d';
+import { worldMuzzle } from './effects/shot-fx';
 import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
 import { A1Mount } from './audio/mount';
 import { RadarSampler, buildRenderTiles, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
@@ -75,7 +76,6 @@ type Phase = 'ready' | 'running' | 'paused';
 /** The spectator camera (spectate.ts): pov = first person through the followed pawn's eyes (the default). */
 export type CameraMode = 'follow' | 'pov' | 'free';
 /** Tracers last this long (ticks of round time). */
-const TRACER_TICKS = 10;
 /** Third-person camera: distance behind and height above the followed pawn's eye (units). */
 const FOLLOW_BACK = 150;
 const FOLLOW_UP = 28;
@@ -288,7 +288,6 @@ class App3D {
   /** Spectator orbit offsets in follow mode (mouse under pointer lock). */
   private orbit: Look = { yaw: 0, pitch: 12 };
   private freePos: Vec3 = { x: -1500, y: 500, z: 200 };
-  private tracers: { from: Vec3; to: Vec3; team: 'T' | 'CT'; tick: number }[] = [];
   private lastHumanShotMs = -1e9;
   private lastHit: { ms: number; head: boolean } | null = null;
   private humanShots = 0;
@@ -499,7 +498,7 @@ class App3D {
     this.phase = 'ready';
     this.loop.paused = true;
     this.loop.reset();
-    this.tracers = [];
+    this.renderer.shotFx.clear();
     const sc = new Scene(s.observe(), s.lastAct, this.host(s).activeEffects(), null);
     this.radar.reset(s.observe());
     this.kills = new Map();
@@ -520,7 +519,10 @@ class App3D {
     for (const shot of h.shots()) {
       const p = o.pawns.find((q) => q.id === shot.shooter);
       if (p === undefined) continue;
-      this.tracers.push({ from: shot.from, to: shot.to, team: p.team, tick });
+      // W3: tracer (1 in the weapon's TracerFrequency) and impacts; the tracer ends where the bullet did.
+      const last = shot.impacts[shot.impacts.length - 1];
+      const to = last === undefined ? shot.to : last.pos;
+      this.renderer.addShot({ shooter: shot.shooter, tick, muzzle: worldMuzzle(shot.from, to, p.yaw, p.crouching), to, tracer: shot.tracer !== false, impacts: shot.impacts });
       this.lastShotMs.set(shot.shooter, performance.now());
       if (shot.shooter === s.human) {
         this.humanShots++;
@@ -535,7 +537,6 @@ class App3D {
         this.lastHit = { ms: performance.now(), head: e.hitgroup === 'head' };
       }
     }
-    this.tracers = this.tracers.filter((t) => tick - t.tick < TRACER_TICKS);
     this.scene.ingest(o, act, h.activeEffects());
     this.a1.tick(o, h, s.human);
   }
@@ -595,7 +596,7 @@ class App3D {
     if (p === null || p.done) {
       this.scene = new Scene(s.observe(), s.lastAct, this.host().activeEffects(), null);
       this.afterJump();
-      this.tracers = [];
+      this.renderer.shotFx.clear();
       this.phase = this.seekResume ?? 'paused';
       this.seekResume = null;
       this.loop.reset();
@@ -1000,10 +1001,6 @@ class App3D {
       };
     });
     const rt = this.scene.renderTick(alpha);
-    const tracers: DrawTracer[] = this.tracers.map((t) => {
-      // The human's own tracers start at the viewmodel's muzzle, a little right of and below the eye.
-      return { from: t.from, to: t.to, team: t.team, age: Math.min(1, Math.max(0, (rt - t.tick) / TRACER_TICKS)) };
-    });
     const o = this.scene.cur;
     const b = o.round.bomb;
     const bomb = b.pos !== null && b.state !== 'carried' ? { pos: b.pos, planted: b.state === 'planted' } : null;
@@ -1022,7 +1019,9 @@ class App3D {
       pitch,
       fovDeg: vfovDeg,
       viewmodelFovDeg: verticalFov(this.viewmodelFov),
-      tracers,
+      fxMs: rt * TICK_MS,
+      // W3: in first person (playing, or watching through a player's eyes) his tracers start at the viewmodel's muzzle.
+      fpShooter: firstPerson ? human : specPov ? viewId : null,
       effects: this.scene.effects,
       bomb,
       items: this.host(s).worldItems(),
@@ -1100,7 +1099,7 @@ class App3D {
     if (tick !== s.tick) s.seek(tick / 64);
     this.scene = new Scene(s.observe(), s.lastAct, this.host().activeEffects(), null);
     this.afterJump();
-    this.tracers = [];
+    this.renderer.shotFx.clear();
     if (this.phase === 'ready') this.phase = 'paused';
     this.loop.reset();
     this.loop.paused = this.phase !== 'running';

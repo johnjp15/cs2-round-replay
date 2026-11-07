@@ -22,7 +22,7 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
   along the view, crouched shorter, the dead lying flat and grey; name tags over the viewer's living teammates, and
   over an enemy only while the viewer sees it (`sees`: never through walls). The viewer is the human, else the
   spectated player.
-- **Effects**: 3D tracers of the last 10 ticks' bullets (`Sim3DHost.shots()`), the muzzle flash on the viewmodel,
+- **Effects**: bullet tracers and impacts (W3, "Tracers and impacts" below), the muzzle flash on the viewmodel,
   smokes (grey domes), molotov fires (orange discs), grenades in flight, the bomb (red, blinking when planted).
 - **First person**: the camera at the eye, the held weapon's low-poly viewmodel with hands (A1, "Viewmodels" below)
   drawn in its own pass and camera (viewmodel_fov), crosshair, hit marker (white; red for a headshot), the scope
@@ -38,6 +38,39 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
   0.25–4×, the settings (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov, and **Recoil tracking**), and FPS
   limit, Res (render scale) and Low latency (Performance, below). These and the radar toggle are kept in localStorage,
   `cs2-sim3d-settings`.
+
+## Tracers and impacts (W3, #50 / #51)
+
+`src/app3d/effects/shot-fx.ts`, fed once per shot from `Sim3DHost.shots()` (main.ts `stepOnce` → `Renderer3D.addShot`),
+three instanced draw calls (hidden while empty), timed in round time (render tick × 15.625 ms: they freeze with a
+paused round, a rewind drops what was born after it, a seek or restart clears them).
+
+- **Which bullets draw a tracer** (the host's `Shot3.tracer`): CS's `CCSPlayer::CreateWeaponTracer` (CS:GO source,
+  `cs_player_shared.cpp`): bullet number n = clip size − rounds left + 1, a tracer when n % TracerFrequency = 0, with
+  weapons.vdata `m_nTracerFrequency` (GameTracking-CS2): AK-47 / M4 / FAMAS / Galil / SMGs 3 (bullets 3, 6, 9 …),
+  pistols, snipers, shotguns and the M249 / Negev 1, the MP5-SD 0 (never).
+- **How**: a streak ~2.4 px wide at 720 lines (constant in screen space, so a tracer near the eye is never fat), a
+  white-hot core in a warm glow, brightest at its head; its head flies at 25,000 u/s (at least 16 ms: 1–3 frames)
+  and it is gone 70 ms after arriving. Head and tail are fractions of the path *on screen* (perspective-corrected in
+  the shader), so a first-person tracer sweeps from the gun to the crosshair instead of leaving the gun in one frame.
+  The speed and look are fitted by eye (CS2's tracer particles are compiled `.vpcf_c`; assumed).
+- **Where it starts**: in first person (playing, or watching through a player's eyes) at the viewmodel's muzzle,
+  re-projected from the viewmodel camera into the world camera 26 u in front of the eye (CS2 uses the viewmodel's
+  muzzle attachment for the local player and the in-eye observer); for everyone else at the muzzle of the gun in
+  their hands (`worldMuzzle`). It ends where the bullet did (its last impact).
+- **Impacts** (the host's `Shot3.impacts`: hit point and surface normal from the mesh trace; with penetration the
+  entry and exit of every wall the bullet went through, then the wall that stopped it): on walls a bullet hole (2.6 u,
+  a dark hole in a scorch ring, scaled up with distance like CS2's `r_decals_distance_scale` 1.35 at 1,536 u), a dust
+  puff pushed out along the normal (0.38 s) and a spark (70 ms; not on exits); on players a blood puff (0.26 s, no
+  decal). At most 128 holes (the oldest reused), fading from 18 s to 20 s (CS2's `r_decals_default_start_fade` 30 s +
+  3 s, shortened); 96 puffs; 48 tracers.
+- **Cost** (`npm run bench:3d`, this sandbox, synthetic clock): inround-5s-120hz p50 1.81 ms vs main's 1.87, watch-1x-480hz
+  0.655 vs 0.760 (noise; one draw call fewer than the old line tracers).
+- **Check**: `npx tsx tools/browser-check3d-w3.ts` (after `npm run build:3d`) freezes the page on a tracer and
+  screenshots it in first person, third person and from the side, and the bullet holes after a spray.
+
+![First-person tracer](img/app3d-w3-fp-tracer.jpg) ![Bullet holes after a spray](img/app3d-w3-fp-impacts.jpg)
+![A tracer from the side](img/app3d-w3-3p-tracer.jpg)
 
 ## Controls
 
