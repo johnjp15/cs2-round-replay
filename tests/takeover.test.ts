@@ -183,7 +183,9 @@ describe('a takeover at T (G4)', () => {
     const tape = TAPE.map((x) => x.tick);
     const defuse = 'CT bomb_defused 12-15 @4275';
     // Lokier outlives an idle cart; barely, LIVE to kill him, rejoins and plants 7 ticks late (as in never-peeks).
-    const late = [1768, 2829, 3222, 3766, 4275];
+    // T1: as in never-peeks, barely (LIVE again from sp4rtan's gunfire at cart) holds Catwalk now and kills Zwomp,
+    // walking up it on his inferred route, for real at 2650 instead of the tape's 2829 (docs/core.md "Results: never-peeks").
+    const late = [1768, 2650, 3222, 3766, 4275];
     expect(got).toEqual({
       '0': { end: defuse, events: late },
       '5': { end: defuse, events: late },
