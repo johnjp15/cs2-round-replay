@@ -63,8 +63,8 @@ export const TOUCH_RADIUS = 16 + ITEM_HALF;
 const TOUCH_HEIGHT = 72;
 
 /** Guns by CS2 slot (1 primary, 2 pistol). Only guns become world items. */
-export const PRIMARY_GUNS: readonly WeaponId[] = ['ak47', 'm4a4', 'awp', 'ssg08'];
-export const PISTOLS: readonly WeaponId[] = ['deagle', 'glock', 'usps'];
+export const PRIMARY_GUNS: readonly WeaponId[] = ['ak47', 'm4a4', 'm4a1s', 'awp', 'ssg08'];
+export const PISTOLS: readonly WeaponId[] = ['deagle', 'glock', 'usps', 'p2000'];
 
 /** 1 primary, 2 pistol, null: not a gun (knife, grenades, c4). */
 export function gunSlot(item: string): 1 | 2 | null {

@@ -173,3 +173,25 @@ describe('W2 drawing', () => {
     expect(html).toBe('<div>AK-47<b>1</b></div><div class="on">Glock-18<b>2</b></div><div>Knife<b>3</b></div><div>HE grenade<b>4</b></div><div>Smoke<b>4</b></div><div>C4<b>5</b></div>');
   });
 });
+
+describe('W2 knife model', () => {
+  it('is cheap (< 500 triangles with the hand) and about 30 cm (11.8 in) long', async () => {
+    const { modelOf } = await import('../src/app3d/viewmodels/models');
+    const { mergeParts, triangles } = await import('../src/app3d/viewmodels/parts');
+    const g = mergeParts(modelOf('knife').body);
+    expect(triangles(g)).toBeLessThan(500);
+    g.computeBoundingBox();
+    const b = g.boundingBox;
+    expect(b === null ? 0 : b.max.z - b.min.z).toBeGreaterThan(11);
+    expect(b === null ? 0 : b.max.z - b.min.z).toBeLessThan(12.6);
+  });
+
+  it('has the stab and inspect pose hooks for W1', async () => {
+    const { vmPose, freshPose, INSPECT_SEC } = await import('../src/app3d/viewmodels/pose');
+    const { modelOf } = await import('../src/app3d/viewmodels/models');
+    const a = { weapon: 'knife', sinceShot: 1e6, cycle: 0.4, reload: null, deploy: null, swing: null, plant: null, primed: false, thrown: null, speed: 0, time: 1 };
+    expect(vmPose({ ...a, stab: 0.3 }, modelOf('knife'), freshPose()).phase).toBe('stab');
+    expect(vmPose({ ...a, inspect: INSPECT_SEC / 2 }, modelOf('knife'), freshPose()).phase).toBe('inspect');
+    expect(vmPose(a, modelOf('knife'), freshPose()).phase).toBe('idle');
+  });
+});

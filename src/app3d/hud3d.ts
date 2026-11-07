@@ -47,8 +47,8 @@ export interface HudFrame {
 
 /** W2: CS2's slot of an item (1 primary, 2 pistol, 3 knife, 4 grenades, 5 C4), or null (the defuser). */
 export function slotOfItem(item: string): 1 | 2 | 3 | 4 | 5 | null {
-  if (['ak47', 'm4a4', 'awp', 'ssg08'].includes(item)) return 1;
-  if (['deagle', 'glock', 'usps'].includes(item)) return 2;
+  if (['ak47', 'm4a4', 'm4a1s', 'awp', 'ssg08'].includes(item)) return 1;
+  if (['deagle', 'glock', 'usps', 'p2000'].includes(item)) return 2;
   if (item === 'knife') return 3;
   if (['he', 'flash', 'smoke', 'molotov'].includes(item)) return 4;
   if (item === 'c4') return 5;

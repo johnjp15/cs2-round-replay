@@ -54,6 +54,7 @@ import {
   type Tuning,
   type Vec3,
   type WeaponId,
+  type WeaponTuning,
 } from '../contracts/index';
 import weaponsJson from '../../data/weapons.json';
 import {
@@ -89,6 +90,7 @@ import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, t
 import { MeshGrenadeNav, MeshSight, meshSightOptionsFromTuning, scriptedHitThroughGeometry } from '../sim2d/mesh-sight';
 import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning } from '../sim2d/vision';
 import type { AiDebug, BlockedPair, CombatLogLine, HostNote, InventoryItem, PawnState, RosterEntry, Sim2DOptions, Sim2DVision } from '../sim2d/host';
+import { gunTable, tableId } from './guns';
 import { eyeOf, meshSolidQuery, traceShot3, type Shot3, type ShotPawn } from './hitscan';
 import { DROP_SPEED, PRIMARY_GUNS, TOUCH_DELAY_TICKS, deathDropGun, gunSlot, spawnItem, stepItems, takeNearest, touched, useTarget, viewDir, type WorldItem } from './items';
 import {
@@ -206,6 +208,8 @@ export class Sim3DHost implements IHost {
   private shotsOut: Shot3[] = [];
   /** H2: CS2 weapon mechanics (src/engine/weapons); null if the tuning has no `weapons._engine` (bullets go exactly along the view). */
   private readonly armsCtx: ArmsContext | null;
+  /** W2: CS2's guns from the weapon table (guns.ts), for mechanical pawns; null without a weapon model. */
+  private readonly guns: ReadonlyMap<string, WeaponTuning> | null;
   /** H2: per pawn (pawn order). */
   private arms: ArmsState[] = [];
   /** H2b: the solids along a bullet on the world mesh, for wall penetration (built on first use). */
@@ -250,6 +254,7 @@ export class Sim3DHost implements IHost {
     }
     this.round = freshRound(o.roundTimeSec, o.score);
     this.armsCtx = tuning.weaponModel === undefined ? null : armsContext(parseWeaponTable(weaponsJson), tuning, TICKS_PER_SEC);
+    this.guns = this.armsCtx === null ? null : gunTable(this.armsCtx.table);
     this.arms = this.freshArmsAll();
   }
 
@@ -622,7 +627,7 @@ export class Sim3DHost implements IHost {
       p.aiDraws = step.state.draws;
       if (step.weapon !== null && p.inventory.some((q) => q.item === step.weapon) && p.weapon !== step.weapon) {
         p.weapon = step.weapon;
-        p.wpn = deployState(p.wpn, t, deploySec(step.weapon, this.tuning));
+        p.wpn = deployState(p.wpn, t, this.deployOf(p, step.weapon));
       }
       this.aiInputs.push(canonicalize({ id: p.id, ...step.input, buttons: sortButtons(step.input.buttons) }));
     });
@@ -689,9 +694,31 @@ export class Sim3DHost implements IHost {
     return this.pawns.findIndex((q) => q.id === id);
   }
 
-  /** The weapon table id of a held item (the 2D ids are the table's; anything unknown counts as the knife). */
+  /** The weapon table id of a held item (guns.ts tableId; anything unknown counts as the knife). */
   private armsWeapon(item: string): string {
-    return this.armsCtx !== null && this.armsCtx.table.weapons[item] !== undefined ? item : 'knife';
+    return this.armsCtx === null ? 'knife' : (tableId(this.armsCtx.table, item) ?? 'knife');
+  }
+
+  /**
+   * W2: a pawn's gun stats: CS2's weapon table (guns.ts) for a mechanical pawn, the 2D table for puppets (the tape's
+   * cadence, so a run nobody plays stays the 2D golden master). null: it doesn't shoot.
+   */
+  private gunOf(p: PawnState, item: string): WeaponTuning | null {
+    if (this.guns !== null && this.armsCtx !== null && this.mechanical(p)) {
+      const id = tableId(this.armsCtx.table, item);
+      if (id !== null) return this.guns.get(id) ?? null;
+    }
+    return gunStats(item, this.tuning);
+  }
+
+  /** W2: seconds to deploy `item`: the table's `deployTime` for a mechanical pawn, else the 2D rules (deploySec). */
+  private deployOf(p: PawnState, item: string): number {
+    if (this.armsCtx !== null && this.mechanical(p)) {
+      const id = tableId(this.armsCtx.table, item);
+      const w = id === null ? undefined : this.armsCtx.table.weapons[id];
+      if (w !== undefined) return w.deployTime;
+    }
+    return deploySec(item, this.tuning);
   }
 
   /**
@@ -764,8 +791,13 @@ export class Sim3DHost implements IHost {
   private stepPawnWeapon(p: PawnState, t: number): void {
     const input = this.inputFor(p.id);
     const buttons = input === null ? [] : input.buttons;
-    const held = p.inventory.find((q) => q.item === p.weapon) ?? null;
-    const gun = gunStats(p.weapon, this.tuning);
+    let held = p.inventory.find((q) => q.item === p.weapon) ?? null;
+    const gun = this.gunOf(p, p.weapon);
+    // W2: a mechanical pawn's gun is CS2's: no more in the magazine or the reserve than the table's (AWP 5 / 10).
+    if (gun !== null && held !== null && this.guns !== null && this.mechanical(p) && (held.clip > gun.clip || held.reserve > gun.reserve)) {
+      this.setAmmo(p, p.weapon, { clip: Math.min(held.clip, gun.clip), reserve: Math.min(held.reserve, gun.reserve) });
+      held = p.inventory.find((q) => q.item === p.weapon) ?? null;
+    }
     const ai = this.pawnIndex(p.id);
     const ctx = this.armsCtx;
     const motion: Motion = { velocity: p.move.vel, onGround: p.move.onGround, crouched: p.move.crouching, onLadder: false };
@@ -786,7 +818,8 @@ export class Sim3DHost implements IHost {
       gun,
       attack: buttons.includes('ATTACK'),
       reload: buttons.includes('RELOAD'),
-      discardMagazine: this.tuning.damage.reloadDiscardsMagazine,
+      // W2: CS2 (March 2026) throws the rest of the magazine away on a reload (docs/weapons.md S8); puppets keep the tuning's rule.
+      discardMagazine: this.guns !== null && this.mechanical(p) ? true : this.tuning.damage.reloadDiscardsMagazine,
     });
     p.wpn = step.state;
     if (step.ammo !== null) this.setAmmo(p, p.weapon, step.ammo);
@@ -846,7 +879,7 @@ export class Sim3DHost implements IHost {
     if (!p.inventory.some((q) => q.item === kind)) {
       p.weapon = fallbackWeapon(p.inventory.map((q) => q.item));
     }
-    p.wpn = deployState(p.wpn, t, deploySec(p.weapon, this.tuning));
+    p.wpn = deployState(p.wpn, t, this.deployOf(p, p.weapon));
   }
 
   // ---- W2: world items (drop on death, G, E / touch pickup) -----------------------------------------------------------
@@ -894,7 +927,7 @@ export class Sim3DHost implements IHost {
   private draw(p: PawnState, item: WeaponId, t: number): void {
     if (p.weapon === item) return;
     p.weapon = item;
-    p.wpn = deployState({ ...p.wpn, reloadEndTick: null }, t, deploySec(item, this.tuning));
+    p.wpn = deployState({ ...p.wpn, reloadEndTick: null }, t, this.deployOf(p, item));
   }
 
   /**
@@ -957,7 +990,7 @@ export class Sim3DHost implements IHost {
   /** Draw even when the id is the same (a swapped-in gun of the same kind is a new weapon). */
   private forceDraw(p: PawnState, item: WeaponId, t: number): void {
     p.weapon = item;
-    p.wpn = deployState({ ...p.wpn, reloadEndTick: null }, t, deploySec(item, this.tuning));
+    p.wpn = deployState({ ...p.wpn, reloadEndTick: null }, t, this.deployOf(p, item));
   }
 
   private stepGrenades(t: number): void {
@@ -1098,7 +1131,7 @@ export class Sim3DHost implements IHost {
           // A dead pawn keeps reporting the c4 as its last weapon; a planter draws its best gun.
           if (p.alive && p.weapon === 'c4') {
             p.weapon = fallbackWeapon(p.inventory.map((q) => q.item));
-            p.wpn = deployState(p.wpn, t, deploySec(p.weapon, this.tuning));
+            p.wpn = deployState(p.wpn, t, this.deployOf(p, p.weapon));
           }
           break;
         }
@@ -1274,7 +1307,7 @@ export class Sim3DHost implements IHost {
         if (p.weapon === action.weapon) return;
         p.weapon = action.weapon;
         // A switch that comes with a teleport in the same act is state placement (setup, rewind): ready at once.
-        p.wpn = deployState(p.wpn, this.tickNo, teleported.has(p.id) ? 0 : deploySec(weapon, this.tuning));
+        p.wpn = deployState(p.wpn, this.tickNo, teleported.has(p.id) ? 0 : this.deployOf(p, weapon));
         return;
       }
       case 'set_mode': {
@@ -1314,7 +1347,7 @@ export class Sim3DHost implements IHost {
         // New weapon entities in CS2: no reload, cadence or deploy left over; with a teleport (resync) ready at once.
         p.inventory = [{ item: SPAWN_WEAPON, clip: 0, reserve: 0 }];
         p.weapon = SPAWN_WEAPON;
-        p.wpn = deployState(freshWeaponState(), this.tickNo, teleported.has(p.id) ? 0 : deploySec(SPAWN_WEAPON, this.tuning));
+        p.wpn = deployState(freshWeaponState(), this.tickNo, teleported.has(p.id) ? 0 : this.deployOf(p, SPAWN_WEAPON));
         return;
       }
       case 'log':

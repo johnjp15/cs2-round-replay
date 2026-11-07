@@ -295,8 +295,8 @@ export function humanInput(id: PlayerId, c: HeldControls, yawDeg: number, pitchD
 
 /** Weapons per slot, in the order a repeated press cycles through them (slot 4 order not checked against CS2). */
 export const SLOT_WEAPONS: { readonly [S in WeaponSlot]: readonly WeaponId[] } = {
-  1: ['ak47', 'm4a4', 'awp', 'ssg08'],
-  2: ['deagle', 'glock', 'usps'],
+  1: ['ak47', 'm4a4', 'm4a1s', 'awp', 'ssg08'],
+  2: ['deagle', 'glock', 'usps', 'p2000'],
   3: ['knife'],
   4: ['he', 'flash', 'smoke', 'molotov'],
   5: ['c4'],

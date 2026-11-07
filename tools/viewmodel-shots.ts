@@ -4,7 +4,7 @@
  *
  *   npm run build:3d && npx tsx tools/viewmodel-shots.ts --tag after [--out docs/img] [--team T|CT] [--port 4188]
  *
- * Writes `<out>/w2-vm-<weapon>-<tag>.jpg` (ak47, usps, glock, knife, he, awp) and prints the paths.
+ * Writes `<out>/w2-vm-<weapon>-<tag>.jpg` (default ak47, usps, knife, he: rifle, pistol, knife, grenade; --weapons a,b to choose) and prints the paths.
  */
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
@@ -20,7 +20,7 @@ const dir = resolve(root, 'dist-3d');
 const port = Number(arg('--port', '4188'));
 const out = resolve(root, arg('--out', 'docs/img'));
 const tag = arg('--tag', 'after');
-const only = arg('--weapons', 'ak47,usps,glock,knife,he,awp').split(',');
+const only = arg('--weapons', 'ak47,usps,knife,he').split(',');
 mkdirSync(out, { recursive: true });
 const types: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.bin': 'application/octet-stream' };
 const server = createServer((req, res) => {

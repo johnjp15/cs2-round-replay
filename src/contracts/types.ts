@@ -37,6 +37,8 @@ export const WEAPON_IDS = [
   'm4a4',
   'glock',
   'usps',
+  'm4a1s',
+  'p2000',
   'knife',
   'c4',
   'smoke',
