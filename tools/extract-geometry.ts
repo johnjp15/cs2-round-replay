@@ -70,6 +70,18 @@ export const IMAGE = {
   zHigh: 30,
 } as const;
 
+/** H3: the height image's (and the clips flood's) pixel grid and ramp, per map (tools/build-map.ts); Mirage's is IMAGE. */
+export interface ImageParams {
+  readonly originX: number;
+  readonly originY: number;
+  readonly unitsPerPx: number;
+  readonly size: number;
+  readonly maskGrow: number;
+  readonly jumpUp: number;
+  readonly zLow: number;
+  readonly zHigh: number;
+}
+
 // ---- AWMH input ------------------------------------------------------------------------------------------------
 
 export interface Awmh {
@@ -300,21 +312,21 @@ export interface LevelGrid {
   readonly stats: Record<string, number>;
 }
 
-export function pixelCentre(px: number, py: number): { x: number; y: number } {
-  return { x: IMAGE.originX + (px + 0.5) * IMAGE.unitsPerPx, y: IMAGE.originY - (py + 0.5) * IMAGE.unitsPerPx };
+export function pixelCentre(px: number, py: number, img: ImageParams = IMAGE): { x: number; y: number } {
+  return { x: img.originX + (px + 0.5) * img.unitsPerPx, y: img.originY - (py + 0.5) * img.unitsPerPx };
 }
 
-export function worldToPixel(x: number, y: number): { px: number; py: number } {
-  return { px: Math.floor((x - IMAGE.originX) / IMAGE.unitsPerPx), py: Math.floor((IMAGE.originY - y) / IMAGE.unitsPerPx) };
+export function worldToPixel(x: number, y: number, img: ImageParams = IMAGE): { px: number; py: number } {
+  return { px: Math.floor((x - img.originX) / img.unitsPerPx), py: Math.floor((img.originY - y) / img.unitsPerPx) };
 }
 
 /** Stand levels for every pixel of the grown playable mask, and their reachability from the seeds. */
-export function buildLevels(g: MapGeometry, radarRgba: Uint8Array, seeds: readonly { x: number; y: number; z: number }[]): LevelGrid {
-  const N = IMAGE.size;
+export function buildLevels(g: MapGeometry, radarRgba: Uint8Array, seeds: readonly { x: number; y: number; z: number }[], img: ImageParams = IMAGE): LevelGrid {
+  const N = img.size;
   const mask = new Uint8Array(N * N);
   for (let p = 0; p < N * N; p++) mask[p] = radarRgba[p * 4 + 3] === 255 ? 1 : 0;
   const grown = new Uint8Array(N * N);
-  const r = IMAGE.maskGrow;
+  const r = img.maskGrow;
   for (let py = 0; py < N; py++) {
     for (let px = 0; px < N; px++) {
       if (mask[py * N + px] !== 1) continue;
@@ -327,7 +339,7 @@ export function buildLevels(g: MapGeometry, radarRgba: Uint8Array, seeds: readon
   for (let p = 0; p < N * N; p++) {
     start[p] = zs.length;
     if (grown[p] !== 1) continue;
-    const c = pixelCentre(p % N, Math.floor(p / N));
+    const c = pixelCentre(p % N, Math.floor(p / N), img);
     for (const l of standLevels(g, c.x, c.y, g.maxZ + 1, g.minZ - 1)) {
       zs.push(l.z);
       st.push(l.standing ? 1 : 0);
@@ -340,7 +352,7 @@ export function buildLevels(g: MapGeometry, radarRgba: Uint8Array, seeds: readon
   // Flood fill (BFS, FIFO) from the level nearest to each seed.
   const queue: number[] = [];
   for (const s of seeds) {
-    const { px, py } = worldToPixel(s.x, s.y);
+    const { px, py } = worldToPixel(s.x, s.y, img);
     const p = py * N + px;
     let best = -1;
     for (let k = start[p] as number; k < (start[p + 1] as number); k++) if (best < 0 || Math.abs((z[k] as number) - s.z) < Math.abs((z[best] as number) - s.z)) best = k;
@@ -371,7 +383,7 @@ export function buildLevels(g: MapGeometry, radarRgba: Uint8Array, seeds: readon
       const qy = py + dy;
       if (qx < 0 || qy < 0 || qx >= N || qy >= N) continue;
       const q = qy * N + qx;
-      const cq = pixelCentre(qx, qy);
+      const cq = pixelCentre(qx, qy, img);
       for (let m = start[q] as number; m < (start[q + 1] as number); m++) {
         if (reach[m] === 1) continue;
         const zm = z[m] as number;
@@ -385,9 +397,9 @@ export function buildLevels(g: MapGeometry, radarRgba: Uint8Array, seeds: readon
             ok = true;
             dropEdges++;
           }
-        } else if (zm - zk <= IMAGE.jumpUp) {
+        } else if (zm - zk <= img.jumpUp) {
           // Jump: the hull fits raised to the upper floor where it stands.
-          const cp = pixelCentre(px, py);
+          const cp = pixelCentre(px, py, img);
           if (!g.hullBlocked(cp.x, cp.y, zm, CROUCHING_HULL)) {
             ok = true;
             jumpEdges++;
@@ -410,7 +422,7 @@ export function buildLevels(g: MapGeometry, radarRgba: Uint8Array, seeds: readon
 }
 
 /** The highest reachable level within 16 units (Chebyshev 3 px) of each pixel, and the floor under the pixel there. */
-export function displayHeights(g: MapGeometry, lv: LevelGrid): Float64Array {
+export function displayHeights(g: MapGeometry, lv: LevelGrid, img: ImageParams = IMAGE): Float64Array {
   const N = lv.size;
   const out = new Float64Array(N * N).fill(NaN);
   const R = 3;
@@ -427,12 +439,12 @@ export function displayHeights(g: MapGeometry, lv: LevelGrid): Float64Array {
       }
       if (cands.length === 0) continue;
       cands.sort((a, b) => b - a);
-      const c = pixelCentre(px, py);
+      const c = pixelCentre(px, py, img);
       let last = Infinity;
       for (const level of cands) {
         if (level > last - 8) continue;
         last = level;
-        const f = g.floorBelow(c.x, c.y, level, IMAGE.unitsPerPx / 2, STEP_HEIGHT, 48);
+        const f = g.floorBelow(c.x, c.y, level, img.unitsPerPx / 2, STEP_HEIGHT, 48);
         if (f !== null && f.walkable) {
           out[p] = f.z;
           break;
@@ -444,7 +456,7 @@ export function displayHeights(g: MapGeometry, lv: LevelGrid): Float64Array {
 }
 
 /** Colour ramp by height (deep blue → teal → sand → white), hill-shaded from the north-west. */
-export function heightImage(h: Float64Array, N: number): Uint8Array {
+export function heightImage(h: Float64Array, N: number, img: Pick<ImageParams, 'zLow' | 'zHigh'> = IMAGE): Uint8Array {
   const stops: [number, number, number, number][] = [
     [0, 30, 60, 140],
     [0.3, 40, 140, 170],
@@ -458,7 +470,7 @@ export function heightImage(h: Float64Array, N: number): Uint8Array {
       const p = py * N + px;
       const z = h[p] as number;
       if (Number.isNaN(z)) continue;
-      const u = Math.min(1, Math.max(0, (z - IMAGE.zLow) / (IMAGE.zHigh - IMAGE.zLow)));
+      const u = Math.min(1, Math.max(0, (z - img.zLow) / (img.zHigh - img.zLow)));
       let k = 0;
       while (k < stops.length - 2 && u > (stops[k + 1] as [number, number, number, number])[0]) k++;
       const s0 = stops[k] as [number, number, number, number];
@@ -538,35 +550,63 @@ export interface Products {
   heights: Float64Array;
 }
 
+/** H3: what one map's geometry build reads and writes (tools/build-map.ts; Mirage's is `mirageGeometrySpec()`). */
+export interface GeometrySpec {
+  readonly meshPath: string;
+  readonly radarPath: string;
+  readonly binPath: string;
+  readonly heightPath: string;
+  readonly img: ImageParams;
+  /** Flood-fill seeds for the height image (Mirage: the ten recorded start positions). */
+  readonly seeds: readonly { x: number; y: number; z: number }[];
+  readonly note: string;
+  /** Repo root the paths are relative to. */
+  readonly root?: string;
+}
+
+const MIRAGE_NOTE = 'Mirage collision geometry for 3D movement (G2): the CS2 physics mesh from awpy-data 2000942, quantized and re-encoded. Binary layout: src/sim2d/geometry.ts (G2GM). Built by tools/extract-geometry.ts; see docs/geometry.md. Derived from Valve game files: private repo / encrypted pages only.';
+
+/** Mirage's geometry build: the committed `mirage-cs2` package (data/geometry/). */
+export function mirageGeometrySpec(): GeometrySpec {
+  return { meshPath: MESH_PATH, radarPath: RADAR_PATH, binPath: BIN_PATH, heightPath: HEIGHT_PATH, img: IMAGE, seeds: spawnSeeds(loadRound()), note: MIRAGE_NOTE };
+}
+
 export function buildAll(): Products {
-  const meshBytes = read(MESH_PATH);
-  const radarBytes = read(RADAR_PATH);
+  return buildGeometry(mirageGeometrySpec());
+}
+
+/** Build a map's G2GM mesh, manifest and height image (docs/geometry.md "Format"; any map: tools/build-map.ts). */
+export function buildGeometry(spec: GeometrySpec): Products {
+  const root = spec.root ?? ROOT;
+  const meshBytes = new Uint8Array(readFileSync(resolve(root, spec.meshPath)));
+  const radarBytes = new Uint8Array(readFileSync(resolve(root, spec.radarPath)));
+  const img = spec.img;
   const { mesh, stats } = buildMesh(readAwmh(meshBytes), PARAMS.quant);
   const bin = encodeGeometry(mesh);
   const geometry = new MapGeometry(decodeGeometry(bin));
   const radar = decodePngRgba(radarBytes);
-  if (radar.width !== IMAGE.size || radar.height !== IMAGE.size) throw new Error('radar: expected 1024 × 1024');
-  const levels = buildLevels(geometry, radar.rgba, spawnSeeds(loadRound()));
-  const heights = displayHeights(geometry, levels);
-  const heightRgba = heightImage(heights, IMAGE.size);
-  const heightPng = new Uint8Array(encodePng(IMAGE.size, IMAGE.size, heightRgba));
-  const preview = previewJpeg(heightRgba, IMAGE.size);
+  if (radar.width !== img.size || radar.height !== img.size) throw new Error(`radar: expected ${img.size} × ${img.size}`);
+  const levels = buildLevels(geometry, radar.rgba, spec.seeds, img);
+  const heights = displayHeights(geometry, levels, img);
+  const heightRgba = heightImage(heights, img.size, img);
+  const heightPng = new Uint8Array(encodePng(img.size, img.size, heightRgba));
+  const preview = previewJpeg(heightRgba, img.size);
   const gz = gzipSync(bin, { level: 9 }).length;
   let shown = 0;
   for (const z of heights) if (!Number.isNaN(z)) shown++;
   const manifest = {
     format: FORMAT,
-    note: 'Mirage collision geometry for 3D movement (G2): the CS2 physics mesh from awpy-data 2000942, quantized and re-encoded. Binary layout: src/sim2d/geometry.ts (G2GM). Built by tools/extract-geometry.ts; see docs/geometry.md. Derived from Valve game files: private repo / encrypted pages only.',
-    binary: { file: BIN_PATH, magic: GEOMETRY_MAGIC, version: GEOMETRY_VERSION, bytes: bin.length, sha256: sha256(bin), gzipBytes: gz, gzipBase64Bytes: Math.ceil(gz / 3) * 4 },
+    note: spec.note,
+    binary: { file: spec.binPath, magic: GEOMETRY_MAGIC, version: GEOMETRY_VERSION, bytes: bin.length, sha256: sha256(bin), gzipBytes: gz, gzipBase64Bytes: Math.ceil(gz / 3) * 4 },
     sources: [
-      { file: MESH_PATH, sha256: sha256(meshBytes) },
-      { file: RADAR_PATH, sha256: sha256(radarBytes) },
+      { file: spec.meshPath, sha256: sha256(meshBytes) },
+      { file: spec.radarPath, sha256: sha256(radarBytes) },
     ],
     params: PARAMS,
     stats,
     bounds: { minX: geometry.minX, minY: geometry.minY, minZ: geometry.minZ, maxX: geometry.maxX, maxY: geometry.maxY, maxZ: geometry.maxZ },
     queries: { cellSize: GEOMETRY_CELL, overlapEps: OVERLAP_EPS, traceSkin: TRACE_SKIN, walkableNz: WALKABLE_NZ, stepHeight: STEP_HEIGHT, standingHull: STANDING_HULL, crouchingHull: CROUCHING_HULL },
-    heightImage: { file: HEIGHT_PATH, rgbaSha256: sha256(heightRgba), pixels: shown, ...IMAGE, levelStats: levels.stats },
+    heightImage: { file: spec.heightPath, rgbaSha256: sha256(heightRgba), pixels: shown, ...img, levelStats: levels.stats },
   };
   const manifestText = JSON.stringify(manifest, null, 2) + '\n';
   return { bin, manifestText, heightPng, heightRgba, preview, geometry, levels, heights };

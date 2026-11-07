@@ -50,7 +50,8 @@ import {
   type Vec3,
   type WeaponId,
 } from '../contracts/index';
-import { freshAiState, roleOf, stepAi, type AiBehaviour, type AiOther, type AiState } from './ai';
+import { freshAiState, legacyMapNav, roleOf, stepAi, type AiBehaviour, type AiOther, type AiState } from './ai';
+import type { MapNav } from './map-nav';
 import { applyBombAction, bombFromObs, freshBomb, isBombsite, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
 import { collideMove, type CollisionNav, type Obstacle } from './collision';
 import type { MapGeometry } from './geometry';
@@ -225,6 +226,8 @@ interface HostState {
 
 export class Sim2DHost implements IHost {
   private readonly nav: NavMesh;
+  /** H3: the AI's view of the nav (the 2020 grid's places). */
+  private readonly aiNav: MapNav;
   /** G3: the collision mesh (world + player clips) for 3D movement, or null for the nav's 2D movement. */
   private readonly geometry: MapGeometry | null;
   private readonly tuning: Tuning;
@@ -277,6 +280,7 @@ export class Sim2DHost implements IHost {
       seen.add(r.id);
     }
     this.nav = nav;
+    this.aiNav = legacyMapNav(nav);
     this.geometry = geometry;
     this.tuning = tuning;
     this.sight = new Sight(vision?.mask ?? null, nav, sightOptionsFromTuning(tuning));
@@ -616,7 +620,7 @@ export class Sim2DHost implements IHost {
         events: this.events,
         bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick },
         round: { phase: roundPhase(this.round, isTicking(this.bomb)) },
-        nav: this.nav,
+        nav: this.aiNav,
         sight: this.meshSight ?? this.sight,
         tuning: this.tuning,
         rng: root.fork('ai:' + p.id),
