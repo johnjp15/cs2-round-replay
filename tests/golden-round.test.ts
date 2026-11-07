@@ -52,8 +52,9 @@ const KILLS: [number, PlayerId, PlayerId, string, boolean][] = [
 ];
 
 // B2's snaps (docs/core.md "Puppets", Snaps table): pawn and tick, copied here on purpose. G3 (3D on CS2 Mirage, the
-// snapped tracks of data/geometry/mirage-tracks.json): 11 instead of main's 6 (cart 922, donk 923, sp4rtan 1165 and
-// 1248, cart 1350, barely 2879). docs/core.md "Snaps on CS2 Mirage" has each one's cause.
+// snapped tracks of data/geometry/mirage-tracks.json): 9 instead of main's 6 (cart 922, donk 923, sp4rtan 1165 and
+// 1248, cart 1350, barely 2879). docs/core.md "Snaps on CS2 Mirage" has each one's cause. T1: barely's 2299 and 2880
+// are gone (his 35.1–44.7 s level flip onto the underpass is put back on Catwalk: snap-tracks' `levelFlips`).
 const SNAPS: [PlayerId, number][] = [
   ['snarlbot', 633], // new: T ramp, the 2020 z (−176) is a floor CS2 has 80 u lower there; the track rejoins the recording's floor in one step
   ['cart', 920], // main's cart 922: the recording's own discontinuity (909–922)
@@ -63,8 +64,6 @@ const SNAPS: [PlayerId, number][] = [
   ['donk', 1344], // new (main's donk 923 is gone): Apartments, CS2 has a raised (+32) floor where the 2020 one is flat; the track climbs it in one step (a jump would do)
   ['cart', 1393], // main's cart 1350: the recording's discontinuity (1344–1350), snapped later
   ['cart', 1880], // new: A site, the recording walks through a box CS2 has there (the snapping finds no way round in time)
-  ['barely', 2299], // new, on purpose: the recording drops from B short's corridor into the underpass (35.1 s); no way down in CS2 near by
-  ['barely', 2880], // main's barely 2879: the recording's own discontinuity (back up from the underpass)
   ['cart', 4114], // new: A site, the same box on the way back
 ];
 
@@ -118,7 +117,7 @@ describe('golden master: movement (B2)', () => {
     }
   });
 
-  it('teleports only at B2’s documented teleport points: the eleven snaps (G3), each inside a teleport window and logged once', () => {
+  it('teleports only at B2’s documented teleport points: the nine snaps (G3, T1), each inside a teleport window and logged once', () => {
     expect(run.snaps.map((s) => [s.id, s.tick])).toEqual(SNAPS);
     expect(run.snaps.length).toBe(run.core.snapCount);
     for (const s of run.snaps) {
