@@ -170,18 +170,19 @@ export function rebind(binds: KeyBinds, control: RebindableControl, code: string
   return next;
 }
 
-/** Stored binds (JSON from localStorage, possibly old or hand-edited) → valid binds: bad or duplicate keys reset. */
+/**
+ * Stored binds (JSON from localStorage, possibly old or hand-edited) → valid binds: a missing or unbindable key keeps
+ * its default; if two controls then share a key, all four go back to the defaults.
+ */
 export function parseKeyBinds(raw: unknown): KeyBinds {
-  let b: KeyBinds = DEFAULT_KEY_BINDS;
-  if (typeof raw !== 'object' || raw === null) return b;
+  if (typeof raw !== 'object' || raw === null) return DEFAULT_KEY_BINDS;
   const r = raw as { readonly [k: string]: unknown };
+  const b: { [C in RebindableControl]: string } = { ...DEFAULT_KEY_BINDS };
   for (const c of REBINDABLE) {
     const v = r[c];
-    if (typeof v !== 'string') continue;
-    const n = rebind(b, c, v);
-    if (n !== null) b = n;
+    if (typeof v === 'string' && canBindKey(bindKeyOf(v))) b[c] = bindKeyOf(v);
   }
-  return b;
+  return new Set(REBINDABLE.map((c) => b[c])).size === REBINDABLE.length ? b : DEFAULT_KEY_BINDS;
 }
 
 /** The whole key map for a set of binds (the fixed keys, the rebindable four, then C as the extra duck key). */

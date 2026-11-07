@@ -72,6 +72,7 @@ interface Stats {
   humanHits: number;
   triangles: number;
   hud: { hp: string; clock: string; mode: string; killfeed: number };
+  guard: { leaveGuard: boolean; keyboardLocked: boolean; fullscreen: boolean; duckKey: string };
 }
 
 const stats = (page: Page): Promise<Stats> => page.evaluate(() => (window.__cs2sim3d as NonNullable<typeof window.__cs2sim3d>).stats() as unknown as Stats);
@@ -206,6 +207,24 @@ async function main(): Promise<void> {
     await p.waitForTimeout(500);
     const t0 = await stats(p);
     if (t0.human !== 'cart' || t0.speed !== 1 || !t0.hud.mode.startsWith('You: cart')) problems.push(`takeover: ${JSON.stringify({ human: t0.human, speed: t0.speed, mode: t0.hud.mode })}`);
+    // Ctrl+W (crouch forward) while playing: the page blocks it, the leave-site guard is on.
+    const ctrlW = await p.evaluate(() => {
+      // No named functions in here (tsx's __name helper isn't in the page).
+      const specs: [string, string, boolean][] = [
+        ['keydown', 'ControlLeft', true],
+        ['keydown', 'KeyW', true],
+        ['keydown', 'KeyT', true],
+        ['keyup', 'KeyW', true],
+        ['keyup', 'KeyT', true],
+        ['keyup', 'ControlLeft', false],
+      ];
+      const evs = specs.map((x) => new KeyboardEvent(x[0], { code: x[1], ctrlKey: x[2], bubbles: true, cancelable: true }));
+      for (const e of evs) document.body.dispatchEvent(e);
+      return { prevented: evs.slice(0, 3).map((e) => e.defaultPrevented) };
+    });
+    const g0 = (await stats(p)).guard;
+    report['ctrlW'] = { ...ctrlW, guard: g0 };
+    if (!ctrlW.prevented.every((x) => x) || !g0.leaveGuard || g0.duckKey !== 'Control') problems.push(`Ctrl+W guard: ${JSON.stringify(report['ctrlW'])}`);
     const before = t0.look;
     await p.evaluate(() => window.__cs2sim3d?.mouse(200, -50));
     await p.waitForTimeout(200);
