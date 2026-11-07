@@ -81,8 +81,8 @@ escaping rejoining` (G1: `rejoining` for the `rejoin` role, moving or waiting).
 - **Target:** the nearest enemy in `sees`; it keeps its target while it is out of sight for up to `ai.targetLostSec`
   (0.5 s), aiming at where it was last seen, then drops it.
 - **Reaction:** nothing changes for `ai.reactionSec` × (1 ± `ai.reactionJitter`) (0.25 s ± 30 %, seeded) after a target
-  is acquired. G7: while the target is in sight it stops (counter-strafes) and turns toward it meanwhile, instead of
-  walking on with its role (a plant or defuse in progress goes on): before G7 a LIVE Lokier who saw cart in the
+  is acquired. G7: a `hold` pawn, while the target is in sight, stops (counter-strafes) and turns toward it meanwhile, instead of
+  walking on to its hold spot (other roles react on the move, as before): before G7 a LIVE Lokier who saw cart in the
   Apartments corridor walked off Truck toward his hold spot during his reaction and lost sight before he could shoot.
   Then it turns at up to `ai.turnRateDegPerTick` (12°) in yaw and pitch and
   counter-strafes: it pushes against its velocity while faster than `ai.counterStrafeSpeed` (40 u/s), then stands.

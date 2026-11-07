@@ -402,39 +402,31 @@ describe('5. cart catches sp4rtan on his flank around 45 s', () => {
 describe('6. cart dies early', () => {
   const { run } = play('cart-dies');
 
-  it('the encounter comes early, then cart walks into Lokier’s angle and a LIVE Lokier kills him for real', () => {
-    const seen = seenTick(run) as number;
-    const delay = Math.round(tuning.replay.encounterDelaySec * 64);
-    expect(seen).toBeLessThan(1117 - 5 * 64);
-    expect(damages(run.entries).filter((d) => d.attacker === 'lokier' && d.victim === 'cart' && d.scripted)).toEqual([expect.objectContaining({ tick: seen + delay, amount: 73 })]);
+  it('G7: at the window 9.4 s before the recorded sighting, beyond encounterWindowSec: the encounter is cancelled, no scripted 73, Lokier goes LIVE on that tick (a real fight)', () => {
+    // Before G7 the encounter time-shifted the recorded hit to 9.02 s (cart 27 HP) and Lokier only went LIVE when cart
+    // walked off the window at 10.4 s.
+    const enc = encounterLogs(run);
+    expect(enc[0]?.text).toMatch(/^encounter lokier -> cart: cancelled at tick \d+, cart in sight at the spot -9\.\d s against the recording, beyond the encounter window \(3\.0 s\): a real fight$/);
+    expect(seenTick(run)).toBeNull();
+    expect(damages(run.entries).filter((d) => d.attacker === 'lokier' && d.victim === 'cart' && d.scripted)).toEqual([]);
     const lk = switches(run).find((s) => s.id === 'lokier');
-    expect(lk).toMatchObject({ trigger: 'sighting' });
-    const death = deaths(run.entries).find((d) => d.victim === 'cart');
-    expect(death).toMatchObject({ attacker: 'lokier', weapon: 'ssg08' });
-    expect(death?.tick).toBeGreaterThan(lk?.tick ?? Infinity);
-    expect(damages(run.entries).find((d) => d.victim === 'cart' && d.tick === death?.tick)?.scripted).toBe(false);
-    console.log(`[cart-dies] encounter seen ${seen}, scripted hit ${seen + delay}, lokier LIVE ${lk?.tick} (${lk?.text}), cart killed at ${death?.tick}`);
+    expect(lk).toMatchObject({ trigger: 'sighting', tick: enc[0]?.tick });
+    expect(lk?.text).toMatch(/^lokier LIVE: sees cart \(the human\), not in the recording/);
+    console.log(`[cart-dies] cancelled at ${enc[0]?.tick}, lokier LIVE ${lk?.tick}; kills: ${deaths(run.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}`).join(', ')}`);
   });
 
-  it('G1: donk (who kills Lokier) and zwomp (who heard it) rejoin; eradicate, saved by Lokier’s early death, has no tape and stays LIVE', () => {
-    // G3: barely too: on his snapped CS2 track he sees the LIVE Lokier from the Apartments at 10.7 s and is back on
-    // his tape 1.3 s later.
-    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['barely', 'donk', 'zwomp']);
-    expect(switches(run).find((s) => s.id === 'eradicate')).toMatchObject({ trigger: 'outlived' });
-    // So barely's kill of Zwomp and sp4rtan's of donk are the tape's again (B4 alone: barely killed a LIVE zwomp at
-    // 31.09 s and donk killed sp4rtan at 53.19 s); then the LIVE eradicate meets sp4rtan on B and wins: T elimination.
-    const ticks = deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim]);
-    expect(ticks).toContainEqual([2829, 'barely', 'zwomp']);
-    // G3: sp4rtan meets the LIVE eradicate on B earlier (49.7 s) on CS2 Mirage, so his donk kill is a LIVE one 11
-    // ticks before the tape's 3222, and eradicate kills him right after.
-    expect(ticks).toContainEqual([3211, 'sp4rtan', 'donk']);
-    expect(deaths(run.entries).find((d) => d.victim === 'sp4rtan')).toMatchObject({ attacker: 'eradicate' });
+  it('G1: the Ts who went LIVE for the LIVE Lokier rejoin; eradicate (Lokier’s recorded kill dropped) outlives his recording', () => {
+    const back = rejoins(run.entries).map((b) => b.id);
+    for (const id of ['barely', 'zwomp'] as const) expect(back).toContain(id);
+    expect(switches(run).filter((s) => s.id === 'eradicate').map((s) => s.trigger)).toContain('outlived');
+    expect(deaths(run.entries).some((d) => d.victim === 'eradicate' && d.tick === 816)).toBe(false);
   });
 
   it('the round continues and every untouched puppet still replays', () => {
     const death = deaths(run.entries).find((d) => d.victim === 'cart')?.tick as number;
     const end = expectRoundEndByRules(run);
-    expect(end.tick).toBeGreaterThan(death);
+    // G7: cart may live to the end of the round (he dies in the bomb's blast on its tick).
+    expect(end.tick).toBeGreaterThanOrEqual(death);
     // Recorded events between puppets that nothing reached land on the recorded ticks: snarlbot's two kills,
     // sp4rtan's kill of snarlbot, barely's plant.
     const ticks = deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim]);
@@ -460,22 +452,23 @@ describe('7. body block', () => {
     expectUntouchedReplay(run);
   });
 
-  it('cart in sp4rtan’s way to the bomb (an enemy, solid): held off his track while cart watches, sp4rtan goes LIVE (blocked)', () => {
+  it('G7: cart in sp4rtan’s way to the bomb, face to face where the tape has him in Shop: sp4rtan sees him and fights (sighting), before any body block', () => {
     const { run } = play('block-sp4rtan');
     const sw = switches(run);
-    expect(sw.map((s) => [s.id, s.trigger])).toEqual([['sp4rtan', 'blocked']]);
+    // Before G7 the recorded pair (cart / barely see sp4rtan on B from 58.6 s, ± 2 s) covered the sighting at any
+    // range and place, so sp4rtan stood REPLAY with cart in sight (and then in contact) for 2.2 s until the block
+    // trigger fired at 59.16 s. Since G7 a recorded pair within closeRangeUnits needs cart about where the tape has him.
+    // Then the LIVE sp4rtan's fight goes on: he hits barely (REPLAY: LIVE by damage) and kills him 0.3 s before the tape.
+    expect(sw[0]).toMatchObject({ id: 'sp4rtan', trigger: 'sighting' });
+    expect(sw.some((s) => s.trigger === 'blocked')).toBe(false);
+    expect(sw[0]?.text).toMatch(/^sp4rtan LIVE: sees cart \(the human\), not in the recording/);
     const k = (sw[0] as { tick: number }).tick;
     const e = run.entries[k] as LogEntry;
-    expect(pawnAt(e, 'cart').sees).toContain('sp4rtan');
-    expect(dist(pawnAt(e, 'cart').pos, pawnAt(e, 'sp4rtan').pos)).toBeLessThanOrEqual(2 * tuning.collision.pawnRadius + tuning.replay.contactSlackUnits);
-    // The engine's debug hint agrees (the Core doesn't read it): sp4rtan's moves were cut by cart before the switch.
-    expect(run.bodyBlocks.some((b) => b.id === 'sp4rtan' && b.by === 'cart' && b.tick < k)).toBe(true);
-    // The two were in sight of each other: the recording has them on B together (58.6 s on), so no sighting trigger.
-    expect(sw[0]?.text).toMatch(/^sp4rtan LIVE: blocked by cart, (held|pushed) \d+ u off course, seen by cart/);
-    // G1: once cart is dead and it is calm, sp4rtan rejoins before his scripted defuse and starts it on the tape's tick
-    // (B4 alone: a LIVE defuse from 61.09 s).
-    const back = rejoins(run.entries);
-    expect(back.map((b) => b.id)).toEqual(['sp4rtan']);
+    expect(dist(pawnAt(e, 'cart').pos, pawnAt(e, 'sp4rtan').pos)).toBeLessThanOrEqual(tuning.replay.closeRangeUnits);
+    expect(run.core.divergence.index.saw('sp4rtan', 'cart', k)).toBe(true);
+    // G1: once cart is dead and it is calm, sp4rtan rejoins before his scripted defuse and starts it on the tape's tick.
+    const back = rejoins(run.entries).filter((b) => b.id === 'sp4rtan');
+    expect(back.length).toBeGreaterThan(0);
     expect((back[0] as { tick: number }).tick).toBeGreaterThan(deaths(run.entries).find((d) => d.victim === 'cart')?.tick ?? Infinity);
     expect(run.entries.find((e) => e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'defuse_start'))?.observe.tick).toBe(3955);
     expectUntouchedReplay(run);

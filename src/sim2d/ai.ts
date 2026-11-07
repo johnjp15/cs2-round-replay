@@ -510,9 +510,10 @@ export function stepAi(prev: AiState, ctx: AiContext): AiStep {
     weapon = plan.weapon;
     if (plan.use) buttons.push('USE');
     let faceYaw: number | null = plan.faceYaw;
-    // G7: reacting to an enemy in sight, a player stops and turns to it instead of walking on (a sniper holding an
-    // angle doesn't leave it the moment a T appears in it); a plant or defuse in progress goes on.
-    const reacting = s.target !== null && s.targetPos !== null && !plan.use && ctx.sees.includes(s.target);
+    // G7: a holder (role hold) reacting to an enemy in sight stops and turns to it instead of walking on to its hold
+    // spot (a sniper holding an angle doesn't leave it the moment a T appears in it). Other roles keep moving (a
+    // planter or a rotating player reacts on the move), as before.
+    const reacting = role === 'hold' && s.target !== null && s.targetPos !== null && !plan.use && ctx.sees.includes(s.target);
     if (reacting && s.targetPos !== null) {
       const speed = Math.hypot(self.vel.x, self.vel.y);
       if (speed > ai.counterStrafeSpeed) move = { dirX: -self.vel.x / speed, dirY: -self.vel.y / speed, mag: 1 };
