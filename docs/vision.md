@@ -1,15 +1,166 @@
-# Vision in the 2D sim (C4 / A5: `src/sim2d/vision.ts`, `data/mirage-vismask.json`)
+# Vision (G6: sight and bullets on CS2 Mirage's 3D geometry; C4's 2D sight kept for hosts without it)
 
-What a pawn can see, and what bullets and grenades can cross. The nav mesh stays the **movement** model; sight uses a
-**mask built from the radar** (walls, and since F **cover**: boxes, crates, the Truck) plus a **level check** on the nav
-floors.
+What a pawn can see, and what bullets and grenade effects can cross. Since G6 the answer comes from **straight
+segments against the CS2 collision mesh** (`src/sim2d/mesh-sight.ts`, `MapGeometry.traceSight`), the same mesh 3D
+movement walks on (`docs/geometry.md`). C4's radar sight mask (`data/mirage-vismask.json`, `src/sim2d/vision.ts`)
+now only clamps grenade throws (their flight is still 2D), and is the whole sight of a host built without 3D geometry
+(the 2D movement mode, the synthetic test meshes). It is not a prefilter (below).
 
-Why: the nav mesh's `lineOfSight` treats everything that isn't walkable as a full-height wall, so drops, ledges,
-windows and nav holes block sight. B3 found that 6 of the 13 recorded aimed engagements had no line of sight that
-way, among them cart → Lokier through the Apartments window onto B, which really happened (`docs/core.md`, Known
-limits).
+**Why.** The radar mask has no heights: it treated whole building walls as windows and let lines pass under floors
+and through rooms. In the no-human golden master **3,107 of 7,063 `sees` entries (44 %) had every aim point blocked
+on the mesh**, and 323 of 432 enemy entries sampled every 8th tick (74.8 %) were blocked eye to eye. In John's case
+(`fixtures/scenarios/cart-dies.json`) the LIVE Lokier went LIVE at 10.38 s "seeing" cart, and at 11.27 s donk in Back
+Alley headshot him at the Truck with the AWP, 1,990 units away through the Apartments building. After G6: **0 false
+entries** in the golden master and in every scenario (`tools/sight-check.ts`, `tests/scenarios.test.ts`), and that
+kill is impossible (`tests/sight3d.test.ts`).
 
-## The mask (`tools/extract-vismask.ts`)
+## The model (`MeshSight`)
+
+**Segments.** `MapGeometry.traceSight(a, b)` is `traceLine` against the **sight triangles only**: `combineMeshes(world,
+clips)` records the world's triangle count (`sightTriangles`), so G3's player clips stop movement but not sight or
+bullets, as CS2's `playerclip` does. Glass, windows and bullet-pass railings were never in the awpy mesh, so they are
+open. Two-sided triangles, open segment (touching an end doesn't count), closed triangle. A cell whose sight triangles'
+z extent misses the segment's z range in it is skipped whole (open floors cost nothing), and a triangle whose box
+misses the segment's box in the cell is skipped (18 % faster than G2's `traceLine` on recorded pairs, same answers:
+`tests/sight3d.test.ts` compares 2,000 segments).
+
+**Eye.** `pos.z` + `damage.eyeHeight` (64), `crouchEyeHeight` (46) crouched, at the pawn's real z: an airborne pawn
+looks from where it is (3D movement keeps the true feet z).
+
+**Aim points.** Like CS2's bots (`CCSBot::IsVisible(player)` checks the gut, head, feet and both elbows), the viewer's
+eye is traced to several points of the target's body, and the target is seen if **any** segment is clear. In order
+(the first clear one ends the test):
+
+| point | where (standing; crouched heights × 46 / 64) |
+| --- | --- |
+| head | `bandHeights.head` 64 above the feet: the eye |
+| chest | `bandHeights.chest` 48 |
+| left, right | chest height, `ai.sightSideUnits` (12) to either side, perpendicular to the 2D line of sight |
+| leg | `bandHeights.leg` 16 |
+
+**One trace for both directions.** The head point is the eye (64 = 64, and 46 = 46 crouched), so the eye-to-head
+segment of a pair is eye to eye and serves both directions: `pairSight(a, b)` traces it once, **from the first pawn of
+the pair (id order)**, and only the directions it leaves blocked try their other points.
+
+**`sees` (contract F5).** For every unordered pair (i < j, id order), both alive: each direction is asked if the
+viewer isn't blind and the target is within `ai.fovDeg / 2` (53°) of its yaw (2D bearing); none asked → nothing traced.
+Then smoke (the 2D segment between the two positions through an active smoke disc) blocks both, before any trace.
+Then `pairSight`. Lists sorted by id; dead pawns neither see nor are seen; teammates are included (the human's `sees`
+decides puppet snaps). Not symmetric any more: a pawn behind a low wall can see a standing enemy's head while the enemy
+sees nothing of him (the shared eye line is the only symmetric part). The host caches `sees` per state, as before.
+
+**Hints (cost only).** For each pair, MeshSight keeps the triangle that last blocked one of its segments and tests that
+triangle first on the next query: if the segment crosses it, the segment is blocked, exactly what the full trace would
+say; otherwise the full trace decides. Answers never depend on the hints, so snapshots don't carry them and a port may
+drop them.
+
+### Who uses what
+
+| user | query |
+| --- | --- |
+| `sees` | `MeshSight.pairSight`: eye to the aim points, plus FOV, smoke and blindness (above) |
+| bullets (`traceShot`) | `LosQuery.shotClear`: the shooter's eye to the impact point at the hit band's height (`docs/combat.md`); a blocked segment stops the bullet; no wall penetration |
+| LIVE AI guard spot (`guardSpot`) | `GuardSight.pointClear`: the spot's eye to the bomb's leg-height point |
+| LIVE AI targets, reactions, hearing vs sight | `sees` (an enemy in `sees` is seen; a heard one isn't) |
+| Core: sighting trigger, the scheduled Lokier encounter (start and gate: "cart in Lokier's `sees` at the spot"), rejoin unrest, puppet snaps (the human's `sees`) | `sees`, unchanged code |
+| flash, HE | `effectClear`: the grenade to the pawn's eye (flash) or stomach-height body (HE); a grenade lying on the ground traces from the CS2 floor under it + 2 (its z is the 2020 nav's) |
+| grenade throw clamp | the 2D radar mask (`GrenadeSight.lineOfSight`), unchanged: the flight is 2D |
+
+### Not a prefilter: the radar mask
+
+A prefilter may only reject what the exact test would reject. Over the golden master (every 4th tick, every alive pair,
+FOV aside) the mask's 2D sight and the mesh agree on 13,923 pairs; the mask **blocks 61 pairs the mesh sees** (the
+Truck-to-Apartments-corridor line through the balcony door, cart and donk in the corridor at 15.2 s, …), so as a
+prefilter it would drop real sightings, and it **passes 574 pairs the mesh blocks** (the false sightings). It isn't
+cheaper either: its DDA plus the nav level check cost about what a mesh trace with hints does. The cheap filters are
+the ones that never lose a sighting: alive, blind, FOV, smoke, then one shared trace, then hints.
+
+## Recorded duels (`tools/sight-snap.ts`, pass 5 of the track snapping)
+
+The recording's positions are a 2020 POV video's, ±20–40 units and more near walls (`docs/geometry.md`), and a
+recorded duel can be impossible on the real mesh at them. The decisive one: **cart's recorded path through the
+Apartments (17.45–18.8 s) runs 80–145 units behind the window's sill** (z −24, the room's floor −48). From Lokier on B
+(eye −92) every line to him then passes under the sill: in sight for 2 ticks of the 87, and neither Lokier's recorded
+73 at 18.5 s nor cart's headshot at 18.8 s could connect. The windows are where geometry.md found them (x −1816…−1752
+and −1672…−1608, y ≈ 656, open from z −24 to +70). Cart's recorded view yaw at the kill (−145.7°) points at Lokier from
+about 100 units further south, close to the window, not from the recorded spot (−137.1°). Moving Lokier instead
+would take ≥ 200 units.
+
+So the snapped tracks (G3, `data/geometry/mirage-tracks.json`) get a fifth pass: for each **recorded duel** (a trusted,
+non-excluded sighting of the vision labels with a trusted hit or kill between the pair in its window, until either
+dies), both must see each other at every 10 Hz sample of the window, standing, and crouched too where the snapped
+track moves slower than 120 u/s but isn't standing still (where the puppet may crouch-walk). Where they don't, one of
+the two (both are tried; the cheaper wins) moves as little as it can: a Viterbi search over 4-unit (window) and 8-unit
+(1.5 s either side) candidate stand spots within 128 units on the same floor, steps within the recorded weapon's run
+speed × 1.1 and in clear hull lines, cost = distance from the snapped spot + how much each step differs from the snapped
+step. Not walls opened: positions moved.
+
+| duel | at the snapped positions | moved |
+| --- | --- | --- |
+| eradicate ↔ Lokier, 12.5–12.75 s (the Truck to the corridor through the balcony door) | 3 samples out of sight | eradicate 12.5–12.7 s, up to 33 u |
+| cart ↔ Lokier, 17.45–18.8 s (the window) | 14 samples out of sight | cart 17.0–19.3 s, up to 106 u, along the window |
+| donk ↔ sp4rtan, 49.9–50.35 s (Apartments corridor, a door frame) | 3 samples out of sight | donk 49.9–50.1 s, up to 6 u |
+| cart ↔ sp4rtan, 68.75–69.4 s (B site) | in sight | – |
+
+Not duels (unchanged, as C4 found them): barely → Zwomp at 44.0–44.2 s (barely's recorded level is wrong) and
+barely ↔ sp4rtan at 58.6–58.85 s (the pillar), both excluded with evidence in `tools/vision-labels.ts`; snarlbot →
+incredibad (0.5 s) and sp4rtan → snarlbot (17.85 s) are on inferred positions. All four duels then hold at every sample
+(`tests/sight3d.test.ts`), and the scheduled encounter's spot (cart's track at the hit) is now (−1728, 700).
+
+## Validation
+
+```sh
+npx tsx tools/sight-check.ts --log <log.jsonl[.gz]>     # re-trace every sees entry; count false ones
+npx tsx tools/sight-check.ts --recorded [--log <golden>]  # recorded engagements at the snapped and the run's positions
+```
+
+`sight-check` re-implements the aim points on its own and traces them with `traceSight`.
+
+| run | `sees` entries (enemy) | every aim point blocked | enemy entries, eye to eye blocked (every 8th tick) |
+| --- | ---: | ---: | ---: |
+| golden master, before G6 | 7,063 (3,091) | 3,107 (44.0 %) | 323 / 432 (74.8 %) |
+| golden master, G6 | 4,295 (805) | **0** | 17 / 143 (seen by another aim point) |
+| cart-dies, before | 5,432 (2,146) | 2,414 | 226 / 309 (73.1 %) |
+| cart-dies, G6 | 2,388 (746) | **0** | 12 / 134 |
+
+`tests/scenarios.test.ts` asserts 0 for the golden master, the follow run and every scenario, and that no engine bullet
+hit's segment (eye to the impact point) crosses a wall. The 12 hand-picked must-not-see pairs are blocked at every aim
+point both ways.
+
+Recorded engagements (`--recorded`, the golden master's positions), ticks with sight: at the snapped positions every
+trusted, non-excluded sighting, damage and kill is in sight on most or all of its ticks (cart → Lokier 84 of 87,
+eradicate → Lokier 17 / 17, donk → sp4rtan 36 / 36, cart → sp4rtan 68.75 s 100 / 100; Lokier's 18.5 s hit and cart's
+18.8 s kill 5 / 5). In the golden run's own positions (puppets lag their tracks by a few units) cart → Lokier is in sight
+on 67 of 87 ticks from 17.63 s; Lokier → eradicate at 12.75 s is not (eradicate's puppet lags the moved samples): a
+scripted kill between puppets, so nothing depends on it. The excluded and inferred ones stay out of sight.
+
+## Cost
+
+`tests/sight3d.test.ts`: 10 viewers × 9 targets at the snapped positions every 0.5 s of the round: **0.15 ms per tick**
+(132 segment tests, 30 full traces; 0.29 ms without the hints), against 0.09–0.11 ms for C4's mask in the same test.
+In whole runs sight costs less than C4's level check did: the harness's no-human round went from 899 to about 710 µs per
+tick (docs/app.md has the Session and browser numbers).
+
+## Known limits
+
+- **No wall penetration.** CS2 bullets go through thin walls and props by material; the mesh has no materials. No
+  recorded kill or hit is a wallbang.
+- **Glass and windows are open**, and so is anything awpy dropped (`passbullets`, `grenadeclip`). Mirage's windows
+  used here have no glass.
+- **Decimation:** the mesh is clustered on an 8-unit grid (`docs/geometry.md`), so box and frame edges can be a few
+  units off; lines that graze them can differ from CS2's.
+- **Smoke** is still a 2D disc of full height between the two positions; flashes and HE ignore partial cover beyond one
+  segment; grenade flight is 2D on the radar mask.
+- **Recorded positions:** pass 5 fixes only the duels; other recorded sightings on estimated or inferred positions can
+  stay out of sight. Puppets follow their tracks within a few units, so a line that only just clears at a sample can
+  close between samples (pass 5 checks the samples only).
+- FOV is a 2D cone (no pitch limit); there is no leaning in CS2 either.
+
+## The 2D sight (C4 / F, hosts without 3D geometry)
+
+What follows is C4's mask and F's cover rule as they were. With the CS2 mesh they only clamp grenade throws.
+
+### The mask (`tools/extract-vismask.ts`)
 
 ```sh
 npx tsx tools/extract-vismask.ts          # data/mirage-vismask.json + logs/vismask-debug.png (+ -bsite.png, B site 3×)
@@ -51,7 +202,7 @@ gitignored.
 
 ![B site in the debug overlay: the box stacks in green, the black corner stacks (walls) in red, the dropped Shop door sill in orange](img/vismask-cover-bsite.jpg)
 
-## Line of sight
+### Line of sight (2D)
 
 **`VisMask.lineOfSight(a, b)`** (2D): an Amanatides–Woo DDA over the exact cells the segment crosses, measuring each
 run of consecutive wall cells along the segment (in cells). A run longer than `ai.losWallTolerancePx` (1) blocks, so
@@ -76,7 +227,7 @@ The slack is 48 because the nav's two-corner height model is off by tens of unit
 Truck → Apartments line (Lokier's kill of eradicate) clipped a Balcony area 24 units under its modelled floor. The
 Underpass → Catwalk line runs 69 units under the Catwalk floor.
 
-### Cover (F)
+#### Cover (F)
 
 The radar has no heights, so a box can't be treated as a wall (you see and shoot over a waist-high crate) nor as floor
 (a pawn crouched or defusing behind it is hidden). `Sight.coverClear(a, b)` decides, for the straight line between the
@@ -98,7 +249,7 @@ against the recording: every recorded kill, damage and sighting stays visible (b
 have an end on or at a box: Lokier at the Truck at 12.5–12.75 s, on the B-site box at 18.8 s), and B3's aimed fire items
 lose nothing.
 
-### Who uses what
+#### Who used what before G6
 
 | user | query | note |
 | --- | --- | --- |
@@ -108,125 +259,3 @@ lose nothing.
 | LIVE AI guard spot | `Sight.clear(spot, eye, bomb, leg band, upright, low)` | a guard spot needs sight to the bomb over the boxes |
 | B2's snap rule | `sees` of the human's pawn | through `Observe` (see below) |
 
-## `sees` (contract F5)
-
-Each tick, for every alive pawn V, `sees` lists every other alive pawn T, of either team, such that:
-
-1. V isn't blind (`tick < blindUntilTick(V)` means blind);
-2. T is within `ai.fovDeg / 2` (53°) of V's yaw (the bearing from V to T; the same point counts as in view);
-3. `Sight.clear(V.pos, eyeV, T.pos, eyeT)` with eyes at `damage.eyeHeight` (64) above the floor, `crouchEyeHeight`
-   (46) when crouched;
-4. the 2D segment V–T crosses no active smoke (`smokeBlocks`).
-
-Sorted by id. Dead pawns see nothing and can't be seen. Teammates are included (the Core's "don't snap a puppet the
-human can see" needs them). Sight and smoke are symmetric, so `computeSees` traces each unordered pair once, and only
-if one side looks at the other. The host caches it per state (recomputed after `tick()`, `apply()` and `restore()`),
-and the LIVE AI reads the same lists at the start of a tick.
-
-**Cost:** 0.073 ms per tick for 10 viewers × 9 targets (Node 22, recorded positions every 0.5 s of the round, 3.4
-visible pairs per tick on average; `tests/vision.test.ts` asserts < 0.5 ms). A whole Session step goes from 0.421 to
-0.449 ms per tick (full round, human cart). Cover adds a second walk over the cells of each line that passes the walls
-and the level check: 0.063 → 0.077 ms per tick in the same test, back to back (3.4 visible pairs per tick, unchanged).
-
-The CS2 adapter reproduces it with `Trace.TraceEndShape` eye to eye plus the same FOV, smoke and flash tests
-(`docs/cs2-adapter.md`, `sees`); the level check is the 2D sim's stand-in for the 3D trace.
-
-## Validation (`tests/vision.test.ts`, `tools/vision-labels.ts`)
-
-```sh
-npx tsx tools/vision-labels.ts           # the report below, logs/vision-labels.png
-npx tsx tools/vision-labels.ts --write   # also rewrites tests/fixtures/vision-labels.json
-npx tsx tools/vision-shots.ts            # B3's aimed fire items in the scripted round
-```
-
-**Must see** (from `data/round.json`, shooter or observer → target at that moment): every kill (`kpos` → `vpos`), every
-damage entry with `apos` and `vpos`, and every `sightings[]` entry (each T named in `by` → the CT, both from the tracks
-at `t0`; when `by` names several players and the recording's camera follows one of them at `t0`, only that one: at
-58.6 s "cart / barely" is barely's POV, while cart is in Shop behind the Market wall). A pair is **untrusted** (listed,
-not asserted) when an end isn't backed by an observed track sample (kills and damage: no observed sample within ±0.1 s
-and 16 units; sightings: the sample at `t0` or a neighbour it is interpolated from is estimated or inferred).
-
-**Must not see:** 12 hand-picked pairs across solid walls (each with its justification in the fixture), including the
-brief's Shop ↔ B plant and Underpass ↔ Catwalk.
-
-The fixture `tests/fixtures/vision-labels.json` is generated by the tool and checked against `round.json` by the test.
-
-**Results:** must see **12 / 12** asserted pairs visible (the nav LOS: 9 / 12); must not see **0 / 12** visible (the 2D
-mask alone: 1, Underpass ↔ Catwalk; the nav LOS: 0). With cover (F) both are unchanged: three asserted pairs cross
-cover, each at an end (rule 2 or 3 above).
-
-| pair | trusted | sight | 2D mask | nav LOS | longest wall run (cells) | mask flips with a sideways shift of |
-| --- | --- | --- | --- | --- | ---: | --- |
-| kill 0.5 snarlbot → incredibad | no (inferred) | blocked | blocked | blocked | 4.7 | 12 u |
-| kill 12.4 snarlbot → snakelore | no (estimated) | visible | visible | blocked | 0 | 35 u |
-| kill 12.75 lokier → eradicate | yes | visible | visible | visible | 0 | 16 u |
-| kill 17.85 sp4rtan → snarlbot | no (inferred) | blocked | blocked | blocked | 61.7 | > 96 u |
-| kill 18.8 cart → lokier | yes | visible | visible | **blocked** | 0 | 8 u |
-| kill 44.2 barely → zwomp | excluded (level) | blocked | blocked | blocked | 4.3 | > 96 u |
-| kill 50.35 sp4rtan → donk | yes | visible | visible | visible | 0 | 45 u |
-| kill 58.85 sp4rtan → barely | excluded (position) | blocked | blocked | blocked | 11.0 | 25 u |
-| kill 69.4 sp4rtan → cart | yes | visible | visible | visible | 0 | 78 u |
-| damage 18.5 lokier → cart | yes | visible | visible | **blocked** | 0.3 | 3 u |
-| damage 49.9 / 50 / 50.1 sp4rtan → donk | yes | visible | visible | visible | 0 | 33–34 u |
-| sighting 12.5 eradicate → lokier | yes | visible | visible | visible | 0 | 33 u |
-| sighting 12 snarlbot → snakelore | no (estimated) | visible | visible | blocked | 0 | 7 u |
-| sighting 17.45 cart → lokier | yes | visible | visible | **blocked** | 0 | 70 u |
-| sighting 44 barely → zwomp | excluded (level) | blocked | blocked | blocked | 4.4 | 91 u |
-| sighting 49.9 donk → sp4rtan | yes | visible | visible | visible | 0 | 33 u |
-| sighting 58.6 barely → sp4rtan | excluded (position) | blocked | blocked | blocked | 11.0 | 28 u |
-| sighting 68.75 cart → sp4rtan | yes | visible | visible | visible | 0 | 81 u |
-
-The 12 must-not-see pairs are all blocked by the full sight, 11 of them by walls 21–268 cells long that no shift up to
-96 units opens; Underpass ↔ Catwalk is blocked by the level check.
-
-**Investigated failures (excluded with evidence; none is a wallbang).** Four trusted pairs fail, all on barely's
-recorded position:
-
-- *barely → zwomp, 44.0 and 44.2 s (level).* barely's recorded spot is on the Tunnel Stairs (z −315 / −328), behind the
-  stairwell's 5-cell south wall (radar y 271–276; no nav area there either) and 143 units below Zwomp on Catwalk. In 3D
-  too his eye (z −251) is below the Catwalk floor (−172) at that wall, so nobody standing there sees Catwalk. His track
-  then jumps 89 units and +154 z onto Catwalk in 0.1 s at 44.7 s (B3's discontinuity list): the recorded spot is wrong,
-  he fired from the top of the stairs at Catwalk level.
-- *sp4rtan ↔ barely, 58.6 and 58.85 s (position).* The line runs 4.6 cells (23 units) inside the south edge of the pillar
-  at the east end of B site (radar x 341–351, y 269–283; also a hole in the nav mesh), 90 units from barely; moving
-  barely 25–28 units sideways clears it. His track holds y 310–312 from 58.2 to 58.8 s while he "runs back toward the
-  bomb" (narrative, 57.6 s), which lies due west at y 311: that straight run would go through the pillar, so he was
-  south of it. The pillar is 55 × 75 units, far beyond AK penetration.
-
-**B3's aimed fire items** (`tools/vision-shots.ts`, positions as the engine had them at each shot of the scripted round):
-9 of the 13 items with a target have sight at one of their shots (the nav LOS: 7; B3 counted 6 blocked), 8 at every
-shot, and 10 get an engine hit (hits are blocked by the Core's `block_damage`, so they only show in `combatLog()`). The
-four without sight: snarlbot → incredibad at 0.48 s (incredibad's inferred spot; the hit still lands, because the
-impact point on his circle is 16 units nearer), sp4rtan → snarlbot at 17.83 s (sp4rtan's inferred 700 u/s loop), and the
-two barely items above. With cover (F) the table is identical, item by item (9 / 8 / 10).
-
-**Cart's spray at the defusing sp4rtan (65.9–66.9 s), the case cover was meant for.** In the recording it hits nothing
-("the defuser behind the B-site boxes"); in 2D the first four of its eleven shots have sight (the table above: 4 / 11),
-and with B3's aim and no spread they hit. On this radar no box is on those lines: from cart's recorded spots
-(−2214, −182) … (−2270, −160) to sp4rtan's (−2005, 345) the line crosses open floor and the bombsite square, passing
-45 units east of the black corner stack (already wall, which blocks the later seven shots) and 55–80 units west of the
-south-east box stack; the nav mesh's holes agree with the radar's boxes there. So cover can't stop them. What the tape
-does show is cart looking elsewhere: his recorded view yaw during the spray tracks a fixed point near (−2210, 275)
-within 0.8° RMS, 17–22° off sp4rtan's spot, while he walks west at 150–200 u/s (an AK that inaccurate at 570 units
-misses anyway). B3 aims every recorded shot at its target; for the human's "perfect" follow script the shots the tape
-shows missing now use his recorded view instead (`tools/follow-aim.ts`, `docs/golden.md`), and that run has no LIVE
-switch. The radar sighting window points the same way, mirrored: sp4rtan is on cart's radar until 65.2 s and off it
-during the spray; in 2D the B-site stack hides the defusing sp4rtan from cart at the Shop door 64.5–65.1 s and opens as
-cart walks west. A few tens of units of difference in the CS:GO 2020 box or sp4rtan's spot would explain both.
-
-## Known failure modes
-
-- **No height in the mask.** Props (the white Truck, the B and A site boxes) are cover with one rule for all (above):
-  a 48-unit crate and a stack taller than a player are treated alike, and boxes drawn black (the B-site corner stacks)
-  are walls. Low walls drawn black block completely. Postures are only crouched / planting / defusing; nobody in the
-  2D sim jumps onto or over a box.
-- **Thin lines are windows everywhere.** The Apartments' whole south wall over B (≈ 415 units) is a 1-px line, so the
-  mask treats all of it as a window, and the Mid window of Sniper's Nest is wider than the real one.
-- **Levels** are only caught where the nav mesh has both floors (stacked areas) or the upper floor's edge; through nav
-  holes (36 % of recorded positions were off-mesh, `docs/nav.md`) the level check has nothing to test. A line within 48
-  units of a floor passes.
-- **Positions near obstacles.** Recorded positions are ±20–30 units; a line that grazes a pillar flips with a small
-  shift (the "flips with" column). The labelled set shows where.
-- **Smoke** is a 2D disc (`smokeBlocks`), full height, instantly full size; flashes need only the 2D mask.
-- **Doors** don't exist; the radar is CS2's (2026), the recording CS:GO's (2020): props and boxes may have moved
-  (`docs/cs2-adapter.md`, risk 10).
