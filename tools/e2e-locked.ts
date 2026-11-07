@@ -40,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import { Session, parseSessionData } from '../src/app/session';
+import { readWorld3d } from './harness';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 /** The throwaway password. It only ever locks the temp copy. */
@@ -555,6 +556,7 @@ async function main(): Promise<void> {
     readFileSync(join(REPO, 'data', 'mirage-nav.json'), 'utf8'),
     readFileSync(join(REPO, 'data', 'tuning.json'), 'utf8'),
     readFileSync(join(REPO, 'data', 'mirage-vismask.json'), 'utf8'),
+    readWorld3d(REPO),
   );
   const node = new Session({ ...data, seed: 1, human: null });
   for (let i = 0; i < (log?.lines ?? 0); i++) node.step();

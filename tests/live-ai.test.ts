@@ -435,7 +435,7 @@ describe('LIVE AI: determinism', () => {
     run(h, 640, () => fighting());
     expect(fighting()).toBe(true);
     const snap = h.snapshot();
-    expect((snap.data as { version: number }).version).toBe(4);
+    expect((snap.data as { version: number }).version).toBe(5);
     const rest = run(h, 400, () => false);
     const again = new Sim2DHost(nav, tuning, roster, { score: round.meta.score, roundTimeSec: round.meta.clock0 }, { mask, seed: 999 });
     again.restore(snap);

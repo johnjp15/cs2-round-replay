@@ -34,6 +34,7 @@ import { screenToWorld, worldToScreen } from './radar';
 import { FOLLOWED, Renderer } from './renderer';
 import { Scene, interpolationAlpha } from './scene';
 import { DEFAULT_HUMAN, Session, parseSessionData, type SessionData } from './session';
+import { STANDING_HULL, TRACE_SKIN } from '../sim2d/index';
 import { SUMMARY_DELAY_TICKS, SummaryOverlay, summaryDue, summaryView } from './summary-overlay';
 import { TimelineDom, seekFraction, seekStepForKey, stepTarget, timelineSpanTicks } from './timeline';
 
@@ -126,6 +127,11 @@ class App {
   private human: PlayerId | null;
   private phase: Phase = 'ready';
   private overlays: Overlays;
+  /** The map layers: the radar, and (G3) the height map. */
+  private readonly radar: HTMLImageElement;
+  private readonly height: HTMLImageElement | null;
+  /** G3: floor height lookup for the renderer's height cue, or null with 2D movement. */
+  private readonly floorZ: ((x: number, y: number, z: number) => number | null) | null;
   private lastFrame: number | null = null;
   private frames = 0;
   private cursorStyle = '';
@@ -153,13 +159,24 @@ class App {
     overlays: HTMLButtonElement[];
   };
 
-  constructor(data: SessionData, radar: HTMLImageElement, seed: number, human: PlayerId | null) {
+  constructor(data: SessionData, radar: HTMLImageElement, seed: number, human: PlayerId | null, height: HTMLImageElement | null = null) {
     this.data = data;
+    this.radar = radar;
+    this.height = height;
+    const g = data.geometry ?? null;
+    // G3: the floor under a pawn (a standing hull's footprint, at or below its feet), for the height cue.
+    this.floorZ =
+      g === null
+        ? null
+        : (x: number, y: number, z: number): number | null => {
+            const f = g.floorBelow(x, y, z + TRACE_SKIN, STANDING_HULL.halfWidth, 0, FLOOR_LOOKUP_DOWN);
+            return f === null ? null : f.z;
+          };
     this.seed = seed;
     this.human = human;
     const canvas = el('view', HTMLCanvasElement);
     this.canvas = canvas;
-    this.overlays = { follow: false, ghost: true, tracks: false, panel: window.matchMedia('(min-width: 900px)').matches };
+    this.overlays = { follow: false, ghost: true, tracks: false, panel: window.matchMedia('(min-width: 900px)').matches, height: false };
     this.renderer = new Renderer(canvas, radar, data.round);
     this.hud = new Hud(data.round, () => this.toggle('panel'));
     this.loop = new FixedLoop(() => this.stepOnce(), { paused: true });
@@ -337,10 +354,11 @@ class App {
       const p = this.scene.pawn(this.session.human ?? FOLLOWED);
       this.renderer.startFollow(p === null ? null : p.pos);
     }
+    if (key === 'height') this.renderer.setMapLayer(this.overlays.height && this.height !== null ? this.height : this.radar);
     this.updateControls();
   }
 
-  /** View toggles: F follow, G ghost, T tracks, Tab status panel; B5: `[` / `]` seek 5 s back / ahead. */
+  /** View toggles: F follow, G ghost, T tracks, Tab status panel, H height map (G3); B5: `[` / `]` seek 5 s back / ahead. */
   private onKey(e: KeyboardEvent): void {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
     const step = seekStepForKey(e.code);
@@ -471,6 +489,7 @@ class App {
       nowMs: now,
       avoid: this.hud.occupiedRects(),
       ai: s.host,
+      floorZ: this.floorZ,
     });
     this.hud.update({
       scene: this.scene,
@@ -484,6 +503,7 @@ class App {
       fps: this.fpsMeter.rate(now),
       tps: this.tpsMeter.rate(now),
       ai: s.host,
+      floorZ: this.floorZ,
     });
     this.updateTimeline();
     this.updateCursor();
@@ -567,6 +587,9 @@ class App {
   }
 }
 
+/** G3: how far below a pawn's feet the height cue looks for a floor (units). */
+const FLOOR_LOOKUP_DOWN = 1024;
+
 async function boot(): Promise<void> {
   const status = el('status', HTMLElement);
   try {
@@ -574,8 +597,8 @@ async function boot(): Promise<void> {
     const seedParam = Number(params.get('seed') ?? '1');
     const seed = Number.isInteger(seedParam) ? seedParam : 1;
     const a = await loadAssets();
-    const data = parseSessionData(a.round, a.nav, tuningJson, a.vision);
-    new App(data, a.radar, seed, initialHuman(params));
+    const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
+    new App(data, a.radar, seed, initialHuman(params), a.height);
     status.hidden = true;
   } catch (err) {
     status.textContent = `Could not start: ${err instanceof Error ? err.message : String(err)}`;

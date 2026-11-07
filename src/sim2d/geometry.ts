@@ -247,6 +247,23 @@ export function decodeGeometry(bytes: Uint8Array): GeometryMesh {
   return { quant, verts, tris };
 }
 
+/**
+ * One mesh made of two with the same `quant`: `a`'s vertices and triangles, then `b`'s (indices shifted). G3 merges
+ * the player clips (data/geometry/mirage-clips.bin, docs/geometry.md "Player clips") into the world mesh this way, so
+ * movement traces see them like any other surface. The result is not canonical G2GM (it is never encoded).
+ */
+export function combineMeshes(a: GeometryMesh, b: GeometryMesh): GeometryMesh {
+  if (a.quant !== b.quant) throw new GeometryError(`combineMeshes: quant ${a.quant} vs ${b.quant}`);
+  const verts = new Int32Array(a.verts.length + b.verts.length);
+  verts.set(a.verts, 0);
+  verts.set(b.verts, a.verts.length);
+  const tris = new Int32Array(a.tris.length + b.tris.length);
+  tris.set(a.tris, 0);
+  const shift = a.verts.length / 3;
+  for (let i = 0; i < b.tris.length; i++) tris[a.tris.length + i] = (b.tris[i] as number) + shift;
+  return { quant: a.quant, verts, tris };
+}
+
 // ---- queries -----------------------------------------------------------------------------------------------------
 
 /** Number of separating axes for an AABB against a triangle: the face normal, x, y, z, and 9 edge cross products. */

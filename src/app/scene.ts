@@ -51,6 +51,8 @@ export function lerpAngle(a: number, b: number, f: number): number {
 export interface Pose {
   readonly x: number;
   readonly y: number;
+  /** G3: feet height (interpolated like x and y). */
+  readonly z: number;
   readonly yaw: number;
 }
 
@@ -59,12 +61,12 @@ export interface Pose {
  * previous observe, across a death, or across a jump larger than SNAP_UNITS_PER_TICK.
  */
 export function interpolatePose(prev: PawnObs | null | undefined, cur: PawnObs, alpha: number): Pose {
-  if (prev === null || prev === undefined || prev.alive !== cur.alive) return { x: cur.pos.x, y: cur.pos.y, yaw: cur.yaw };
+  if (prev === null || prev === undefined || prev.alive !== cur.alive) return { x: cur.pos.x, y: cur.pos.y, z: cur.pos.z, yaw: cur.yaw };
   const dx = cur.pos.x - prev.pos.x;
   const dy = cur.pos.y - prev.pos.y;
-  if (dx * dx + dy * dy > SNAP_UNITS_PER_TICK * SNAP_UNITS_PER_TICK) return { x: cur.pos.x, y: cur.pos.y, yaw: cur.yaw };
+  if (dx * dx + dy * dy > SNAP_UNITS_PER_TICK * SNAP_UNITS_PER_TICK) return { x: cur.pos.x, y: cur.pos.y, z: cur.pos.z, yaw: cur.yaw };
   const f = Math.min(1, Math.max(0, alpha));
-  return { x: prev.pos.x + dx * f, y: prev.pos.y + dy * f, yaw: lerpAngle(prev.yaw, cur.yaw, f) };
+  return { x: prev.pos.x + dx * f, y: prev.pos.y + dy * f, z: prev.pos.z + (cur.pos.z - prev.pos.z) * f, yaw: lerpAngle(prev.yaw, cur.yaw, f) };
 }
 
 // ---- kill feed ---------------------------------------------------------------------------------

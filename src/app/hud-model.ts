@@ -74,11 +74,13 @@ export interface Overlays {
   readonly tracks: boolean;
   /** Status panel open. */
   readonly panel: boolean;
+  /** G3: the map layer is the height map (data/geometry/mirage-height.png) instead of the radar. */
+  readonly height: boolean;
 }
 
 export type OverlayKey = keyof Overlays;
 
-/** View toggles by `KeyboardEvent.code`: F follow, G ghost, T tracks, Tab panel. */
+/** View toggles by `KeyboardEvent.code`: F follow, G ghost, T tracks, Tab panel, H height map (G3). */
 export function overlayForKey(code: string): OverlayKey | null {
   switch (code) {
     case 'KeyF':
@@ -89,6 +91,8 @@ export function overlayForKey(code: string): OverlayKey | null {
       return 'tracks';
     case 'Tab':
       return 'panel';
+    case 'KeyH':
+      return 'height';
     default:
       return null;
   }
@@ -283,6 +287,38 @@ export interface AiDebugSource {
  * The status panel's line for a LIVE pawn: its behaviour, target and goal, e.g.
  * "fighting · target sp4rtan · defuse → (-1982, 311)". null when it isn't LIVE (no debug view).
  */
+/**
+ * G3: how a pawn above the floor is drawn (top-down, so height needs a cue): its shadow on the floor, offset down and
+ * to the right (light from the upper left) by `shadowPerUnit` × the height in CSS px (at most AIR_CUE_MAX units of
+ * height count), the disc scaled up by up to 35 % and brightened by up to 0.3 (white over it). Below
+ * AIR_CUE_MIN_UNITS (stairs, a step) nothing changes: null.
+ */
+export interface AirCue {
+  readonly shadowDx: number;
+  readonly shadowDy: number;
+  readonly scale: number;
+  readonly lighten: number;
+}
+
+export const AIR_CUE_MIN_UNITS = 2;
+export const AIR_CUE_MAX_UNITS = 120;
+
+export function airCue(heightUnits: number, pxPerUnit: number): AirCue | null {
+  if (!(heightUnits >= AIR_CUE_MIN_UNITS)) return null;
+  const h = Math.min(heightUnits, AIR_CUE_MAX_UNITS);
+  const k = h / AIR_CUE_MAX_UNITS;
+  const off = Math.max(2, h * pxPerUnit * 0.6);
+  return { shadowDx: off, shadowDy: off, scale: 1 + 0.35 * k, lighten: 0.3 * k };
+}
+
+/** G3: a pawn's height for the status panel: `z −48`, and `+23 in the air` / `crouched` when it is. */
+export function heightText(p: Pick<PawnObs, 'pos' | 'onGround' | 'crouching'>, aboveFloor: number | null): string {
+  const parts = [`z ${Math.round(p.pos.z)}`];
+  if (!p.onGround) parts.push(aboveFloor === null ? 'in the air' : `+${Math.round(aboveFloor)} in the air`);
+  else if (p.crouching) parts.push('crouched');
+  return parts.join(' · ');
+}
+
 export function aiDebugLine(d: AiDebugView | null): string | null {
   if (d === null) return null;
   const parts: string[] = [d.behaviour];

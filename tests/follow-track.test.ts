@@ -99,6 +99,9 @@ function follow(id: string, mode: Controller): FollowResult {
     yaw: 0,
     pitch: 0,
     crouching: false,
+      onGround: true,
+      jumpHeld: false,
+      stamina: 0,
   };
   let yaw = 0;
   for (let i = 1; i < samples.length; i++) {

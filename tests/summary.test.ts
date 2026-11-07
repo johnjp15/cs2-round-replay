@@ -62,9 +62,10 @@ describe('summary of the golden round (no human)', () => {
   it("reports cart's stats (watched, not played)", () => {
     expect(s.player).toMatchObject({ id: 'cart', human: false, kills: 1, damageDealt: 100, damageTaken: 100, deathTick: 4442 });
     expect(s.player.aliveSec).toBeCloseTo(4441 / 64, 9);
-    // Per tick against the interpolated track (the golden table's 13.5 is per 10 Hz sample).
+    // Per tick against the interpolated track (the golden table's 13.5 is per 10 Hz sample). G3: 27 on CS2 Mirage:
+    // cart's puppet drifts up to the 96 u snap distance before each of his four snaps (tests/golden-round.test.ts).
     expect(s.player.rmsFromRecording).toBeGreaterThan(10);
-    expect(s.player.rmsFromRecording).toBeLessThan(16);
+    expect(s.player.rmsFromRecording).toBeLessThan(30);
   });
 
   it('is a pure function: the same lines give the same summary; a partial log is unfinished', () => {

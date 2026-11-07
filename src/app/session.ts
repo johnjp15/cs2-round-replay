@@ -27,8 +27,10 @@
 import {
   ALL_CAPABILITIES,
   SessionLog,
+  applyTracks3d,
   canonicalize,
   parseRound,
+  parseTracks3d,
   parseTuning,
   toReplayTrace,
   type Act,
@@ -44,9 +46,10 @@ import {
   type ReplayTrace,
   type RoundData,
   type Tuning,
+  type WalkQuery,
 } from '../contracts/index';
 import { CheckpointStore, EventSchedule, ReplayCore, RoundModel, autoCheckpointId, checkpointInterval, tickOf, type Checkpoint, type RoundClock } from '../core/index';
-import { NavMesh, NavWalkQuery, Sim2DHost, VisMask, navOptionsFromTuning, visOptionsFromTuning, type HostNote, type PawnState, type RosterEntry } from '../sim2d/index';
+import { HullWalkQuery, MapGeometry, NavMesh, NavWalkQuery, Sim2DHost, nav3dFor, VisMask, combineMeshes, decodeGeometry, navOptionsFromTuning, visOptionsFromTuning, type HostNote, type PawnState, type RosterEntry } from '../sim2d/index';
 import { weaponForSlot, type WeaponSlot } from './input';
 
 /** The pawn a human plays unless told otherwise. */
@@ -54,23 +57,44 @@ export const DEFAULT_HUMAN: PlayerId = 'cart';
 
 /** The parsed data files a session is built from. */
 export interface SessionData {
+  /** The round the Session plays: `round.json`, with the snapped 3D tracks applied when there is a 3D world (G3). */
   readonly round: RoundData;
   readonly nav: NavMesh;
   readonly tuning: Tuning;
   /** The sight mask (`mirage-vismask.json`, C4), or null for the nav mesh's line of sight. */
   readonly vision: VisMask | null;
+  /** G3: the movement mesh (world + player clips) for 3D movement, or null for the nav's 2D movement. */
+  readonly geometry?: MapGeometry | null;
+  /** G3: `round.json` as recorded (before snapping); the same object as `round` without a 3D world. */
+  readonly recorded?: RoundData;
+}
+
+/**
+ * G3: the 3D world's files: `data/geometry/mirage-geometry.bin` (CS2 collision), `mirage-clips.bin` (player clips)
+ * and `mirage-tracks.json` (the snapped tracks; JSON value or text). docs/geometry.md, docs/movement.md.
+ */
+export interface World3dFiles {
+  readonly geometry: Uint8Array;
+  readonly clips: Uint8Array;
+  readonly tracks: unknown;
 }
 
 /**
  * Parse `round.json`, `mirage-nav.json`, `tuning.json` and `mirage-vismask.json` (as JSON values or text; the mask
- * may be null). Throws on bad data.
+ * may be null), and (G3) the 3D world: with it the session moves pawns in 3D on the CS2 mesh and plays the snapped
+ * tracks. Throws on bad data.
  */
-export function parseSessionData(roundJson: unknown, navJson: unknown, tuningJson: unknown, visionJson: unknown = null): SessionData {
+export function parseSessionData(roundJson: unknown, navJson: unknown, tuningJson: unknown, visionJson: unknown = null, world3d: World3dFiles | null = null): SessionData {
   const tuning = parseTuning(tuningJson);
   const nav = NavMesh.fromJson(typeof navJson === 'string' ? (JSON.parse(navJson) as unknown) : navJson, navOptionsFromTuning(tuning));
   const vis = typeof visionJson === 'string' ? (JSON.parse(visionJson) as unknown) : visionJson;
   const vision = vis === null ? null : VisMask.fromJson(vis, visOptionsFromTuning(tuning.ai));
-  return { round: parseRound(roundJson), nav, tuning, vision };
+  const recorded = parseRound(roundJson);
+  if (world3d === null) return { round: recorded, nav, tuning, vision, geometry: null, recorded };
+  const geometry = new MapGeometry(combineMeshes(decodeGeometry(world3d.geometry), decodeGeometry(world3d.clips)));
+  // Paths (the LIVE AI, G1's pathLength) only through portals a hull can cross on the CS2 mesh.
+  const nav3d = nav.with3d(nav3dFor(geometry, tuning.movement.stepSize));
+  return { round: applyTracks3d(recorded, parseTracks3d(world3d.tracks)), nav: nav3d, tuning, vision, geometry, recorded };
 }
 
 /** What a Core is built from. */
@@ -80,13 +104,24 @@ export interface CoreParts {
   readonly tuning: Tuning;
   readonly seed: number;
   readonly nav: NavMesh;
+  /** G3: the movement mesh, or null with 2D movement. */
+  readonly geometry?: MapGeometry | null;
 }
 
 export type CoreFactory = (parts: CoreParts) => ReplayCore;
 
-/** The Core every session uses unless told otherwise: puppets steer with the nav mesh's walkable-line query (B2). */
+/**
+ * The WalkQuery the app's Core uses: with 3D movement (G3) the hull sweep on the movement mesh (`HullWalkQuery`), so
+ * puppets steer around the walls they actually collide with; otherwise the nav mesh's (B2). Paths are the nav's either way.
+ */
+export function walkQueryOf(p: { readonly nav: NavMesh; readonly geometry?: MapGeometry | null; readonly tuning: Tuning }): WalkQuery {
+  const g = p.geometry ?? null;
+  return g === null ? new NavWalkQuery(p.nav) : new HullWalkQuery(g, p.nav, p.tuning.movement.stepSize);
+}
+
+/** The Core every session uses unless told otherwise: puppets steer with `walkQueryOf` (B2, G3). */
 export function defaultCore(p: CoreParts): ReplayCore {
-  return new ReplayCore(p.model, p.schedule, p.tuning, p.seed, new NavWalkQuery(p.nav));
+  return new ReplayCore(p.model, p.schedule, p.tuning, p.seed, walkQueryOf(p));
 }
 
 export interface SessionConfig {
@@ -97,6 +132,8 @@ export interface SessionConfig {
   readonly seed: number;
   /** The sight mask (C4); without it (or null) the engine uses the nav mesh's line of sight. */
   readonly vision?: VisMask | null;
+  /** G3: the movement mesh for 3D movement (SessionData.geometry); without it (or null) the nav's 2D movement. */
+  readonly geometry?: MapGeometry | null;
   /** The pawn the human plays: `cart` by default, or null to spectate (all ten pawns replay). */
   readonly human?: PlayerId | null;
   /** Builds the Core (default: defaultCore). For tests, benchmarks and Core variants. */
@@ -165,6 +202,8 @@ export interface SessionSnapshot {
 export class Session {
   readonly round: RoundData;
   readonly nav: NavMesh;
+  /** G3: the movement mesh, or null (2D movement). */
+  readonly geometry: MapGeometry | null;
   readonly tuning: Tuning;
   readonly seed: number;
   readonly human: PlayerId | null;
@@ -213,10 +252,18 @@ export class Session {
     this.model = new RoundModel(config.round);
     this.schedule = new EventSchedule(config.round);
     const roster: RosterEntry[] = this.model.players.map((p) => ({ id: p.id, team: p.team }));
-    this.host = new Sim2DHost(config.nav, config.tuning, roster, { score: config.round.meta.score, roundTimeSec: config.round.meta.clock0 }, { mask: config.vision ?? null, seed: config.seed });
+    this.geometry = config.geometry ?? null;
+    this.host = new Sim2DHost(
+      config.nav,
+      config.tuning,
+      roster,
+      { score: config.round.meta.score, roundTimeSec: config.round.meta.clock0 },
+      { mask: config.vision ?? null, seed: config.seed },
+      this.geometry,
+    );
     this.host.setHuman(this.human);
     const makeCore = config.core ?? defaultCore;
-    this.core = makeCore({ model: this.model, schedule: this.schedule, tuning: config.tuning, seed: config.seed, nav: config.nav });
+    this.core = makeCore({ model: this.model, schedule: this.schedule, tuning: config.tuning, seed: config.seed, nav: config.nav, geometry: this.geometry });
     const hc = this.host.capabilities();
     const want = { ...ALL_CAPABILITIES, ...(config.capabilities ?? {}) };
     this.capabilities = { snapshot: hc.snapshot && want.snapshot, seek: hc.seek && want.seek, speed: hc.speed && want.speed };

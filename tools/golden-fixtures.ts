@@ -26,6 +26,7 @@ import {
   DEFAULT_SEED,
   ROOT,
   ScriptDriver,
+  bytesHash,
   canonicalHash,
   loadHarnessData,
   logDigest,
@@ -105,6 +106,9 @@ export interface FixtureEntry {
   readonly roundHash: string;
   readonly navHash: string;
   readonly visionHash: string;
+  /** G3: canonicalHash of data/geometry/mirage-tracks.json, and FNV-1a of the movement mesh (mirage-geometry.bin then mirage-clips.bin). */
+  readonly tracksHash: string;
+  readonly geometryHash: string;
   /** `git rev-parse HEAD` when generated, and whether src/, data/ or tools/ had uncommitted changes then. */
   readonly commit: string;
   readonly sourceDirty: boolean;
@@ -205,7 +209,14 @@ export function updateFixtures(data: HarnessData, write: boolean, root = ROOT): 
   const old = readManifest(root);
   const commit = git(['rev-parse', 'HEAD'], root) || 'unknown';
   const dirty = git(['status', '--porcelain', '--', 'src', 'data', 'tools'], root) !== '';
-  const hashes = { tuningHash: canonicalHash(data.sources.tuning), roundHash: canonicalHash(data.sources.round), navHash: canonicalHash(data.sources.nav), visionHash: canonicalHash(data.sources.vision) };
+  const hashes = {
+    tuningHash: canonicalHash(data.sources.tuning),
+    roundHash: canonicalHash(data.sources.round),
+    navHash: canonicalHash(data.sources.nav),
+    visionHash: canonicalHash(data.sources.vision),
+    tracksHash: canonicalHash(data.sources.tracks),
+    geometryHash: bytesHash(data.sources.geometry, data.sources.clips),
+  };
   const changed: string[] = [];
   const entries: FixtureEntry[] = [];
   if (write) mkdirSync(resolve(root, GOLDEN_DIR), { recursive: true });

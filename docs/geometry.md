@@ -343,7 +343,7 @@ Windows are open in the mesh (glass is filtered), so with corrected positions th
 
 ## Known limits
 
-- **No player clips, no glass.** The mesh can't tell which wall tops, ledges and roofs the game keeps players off
+- **No player clips, no glass** (G3 adds clips from the CS2 nav: "Player clips" above). The mesh can't tell which wall tops, ledges and roofs the game keeps players off
   with `playerclip`: every walkable top where a hull fits counts as standable (for example a ledge 28 units above the
   Catwalk walkway at x ≈ −745). Windows and glass panes are holes. Crouch-jump reachability from boxes could reach places the real game forbids.
   Getting the clips back would need the unfiltered `world_physics` export (rerun awpy-data's
@@ -392,6 +392,66 @@ Windows are open in the mesh (glass is filtered), so with corrected positions th
 6. **Wiring.** Load `mirage-geometry.bin` once (≈ 55 ms) and share one `MapGeometry` across pawns. Instances aren't
    re-entrant, which is fine on the main thread or one per worker. Embed it as described under Format; it adds
    313 KB to the single page and ≈ 417 KB to the locked one.
+
+## Player clips (G3, `tools/extract-clips.ts`)
+
+The mesh has no `playerclip` brushes, so G3 puts them back where they matter: **CS2's own nav mesh is the authority**
+(Valve generates it from the full collision, clips included). `npm run clips:extract` writes
+`data/geometry/mirage-clips.bin` (G2GM, 151,199 bytes: 3,864 surface pieces as prisms, 27,155 triangles),
+`mirage-clips.json` (manifest, parameters, rounds, validation) and `docs/img/geometry-clips.jpg`. The movement mesh
+is the world merged with the clips (`combineMeshes`), so every trace sees them as walls.
+
+1. Every walkable world triangle is cut into 8-unit world cells ("pieces"). A piece is **allowed** when the CS2 nav
+   has a polygon at its height at the point (within 16) or within 24 units (within 16): the nav is eroded by Recast's
+   agent radius and sits a few units off the decimated mesh.
+2. Flood from the ten start positions over allowed stand levels at every 5-unit radar pixel, by walking (up 18),
+   dropping and jumping (up to 72, with the crouched hull's headroom). A forbidden level an edge reaches is a frontier:
+   a wall top, ledge, roof or out-of-map floor a pawn could get onto.
+3. Under each frontier level, every forbidden piece the hull would rest on gets a prism up 512 units (or to just
+   under the ceiling). Allowed floors are never covered, so a pawn beside a low wall isn't pushed off it.
+4. Repeat on the merged mesh until nothing new is reached (3 rounds), then validate: a flood of the merged mesh with
+   **no** nav filter reaches 243,495 stand levels, 35 of them (19 cells) not nav-covered (prop corners and nav holes,
+   listed in the manifest).
+
+So pawns stand on the B-site and A-site boxes, the Catwalk, the Balcony and Window, and not on wall tops, roofs or
+outside the map (tests in `tests/movement3d.test.ts`). The clips don't cover glass (windows stay open) and don't add
+invisible walls in mid-air (there are none in the nav to find).
+
+## Track snapping (G3, `tools/snap-tracks.ts`)
+
+The recording's (x, y) are from a 2020 POV video and its z from the 2020 nav, so many samples are inside CS2's
+walls, props or the Truck, or on the wrong floor. `npm run tracks:snap` writes `data/geometry/mirage-tracks.json` (one
+[x, y, z] per sample of `round.tracks`, 1/32-unit grid, plus jump take-offs; `--check` fails when it is stale). The
+app applies it to the round before the Core sees it (`applyTracks3d`), so puppets follow positions a hull can stand
+at. Deterministic, offline (36 s). Passes:
+
+1. **Snap** each sample to the nearest allowed stand level within 64 units (2-unit search grid, level within 32 of the
+   recorded z), preferring one on the previous sample's floor in a clear hull line from it (`hullLineClear`, as the
+   puppets' WalkQuery); else the spot reachable from the previous one nearest the recording (`follow`). A recorded
+   change of floor is taken when a hull can walk there; a track left on another floor than the recording's for a
+   second restarts on the recording's (barely's underpass at 35.1 s).
+2. **Repair**: where consecutive samples still aren't in a clear line, re-place the samples around the gap together
+   (Viterbi over candidate spots).
+3. **Detour**: a gap that remains is a wall the recording walked through: an A* over stand levels (8-unit grid, up a
+   step, down ledges up to 216, no jumps) finds the way round, and the samples around the gap are spread along it.
+4. **Retime and reroute**: a snapped track longer than the recording can't be followed at run speed, so the track
+   falls behind along its own path at the recorded weapon's run speed and catches up where the recording is slower
+   (35 stretches, at most 67 units behind). Where it would fall more than 48 units behind, the shortest way (A* with
+   jump edges onto levels up to 48 higher, checked with the 3D movement, with headroom for the jump) replaces the
+   snapped one when it is shorter, the samples placed by the recording's progress (3 stretches: barely 17.7–23.9 s
+   through the Apartments and off the Balcony's west end, 1,427 → 1,072 units; cart 19.5–21.1 s and 46.9–48.6 s).
+   Plant and defuse samples never move.
+
+Result: 3,562 samples; 2,286 unmoved, 163 moved ≤ 16 units, 1,074 moved 16–64, 39 further (horizontal moves ≤ 4: 72,
+≤ 8: 86, ≤ 16: 110, ≤ 32: 286, ≤ 48: 328, more: 189). 7 transitions are still not in a clear hull line: the recording's own
+jump back up from the underpass (barely 44.9 s); the recording walking through an A-site box CS2 has, with no way
+round found in time (cart 29.3 s and 64.2 s); floors that don't match (barely 35.0 s into the underpass, donk 20.9 s
+onto a floor CS2 raises 32 units in the Apartments, snarlbot 9.8 s on T ramp where the 2020 z is 80 above CS2's
+floor); and 9 units at barely 2.5 s. The puppets snap at these when nobody watches (`docs/core.md`, "Snaps on CS2
+Mirage"). **Jumps: none.** The search found
+jump edges (the B Apartments window's 20-unit sill), but a jump there bumps the lintel and stalls the puppet, so jump
+landings need headroom for a whole jump; with that rule no track needs one. Puppets still press JUMP for any take-off
+the tracks mark (`docs/core.md`), tested with synthetic tracks.
 
 ## Port notes (C#)
 

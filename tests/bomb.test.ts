@@ -433,7 +433,7 @@ describe('bomb snapshots and determinism', () => {
       const host = mirageHost();
       advanceStory(host, at);
       const snap = host.snapshot();
-      expect((snap.data as { version: number }).version).toBe(4);
+      expect((snap.data as { version: number }).version).toBe(5);
       const state = host.bombState();
       if (at < PLANT_TICK) expect(state.plant).toMatchObject({ id: 'barely', endTick: PLANT_TICK });
       else expect(state.defuse).toMatchObject({ id: 'sp4rtan', endTick: DEFUSE_TICK, forced: false });

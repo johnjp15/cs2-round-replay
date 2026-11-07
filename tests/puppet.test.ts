@@ -58,6 +58,7 @@ function pawn(id: PlayerId, x: number, y: number, yaw = 0): PawnObs {
     weapon: 'ak47',
     ammo: { clip: 30, reserve: 90 },
     crouching: false,
+    onGround: true,
     sees: [],
   };
 }
@@ -398,5 +399,61 @@ describe('ReplayCore with puppets', () => {
     const core = new ReplayCore(model, schedule, tuning, 1);
     expect(core.puppet('cart')).toBeNull();
     expect(core.snapCount).toBe(0);
+  });
+});
+
+describe('G3: JUMP from a take-off sample (TrackSample.jump)', () => {
+  // East at 200 u/s; the sample at 1.0 s (x 200) takes off for the one at 1.1 s (x 220, 20 u up: a box top).
+  const jumpTrack = (kind: 'plain' | 'crouch'): PuppetTrack => {
+    const s = line(30, 0, 0, 200, 0).map((q) => (q.t >= 1.1 - 1e-9 ? { ...q, z: 20 } : q));
+    s[10] = { ...(s[10] as TrackSample), jump: kind };
+    return track(s);
+  };
+  const running = (x: number, vx = 200): PawnObs => ({ ...pawn('cart', x, 0, 0), vel: { x: vx, y: 0, z: 0 } });
+
+  it('the track lists its take-offs; none on a track without jump flags', () => {
+    expect(jumpTrack('plain').takeoffs).toEqual([10]);
+    expect(track(line(30, 0, 0, 200, 0)).takeoffs).toEqual([]);
+  });
+
+  it('presses JUMP once, near the take-off spot, in its window, running toward the landing; then steers at the landing', () => {
+    const c = new PuppetController(jumpTrack('plain'), tuning, OPEN);
+    // Too far from the take-off spot (x 200): no jump yet.
+    expect(c.input(running(150), observe(60, [running(150)], null), 60).input.buttons).not.toContain('JUMP');
+    // Within jumpReachUnits, on the ground, lined up: JUMP.
+    const at = 200 - r.jumpReachUnits + 2;
+    const first = c.input(running(at), observe(62, [running(at)], null), 62).input;
+    expect(first.buttons).toContain('JUMP');
+    expect(c.state.usedJumps).toEqual([10]);
+    // In the air: no second press (fresh press only once), steering at the landing sample (straight east here).
+    const air = { ...running(at + 6), onGround: false, pos: { x: at + 6, y: 0, z: 30 } };
+    const next = c.input(air, observe(63, [air], null), 63).input;
+    expect(next.buttons).not.toContain('JUMP');
+    expect(next.forward).toBeGreaterThan(0);
+    // The take-off is used: back on the ground near it later, no jump.
+    const again = c.input(running(at), observe(70, [running(at)], null), 70).input;
+    expect(again.buttons).not.toContain('JUMP');
+  });
+
+  it('not lined up (running away from the landing): eases to the take-off spot and jumps from nearly standing', () => {
+    const c = new PuppetController(jumpTrack('plain'), tuning, OPEN);
+    const away = running(190, -200);
+    expect(c.input(away, observe(62, [away], null), 62).input.buttons).not.toContain('JUMP');
+    const still = { ...pawn('cart', 199, 0, 0), vel: { x: 10, y: 0, z: 0 } };
+    expect(c.input(still, observe(63, [still], null), 63).input.buttons).toContain('JUMP');
+  });
+
+  it('a crouch jump holds DUCK in the air', () => {
+    const c = new PuppetController(jumpTrack('crouch'), tuning, OPEN);
+    const at = 195;
+    expect(c.input(running(at), observe(62, [running(at)], null), 62).input.buttons).toEqual(expect.arrayContaining(['JUMP', 'DUCK']));
+    const air = { ...running(at + 6), onGround: false, pos: { x: at + 6, y: 0, z: 30 } };
+    expect(c.input(air, observe(63, [air], null), 63).input.buttons).toContain('DUCK');
+  });
+
+  it('outside the window (the track is long past the take-off), no jump', () => {
+    const c = new PuppetController(jumpTrack('plain'), tuning, OPEN);
+    const k = 64 * 2 + Math.round(r.jumpWindowSec * 64) + 4;
+    expect(c.input(running(198), observe(k, [running(198)], null), k).input.buttons).not.toContain('JUMP');
   });
 });

@@ -249,6 +249,47 @@ Compared with C1's wall-aware pursuit (no snaps): cart 21.2 → 13.7, donk 17.5 
 - **Snap visibility** checks only whether the human sees the pawn now, not whether the destination is in view. `Sim2DHost` reports `sees: []`, so in the 2D sim every pawn is unseen until the host computes `sees`.
 - **Drift is 2D.** A pawn on the wrong level right under its track counts as on track. barely's level change snaps 0.18 s after the jump (98 u at 44.98 s), because the 2D gap at the jump is only 89 u.
 
+### Jumps (G3)
+
+A track sample can carry `jump: 'plain' | 'crouch'` (the snapped 3D tracks mark where a puppet has to jump; the
+current tracks need none, `docs/geometry.md`). `PuppetTrack.takeoffs` lists them. From `jumpWindowSec` (0.5 s) before
+the take-off sample's tick to as long after the landing sample's, a puppet on the ground within `jumpReachUnits` (24)
+of the take-off spot presses JUMP once: at once if it runs within about 25° of the take-off → landing bearing, else
+it eases to the take-off spot and jumps from nearly standing (the snapping checks jumps from standing). Then it steers
+at the landing sample, holding DUCK in the air for a crouch jump, until it is on the ground near the landing (or the
+window is over). Each take-off is used once (`PuppetState.usedJumps`). Tested with synthetic tracks
+(`tests/puppet.test.ts`).
+
+### Snaps on CS2 Mirage (G3)
+
+With 3D movement on the snapped tracks the golden master snaps 11 times instead of main's 6
+(`tests/golden-round.test.ts` lists them). A puppet only snaps inside a teleport window (an over-speed stretch of its
+track) when it is more than `driftSnapUnits` (96) behind and the human doesn't see it.
+
+| Snap | Same as on main? | Cause |
+| --- | --- | --- |
+| cart 920 | main's cart 922 | the recording's own discontinuity |
+| sp4rtan 1171 | main's sp4rtan 1165 | the recording's spike (inferred CT positions) |
+| sp4rtan 1229, 1245 | main's sp4rtan 1248 | the same inferred 700 u/s stretch, split in two by the snapping |
+| cart 1393 | main's cart 1350 | the recording's discontinuity, reached later |
+| barely 2880 | main's barely 2879 | the recording's jump back up from the underpass |
+| snarlbot 633 | new | T ramp: the 2020 z is 80 above CS2's floor there; the track rejoins the recording's floor in one step |
+| donk 1344 | new (main's donk 923 is gone) | Apartments: CS2 raises the floor 32 units where the 2020 floor is flat; the track gets onto it in one step (a jump would do it: the snapping's detours have no jumps yet) |
+| cart 1880, 4114 | new | A site: the recording walks through a box CS2 has; the snapping finds no way round in time |
+| barely 2299 | new, on purpose | the recording drops from B short's corridor into the underpass (35.1 s); CS2 has no way down near by, so the track restarts on the recording's floor (keeping barely out of Mid's sight, as on main) |
+
+Fixable later: the A-site box (a wider detour search), the Apartments step (detours with jumps) and the split
+sp4rtan stretch; the floor mismatches are recording error against CS2's floors.
+
+### The plant in never-peeks (G3)
+
+`never-peeks` (and `cart-goes-a`, `miss-lokier-shop`) plant at 1768 instead of the tape's 1761, so the round ends
+with 0.83 s on the bomb instead of 0.72. barely goes LIVE on the Balcony when he sees the outlived Lokier (21.8 s) and
+kills him; on CS2 Mirage the 2020 drop under the Apartments window (x ≈ −1850) is a wall, so his LIVE leg leaves the
+Balcony by its west end, and the B-site box the recording walks through is in his way to the plant spot. When he
+rejoins (1483, 203 units off his track) G1's plant shift finds him 7 ticks short of the recorded USE start and starts
+the plant at 1562 instead of 1555. Everything else is on the tape's ticks.
+
 ## Scripted events (`scripted.ts`, `aim.ts`)
 
 B3 makes the REPLAY puppets act the recording: they aim and shoot on the recorded ticks, switch and pick up weapons, throw their utility, plant and defuse, and the recorded damage and kills are applied exactly. Everything goes through `inputs` (yaw, pitch, `ATTACK`, `USE`) or contract `actions`, so the same Core can drive CS2 bots through usercmd injection.

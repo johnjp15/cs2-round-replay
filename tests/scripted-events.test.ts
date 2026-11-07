@@ -120,6 +120,7 @@ class StubHost implements IHost {
             weapon: p.weapon,
             ammo: { clip: 30, reserve: 90 },
             crouching: false,
+            onGround: true,
             sees: [],
           };
         }),
