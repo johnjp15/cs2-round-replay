@@ -163,7 +163,7 @@ async function standalone(): Promise<void> {
   };
   const root = resolve(new URL('..', import.meta.url).pathname);
   const dir = resolve(root, 'dist-3d');
-  const port = Number(arg('--port', process.env['BROWSER_CHECK_PORT'] ?? '4187'));
+  const port = Number(arg('--port', process.env['CHECK3D_PORT'] ?? '4187'));
   const out = resolve(root, arg('--out', 'docs/img'));
   mkdirSync(out, { recursive: true });
   const types: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.bin': 'application/octet-stream' };
