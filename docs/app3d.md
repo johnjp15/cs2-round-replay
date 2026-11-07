@@ -199,6 +199,15 @@ sandstone ramp by height, shaded by how much they face the sun (two-sided), tint
 front of them, darker toward their foot, with ±3 % grain per triangle. The mesh is cut into 1024-unit tiles so the
 renderer culls what is off screen; everything is unlit at run time (colours baked), ≈ 73k triangles.
 
+## Scenarios (H3)
+
+`?scenario=<name>` picks a scenario from `data/scenarios/` (default `mirage-sp4rtan-1v3`, the recorded round) and
+`?map=<package>` its map; the bar's **Scenario** and **Map** pickers (`src/app3d/scenarios3d.ts`) reload the page
+with them. A free-play scenario (no recording) builds its Session from the map package's CS2 nav and facts
+(`FreePlayCore`, docs/scenarios.md): every bot is live, E (or the button) takes over **the player you spectate**,
+the floors and the radar use the map's own radar and transform, and the summary is the round's result. The
+single-file page embeds the default scenario only (its pickers list just it); free play needs `npm run build:3d`.
+
 ## Data, build and deploy
 
 Normal build: the JSON and binary files are fetched next to the page (assets3d.ts). Single file

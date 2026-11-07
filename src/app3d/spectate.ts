@@ -71,10 +71,11 @@ export interface SpectatePanel {
 }
 
 /** The bottom spectator panel's text (null: not spectating). */
-export function spectatePanel(p: PawnObs | null, kills: number, mode: SpectateMode, weapon: string, canTakeControl: boolean): SpectatePanel | null {
+/** @param target H3: the pawn E would take (cart in the recorded round; the spectated one in free play). */
+export function spectatePanel(p: PawnObs | null, kills: number, mode: SpectateMode, weapon: string, canTakeControl: boolean, target = 'cart'): SpectatePanel | null {
   if (p === null) return null;
   const hp = p.alive ? Math.round(p.hp) : 0;
-  const hints = [mode === 'free' ? 'Mouse 1 / 2 pick a player' : 'Mouse 1 / 2 switch player', 'V mode', canTakeControl ? 'E take control of cart' : null].filter((x) => x !== null).join(' · ');
+  const hints = [mode === 'free' ? 'Mouse 1 / 2 pick a player' : 'Mouse 1 / 2 switch player', 'V mode', canTakeControl ? `E take control of ${target}` : null].filter((x) => x !== null).join(' · ');
   return {
     name: p.id,
     team: p.team,
