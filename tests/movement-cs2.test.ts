@@ -7,12 +7,12 @@
  * transcriptions of the Source functions, written independently of the model, so a test compares the model against
  * the formula, and the pinned numbers show what the formula gives.
  *
- * Tests the current model fails are `it.skip` / `it.todo` with the reason (the findings table in docs/movement.md).
+ * Findings M1-1..M1-5 and M1-7 are fixed (their tests pass); M1-6 and M1-15 are `it.todo` (docs/movement.md findings).
  */
 import { describe, expect, it } from 'vitest';
 import type { Button } from '../src/contracts/index';
 import { MapGeometry } from '../src/sim2d/geometry';
-import { TICK_DT, fallDamageFor, restingState, stepMove3d, type MoveInput, type MoveState } from '../src/sim2d/movement';
+import { TICK_DT, fallDamageFor, restingState, stepMove3d, stepMove3dSubtick, type MoveInput, type MoveState } from '../src/sim2d/movement';
 import { tuning } from './sim2d-fixtures';
 
 const m = tuning.movement;
@@ -218,7 +218,7 @@ describe('walking (×0.52) and crouching (×0.34), accelerating at the weapon ra
 });
 
 describe('small speeds (Source zeroes a ground speed below 1 u/s)', () => {
-  it.skip('FINDING M1-1: a tick ending below 1 u/s on the ground stops dead (WalkMove `spd < 1.0f` → Init, gamemovement.cpp:1966-1973); the model keeps 0.5 u/s', () => {
+  it('FINDING M1-1 (fixed): a tick ending below 1 u/s on the ground stops dead (WalkMove `spd < 1.0f` → Init, gamemovement.cpp:1966-1973)', () => {
     // 7 u/s, no input: friction drop 6.5 → 0.5 u/s, which Source zeroes.
     expect(refGroundTick(7, 0, 0, 0)).toBe(0);
     const s = stepMove3d(at(7), null, 'ak47', FLAT, m).state;
@@ -245,7 +245,7 @@ describe('jumping (sv_jump_impulse 301.99338, sv_gravity 800, sv_jump_precision_
     expect(jumps).toBe(1);
   });
 
-  it.skip('FINDING M1-2: sv_enablebunnyhopping 0 clamps the take-off speed to 1.1 × max speed ("Allow jump speed to exceed 1.1x max speed"); the model keeps 300', () => {
+  it('FINDING M1-2 (fixed): sv_enablebunnyhopping 0 clamps the take-off speed to 1.1 × max speed ("Allow jump speed to exceed 1.1x max speed")', () => {
     // On the ground at 300 u/s with a knife (max 250), JUMP, no move keys: CheckJumpButton crops the velocity to
     // 1.1 × 250 = 275 before the air move (as PreventBunnyJumping, tf_gamemovement.cpp:1092-1112, with CS2's factor 1.1).
     const s = stepMove3d(at(300), inp(0, 0, 0, ['JUMP']), 'knife', FLAT, m).state;
@@ -290,7 +290,7 @@ describe('air movement (AirAccelerate, sv_airaccelerate 12, sv_air_max_wishspeed
     expect(refAir(250, 180, 250, 1)).toBeCloseTo(250 - 46.875, 9); // 12 × 250 / 64 = 46.875 u/s against the motion
   });
 
-  it.skip('FINDING M1-3: while rising at ≤ 140 u/s, air acceleration is a quarter (surfaceFriction 0.25); the model uses full air acceleration', () => {
+  it('FINDING M1-3 (fixed): while rising at ≤ 140 u/s, air acceleration is a quarter (surfaceFriction 0.25)', () => {
     // vz +100 at the end of the last tick = +106.25 at its CategorizePosition (before FinishGravity's half step).
     const s = stepMove3d(airborne(100), inp(1, 0, 90), 'knife', FLAT, m).state;
     expect(hspeed(s)).toBeCloseTo(refAir(250, 90, 250, 0.25), 9); // 250 → 250.2746 (11.72 u/s sideways)
@@ -343,6 +343,8 @@ describe('steps and slopes (sv_stepsize 18, sv_standable_normal 0.7)', () => {
 // (KZGlobalTeam/cs2kz-metamod @ 317449df, src/kz/jumpstats/kz_jumpstats.cpp:676-697).
 // ---------------------------------------------------------------------------------------------------------------------
 
+/** Landing speed of the TAS long jump below (pinned from the model after M1-3). */
+const LJ_TAS_LAND = 310.5006;
 const heading = (s: MoveState): number => (Math.atan2(s.vel.y, s.vel.x) * 180) / Math.PI;
 
 /** The best ground wish angle from the velocity (Friction then Accelerate, scanned at 0.05°) and the speed it gives. */
@@ -411,11 +413,11 @@ describe('stock: one long jump from 250 u/s with a knife (distance measured as j
     expect(j.distance).toBeCloseTo(219.5, 6);
     expect(j.landSpeed).toBeCloseTo(250, 9);
   });
-  it('tool-assisted strafes (wish ⊥ velocity every tick, full air acceleration): 247.72 units, landing at 323.7 u/s (model before M1-3)', () => {
+  it('tool-assisted strafes (wish ⊥ velocity every tick; a quarter of the air acceleration while rising at ≤ 140 u/s, M1-3): 241.52 units (247.72 before M1-3), tier "235"', () => {
     const j = longJump(250, 'knife', tasStrafe);
     expect(j.ticks).toBe(48);
-    expect(j.distance).toBeCloseTo(247.722, 2);
-    expect(j.landSpeed).toBeCloseTo(323.728, 2);
+    expect(j.distance).toBeCloseTo(241.5216, 2);
+    expect(j.landSpeed).toBeCloseTo(LJ_TAS_LAND, 2);
   });
   it('air acceleration per tick for the held item: 12 × wishspeed / 64 = 46.875 (knife), 40.3125 (AK-47); the 30 u/s wish cap limits what it adds', () => {
     const fall = (w: string): number => hspeed(stepMove3d({ ...restingState({ x: 0, y: 0, z: 1000 }), vel: { x: 0, y: 0, z: -100 }, onGround: false }, inp(1, 0, 0), w, FLAT, m).state);
@@ -456,7 +458,7 @@ describe('stock: why bunnyhop chains are hard (sv_autobunnyhopping 0, sv_enableb
     const after = Math.max(0, penalty - 60 * DT);
     expect(hspeed(late)).toBeCloseTo(hspeed(l.state) * (1 - 5.2 / 64) * ((100 - after) / 100), 6);
   });
-  it.skip('FINDING M1-2: a hop landing at 300 u/s with a knife takes off at 275 (1.1 × 250); the model keeps 300', () => {
+  it('FINDING M1-2 (fixed): a hop landing at 300 u/s with a knife takes off at 275 (1.1 × 250)', () => {
     const l = stepMove3d(landing(300), null, 'knife', FLAT, m).state;
     const r = stepMove3d(l, inp(0, 0, 0, ['JUMP']), 'knife', FLAT, m);
     expect(hspeed(r.state)).toBeCloseTo(275, 6);
@@ -500,10 +502,68 @@ describe('stock: crouch jump, edges, steep slopes', () => {
   });
 });
 
+describe('tagging and scoped speeds (MoveOptions from the weapons engine)', () => {
+  it('FINDING M1-4 (fixed in movement): an AK-47 tagged to 0.4 (weapons.vdata flinch large 0.4 × mp_tagging_scale 1) runs at most 86 u/s and still accelerates at the AK rate', () => {
+    const r = runX(restingState({ x: 0, y: 0, z: 0 }), 20, () => inp(1, 0, 0), 'ak47');
+    let s = restingState({ x: 0, y: 0, z: 0 });
+    for (let k = 0; k < 20; k++) s = stepMove3d(s, inp(1, 0, 0), 'ak47', FLAT, m, DT, { velocityModifier: 0.4 }).state;
+    expect(hspeed(s)).toBeCloseTo(86, 9);
+    const ref = refRun(0, 20, () => [1, 86, 215]);
+    expect(hspeed(s)).toBeCloseTo(ref[19] as number, 9);
+    expect(r.v[0]).toBeCloseTo(18.4765625, 9);
+  });
+  it('FINDING M1-5 (fixed in movement): a scoped AWP (weapons.vdata m_flMaxSpeed [200, 100]) runs at 100, accelerating at 5.5 × 100 / 64 = 8.59 per tick (+2.09 net under the 6.5 friction floor): 53 ticks (0.83 s) to 100', () => {
+    let s = restingState({ x: 0, y: 0, z: 0 });
+    const v: number[] = [];
+    for (let k = 0; k < 120; k++) {
+      s = stepMove3d(s, inp(1, 0, 0), 'awp', FLAT, m, DT, { runSpeed: 100 }).state;
+      v.push(s.vel.x);
+    }
+    expect(v[0]).toBeCloseTo((5.5 * 100) / 64, 9);
+    const ref = refRun(0, 120, () => [1, 100, 100]);
+    for (let k = 0; k < 120; k++) expect(v[k]).toBeCloseTo(ref[k] as number, 9);
+    expect(firstIndex(ref, (x) => x >= 100 - 1e-9)).toBe(53);
+  });
+  it('without options the per-tick path is unchanged (same state as the 6-argument call)', () => {
+    const a = stepMove3d(at(150), inp(1, 0.5, 30, ['WALK']), 'ak47', FLAT, m);
+    const b = stepMove3d(at(150), inp(1, 0.5, 30, ['WALK']), 'ak47', FLAT, m, DT, {});
+    expect(b).toEqual(a);
+  });
+});
+
+describe('sub-tick input (FINDING M1-7: stepMove3dSubtick)', () => {
+  const A = inp(1, 0, 0);
+  const D = inp(-1, 0, 0);
+  it('a knife press half way through a tick gives 10.742 u/s (5.5 × 250 / 128), as measured in CS2 (10.74, W3), not 21.48', () => {
+    const r = stepMove3dSubtick(restingState({ x: 0, y: 0, z: 0 }), null, A, 0.5, 'knife', FLAT, m);
+    expect(r.state.vel.x).toBeCloseTo(10.7421875, 9);
+  });
+  it('fraction 0 / 1 is exactly the per-tick step with the input after / before', () => {
+    const s = at(200);
+    expect(stepMove3dSubtick(s, A, D, 0, 'ak47', FLAT, m)).toEqual(stepMove3d(s, D, 'ak47', FLAT, m));
+    expect(stepMove3dSubtick(s, A, D, 1, 'ak47', FLAT, m)).toEqual(stepMove3d(s, A, 'ak47', FLAT, m));
+  });
+  it('counter-strafe from 215, opposite key pressed at 0.25 of a tick and released 7 ticks later: 11.06 units to stop (per-tick input: 13.45, the press waits for the next tick)', () => {
+    const go = (sub: boolean): number => {
+      let s = at(215);
+      for (let k = 0; k < 14; k++) {
+        if (sub) s = (k === 0 ? stepMove3dSubtick(s, A, D, 0.25, 'ak47', FLAT, m) : k === 7 ? stepMove3dSubtick(s, D, null, 0.25, 'ak47', FLAT, m) : stepMove3d(s, k < 7 ? D : null, 'ak47', FLAT, m)).state;
+        else s = stepMove3d(s, k < 1 ? A : k < 8 ? D : null, 'ak47', FLAT, m).state;
+      }
+      expect(s.vel.x).toBe(0);
+      return s.pos.x;
+    };
+    expect(go(true)).toBeCloseTo(11.059, 2);
+    expect(go(false)).toBeCloseTo(13.453, 2);
+  });
+  it('a jump in the second part of a split tick is reported', () => {
+    const r = stepMove3dSubtick(restingState({ x: 0, y: 0, z: 0 }), null, inp(0, 0, 0, ['JUMP']), 0.5, 'knife', FLAT, m);
+    expect(r.jumped).toBe(true);
+    expect(r.state.onGround).toBe(false);
+  });
+});
+
 describe('not modelled yet (findings without a fix in M1)', () => {
-  it.todo('FINDING M1-4 (tagging): a hit lowers the victim’s speed cap to flinch × mp_tagging_scale (m_flVelocityModifier); movement needs a velocity-modifier input');
-  it.todo('FINDING M1-5 (scoped speeds): AWP 100, SCAR-20 / G3SG1 120, AUG / SG 553 150 scoped (weapons.vdata m_flMaxSpeed[1]); movement needs a run-speed override from the weapon state');
   it.todo('FINDING M1-6 (duck transition): CS2 ducks over time (m_flDuckAmount at m_flDuckSpeed, 8 when rested; sv_timebetweenducks 0.4); the model crouches instantly. Rate not verifiable from public sources.');
-  it.todo('FINDING M1-7 (sub-tick input): CS2 splits a tick at each key change; the model applies input per tick');
   it.todo('FINDING M1-15 (ladders): CS2 ladders (sv_ladder_scale_speed 0.78, ladder jumps "LAJ") need ladder volumes the Mirage geometry does not have; Mirage ladders are walls');
 });
