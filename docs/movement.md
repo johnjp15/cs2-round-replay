@@ -495,6 +495,12 @@ snapshot's pending input), which is beyond a contained change. Plan for H4 (the 
 4. CS2's 2025-09-17 "improved timestep-independence of subtick movement acceleration" (W2 l. 169) changed the
    acceleration of split ticks in a way that is not public; the plain Source split used here is the pre-change rule.
 
+### V1 fix (2026-11-07)
+
+| Finding | Change in `src/sim2d/movement.ts` | Effect |
+| --- | --- | --- |
+| V1-8 (docs/audit/v1-e2e-2026-11-07.md) | `stepMove3d`'s air acceleration takes the wish without DUCK: Source's `HandleDuckingSpeedCrop` crops the move by the duck factor only with a ground entity (`( player->GetFlags() & FL_DUCKING ) && ( player->GetGroundEntity() != NULL )`, Source SDK 2013 gamemovement.cpp) | a ducked air strafe adds 30 u/s per tick at 90° (was 15.9); knife run-up LJ with DUCK from air tick 30: TAS 248.5 → 251.6 u; the golden master is unchanged |
+
 ### Still open after M1
 
 M1-6 duck transition (rate not public; needs a `duckAmount` in `MoveState`, the hull switching at full duck, the speed
