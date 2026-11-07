@@ -56,3 +56,16 @@ Single-thread speed is roughly 3–5× this loaded sandbox core. So expect:
 With **Uncapped**, the loop will run thousands of frames a second. A 120 Hz ProMotion display shows 120 of them,
 each drawn from the newest mouse input. Run `…/sim3d/?bench=1` in Chrome and in Safari on the Mac for the real
 numbers, and commit them here next to these.
+
+## After merging #35 (H2b) and #38 (A1: viewmodels, world weapons, audio)
+
+Same sandbox, `2026-11-07-after-merge-a1-h2b.json`:
+
+| scenario | frame p50 | sim | scene | render | HUD | draw calls | heap KB/frame |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| inround-5s-120hz | 1.870 | 0.560 | 0.035 | 0.770 | 0.170 | 21 | 97 |
+| postend-5s-120hz | 1.735 | 0.480 | 0.045 | 0.695 | 0.180 | 8 | 125 |
+| watch-1x-480hz | **0.785** (1274 fps-eq) | 0.005 | 0.030 | 0.605 | 0.065 | 20 | 63 |
+
+The procedural gun models (in the viewmodel and in the pawns' hands) add draw calls: 14 → 21 in the round. The
+frame stays under 2 ms here, and well under 1 ms between ticks.
