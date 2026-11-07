@@ -177,8 +177,8 @@ bearing in 3° steps, pitch −60…+30° in 5° steps) and then refines around 
 it is deterministic. For the recorded round the target is `utility[].landing` (V0, `data/round.json`), so a host
 solves each scripted throw once (≈ 650 throws, a few seconds on the Mirage mesh; cache the angles) and releases with
 the result. Where `landing` is null the host keeps an assumed target. On cart's B-site smoke: aimed at the Market
-window's front it lands 3.4 from it (pitch −5°, yaw −64.8°, strength 0.5); aimed at V0's counter spot the best is
-89.6 away (−2030, −246, −161), on the B side of the solid wall (see below).
+window's front it lands 3.4 from it (pitch −5°, yaw −64.8°, strength 0.5); aimed at V0's measured spot (−1885, −320, −166) it lands 1.7 from it (pitch −6.25°, yaw −66.9°, strength 0.5), on
+the Shop floor just inside the window (see below).
 
 `GrenadeWorld` = `traceHull(c, half, d) → {fraction, hit, normal, startSolid, allSolid}` and
 `traceLine(a, b) → fraction` (1 = clear). `pawns` are `{id, team, alive, pos (feet), height, eye, yaw, pitch}`.
@@ -246,14 +246,12 @@ door is the full-height gap at x −2356…−2292. cart's B-site smoke is aimed
 lands 26 from it; the test asserts that it blocks the clear line from a CT in Market (−1921, −330, −104) out through
 the window to (−1921, −100, −104) 3 s after the pop and not after 21 s, and the cloud fills the opening.
 
-**V0's measured landing** (#39, `data/round.json` `utility[].landing`; only this throw has one): (−2035, −305, −94)
-± 35, on the counter "just inside the window". On the CS2 mesh that counter (z −94, x −2040…−1980, y ≤ −290) is
-behind **solid** wall: at x −2074…−2018 the wall only steps out to y −248 and has no opening, so the spot V0 places
-"in the window" is ~90 units west of the mesh's only opening. Of 4,880 throws from cart's spot (yaw ±30° around the
-landing, pitch −60…+20 in 2.5° steps, strengths 1 / 0.5 / 0) none lands within 35 of it; the nearest is 89 away, on
-the B side of the wall. The replay (aimed at the window) detonates 165 from it (148 in xy) and the cloud does not
-reach the counter spot. Either V0's x is off by about one window width or the mesh's window differs from the video;
-worth a second look by V0 before the hosts aim at it.
+**V0's measured landing** (`data/round.json` `utility[].landing`; only this throw has one): (−1885, −320, −166) ± 45,
+on the Shop floor just inside the window. #39 had (−2035, −305, −94) on the counter, about one window width west and
+behind solid wall. H5 found it unreachable from cart's spot (4,880 throws, none within 35 u; nearest 89 u away, on the
+B side). V0b re-measured it from the frames: the trajectory line passes the opening and goes behind its east jamb, and
+cart climbs through the same opening at 28.5 s, so the window matches the mesh and the x was off
+(`docs/round-data.md`). `aimAtLanding` now reaches the measured spot within its uncertainty.
 
 Throws from Back Alley and Palace Alley (cramped, roofed or overhung spots) come back off nearby geometry for every
 pitch tried (cart's 4.8 s smoke, aimed west, pops 390 units east of him); the open-site throws reach their targets.
