@@ -206,3 +206,36 @@ cannot be reproduced on the CS2 map, and the recorded yaws near the stack are ab
 cart at 65-66.7 s), so yaw-based bearings don't settle it either. The plant spot stays where the radar puts it until
 the 2020 map (X1) or V2's view angles can place the stack and the bomb against each other.
 
+## sp4rtan's kill on barely, 58.85 s (K1)
+
+John: "sp4rtan killing barely is still bugged". The video (barely's own POV 55.2–59.4 s) against the 3D game spectating
+barely and sp4rtan, and the headless log (ticks 3560–3790):
+
+- **Video.** barely has his **knife** out from 57.6 s (`timelines.weapon`; the breakdown's "molotov" is wrong: the HUD and
+  the viewmodel show a knife, and he never draws a molotov). From 58.4 s he stands in the arch at the east end of B
+  site, the arch's north pillar filling the right half of his screen and B site open to the left of its edge. At
+  58.72 s sp4rtan is in view just left of that edge, by the barrel stack, and the kill lands a few frames later.
+- **Game, before.** (1) sp4rtan was 190–228 units behind his tape: at the kill his puppet was at (−2129, 542), at the
+  foot of the Apartments stairs, not at (−2089, 357) by the bomb (the harness's worst observed miss, 228 u at 58.6 s).
+  His inferred route covers the Apartments, the stairs and the site at 140 u/s until 57.0 s and then at 320–335 u/s
+  (57.0–58.5 s), which no AK runner can do (run speed 215), and the snapped track kept it (`retime` lets a track go as
+  fast as the recording). (2) barely's radar dot at 58.2–58.85 s, (−1370, 311), is 17 units east of the pillar's east face
+  (x −1392, y 300–345; the pillar is x −1522…−1392, y 275–365 on the CS2 mesh): in the game he stared into the wall
+  and sp4rtan shot him from out of sight (`scripted hit through geometry` at 3766, no aim point in sight).
+- **Fix.** `tools/snap-tracks.ts` pass 4 `lead`: an inferred stretch walks at most 0.9 × run speed toward the next
+  seen sample and starts earlier where it has to (sp4rtan 52.6–58.6 s, up to 220 u ahead in the Apartments; only he
+  changes). `tools/vision-labels.ts` `SNAP_FIXES` makes barely ↔ sp4rtan (58.6–58.85 s) a recorded duel for pass 5,
+  which moves barely 53 u south at 58.4–58.8 s into the arch opening, where his POV puts him (the 2D mask exclusion
+  stays: it is about the raw dot). The kill stays on tick 3766, and both see each other at 58.72–58.84 s.
+- **2020 vs CS2.** Not a map difference as far as the video shows: the pillar is in both. One CS2 surface grazes the
+  line: the west face of the box west of the bomb (x −1969, y 347–430, top z −95) is 1–3 units above and inside the
+  line from sp4rtan's eye (z −96) at his tape spot; at barely's corrected spot the line passes south of it. X1b's 2020
+  map can confirm both.
+
+![video, game before, game after (barely's eyes), game after (sp4rtan's eyes) at 58.72 s](img/k1-barely-death-58.72.jpg)
+![sp4rtan's eyes at 58.72 s before: at the foot of the Apartments stairs](img/k1-sp4rtan-58.72-before.jpg)
+
+Top left the video, top right the game before (barely facing the pillar), bottom left after (barely in the arch, the
+site open as in the video), bottom right sp4rtan's eyes after (barely at the crosshair). barely's facing is the
+puppet's; V2b's `view[]` for this segment will refine it, and the positions don't depend on it.
+
