@@ -10,7 +10,7 @@
  */
 import { roundNumber, type DamageTuning, type Tuning, type Vec3, type WeaponModelTuning } from '../../contracts/index';
 import { decayPenalty, drawSpread, inaccuracy, penaltyFloor, recoveryTime, shotDirection, type Motion, type UniformSource } from './accuracy';
-import { applyKick, buildRecoilTables, decayPunch, punchOffset, recoilKick, ZERO_PUNCH, type Angle2, type PunchState, type RecoilTables } from './recoil';
+import { applyKick, buildRecoilTables, RECOIL_TABLE_SIZE, decayPunch, punchOffset, recoilKick, ZERO_PUNCH, type Angle2, type PunchState, type RecoilTables } from './recoil';
 import { shoots, weaponDef, type WeaponDef, type WeaponTable } from './table';
 
 const TICK_EPS = 1e-9;
@@ -186,7 +186,10 @@ export function fireShot(ctx: ArmsContext, s: ArmsState, rng: UniformSource, vie
   const pellets = off.pellets.map((o) => shotDirection(aim, o));
   const tables = ctx.recoil[w.id];
   if (tables === undefined) throw new Error(`no recoil table for ${w.id}`);
-  const punch = applyKick(s.punch, recoilKick(tables, mode, s.recoilIndex, m), m);
+  // CWeaponCSBase::Recoil: full-auto weapons kick with table entry (int) m_flRecoilIndex; semi-automatic ones with a
+  // random entry (GetPredictionRandomSeed() % 64), drawn here after the cone so the cone draws are unchanged.
+  const entry = w.fullAuto ? s.recoilIndex : Math.floor(rng.next() * RECOIL_TABLE_SIZE);
+  const punch = applyKick(s.punch, recoilKick(tables, mode, entry, m), m);
   const state: ArmsState = {
     ...s,
     penalty: roundNumber(Math.min(m.maxInaccuracy, s.penalty + w.inaccuracy.fire[mode])),
@@ -200,8 +203,9 @@ export function fireShot(ctx: ArmsContext, s: ArmsState, rng: UniformSource, vie
 /**
  * One tick, in this order:
  * 1. Take-off adds jumpInitial × airSpreadScale to the penalty; landing adds land[mode] × airSpreadScale.
- * 2. The penalty decays toward its floor (accuracy.ts); the recoil index decays (e^(−recoilIndexDecay·dt)) once no
- *    shot came for recoilIndexDelayCycles × the cycle time.
+ * 2. The penalty decays toward its floor (accuracy.ts); the recoil index decays (× e^(−ln 10 × recoilIndexDecay × dt),
+ *    CS:GO's `weapon_recoil_decay_coefficient` 2: a tenth every 0.5 s) once no shot came for recoilIndexDelayCycles
+ *    (1.1, WEAPON_RECOIL_DECAY_THRESHOLD) × the cycle time.
  * 3. Reloads progress: a magazine reload refills at its end (from reserve; a fresh magazine when discardMagazine);
  *    a shell reload loads one shell every shellReloadSec after reloadTime, until full or out of reserve.
  * 4. ATTACK2: scoped weapons step the zoom (0 → 1 → … → 0), burst weapons and detachable silencers toggle alt mode;
@@ -318,9 +322,10 @@ function preTick(ctx: ArmsContext, w: WeaponDef, s: ArmsState, t: number, mot: M
   let penalty = s.penalty;
   if (s.wasOnGround && !mot.onGround && !mot.onLadder) penalty += w.inaccuracy.jumpInitial * m.airSpreadScale;
   else if (!s.wasOnGround && mot.onGround) penalty += w.inaccuracy.land[mode] * m.airSpreadScale;
-  penalty = decayPenalty(penalty, penaltyFloor(w, mode, mot, reloading, m), recoveryTime(w, mot.crouched, s.recoilIndex), dt, m);
+  const footing = mot.onLadder ? 'ladder' : mot.onGround ? 'ground' : 'air';
+  penalty = decayPenalty(penalty, penaltyFloor(w, mode, mot, reloading, m), recoveryTime(w, mot.crouched, s.recoilIndex, footing), dt, m);
   let recoilIndex = s.recoilIndex;
-  if (t > s.lastShotTick + m.recoilIndexDelayCycles * w.cycleTime[mode] * tps + TICK_EPS) recoilIndex = roundNumber(recoilIndex * Math.exp(-m.recoilIndexDecay * dt));
+  if (t > s.lastShotTick + m.recoilIndexDelayCycles * w.cycleTime[mode] * tps + TICK_EPS) recoilIndex = roundNumber(recoilIndex * Math.exp(-Math.LN10 * m.recoilIndexDecay * dt));
   return { ...s, penalty, recoilIndex, wasOnGround: mot.onGround || mot.onLadder };
 }
 

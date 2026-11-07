@@ -23,6 +23,7 @@ import {
   modeOf,
   movementScale,
   parseWeaponTable,
+  recoilKick,
   recoilTable,
   recoveryTime,
   shotDirection,
@@ -190,17 +191,66 @@ describe('recoil tables and spray patterns', () => {
     }
   });
 
-  it('AK-47 spray: bullet 1 dead centre, bullets 2–5 straight up (|yaw| < 0.25°), climbing to ~10° by bullet 9, then drifting left, then back right', () => {
+  // CS:GO's WeaponRecoilData::GenerateRecoilTable (cs_weapon_parse.cpp, 2020 source, SwagSoftware/Kisak-Strike) for
+  // weapon_ak47 (CS2 weapons.vdata: angle 0, variance 70, magnitude 30, variance 0, seed 223; full auto) with
+  // weapon_recoil_variance 0.55, suppression 4 shots from 0.75: the first ten (angle °, magnitude) entries. The
+  // magnitudes follow from the cvars alone (magnitude variance 0): 22.5, lerp(22.5, 30) × 0.8125, … — the damping
+  // multiplies the running value, so bullets 5–10 are below 30 too.
+  const AK_TABLE_10: [number, number][] = [
+    [27.330322, 22.5],
+    [-17.830391, 21.632813],
+    [5.800777, 22.95542],
+    [1.6354, 25.153069],
+    [-15.538623, 27.81888],
+    [-9.262066, 29.018496],
+    [-18.047684, 29.558323],
+    [12.5035, 29.801245],
+    [43.999619, 29.910561],
+    [22.431967, 29.959753],
+  ];
+
+  it('AK-47 recoil table: the first 10 entries are Valve GenerateRecoilTable output (angle, magnitude)', () => {
+    const t = recoilTable(W('ak47'), 0, model);
+    AK_TABLE_10.forEach(([a, m], i) => {
+      expect(t[i]?.angle, `angle ${i}`).toBeCloseTo(a, 5);
+      expect(t[i]?.magnitude, `magnitude ${i}`).toBeCloseTo(m, 5);
+    });
+    // The magnitudes by hand from the cvars (float32 like the game).
+    let r = 0;
+    for (let j = 0; j < 10; j++) {
+      r = j === 0 ? 30 : Math.fround(r + Math.fround((30 - r) * 0.55));
+      if (j < 4) r = Math.fround(r * Math.fround(0.75 + 0.25 * (j / 4)));
+      expect(t[j]?.magnitude).toBeCloseTo(r, 5);
+    }
+  });
+
+  it('a kick turns a positive recoil angle to the right (−yaw), as CCSPlayer::KickBack (yaw velocity −sin a × m)', () => {
+    const t = [recoilTable(W('ak47'), 0, model), recoilTable(W('ak47'), 1, model)] as const;
+    const k = recoilKick(t, 0, 8, model); // entry 8: angle +44°
+    expect(k.yaw).toBeCloseTo(-Math.sin((44 * Math.PI) / 180) * 29.910561, 3);
+    expect(k.pitch).toBeLessThan(0); // up
+    // the index wraps at 64 (GetRecoilOffsets: iIndex % 64), it doesn't stick on the last entry
+    expect(recoilKick(t, 0, 64 + 8, model)).toEqual(k);
+  });
+
+  it('AK-47 spray as the player sees it: up, a slight lean left (6–9), then right (10–17), left (19–27), right (28–30)', () => {
     const p = table.sprays['ak47'] ?? [];
     expect(p.length).toBe(30);
     expect(p[0]).toEqual([0, 0]);
-    for (let i = 1; i <= 4; i++) expect(Math.abs((p[i] as [number, number])[1])).toBeLessThan(0.25);
-    for (let i = 1; i <= 7; i++) expect((p[i] as [number, number])[0]).toBeLessThan((p[i - 1] as [number, number])[0]); // pitch − = up
-    expect((p[8] as [number, number])[0]).toBeLessThan(-9.5);
-    const yaw = p.map((b) => b[1]);
-    const leftPeak = Math.max(...yaw.slice(9, 16));
-    expect(leftPeak).toBeGreaterThan(3); // bullets 10–16 swing left (+yaw)
-    expect(Math.min(...yaw.slice(16, 24))).toBeLessThan(-1); // then right
+    const yaw = p.map((b) => b[1]); // + = the player's left
+    const pitch = p.map((b) => b[0]); // − = up
+    for (let i = 1; i <= 4; i++) expect(Math.abs(yaw[i] as number)).toBeLessThan(0.25);
+    for (let i = 1; i <= 8; i++) expect(pitch[i] as number).toBeLessThan(pitch[i - 1] as number);
+    for (let i = 5; i <= 8; i++) expect(yaw[i] as number, `bullet ${i + 1} leans left`).toBeGreaterThan(0.4);
+    for (let i = 9; i <= 16; i++) expect(yaw[i] as number, `bullet ${i + 1} right`).toBeLessThan(-1);
+    expect(yaw[9] as number).toBeLessThan((yaw[0] as number) - 1); // shot 10 is right of shot 1 on screen
+    expect(Math.min(...yaw.slice(9, 17))).toBeLessThan(-4); // the right swing peaks past 4° (bullets 14–15)
+    for (let i = 18; i <= 26; i++) expect(yaw[i] as number, `bullet ${i + 1} left`).toBeGreaterThan(0.9);
+    for (let i = 28; i <= 29; i++) expect(yaw[i] as number, `bullet ${i + 1} right`).toBeLessThan(-2.5);
+    // 30-shot height at a wall 500 u away vs csstats.gg's CS2 AK-47 height (11.06°): within 5 % (it is 0.3 %).
+    const h = 500 * Math.tan((-Math.min(...pitch) * Math.PI) / 180);
+    const ref = 500 * Math.tan((11.06 * Math.PI) / 180);
+    expect(Math.abs(h / ref - 1)).toBeLessThan(0.05);
   });
 
   // csstats.gg/spray-patterns (updated 22 Aug 2023): CS2 height / width in degrees, and the CS:GO values (CS2 + delta).
@@ -249,7 +299,8 @@ describe('recoil tables and spray patterns', () => {
     expect(glock[0]).toEqual({ angle: a0, magnitude: m0 });
     const ak = recoilTable(W('ak47'), 0, model);
     expect(ak[0]?.magnitude).toBeCloseTo(30 * 0.75, 4); // magnitude variance 0: 30 × suppression 0.75
-    expect(ak[4]?.magnitude).toBeCloseTo(30, 4);
+    expect(ak[4]?.magnitude).toBeCloseTo(27.81888, 4); // the damping carries through the smoothing
+    expect(ak[20]?.magnitude).toBeCloseTo(30, 4);
   });
 });
 
@@ -471,7 +522,11 @@ describe('arms state machine', () => {
     expect((p - 0.00641) / 0.0078).toBeCloseTo(Math.pow(0.1, n / 64 / rec), 3);
     // "final" recovery from bullet 5 on.
     expect(recoveryTime(ak, false, 5)).toBe(0.506);
-    expect(recoveryTime(ak, true, 3.5)).toBeCloseTo(0.305257 + (0.419728 - 0.305257) * 0.5, 9);
+    // GetRecoveryTime remaps the integer index (int nRecoilIndex = m_flRecoilIndex): 3.5 → 3, a third of the way 2 → 5.
+    expect(recoveryTime(ak, true, 3.5)).toBeCloseTo(0.305257 + (0.419728 - 0.305257) / 3, 9);
+    expect(recoveryTime(ak, true, 3.99)).toBe(recoveryTime(ak, true, 3));
+    // on a ladder: the standing time, no transition
+    expect(recoveryTime(ak, false, 9, 'ladder')).toBe(0.368);
   });
 
   it('the recoil index decays after a pause; a fresh spray starts at bullet 0 again', () => {
@@ -522,7 +577,7 @@ describe('determinism', () => {
 
 describe('tuning: weapons._engine', () => {
   it('parses into tuning.weaponModel and leaves the gun table alone', () => {
-    expect(Object.keys(tuning.weapons)).toEqual(['ak47', 'awp', 'deagle', 'glock', 'm4a4', 'ssg08']);
+    expect(Object.keys(tuning.weapons)).toEqual(['ak47', 'awp', 'deagle', 'glock', 'm4a4', 'ssg08', 'usps']); // W2: CTs carry a USP-S
     expect(model.recoilScale).toBe(1.884);
     expect(model.jumpImpulse).toBe(tuning.movement.jumpImpulse);
   });
@@ -540,5 +595,116 @@ describe('tuning: weapons._engine', () => {
     const { weaponModel: _unused, ...rest } = tuning;
     void _unused;
     expect(() => armsContext(table, rest, 64)).toThrow(/weapons\._engine/);
+  });
+});
+
+/**
+ * R1 / #55: the gunplay conformance checklist (docs/weapons.md "Gunplay conformance"). Each test names its line (G1…);
+ * the rules are CS:GO's 2020 source (S9) on CS2's weapon fields (S1) unless the checklist says otherwise.
+ */
+describe('gunplay conformance checklist', () => {
+  const fresh = (id: string): ArmsState => freshArms(ctx, id, -1000);
+  const idle = (s0: ArmsState, from: number, ticks: number, inp: Partial<ArmsInput> = {}): ArmsState => {
+    let s = s0;
+    for (let t = from; t < from + ticks; t++) s = stepArms(ctx, s, { tick: t, attack: false, attack2: false, reload: false, view, motion: still, ...inp }, new Rng(1)).state;
+    return s;
+  };
+  /** The recoil index after `n` held shots then `pause` idle ticks, by CS:GO's rule (UpdateAccuracyPenalty). */
+  const expectedIndex = (n: number, lastShotTick: number, firstIdleTick: number, pause: number, cycleTicks: number): number => {
+    let i = n;
+    for (let t = firstIdleTick; t < firstIdleTick + pause; t++) if (t > lastShotTick + 1.1 * cycleTicks + 1e-6) i = i * Math.exp((-Math.log(10) * 2) / 64);
+    return i;
+  };
+
+  it('G1: the recoil index advances by one per round fired, not on dry fire or during a reload', () => {
+    const { s, shots } = hold(fresh('ak47'), 39, 0);
+    expect(shots.length).toBe(6);
+    expect(s.recoilIndex).toBe(6);
+    // empty magazine: holding fire dry-fires (and then reloads), the index only decays
+    const empty = { ...s, clip: 0, reserve: 0 };
+    const r = hold(empty, 20, 39);
+    expect(r.shots.length).toBe(0);
+    expect(r.s.recoilIndex).toBeLessThanOrEqual(6);
+    const started = idle({ ...s, clip: 5 }, 39, 1, { reload: true }); // R on tick 39: the magazine reload starts
+    expect(started.reload).not.toBeNull();
+    const reloading = hold(started, 64, 40);
+    expect(reloading.shots.length).toBe(0); // fire is blocked while the magazine reload runs
+    expect(reloading.s.recoilIndex).toBeLessThan(6);
+  });
+
+  it('G2: after the last shot the index holds for 1.1 cycles, then × e^(−ln 10 × 2 × dt) per tick (a tenth every 0.5 s)', () => {
+    const { s, shots } = hold(fresh('ak47'), 59, 0); // 10 shots, last on tick 58
+    expect(shots.length).toBe(10);
+    const last = shots[shots.length - 1] as number;
+    for (const pause of [5, 8, 16, 32, 64]) {
+      const st = idle(s, 59, pause);
+      expect(st.recoilIndex, `pause ${pause}`).toBeCloseTo(expectedIndex(10, last, 59, pause, 6.4), 4);
+    }
+    expect(idle(s, 59, 7 - (59 - last)).recoilIndex).toBe(10); // still 10 within 1.1 cycles (7.04 ticks)
+  });
+
+  it('G3: a full 30-round spray restarts at bullet 1 after a ≥ 0.86 s pause; after 0.5 s it resumes mid-pattern (entry 5)', () => {
+    let s = { ...fresh('ak47'), reserve: 0 };
+    const r = hold(s, 187, 0);
+    expect(r.shots.length).toBe(30);
+    expect(r.shots[29]).toBe(186);
+    s = { ...r.s, clip: 30 };
+    const after = (ticks: number): number => Math.floor(idle(s, 187, ticks).recoilIndex);
+    expect(after(31)).toBe(5); // 0.5 s after the last shot: bullet 6's kick next
+    expect(after(55)).toBe(0); // 0.875 s: back at bullet 1
+    expect(after(50)).toBeGreaterThanOrEqual(1); // 0.8 s: still mid-pattern
+  });
+
+  it('G4: 2–3 round bursts stay near the first bullet: a 3-round burst, 0.25 s pause, the next burst starts at entry 1', () => {
+    const b1 = hold(fresh('ak47'), 14, 0); // ticks 0, 7, 13
+    expect(b1.shots).toEqual([0, 7, 13]);
+    const s = idle(b1.s, 14, 16);
+    expect(Math.floor(s.recoilIndex)).toBe(1);
+    // bullet 1 of the next burst kicks with entry 1 (Valve's second entry), its aim is the decayed punch only
+    const shot = fireShot(ctx, s, new Rng(3), view, still, 30).shot;
+    expect(shot.recoilIndex).toBeCloseTo(s.recoilIndex, 9);
+  });
+
+  it('G5: a tap after a 5-round burst: the penalty falls back with the stand → final recovery of the integer index', () => {
+    const ak = W('ak47');
+    const b = hold(fresh('ak47'), 27, 0); // ticks 0, 7, 13, 20, 26
+    expect(b.shots.length).toBe(5);
+    // penalty after the burst: stand + 5 × fire, decayed in between; then idle and compare with CS:GO's loop
+    let p = b.s.penalty;
+    let i = b.s.recoilIndex;
+    for (let t = 27; t < 27 + 32; t++) {
+      const decayIndex = t > 26 + 1.1 * 6.4 + 1e-6;
+      p = Math.max(0.00641, 0.00641 + (p - 0.00641) * Math.exp((-1 / 64) * (Math.log(10) / recoveryTime(ak, false, i))));
+      if (decayIndex) i *= Math.exp((-Math.log(10) * 2) / 64);
+    }
+    const s = idle(b.s, 27, 32);
+    expect(s.penalty).toBeCloseTo(p, 5);
+    expect(s.recoilIndex).toBeCloseTo(i, 4);
+  });
+
+  it('G6: semi-automatic weapons kick with a random table entry (CWeaponCSBase::Recoil: GetPredictionRandomSeed), full-auto with the index', () => {
+    const g = fresh('glock');
+    const kicks = new Set<string>();
+    for (let seed = 1; seed <= 20; seed++) {
+      const r = fireShot(ctx, g, new Rng(seed), view, still, 0);
+      kicks.add(`${r.state.punch.aimVel.pitch},${r.state.punch.aimVel.yaw}`);
+      expect(fireShot(ctx, g, new Rng(seed), view, still, 0).state.punch).toEqual(r.state.punch); // deterministic
+    }
+    expect(kicks.size).toBeGreaterThan(10);
+    const a = fireShot(ctx, fresh('ak47'), new Rng(1), view, still, 0).state.punch;
+    expect(fireShot(ctx, fresh('ak47'), new Rng(2), view, still, 0).state.punch).toEqual(a);
+  });
+
+  it('G7: two independent cones (inaccuracy then spread), the spread cone is the vdata m_flSpread, nospread off', () => {
+    const ak = W('ak47');
+    const rng = new Rng(5);
+    const d = drawSpread(ak, 0, 0.01, 0, rng);
+    const r2 = new Rng(5);
+    const r1 = r2.next();
+    const t1 = r2.next() * 2 * Math.PI;
+    const q = r2.next();
+    const t2 = r2.next() * 2 * Math.PI;
+    expect(d.pellets[0]?.x).toBeCloseTo(Math.cos(t1) * r1 * 0.01 + Math.cos(t2) * q * ak.spread[0], 12);
+    expect(ak.spread[0]).toBe(0.0006);
   });
 });

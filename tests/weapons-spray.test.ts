@@ -144,10 +144,10 @@ describe('recoil control: pulling the view against the mean pattern before each 
     expect(r[r.length - 1]).toBeLessThan(21);
   });
 
-  it('without control the first 10 bullets climb out of that group (median ~112 u, 95 % ~183 u from the aim point)', () => {
+  it('without control the first 10 bullets climb out of that group (median ~94 u, 95 % ~173 u from the aim point)', () => {
     const r = radii(free, 0, 10);
-    expect(pct(r, 0.5)).toBeGreaterThan(100);
-    expect(pct(r, 0.95)).toBeGreaterThan(170);
+    expect(pct(r, 0.5)).toBeGreaterThan(85);
+    expect(pct(r, 0.95)).toBeGreaterThan(160);
   });
 
   it('the controlled group is the same as the inaccuracy cone alone: the pattern is fixed, only the cone is random', () => {

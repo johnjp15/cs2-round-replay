@@ -171,15 +171,38 @@ const glock = pistol(0x2a2b2d, 0x3b3d40, 7.4, 3.8);
 const p2000 = pistol(0x2c2e31, 0x36383c, 7.2, 3.9);
 const usps = pistol(0x26272a, 0x2f3033, 7.6, 3.9, [{ s: 'cylz', c: 0x1c1d1f, size: [0.65, 6.2, 10], at: [0, 1.1, -9.9] }], true, 6);
 
+/**
+ * W2: CS2's default knife, low poly (≈ 250 triangles): 11.8 in (30 cm) overall, a 6.6 in (17 cm) drop-point blade
+ * (1.2 in tall, 0.16 thick) with a bright edge bevel rising to the point, a dark fuller and a polished spine; a short
+ * steel guard; a 4.3 in grip of dark polymer with four raised wrap rings; a steel pommel. Model space as for the guns
+ * but the grip runs along z (the fist closes around it at the origin), the blade forward (−z).
+ */
+const KNIFE_STEEL = 0xbfc4c9;
+const KNIFE_GRIP = 0x1f2021;
+const KNIFE_WRAP = 0x34322e;
 const knife: WeaponModel = {
   kind: 'knife',
   body: [
-    { s: 'box', c: 0x1f1f20, size: [0.9, 1.1, 4.4], at: [0, 0, 0.4] },
-    { s: 'box', c: 0x4d5054, size: [1.6, 1.3, 0.4], at: [0, 0.15, -1.9] },
-    { s: 'box', c: 0xc9ced3, size: [0.18, 1.4, 6.2], at: [0, 0.35, -5.2] },
-    { s: 'box', c: 0xe2e5e8, size: [0.16, 0.6, 2.4], at: [0, 0.55, -8.6], rot: [-0.35, 0, 0] },
+    // Grip, wrap rings, pommel.
+    { s: 'cylz', c: KNIFE_GRIP, size: [0.47, 4.3, 8], at: [0, 0, 0.15] },
+    { s: 'cylz', c: KNIFE_WRAP, size: [0.53, 0.32, 6], at: [0, 0, 1.55] },
+    { s: 'cylz', c: KNIFE_WRAP, size: [0.53, 0.32, 6], at: [0, 0, 0.6] },
+    { s: 'cylz', c: KNIFE_WRAP, size: [0.53, 0.32, 6], at: [0, 0, -0.35] },
+    { s: 'cylz', c: KNIFE_WRAP, size: [0.53, 0.32, 6], at: [0, 0, -1.3] },
+    { s: 'cylz', c: 0x6c7075, size: [0.5, 0.55, 8, 0.42], at: [0, 0, 2.55] },
+    // Guard: a bar across, a little taller below the blade.
+    { s: 'box', c: 0x55595e, size: [0.62, 1.9, 0.32], at: [0, 0.05, -2.2] },
+    { s: 'box', c: 0x55595e, size: [0.46, 0.5, 0.5], at: [0, -0.95, -2.15] },
+    // Blade: the flat (full height to 2 in from the point, then the drop to the point at the spine), the edge bevel
+    // (rising to the point), the fuller, the spine.
+    { s: 'box', c: KNIFE_STEEL, size: [0.16, 1.2, 4.6], at: [0, 0.25, -4.7] },
+    { s: 'taper', c: KNIFE_STEEL, size: [0.16, 1.2, 2.0, 0.1, 0.06, 0.5], at: [0, 0.25, -8.0] },
+    { s: 'box', c: 0xe9ecef, size: [0.2, 0.34, 4.6], at: [0, -0.18, -4.7] },
+    { s: 'taper', c: 0xe9ecef, size: [0.2, 0.34, 2.0, 0.06, 0.08, 0.9], at: [0, -0.18, -8.0] },
+    { s: 'box', c: 0x80868c, size: [0.2, 0.16, 3.4], at: [0, 0.42, -4.4] },
+    { s: 'box', c: 0xd9dde1, size: [0.19, 0.08, 6.4], at: [0, 0.83, -5.6] },
   ],
-  muzzle: [0, 0.4, -9.5],
+  muzzle: [0, 0.8, -9.0],
   leftHand: null,
   boltTravel: 0,
 };

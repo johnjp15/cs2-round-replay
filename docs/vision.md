@@ -106,11 +106,14 @@ step. Not walls opened: positions moved.
 | eradicate ↔ Lokier, 12.5–12.75 s (the Truck to the corridor through the balcony door) | 3 samples out of sight | eradicate 12.5–12.7 s, up to 33 u |
 | cart ↔ Lokier, 17.45–18.8 s (the window) | 14 samples out of sight | cart 17.0–19.3 s, up to 106 u, along the window |
 | donk ↔ sp4rtan, 49.9–50.35 s (Apartments corridor, a door frame) | 3 samples out of sight | donk 49.9–50.1 s, up to 6 u |
+| barely ↔ sp4rtan, 58.6–58.85 s (B site, the arch pillar; K1) | 3 samples out of sight | barely 58.4–58.8 s, up to 53 u (south, into the arch opening: his own POV) |
 | cart ↔ sp4rtan, 68.75–69.4 s (B site) | in sight | – |
 
-Not duels (unchanged, as C4 found them): barely → Zwomp at 44.0–44.2 s (barely's recorded level is wrong) and
-barely ↔ sp4rtan at 58.6–58.85 s (the pillar), both excluded with evidence in `tools/vision-labels.ts`; snarlbot →
-incredibad (0.5 s) and sp4rtan → snarlbot (17.85 s) are on inferred positions. All four duels then hold at every sample
+Not duels (unchanged, as C4 found them): barely → Zwomp at 44.0–44.2 s (barely's recorded level is wrong, excluded with
+evidence in `tools/vision-labels.ts`); snarlbot →
+incredibad (0.5 s) and sp4rtan → snarlbot (17.85 s) are on inferred positions. barely ↔ sp4rtan at 58.6–58.85 s stays
+excluded on the 2D mask (the radar dot is behind the pillar) but is a duel here since K1 (`SNAP_FIXES`): his own POV
+shows sp4rtan past the pillar's edge (docs/round-data.md, "sp4rtan's kill on barely"). All five duels then hold at every sample
 (`tests/sight3d.test.ts`), and the scheduled encounter's spot (cart's track at the hit) is now (−1728, 700).
 
 ## Aim follows sight (G6)
@@ -145,10 +148,11 @@ the positions from the video and X1 brings the 2020 BSP. In the no-human round (
 | 1203 | 18.80 | cart → lokier | AK-47, head | 114 / 477 u | yes | **the window duel**: the same wall at (−1821, 648, −10), 5 u west of the edge |
 | 3194 | 49.91 | sp4rtan → donk | AK-47, chest | 424 / 528 u | yes | the Apartments corridor door frame |
 | 3206 | 50.09 | sp4rtan → donk | AK-47, chest | 434 / 529 u | yes | the same; donk's 3200 hit is open |
-| 3766 | 58.84 | sp4rtan → barely | AK-47, head | 222 / 784 u | no | the B-site pillar (excluded in the vision labels) |
 
 T1 took barely → Zwomp (2829, 44.20 s) off this list: the recording had barely a level too low, on the Tunnel Stairs
 under Catwalk, and on Catwalk (`docs/geometry.md`, "barely 33–48 s") the hit is in sight.
+K1 took sp4rtan → barely (3766, 58.84 s) off it: sp4rtan's inferred route now arrives on time and barely stands in the
+arch opening (docs/round-data.md, "sp4rtan's kill on barely").
 
 ## Validation
 

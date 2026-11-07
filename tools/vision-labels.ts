@@ -96,6 +96,13 @@ const PILLAR =
   '(radar x 341-351, y 269-283; a hole in the nav mesh too), 90 units from barely; moving barely 25-28 units sideways clears it. ' +
   'His track holds y 310-312 from 58.2 to 58.8 s while he "runs back toward the bomb" (narrative, 57.6 s), which lies due west at ' +
   'y 311: that straight run goes through the pillar, so he was south of it. The pillar is 55 x 75 units, far beyond AK penetration.';
+/**
+ * K1: excluded pairs whose failure is the recorded position on the 2D mask, which pass 5 of tools/snap-tracks.ts
+ * (tools/sight-snap.ts, "Recorded duels") does fix on the CS2 mesh: the video shows the pair in sight. barely's own POV at
+ * 58.72 s shows sp4rtan on B site just left of the pillar's edge (barely is south of it, in the arch opening, not
+ * behind it as his radar dot has him), so the 3D tracks put him where he sees sp4rtan (docs/round-data.md).
+ */
+export const SNAP_FIXES: ReadonlySet<string> = new Set(['kill@58.85 sp4rtan->barely', 'sighting@58.6 barely->sp4rtan']);
 export const EXCLUDED: Readonly<Record<string, string>> = {
   'kill@44.2 barely->zwomp': WRONG_LEVEL,
   'sighting@44 barely->zwomp': WRONG_LEVEL,

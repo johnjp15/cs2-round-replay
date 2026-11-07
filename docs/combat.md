@@ -25,8 +25,13 @@ pure; the host owns the state. Movement is in `docs/movement.md`.
 | deagle | 53 | 267 | **3.9** | 0.932 | 0.85 | 7 | 35 | 2.17 | 1 *(assumed)* | no |
 | m4a4 | 33 | 666.667 | 4 | 0.70 | 0.97 | 30 | 90 | 3.07 | 1 *(assumed)* | yes |
 | glock | 30 | 400 | 4 | 0.47 | **0.85** | 20 | 120 | 2.17 | 1 *(assumed)* | **no** |
+| usps | 35 | 352.941 | 4 | 0.505 | 0.91 | 12 | 24 | 2.2 | 1 | no |
 
 Sources (read 2026-11-05):
+
+- **USP-S** (W2, 2026-11-07): CS2 `weapon_usp_silencer` in `data/weapons.json` (weapons.vdata via GameTracking-CS2):
+  35 damage, cycle 0.17 s (= 352.941 RPM), armor ratio 1.01 (armorPen = ratio / 2 = 0.505), range modifier 0.91, ×4
+  head, 12 + 2 magazines (24), reload 2.2 s, deploy 1 s, 240 u/s. The default CT pistol (docs/core.md "Start state").
 
 - **AK-47:** [csdb.gg AK-47](https://csdb.gg/weapon/ak-47): 36 damage, 600 RPM, 77.5 % armor penetration, range
   modifier 0.98, ×4 head, 30/90, reload 2.5 s. The page says its stats come from CS2 game data files. Cross-checked

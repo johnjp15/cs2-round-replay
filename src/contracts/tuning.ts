@@ -212,7 +212,7 @@ export interface WeaponModelTuning {
   recoilSuppressionShots: number;
   /** ... starting at this fraction of the magnitude (`weapon_recoil_suppression_factor`). */
   recoilSuppressionFactor: number;
-  /** +1: a recoil angle of +90° kicks the view left (+yaw); −1 mirrors. */
+  /** −1 (Valve's CCSPlayer::KickBack, yaw velocity −= sin a × m): a recoil angle of +90° kicks the aim right (−yaw); +1 mirrors (the pre-#54 bug). */
   recoilYawSign: number;
   /** The camera follows this share of the bullet's punch offset (CS:GO `view_recoil_tracking` 0.45; not in CS2's dump). */
   viewRecoilTracking: number;
@@ -220,7 +220,7 @@ export interface WeaponModelTuning {
   recoilViewPunchExtra: number;
   /** View punch exponential decay per second (CS2 `view_punch_decay`). */
   viewPunchDecay: number;
-  /** Recoil index decay per second (exponential) once no shot came for recoilIndexDelayCycles × the cycle time. */
+  /** `weapon_recoil_decay_coefficient` (CS:GO 2): the recoil index × e^(−ln 10 × this × dt) per tick once no shot came for recoilIndexDelayCycles × the cycle time. */
   recoilIndexDecay: number;
   recoilIndexDelayCycles: number;
   /** Rounds per Glock / FAMAS burst. */

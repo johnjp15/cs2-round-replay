@@ -45,16 +45,27 @@ export function penaltyFloor(w: WeaponDef, mode: 0 | 1, motion: Motion, reloadin
   return p;
 }
 
+/** Where the shooter is, for the recovery time: on the ground, in the air, or on a ladder. */
+export type Footing = 'ground' | 'air' | 'ladder';
+
+
 /**
- * Recovery time (seconds for the penalty to fall to a tenth) at recoil index `recoilIndex`: the stand / crouch time,
- * moving linearly to the "final" time between transitionStartBullet and transitionEndBullet.
+ * Recovery time (seconds for the penalty to fall to a tenth), CS:GO's `CWeaponCSBase::GetRecoveryTime` (docs/weapons.md
+ * S9): on a ladder the standing time; else (also in the air, see below) the stand / crouch time, moving linearly to the "final" time between transitionStartBullet and
+ * transitionEndBullet of the **integer** recoil index (`int nRecoilIndex = m_flRecoilIndex`; RemapValClamped), unless
+ * the final time is unset (−1).
  */
-export function recoveryTime(w: WeaponDef, crouched: boolean, recoilIndex: number): number {
+export function recoveryTime(w: WeaponDef, crouched: boolean, recoilIndex: number, footing: Footing = 'ground'): number {
   const r = w.recovery;
+  if (footing === 'ladder') return r.stand;
+  // CS:GO's in-air rule (crouch × 4) is not applied: CS2's air model (m_flInaccuracyJumpApex, which CS:GO's 2020 code
+  // doesn't have) differs, and the sim's air terms follow CS2's fields; docs/weapons.md, gunplay checklist G9.
   const a = crouched ? r.crouch : r.stand;
   const b = crouched ? r.crouchFinal : r.standFinal;
+  if (b === -1) return a;
+  const n = Math.trunc(recoilIndex);
   const span = r.transitionEndBullet - r.transitionStartBullet;
-  const t = span <= 0 ? (recoilIndex >= r.transitionEndBullet ? 1 : 0) : Math.max(0, Math.min(1, (recoilIndex - r.transitionStartBullet) / span));
+  const t = span === 0 ? (n >= r.transitionEndBullet ? 1 : 0) : Math.max(0, Math.min(1, (n - r.transitionStartBullet) / span));
   return a + (b - a) * t;
 }
 

@@ -12,6 +12,10 @@
  *   accidental Ctrl+W outside fullscreen, in Safari or Firefox, or ⌘W on a Mac (which no page can capture) brings up
  *   the browser's "Leave site?" dialog instead of closing the tab.
  * - A one-line hint says which of these applies when fullscreen starts.
+ * - W1 (#53, 3D page): `enter()` goes fullscreen with the keyboard locked without toggling (the 3D page calls it on
+ *   Start, on taking control and on a click into the game unless the "Auto fullscreen" setting is off), and the
+ *   optional `banner` line stays up while the player plays and Ctrl+W can still close the tab ("Press ⛶ for
+ *   fullscreen to disable Ctrl+W"; ctrlWBanner).
  */
 import { keyLabel, type KeyBinds } from './input';
 
@@ -64,6 +68,17 @@ export function isMacLike(nav: unknown = typeof navigator === 'undefined' ? unde
   return /Mac|iPhone|iPad|iPod/.test(`${n?.platform ?? ''} ${n?.userAgent ?? ''}`);
 }
 
+/**
+ * W1 (#53): the standing banner while playing when Ctrl+W can still close the tab, or '' when it can't: the keyboard
+ * is locked, or on a Mac (Ctrl+W is no browser shortcut there; ⌘W can't be blocked anywhere, the leave-site guard
+ * asks first).
+ */
+export function ctrlWBanner(playing: boolean, keyboardLocked: boolean, mac: boolean, canLock: boolean, fullscreen: boolean): string {
+  if (!playing || keyboardLocked || mac) return '';
+  if (canLock && !fullscreen) return 'Press ⛶ for fullscreen to disable Ctrl+W';
+  return 'This browser can’t block Ctrl+W: it asks before leaving while you play';
+}
+
 /** The one-line hint when fullscreen starts. */
 export function fullscreenHint(keyboardLocked: boolean, mac: boolean, binds: KeyBinds, pointerLock: boolean): string {
   const esc = pointerLock ? 'Esc frees the mouse; hold Esc to leave fullscreen.' : 'Hold Esc to leave fullscreen.';
@@ -89,6 +104,8 @@ export interface PlayGuardOptions {
   readonly onEscape?: () => void;
   /** Fullscreen started or ended. */
   readonly onChange?: () => void;
+  /** W1: the standing Ctrl+W banner (ctrlWBanner; hidden when empty). */
+  readonly banner?: HTMLElement | null;
 }
 
 const HINT_MS = 9000;
@@ -136,6 +153,12 @@ export class PlayGuard {
       await document.exitFullscreen().catch(() => undefined);
       return;
     }
+    await this.enter();
+  }
+
+  /** W1: enter fullscreen with the keyboard locked where possible (nothing if already in it or unavailable). */
+  async enter(): Promise<void> {
+    if (this.fullscreen || !document.fullscreenEnabled) return;
     try {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
     } catch {
@@ -160,6 +183,12 @@ export class PlayGuard {
       this.guarding = on;
       if (on) window.addEventListener('beforeunload', onBeforeUnload);
       else window.removeEventListener('beforeunload', onBeforeUnload);
+    }
+    const banner = this.o.banner ?? null;
+    if (banner !== null) {
+      const text = ctrlWBanner(on, this.locked, this.mac, this.kb !== null && document.fullscreenEnabled, this.fullscreen);
+      if (banner.textContent !== text) banner.textContent = text;
+      if (banner.hidden !== (text === '')) banner.hidden = text === '';
     }
     const b = this.o.button;
     if (b !== null) {

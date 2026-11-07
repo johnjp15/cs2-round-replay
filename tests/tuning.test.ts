@@ -22,7 +22,7 @@ describe('parseTuning', () => {
     // C4: sight tolerances and the LIVE AI's keys.
     expect(t.ai).toMatchObject({ losWallTolerancePx: 1, losEndpointTolerancePx: 3, losLevelStepUnits: 16, losLevelSlackUnits: 48, headshotAimRatio: 0.35, reactionJitter: 0.3 });
     expect(t.nav).toEqual({ stepHeight: 18, edgeEpsilon: 1, losMargin: 8, dropHeight: 200 });
-    expect(Object.keys(t.weapons)).toEqual(['ak47', 'awp', 'deagle', 'glock', 'm4a4', 'ssg08']);
+    expect(Object.keys(t.weapons)).toEqual(['ak47', 'awp', 'deagle', 'glock', 'm4a4', 'ssg08', 'usps']);
   });
 
   it('loads the C2 combat sections: gun table, grenades, damage, sound', () => {
