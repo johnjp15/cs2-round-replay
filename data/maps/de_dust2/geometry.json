@@ -1,0 +1,81 @@
+{
+  "format": "cs2-round-replay/geometry@1",
+  "note": "Dust II (de_dust2) collision geometry for 3D movement: the CS2 physics mesh from awpy-data, quantized and re-encoded (G2GM, src/sim2d/geometry.ts). Built by tools/build-map.ts; see docs/maps.md. Derived from Valve game files: private repo / encrypted pages only.",
+  "binary": {
+    "file": "data/maps/de_dust2/geometry.bin",
+    "magic": "G2GM",
+    "version": 1,
+    "bytes": 1313283,
+    "sha256": "18e0cd695ae265d4a655a6e68cc9cdf9a41fb8c4746b35f0ca964fa81da77d4e",
+    "gzipBytes": 683561,
+    "gzipBase64Bytes": 911416
+  },
+  "sources": [
+    {
+      "file": "data/source/cs2/de_dust2/de_dust2.mesh",
+      "sha256": "a21f26cb5df390dd03e10a8b43da8c89781b5f5c7cf1216a31748fd23a341766"
+    },
+    {
+      "file": "data/source/cs2/de_dust2/de_dust2.png",
+      "sha256": "0828297130ce26db25a299806ff743df9104de634a3e64b52b358f6f4399354d"
+    }
+  ],
+  "params": {
+    "quant": 8
+  },
+  "stats": {
+    "sourceVertices": 122106,
+    "sourceTriangles": 239917,
+    "mergedVertices": 133,
+    "unusedVertices": 952,
+    "degenerateTriangles": 190,
+    "duplicateTriangles": 42,
+    "vertices": 121021,
+    "triangles": 239685
+  },
+  "bounds": {
+    "minX": -4736,
+    "minY": -2496,
+    "minZ": -320,
+    "maxX": 3584,
+    "maxY": 4608,
+    "maxZ": 964
+  },
+  "queries": {
+    "cellSize": 32,
+    "overlapEps": 0.0001,
+    "traceSkin": 0.03125,
+    "walkableNz": 0.7,
+    "stepHeight": 18,
+    "standingHull": {
+      "halfWidth": 16,
+      "height": 72
+    },
+    "crouchingHull": {
+      "halfWidth": 16,
+      "height": 54
+    }
+  },
+  "heightImage": {
+    "file": "data/maps/de_dust2/height.png",
+    "rgbaSha256": "f1bc256a96c54a83f3319ef0f86b41d60d130998661a52db09d687c3f5db1d88",
+    "pixels": 464451,
+    "originX": -2476,
+    "originY": 3239,
+    "unitsPerPx": 4.4,
+    "size": 1024,
+    "maskGrow": 6,
+    "jumpUp": 64,
+    "zLow": -130,
+    "zHigh": 170,
+    "levelStats": {
+      "maskPixels": 494513,
+      "grownPixels": 556474,
+      "levels": 742845,
+      "reachableLevels": 518614,
+      "walkEdges": 480577,
+      "dropEdges": 36696,
+      "jumpEdges": 1331
+    }
+  }
+}

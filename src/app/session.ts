@@ -37,6 +37,7 @@ import {
   parseRound,
   parseTracks3d,
   parseTuning,
+  roundNumber,
   toReplayTrace,
   type Act,
   type Action,
@@ -56,6 +57,7 @@ import {
 import { CheckpointStore, EventSchedule, ReplayCore, RoundModel, autoCheckpointId, checkpointInterval, tickOf, type Checkpoint, type RoundClock } from '../core/index';
 import {
   HullWalkQuery,
+  hullLineClear,
   MapGeometry,
   NavMesh,
   NavWalkQuery,
@@ -72,8 +74,15 @@ import {
   type Sim2DOptions,
   type Sim2DVision,
 } from '../sim2d/index';
+import type { MapNav } from '../sim2d/map-nav';
 import { weaponForSlot, type WeaponSlot } from './input';
 import type { SightQuery } from './scene';
+
+/**
+ * H3: the map nav a session runs on: the Mirage 2020 grid (NavMesh: the 2D host, the recorded round's AI and puppets)
+ * or any map's CS2 nav (a MapNav: src/engine/nav/cs2-nav.ts; free play in the 3D host).
+ */
+export type SessionNav = NavMesh | MapNav;
 
 /** The pawn a human plays unless told otherwise. */
 export const DEFAULT_HUMAN: PlayerId = 'cart';
@@ -126,7 +135,7 @@ export interface CoreParts {
   readonly schedule: EventSchedule;
   readonly tuning: Tuning;
   readonly seed: number;
-  readonly nav: NavMesh;
+  readonly nav: SessionNav;
   /** G3: the movement mesh, or null with 2D movement. */
   readonly geometry?: MapGeometry | null;
 }
@@ -142,7 +151,7 @@ export type SessionHost = Pick<Sim2DHost, keyof Sim2DHost>;
 
 /** H1: what a host is built from (the arguments Sim2DHost's constructor takes). */
 export interface HostParts {
-  readonly nav: NavMesh;
+  readonly nav: SessionNav;
   readonly tuning: Tuning;
   readonly roster: readonly RosterEntry[];
   readonly options: Sim2DOptions;
@@ -154,6 +163,7 @@ export type HostFactory = (parts: HostParts) => SessionHost;
 
 /** The host every session uses unless told otherwise: the 2D app's Sim2DHost. */
 export function defaultHost(p: HostParts): SessionHost {
+  if (!(p.nav instanceof NavMesh)) throw new Error('Sim2DHost: the 2D host runs on the Mirage nav grid only (H3: other maps play in the 3D host)');
   return new Sim2DHost(p.nav, p.tuning, p.roster, p.options, p.vision, p.geometry);
 }
 
@@ -161,9 +171,18 @@ export function defaultHost(p: HostParts): SessionHost {
  * The WalkQuery the app's Core uses: with 3D movement (G3) the hull sweep on the movement mesh (`HullWalkQuery`), so
  * puppets steer around the walls they actually collide with; otherwise the nav mesh's (B2). Paths are the nav's either way.
  */
-export function walkQueryOf(p: { readonly nav: NavMesh; readonly geometry?: MapGeometry | null; readonly tuning: Tuning }): WalkQuery {
+export function walkQueryOf(p: { readonly nav: SessionNav; readonly geometry?: MapGeometry | null; readonly tuning: Tuning }): WalkQuery {
   const g = p.geometry ?? null;
-  return g === null ? new NavWalkQuery(p.nav) : new HullWalkQuery(g, p.nav, p.tuning.movement.stepSize);
+  const nav = p.nav;
+  if (nav instanceof NavMesh) return g === null ? new NavWalkQuery(nav) : new HullWalkQuery(g, nav, p.tuning.movement.stepSize);
+  // H3: a CS2 nav: lines by a hull sweep on the movement mesh when there is one, else the nav's; paths by the nav.
+  return {
+    isWalkableLine: (a, b) => (g === null ? nav.segmentWalkable(a, b) : hullLineClear(g, a, b, p.tuning.movement.stepSize)),
+    pathLength: (a, b) => {
+      const path = nav.path(a, b);
+      return path === null ? null : roundNumber(NavMesh.pathLength(path));
+    },
+  };
 }
 
 /** The Core every session uses unless told otherwise: puppets steer with `walkQueryOf` (B2, G3). */
@@ -174,7 +193,7 @@ export function defaultCore(p: CoreParts): ReplayCore {
 export interface SessionConfig {
   /** Parsed `data/round.json` (parseRound). */
   readonly round: RoundData;
-  readonly nav: NavMesh;
+  readonly nav: SessionNav;
   readonly tuning: Tuning;
   readonly seed: number;
   /** The sight mask (C4); without it (or null) the engine uses the nav mesh's line of sight. */
@@ -191,6 +210,8 @@ export interface SessionConfig {
    * (cart); null = none (spectate only). The Core's scheduled encounters exist for the default human only.
    */
   readonly playable?: PlayerId | null;
+  /** H3 (free play): the watching player may take control of any living pawn, not only `playable`. Default false. */
+  readonly anyPlayable?: boolean;
   /** Builds the Core (default: defaultCore). For tests, benchmarks and Core variants. */
   readonly core?: CoreFactory;
   /** H1: builds the engine (default: defaultHost, the 2D app's Sim2DHost; the 3D app passes Sim3DHost's). */
@@ -265,13 +286,15 @@ export interface SessionSnapshot {
 
 export class Session {
   readonly round: RoundData;
-  readonly nav: NavMesh;
+  readonly nav: SessionNav;
   /** G3: the movement mesh, or null (2D movement). */
   readonly geometry: MapGeometry | null;
   readonly tuning: Tuning;
   readonly seed: number;
   /** G4: the pawn takeControl() may hand to the player (SessionConfig.playable), or null. */
   readonly playable: PlayerId | null;
+  /** H3: any living pawn may be taken over (free play), not only `playable`. */
+  readonly anyPlayable: boolean;
   readonly model: RoundModel;
   readonly schedule: EventSchedule;
   /** For inspection (renderer, tests); drive the session through its own methods. */
@@ -315,6 +338,8 @@ export class Session {
   private takeoverAt: number | null;
   /** G4: a takeover the tape holds (a rewind took the run back before it): a forward seek replays it on this tick. */
   private tapeTakeover: number | null = null;
+  /** H3: the pawn of the taped takeover (any pawn in free play). */
+  private tapeTakeoverId: PlayerId | null = null;
 
   constructor(config: SessionConfig) {
     this.round = config.round;
@@ -324,6 +349,7 @@ export class Session {
     this.humanNow = config.human === undefined ? DEFAULT_HUMAN : config.human;
     this.startHuman = this.humanNow;
     this.playable = config.playable !== undefined ? config.playable : (this.humanNow ?? DEFAULT_HUMAN);
+    this.anyPlayable = config.anyPlayable === true;
     this.takeoverAt = this.humanNow === null ? null : 0;
     this.model = new RoundModel(config.round);
     this.schedule = new EventSchedule(config.round);
@@ -451,7 +477,7 @@ export class Session {
    */
   takeControlBlocked(id: PlayerId | null = this.playable): string | null {
     if (this.humanNow !== null) return `${this.humanNow} is already controlled`;
-    if (id === null || id !== this.playable) return `${String(id)} is not the playable pawn (${String(this.playable)})`;
+    if (id === null || (id !== this.playable && !this.anyPlayable)) return `${String(id)} is not the playable pawn (${String(this.playable)})`;
     if (this.seekState !== null) return 'a seek is in progress';
     if (this.resyncObserve !== null) return 'a resync is pending; step first';
     const p = this.host.pawnState(id);
@@ -489,6 +515,7 @@ export class Session {
     if (cp === null) throw new Error(`rewind: no checkpoint ${id}`);
     this.seekState = null;
     const takenAt = this.takeoverAt;
+    const takenBy = this.humanNow;
     const lastInput = this.humanTrack.length === 0 ? -1 : (this.humanTrack[this.humanTrack.length - 1] as HumanInputAt).tick;
     const lastSlot = this.slotTrack.length === 0 ? -1 : (this.slotTrack[this.slotTrack.length - 1] as SlotAt).tick;
     this.tapeInputs = [...this.humanTrack.filter((e) => e.tick >= cp.tick), ...this.tapeInputs.filter((e) => e.tick > lastInput)];
@@ -498,7 +525,10 @@ export class Session {
     if (this.humanNow !== null) this.tapeUntil = Math.max(this.tick, this.tapeUntil ?? 0);
     this.rewindTo(cp);
     // G4: back before the takeover: watching again, and the takeover goes on the tape (a forward seek replays it).
-    if (takenAt !== null && this.takeoverAt === null) this.tapeTakeover = takenAt;
+    if (takenAt !== null && this.takeoverAt === null) {
+      this.tapeTakeover = takenAt;
+      this.tapeTakeoverId = takenBy;
+    }
     return cp;
   }
 
@@ -542,9 +572,11 @@ export class Session {
         if (inputs.length > 0) this.tapeInputs = this.tapeInputs.filter((e) => e.tick !== k);
         if (slots.length > 0) this.tapeSlots = this.tapeSlots.filter((e) => e.tick !== k);
         // G4: the takeover first (his inputs need a human pawn).
-        if (this.tapeTakeover === k && this.humanNow === null && this.playable !== null) {
+        const tapedId = this.tapeTakeoverId ?? this.playable;
+        if (this.tapeTakeover === k && this.humanNow === null && tapedId !== null) {
           this.tapeTakeover = null;
-          this.applyTakeover(this.playable);
+          this.tapeTakeoverId = null;
+          this.applyTakeover(tapedId);
         }
         for (const e of inputs) this.setHumanInput(e.input);
         for (const e of slots) this.requestWeaponSlot(e.slot);
@@ -592,6 +624,7 @@ export class Session {
     this.tapeSlots = [];
     this.tapeUntil = null;
     this.tapeTakeover = null;
+    this.tapeTakeoverId = null;
   }
 
   private seekProgress(): SeekProgress {
@@ -724,7 +757,7 @@ export class Session {
   restore(s: SessionSnapshot): void {
     if (s.kind !== 'session' || s.version !== SNAPSHOT_VERSION) throw new Error('Session.restore: not a session snapshot of this version');
     if (s.seed !== this.seed) throw new Error(`Session.restore: snapshot seed ${s.seed} != session seed ${this.seed}`);
-    if (s.human !== null && s.human !== this.startHuman && s.human !== this.playable) {
+    if (s.human !== null && s.human !== this.startHuman && s.human !== this.playable && !this.anyPlayable) {
       throw new Error(`Session.restore: snapshot human ${String(s.human)} is not this session's (playable: ${String(this.playable)})`);
     }
     this.host.restore(s.host);

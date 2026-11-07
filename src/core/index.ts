@@ -124,3 +124,5 @@ export { blockedPairs, resyncActions, resyncHazards } from './resync';
 export type { ResyncPawn, StandingBlock } from './resync';
 export { DEFAULT_SUMMARY_OPTIONS, compareKills, deltaText, fixed2, liveSwitchRows, recordedBomb, recordedResult, resultLong, resultShort, secText, summarize } from './summary';
 export type { SummaryOptions } from './summary';
+export { FreePlayCore, checkScenarioOnMap, freePlayCoreFactory, freePlayPlan, freePlayRound, scenarioTuning, startOf } from './free-play';
+export type { FreePlayPawn, FreePlayPlan } from './free-play';

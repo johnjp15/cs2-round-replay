@@ -1,0 +1,57 @@
+{
+  "format": "cs2-round-replay/awpy-source@1",
+  "note": "de_dust2 from the awpy-data release 2000942 (pnxenopoulos/awpy-data, built by its CI from a CS2 install). Derived from Valve's game files: private repo / encrypted pages only.",
+  "release": {
+    "tag": "2000942",
+    "client_version": "2000942",
+    "patch_version": "1.41.9.6",
+    "buildid": "26445667",
+    "source_revision": "11206718",
+    "generated_at": "2026-11-05T08:04:06.007768+00:00"
+  },
+  "assets": [
+    {
+      "asset": "geometry.zip",
+      "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000942/geometry.zip",
+      "sha256": "de756f94cc27270cbed5c8c6aa3b9ab04abbc0f0b5107135c4aa69ca21baf605",
+      "member": "de_dust2.mesh",
+      "crc32": "a1a516fb",
+      "bytes": 4344292,
+      "file": "data/source/cs2/de_dust2/de_dust2.mesh",
+      "fileSha256": "a21f26cb5df390dd03e10a8b43da8c89781b5f5c7cf1216a31748fd23a341766"
+    },
+    {
+      "asset": "navs.zip",
+      "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000942/navs.zip",
+      "sha256": "a9ea330843d13960fe487907f8e4660543e04a84122b2e247fe189a26517c175",
+      "member": "de_dust2.nav",
+      "crc32": "77ee421b",
+      "bytes": 481872,
+      "file": "data/source/cs2/de_dust2/de_dust2.nav",
+      "fileSha256": "64bbc202edae8a92d432368e86948bbee3af9c56555e190dda251d28c64e1ea7"
+    },
+    {
+      "asset": "images.zip",
+      "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000942/images.zip",
+      "sha256": "eefb39d6519b9dabca82100fc0958e8762550d85ad1aa344836d92ff363f531c",
+      "member": "radars/de_dust2.png",
+      "crc32": "bc248b9a",
+      "bytes": 175761,
+      "file": "data/source/cs2/de_dust2/de_dust2.png",
+      "fileSha256": "0828297130ce26db25a299806ff743df9104de634a3e64b52b358f6f4399354d"
+    },
+    {
+      "asset": "map_data.json",
+      "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000942/map_data.json",
+      "sha256": "b0c8e7e95839b283f311e01c7d7022e5fe701bcfbb44134e7cedccec0f916e67",
+      "entry": "de_dust2",
+      "value": {
+        "pos_x": -2476,
+        "pos_y": 3239,
+        "rotate": 1,
+        "scale": 4.4,
+        "zoom": 1.1
+      }
+    }
+  ]
+}

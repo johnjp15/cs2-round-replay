@@ -21,8 +21,30 @@ import clipsUrl from '../../data/geometry/mirage-clips.bin?url';
 import tracksUrl from '../../data/geometry/mirage-tracks.json?url';
 import heightUrl from '../../data/geometry/mirage-height.png';
 import type { World3dFiles } from './session';
-import { DEFAULT_MAP, type MapId } from '../contracts/index';
-import { packageWorldUrls } from './map-packages';
+import { DEFAULT_MAP, mapPackagePaths, parseScenario, type MapId, type Scenario } from '../contracts/index';
+import { packageUrl, packageWorldUrls } from './map-packages';
+
+/** H3: every scenario (data/scenarios/*.json), parsed; tiny JSON, bundled. */
+const SCENARIO_JSON = import.meta.glob<unknown>('../../data/scenarios/*.json', { eager: true, import: 'default' });
+
+export function scenarioList(): Scenario[] {
+  return Object.keys(SCENARIO_JSON)
+    .sort()
+    .map((k) => parseScenario(SCENARIO_JSON[k], (k.split('/').pop() ?? k).replace(/\.json$/, '')));
+}
+
+/** H3: a map package's facts and CS2 nav (free play). */
+export async function loadFreePlayNav(map: MapId): Promise<{ info: unknown; nav: unknown }> {
+  const p = mapPackagePaths(map);
+  if (p.info === null || p.nav === null) throw new Error(`map package "${map}" has no nav.json / map.json`);
+  const get = async (url: string): Promise<unknown> => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+    return (await res.json()) as unknown;
+  };
+  const [info, nav] = await Promise.all([get(packageUrl(p.info, map)), get(packageUrl(p.nav, map))]);
+  return { info, nav };
+}
 
 /** The JSON values (or their text: parseSessionData takes either) and the decoded radar. */
 export interface PageAssets {

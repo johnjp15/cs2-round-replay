@@ -9,7 +9,17 @@
  */
 import embedded from 'virtual:cs2-embedded-assets';
 import type { PageAssets } from './assets';
-import { DEFAULT_MAP, type MapId } from '../contracts/index';
+import { DEFAULT_MAP, parseScenario, type MapId, type Scenario } from '../contracts/index';
+import defaultScenario from '../../data/scenarios/mirage-sp4rtan-1v3.json';
+
+/** H3: this page embeds the default scenario only (the recorded round); free play is in the normal build (docs/scenarios.md). */
+export function scenarioList(): Scenario[] {
+  return [parseScenario(defaultScenario, 'mirage-sp4rtan-1v3')];
+}
+
+export function loadFreePlayNav(map: MapId): Promise<{ info: unknown; nav: unknown }> {
+  return Promise.reject(new Error(`free play (map package "${map}") isn't embedded in this page (docs/scenarios.md)`));
+}
 
 function bytesOf(base64: string): Uint8Array<ArrayBuffer> {
   const s = atob(base64);
