@@ -6,8 +6,8 @@
  * Serves dist/ with `vite preview`, opens it in headless Chromium (playwright-core; the browser
  * comes from PLAYWRIGHT_BROWSERS_PATH, `npx playwright-core install chromium`, or CHROME_PATH),
  * and:
- *  1. desktop 1280×860: screenshot (a) of the ready state (round set up, 1:39), Start, a few seconds
- *     at 1×, screenshot again;
+ *  1. desktop 1280×860: the page starts watching (G4); screenshot (a) of the ready state (round set up, 1:39), E
+ *     takes control of cart (tick 1), Start, a few seconds at 1×, screenshot again;
  *  2. plays cart: aims east of him with the mouse and holds S for 1 s (he must face east and move
  *     south: WASD is screen-relative), presses 3 (knife) and downloads the log and the trace;
  *  3. measures frames/s and ticks/s at 4× over `--seconds` with every overlay on (tracks, ghost,
@@ -32,10 +32,15 @@
  *     summary overlay 2 s after the round end (screenshot e), closes and reopens it, uses its Rewind 10 s; the same
  *     spectating (screenshot e2, "Played it like the tape") and on the phone (screenshot f). With the overlay showing
  *     (desktop and phone) it is one of the HUD's rectangles and no pawn label overlaps it (F);
+ * 9b. G4, takeover: the default page watches at 4×; at 10 s screenshot (i), "Take control of cart": the speed drops to
+ *     1×, cart is "YOU" and walks, screenshot (i2); the page log before the takeover tick is the Node no-human run's,
+ *     byte for byte; `[` back before it watches again and E takes over again; Restart watches; after cart's death
+ *     (69.4 s) the button is disabled and E does nothing;
  * 10. fails on console errors, page errors or requests to other origins.
  *
  *   npx tsx tools/browser-check.ts --only parity    # just step 8 (about 10 s)
  *   npx tsx tools/browser-check.ts --only b5        # just step 9
+ *   npx tsx tools/browser-check.ts --only takeover  # just step 9b (G4)
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
@@ -58,6 +63,8 @@ interface Stats {
   droppedTicks: number;
   speed: number;
   human: string | null;
+  takeoverTick: number | null;
+  canTakeControl: boolean;
   overlays: { follow: boolean; ghost: boolean; tracks: boolean; panel: boolean };
   camera: { zoom: number; cx: number; cy: number };
   radarRebuilds: number;
@@ -281,7 +288,7 @@ async function rewindAndSummary(browser: Awaited<ReturnType<typeof chromium.laun
   // Desktop, cart played by nobody (he stands where the setup put him): history changes.
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   watch(page, problems);
-  await page.goto(ORIGIN + '/?seed=1');
+  await page.goto(ORIGIN + '/?seed=1&human=cart');
   await page.waitForFunction(() => window.__cs2replay !== undefined);
   await page.click('button[data-speed="4"]');
   await page.click('#start');
@@ -378,6 +385,87 @@ async function rewindAndSummary(browser: Awaited<ReturnType<typeof chromium.laun
   await phone.close();
 }
 
+/** The page log's first `n` lines: FNV-1a digest (as SessionLog.digest), and the controls it logged before them. */
+async function logHead(page: Page, n: number): Promise<{ digest: string; controls: { tick: number; control: Control }[] }> {
+  return page.evaluate((count) => {
+    const lines = window.__cs2replay?.session().log().lines().slice(0, count) ?? [];
+    const bytes = new TextEncoder().encode(lines.map((l) => l + '\n').join(''));
+    let h = 0x811c9dc5;
+    for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ (bytes[i] as number), 0x01000193);
+    const controls: { tick: number; control: Control }[] = [];
+    for (const l of lines) {
+      const e = JSON.parse(l) as { observe: { tick: number }; controls: Control[] };
+      for (const c of e.controls) controls.push({ tick: e.observe.tick, control: c });
+    }
+    return { digest: (h >>> 0).toString(16).padStart(8, '0'), controls };
+  }, n);
+}
+
+/** Step 9b (G4): watching, taking control mid-round, back to watching (rewind, Restart), no takeover of a dead cart. */
+async function takeoverCheck(browser: Awaited<ReturnType<typeof chromium.launch>>, problems: string[]): Promise<void> {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  watch(page, problems);
+  await page.goto(ORIGIN + '/?seed=1');
+  await page.waitForFunction(() => window.__cs2replay !== undefined);
+  const note = async (): Promise<string> => page.evaluate(() => document.getElementById('you-note')?.textContent ?? '');
+  const label = async (): Promise<string> => page.evaluate(() => document.querySelector('#takeover span')?.textContent ?? '');
+  await page.click('button[data-speed="4"]');
+  await page.click('#start');
+  await waitTick(page, 10 * 64);
+  const w = await stats(page);
+  console.log(`watching at 4×: tick ${w.tick}, human ${w.human}, note "${await note()}", button "${await label()}"`);
+  if (w.human !== null || w.speed !== 4) problems.push(`not watching at 4× (human ${w.human}, speed ${w.speed})`);
+  if ((await note()) !== 'watching · E: take control') problems.push(`status note while watching: "${await note()}"`);
+  await shoot(page, 'i-desktop-watching');
+  await page.click('#takeover');
+  const t = await stats(page);
+  const k = t.takeoverTick ?? -1;
+  console.log(`Take control of cart: human ${t.human} from tick ${k} (${(k / 64).toFixed(2)} s), speed ${t.speed}, button "${await label()}"`);
+  if (t.human !== 'cart' || t.speed !== 1 || k < 640) problems.push(`takeover: human ${t.human}, tick ${k}, speed ${t.speed}`);
+  if (!(await page.isDisabled('#takeover')) || (await label()) !== 'You: cart') problems.push('the button does not show the takeover');
+  const at = await page.evaluate(() => {
+    const p = window.__cs2replay?.session().observe().pawns.find((q) => q.id === 'cart');
+    return p === undefined ? null : window.__cs2replay?.screenOf(p.pos.x, p.pos.y - 300);
+  });
+  if (at !== null && at !== undefined) await page.mouse.move(at.x, at.y);
+  await page.keyboard.down('s');
+  await page.waitForTimeout(800);
+  await page.keyboard.up('s');
+  await page.waitForTimeout(400);
+  if ((await note()) !== 'you') problems.push(`status note after the takeover: "${await note()}"`);
+  await shoot(page, 'i2-desktop-takeover');
+  // Before the takeover tick the page log is the no-human round's (with the page's own speed control).
+  const head = await logHead(page, k);
+  const sent = head.controls.filter((c) => !(c.tick === 0 && stableStringify(c.control) === '{"type":"start"}'));
+  const node = runHarness(loadHarnessData(), { ...NO_HUMAN, lastTick: k - 1, controls: sent });
+  console.log(`page log before the takeover (${k} lines, controls ${stableStringify(head.controls)}): ${head.digest}; Node no-human ${node.log.digest()}`);
+  if (head.digest !== node.log.digest()) problems.push(`the page log before the takeover differs from the no-human round (${head.digest} != ${node.log.digest()})`);
+  // [ (5 s back, before the takeover): watching again; E takes control again.
+  await page.keyboard.press('BracketLeft');
+  const back = await landed(page);
+  const b = await stats(page);
+  console.log(`[ : tick ${back.tick} (${back.phase}), human ${b.human}, takeover ${b.takeoverTick}`);
+  if (b.human !== null || back.tick >= k) problems.push(`[ did not go back to watching before the takeover (tick ${back.tick}, human ${b.human})`);
+  await page.keyboard.press('e');
+  const again = await stats(page);
+  console.log(`E again: human ${again.human} from tick ${again.takeoverTick}`);
+  if (again.human !== 'cart' || again.takeoverTick === k) problems.push(`E did not take control again (human ${again.human}, tick ${again.takeoverTick})`);
+  await page.click('#restart');
+  const r = await stats(page);
+  console.log(`Restart: human ${r.human}, takeover ${r.takeoverTick}, phase ${r.phase}`);
+  if (r.human !== null || r.takeoverTick !== null) problems.push('Restart did not return to watching');
+  // After cart's death (69.41 s) there is nobody to take over.
+  await page.click('#start');
+  await page.evaluate(() => window.__cs2replay?.seek(69.6));
+  await landed(page, 60_000);
+  await page.keyboard.press('e');
+  const dead = await stats(page);
+  const title = await page.getAttribute('#takeover', 'title');
+  console.log(`after cart's death: tick ${dead.tick}, can take control ${dead.canTakeControl}, button disabled ${await page.isDisabled('#takeover')} ("${title ?? ''}"), human ${dead.human}`);
+  if (dead.canTakeControl || dead.human !== null || !(await page.isDisabled('#takeover'))) problems.push('a dead cart can be taken over');
+  await page.close();
+}
+
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
   const server = startPreview();
@@ -397,7 +485,12 @@ async function main(): Promise<void> {
       await browser.close();
       return;
     }
-    if (ONLY !== '') throw new Error(`--only: expected parity or b5, got ${ONLY}`);
+    if (ONLY === 'takeover') {
+      await takeoverCheck(browser, problems);
+      await browser.close();
+      return;
+    }
+    if (ONLY !== '') throw new Error(`--only: expected parity, b5 or takeover, got ${ONLY}`);
 
     // 1. Desktop: ready, then running at 1x.
     const desk = await browser.newPage({ viewport: { width: 1280, height: 860 } });
@@ -406,8 +499,14 @@ async function main(): Promise<void> {
     await desk.waitForFunction(() => window.__cs2replay !== undefined);
     await desk.waitForTimeout(500);
     const ready = await stats(desk);
-    console.log(`ready: tick ${ready.tick}, clock ${await clockText(desk)}, human ${ready.human}, phase ${ready.phase}`);
+    console.log(`ready: tick ${ready.tick}, clock ${await clockText(desk)}, human ${ready.human}, phase ${ready.phase}, can take control ${ready.canTakeControl}`);
+    if (ready.human !== null || !ready.canTakeControl) problems.push(`the page did not start watching (human ${ready.human}, can take control ${ready.canTakeControl})`);
     await shoot(desk, 'a-desktop-ready');
+    // G4: E takes control of cart (before Start: from tick 1).
+    await desk.keyboard.press('e');
+    const taken = await stats(desk);
+    console.log(`E: human ${taken.human} from tick ${taken.takeoverTick}`);
+    if (taken.human !== 'cart' || taken.takeoverTick !== 1) problems.push(`E did not take control at the ready state (human ${taken.human}, tick ${taken.takeoverTick})`);
     await desk.click('#start');
     await desk.waitForTimeout(3000);
     const ran = await stats(desk);
@@ -521,7 +620,7 @@ async function main(): Promise<void> {
     // 5. (c) Follow camera zoomed in on cart: a smoke, a burst, aiming through the zoomed view.
     const play = await browser.newPage({ viewport: { width: 1280, height: 860 } });
     watch(play, problems);
-    await play.goto(ORIGIN + '/');
+    await play.goto(ORIGIN + '/?human=cart');
     await play.waitForFunction(() => window.__cs2replay !== undefined);
     await play.click('#start');
     await play.keyboard.press('f');
@@ -599,7 +698,7 @@ async function main(): Promise<void> {
     //     is drawn bigger with a shadow, and lands again; H swaps the radar for the height map.
     const jump = await browser.newPage({ viewport: { width: 1280, height: 860 } });
     watch(jump, problems);
-    await jump.goto(ORIGIN + '/');
+    await jump.goto(ORIGIN + '/?human=cart');
     await jump.waitForFunction(() => window.__cs2replay !== undefined);
     await jump.click('#start');
     await jump.keyboard.press('f');
@@ -650,6 +749,8 @@ async function main(): Promise<void> {
     const ph = await stats(phone);
     console.log(`phone: human ${ph.human}, tick ${ph.tick}, clock ${await clockText(phone)}, panel ${ph.overlays.panel ? 'open' : 'closed'}`);
     if (ph.human !== null) problems.push('phone did not start in spectate mode');
+    // G4: no controls for the human on a phone: the takeover button is disabled.
+    if (ph.canTakeControl || !(await phone.isDisabled('#takeover'))) problems.push('the phone offers to take control');
     await shoot(phone, 'd-phone-spectate');
     await phone.click('#pause');
     const browserLog = await phone.evaluate(() => {
@@ -721,7 +822,7 @@ async function main(): Promise<void> {
     //     outlives his recording at 21.8 s and goes LIVE, and the Ts who see him follow.
     const live = await browser.newPage({ viewport: { width: 1280, height: 860 } });
     watch(live, problems);
-    await live.goto(ORIGIN + '/');
+    await live.goto(ORIGIN + '/?human=cart');
     await live.waitForFunction(() => window.__cs2replay !== undefined);
     await live.keyboard.press('t');
     await live.click('button[data-speed="4"]');
@@ -764,6 +865,8 @@ async function main(): Promise<void> {
 
     // 9. B5: rewind, seek and the summary overlay.
     await rewindAndSummary(browser, problems);
+    // 9b. G4: takeover.
+    await takeoverCheck(browser, problems);
 
     await browser.close();
   } finally {

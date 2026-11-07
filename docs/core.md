@@ -115,6 +115,7 @@ Other cases:
 
 1. On the first step after `start` or `restart`, it emits `startActions`, resets every pawn's status to `REPLAY` since that tick, resets every puppet controller to the pawn's start yaw and the scripted events' state, and then (B3) emits the round-start `block_damage` actions (see "Scripted events"). Before any `start` it emits no setup.
 2. Status for all ten pawns, in id order: `DEAD` from the tick the observe first shows `alive: false`; `HUMAN` for the living pawn `observe.human` names (B4); otherwise `LIVE` stays `LIVE` (set by B4's triggers through `setPawnMode`) and anything else is `REPLAY`. `trigger` is the trigger that made the pawn LIVE (B4, see "Divergence"), `rejoin` for a REPLAY pawn that came back to its recording (G1), else `null`, and `sinceTick` is the tick the mode began (0 before the first start).
+   - **G4: takeover.** Not on the setup step: if `observe.human` is not the last step's human, `humanChanged` lifts the new human's damage blocks, logs the takeover and activates his scheduled encounters (or, a release, makes the old one LIVE), after any resync prefix and before the triggers. See "Takeover".
 3. **Divergence** (B4, not on the setup step): `Divergence.step` runs the triggers and the scheduled encounters, appends their actions (`unblock_damage`, `set_mode`, logs; an encounter's `block_damage` and scripted `damage`) and returns the pawns that go LIVE, which `setPawnMode` switches before B3 sees the modes. On the setup step `Divergence.setup` replaces the recorded shot of an active encounter. Then (G1) **`Rejoin.step`** looks at every LIVE pawn with the modes after those switches: it may send an approach (`set_mode` LIVE with role `rejoin`) or switch the pawn back (`block_damage`s, reconciliation, `set_mode` REPLAY, log), and `setPawnMode` makes the returned pawns REPLAY (trigger `rejoin`) before B3 sees the modes; the puppet's commanded yaw restarts from the observed one. See "Rejoin".
 4. **`scheduledActions(o, actions)`** (B3): appends this tick's scripted actions after the setup (`ScriptedEvents.actions`: damage, weapons, grenade selection, plant / defuse fallbacks, drop logs).
 5. **`pawnInput(pawn, o, actions)`** (B2): called once per REPLAY pawn (alive, not `o.human`, mode `REPLAY`), in id order. It returns the puppet's input and may append a snap (`teleport` + `log`) to `actions`, after the setup and scheduled actions. On the setup step every REPLAY pawn (puppets on or off) gets a neutral input at the yaw of its setup `teleport`: that observe predates the teleports, and the engine applies the input yaw after them, so echoing the observed (pre-setup) yaw would turn every pawn back to 0. Without puppets (no `walk`) the input is otherwise neutral: forward 0, side 0, the pawn's current yaw and pitch, no buttons. See "Puppets" below.
@@ -123,10 +124,11 @@ Other cases:
 `control(c)`:
 
 - `start` and `restart` reset the state and arm the setup. `paused` and `speed` carry over.
+- G4: `take_control {id}` is checked (a player id) and changes nothing: the engine hands the pawn over and the Core sees it in the next observe's `human` ("Takeover").
 - `pause {paused}` and `speed {x}` are stored; `x` must be positive. The driver does the actual pausing and pacing: Core doesn't stop stepping by itself.
 - B5: `checkpoint {id}` and `seek {t}` are checked (a non-empty id; seconds ≥ 0) and change nothing: checkpoints and seeking are the driver's work (a checkpoint stores `snapshot()`, a seek steps every tick as usual). `rewind {id}` arms a **resync**: the driver has restored this Core to the checkpoint and the engine couldn't be (no snapshot capability), so the next step puts the engine back first. See "Checkpoints, rewind, summary".
 
-`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `setupThisStep`, `startTick`, `lastTick`, `paused`, `speed`, each pawn's mode, trigger, since tick, (B5) `everLive` and (G1) `blocksLifted`, the armed `resync`, each puppet's `PuppetState`, the scripted events' `ScriptState`, (B4) the `DivergenceState`, (B5) the loadout ledger and (G1) the `RejoinState` list) together with the seed. Snapshots from before G1 restore with no rejoin state (a LIVE pawn's calm clock starts afresh), no LIVE spans and `blocksLifted` = `everLive`. Restoring checks that the seed matches. Every stored number is already canonical (yaw to 0.001°, `behind` to 6 decimals), so a restore continues exactly. A snapshot from before B5 restores with an empty ledger.
+`snapshot()` / `restore()` save and restore the Core's own state (`setupPending`, `setupThisStep`, `startTick`, `lastTick`, `paused`, `speed`, each pawn's mode, trigger, since tick, (B5) `everLive` and (G1) `blocksLifted`, the armed `resync`, (G4) the last step's `human` (a snapshot from before G4: the pawn whose status is HUMAN), each puppet's `PuppetState`, the scripted events' `ScriptState`, (B4) the `DivergenceState`, (B5) the loadout ledger and (G1) the `RejoinState` list) together with the seed. Snapshots from before G1 restore with no rejoin state (a LIVE pawn's calm clock starts afresh), no LIVE spans and `blocksLifted` = `everLive`. Restoring checks that the seed matches. Every stored number is already canonical (yaw to 0.001°, `behind` to 6 decimals), so a restore continues exactly. A snapshot from before B5 restores with an empty ledger.
 
 `puppet(id)` returns a pawn's `PuppetController` (or null without puppets) and `snapCount` the snaps since the last start. `script` is the `ScriptedEvents` (its `plan` and `state`), `divergence` the B4 `Divergence` (its `index`, `encounters` and `state`), `modeOf(id)` a pawn's Core mode, `triggerOf(id)` its trigger, and the protected `setPawnMode(id, mode, tick, trigger)` is what the triggers switch through.
 
@@ -344,7 +346,7 @@ When `observe.human` is a pawn (normally cart):
 - no scripted damage to or from it at the recorded tick (one `debug` log per skipped entry: lokier's 73 on cart, cart's kill of lokier, sp4rtan's post-round kill of cart). B4 plays Lokier's hit on cart as a time-shifted, gated scheduled encounter ("Divergence");
 - no `block_damage` pair involves it, so its fights are real: puppets still aim and shoot at the human, and the engine decides those hits.
 
-With `human === null` (the golden master) cart is a puppet like everyone else.
+With `human === null` (the golden master) cart is a puppet like everyone else. G4: every rule above tests `observe.human` on the tick it applies, so from a mid-round takeover on they apply to him; the blocks he had as a puppet are lifted on the takeover tick ("Takeover").
 
 ### Drops and decisions
 
@@ -426,7 +428,7 @@ HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/10
 
 By default the round replays exactly. When the human does something different, only the puppets whose world actually changed go **LIVE** (the engine's AI drives them, carrying their recorded intent as a goal), and everyone else keeps replaying. A puppet follows its recording until something happens that its recorded self never experienced; divergence spreads only through cause and effect from an **off-script** pawn (the human, or a LIVE pawn): damage, sight, gunfire, a body block. A cancelled event alone changes nothing: B3 drops the shots and damage whose other side is dead or LIVE and the puppet carries on replaying (barely's 44.2 s kill of an already dead Zwomp).
 
-**Modes** (G1): REPLAY → LIVE (a trigger below) → REPLAY again once the reason is gone (**rejoin**, below: calm, still alive on the tape, its state fits the recorded future) → LIVE again if something new reaches it, and so on; DEAD ends it. A pawn with no tape left (outlived) stays LIVE. The human is never LIVE or REPLAY. Before G1 modes went one way (REPLAY → LIVE → DEAD): one small deviation by the human (cart idle in Back Alley) cascaded through the rest of the round (never-peeks ended in a T win instead of the recorded CT defuse).
+**Modes** (G1): REPLAY → LIVE (a trigger below, or G4's `released`: the human let go of the pawn without a rewind) → REPLAY again once the reason is gone (**rejoin**, below: calm, still alive on the tape, its state fits the recorded future) → LIVE again if something new reaches it, and so on; DEAD ends it. A pawn with no tape left (outlived) stays LIVE. The human is never LIVE or REPLAY. Before G1 modes went one way (REPLAY → LIVE → DEAD): one small deviation by the human (cart idle in Back Alley) cascaded through the rest of the round (never-peeks ended in a T win instead of the recorded CT defuse).
 
 ### Triggers (checked every tick, pure functions)
 
@@ -454,7 +456,7 @@ Built once from the schedule and `round.json` `sightings[]`:
 
 ### Scheduled encounters: Lokier on B (`EncounterPlan`, `EncounterState`)
 
-Every non-lethal recorded hit on the default human by an enemy is a scheduled encounter, active while that player is the human: here exactly one, Lokier's 73 HP / 7 armor SSG 08 hit on cart at 18.50 s, from the 17.45 s sighting (the time shift's origin), with cart's recorded spot at the hit, (−1764, 800) at the Apartments window. It is time-shifted, not divergence:
+Every non-lethal recorded hit on the default human by an enemy is a scheduled encounter, active while that player is the human (G4: from a takeover on, by the takeover's time: "Takeover"; while nobody plays it only notes when the shooter first sees the puppet at the spot, `puppetSightTick`): here exactly one, Lokier's 73 HP / 7 armor SSG 08 hit on cart at 18.50 s, from the 17.45 s sighting (the time shift's origin), with cart's recorded spot at the hit, (−1764, 800) at the Apartments window. It is time-shifted, not divergence:
 
 - **Setup**: B3's recorded tap and aim of that hit are suppressed (`ScriptedEvents.suppress`), and from the recorded aim's start (tick 1161) Lokier **holds the angle** on the spot (a B3 `HoldItem`: he looks at chest height there whenever no engagement is active), after replaying to his track's end on B and holding there.
 - **waiting → seen**: the first tick Lokier (REPLAY) has cart in `sees` within `humanSpotToleranceUnits` (192) of the spot. The hit is due `encounterDelaySec` (1 s) later; Lokier aims at cart's chest from now (a run-time B3 engagement). Logged with the shift against the recording.
@@ -480,7 +482,7 @@ The C4 AI faces a holding pawn toward the enemy's approach from their spawn; the
 
 ### The human's pawn
 
-`status` reports the human's living pawn as **`HUMAN`** (`MODES` gained it; status only, `set_mode` still takes `REPLAY | LIVE`; `trigger` null), DEAD once dead. With `human === null` it never appears, so the golden master was byte-identical (`e6c2be70` then; `e9a228d9` since F's cover). The renderer's badge reads it ("YOU").
+`status` reports the human's living pawn as **`HUMAN`** (`MODES` gained it; status only, `set_mode` still takes `REPLAY | LIVE`; `trigger` null), DEAD once dead; G4: from the takeover tick (`sinceTick`), REPLAY before it. With `human === null` it never appears, so the golden master was byte-identical (`e6c2be70` then; `e9a228d9` since F's cover). The renderer's badge reads it ("YOU").
 
 ### Tunables (`data/tuning.json` → `replay`, B4)
 
@@ -743,3 +745,138 @@ The drift comes from the lost velocity at the checkpoint and closes within about
 | flank-sp4rtan (B4 #5) | You changed history: Ts win by elimination (recorded: CT defuse) | 5 `same`; cart → lokier `shifted` −0.30 s; **new** cart → sp4rtan 44.63 s (HS); sp4rtan → donk, → barely, → cart `missed` ("sp4rtan was dead (44.63 s)"); the bomb kills nobody (F: the LIVE guards leave its blast; before F, **new** bomb → barely and → donk 67.52 s) | sp4rtan sighting 44.61 s, donk outlived 53.34 s, barely outlived 61.84 s | you; 2 kills, 200 dealt, 41 taken, alive the whole round, RMS 1,145 u (he waited in Back Alley) |
 
 Summarizing the whole round's log takes ~250 ms in Node and ~80 ms in Chrome (it parses every line).
+
+## Takeover: take control of cart at any time (G4)
+
+Controlling cart is optional. A session can start **watching**: nobody controls cart, he is a REPLAY puppet like the
+other nine, and the run is the no-human golden master byte for byte ("Played it like the tape: CT defuse, 0.72 s
+left"). At any tick T the player can **take control** of cart; from T on cart is the human, exactly as if
+`observe.human` had named him from the start, and before T nothing differs: the log's first T lines are the golden
+master's. This is CS2's own bot takeover (a dead or spectating player presses E on a teammate bot): the CS2 adapter
+maps it one to one (`docs/cs2-adapter.md`, `docs/port-notes.md` "Takeover").
+
+### How the Core learns of it
+
+- **From the observe.** `observe.human` changes from null to `cart` on tick T: the engine handed the pawn to the human
+  before that observe (2D: `Session.takeControl`, i.e. `Sim2DHost.setHuman` between two steps; CS2: the player's E
+  press, which the adapter sees as the human controller now controlling cart's pawn). Nothing is sent to the Core and
+  nothing new is logged: the log shows the takeover as `human` changing in line T's observe, and a Replayer feeds it
+  back like any observe. The contract's `take_control {id}` control is the app → engine request (`Session.control`
+  routes it to `takeControl`; `ReplayCore.control` accepts it and does nothing).
+- `ReplayCoreState.human` is the human of the last step. A step (not the setup step) whose observe names another one
+  calls `humanChanged`. A takeover at tick 0 comes before the setup step, so the setup's blocks and encounter already
+  follow it: it **is** a human from the start, byte for byte (`--takeover 0` = `--human cart`, tested).
+
+### Tick T
+
+In the Act of tick T, after a resync prefix and before the triggers:
+
+1. `unblock_damage` for cart's self pair, then both directions with every enemy whose own blocks are not lifted, dead
+   ones included (as a LIVE switch does). Nobody is LIVE while nobody plays, so it is always the self pair and the five
+   CTs: 11 actions. The invariant of G1 holds on: a self or enemy pair is blocked exactly when neither pawn is the
+   human nor has its blocks lifted.
+2. `log {info, "takeover: cart is the human from tick T (27 hp, ak47); 11 damage blocks lifted"}`.
+3. Scheduled encounters of cart (`Divergence.takeover`, below), each with a log line.
+
+From T: status `HUMAN` since T; no Core input for him (Act T has none, so the engine moves him by the player's input,
+or not at all); everything B3 does for "the human" applies, because it tests `observe.human` every tick ("Scripted
+events" → The human): no scripted damage to or from him (`script: no scripted damage … : cart is the human` at the
+entry's emission tick), no weapon, grenade, plant or defuse scripting; puppets still aim and shoot at him and the
+engine decides those hits. A fire item of his that started before T was decided already, but without Core input
+nothing fires. The divergence triggers that test the human (sighting with the on-course rule, blocked, gunfire,
+damage) start at T: before it there is no off-script pawn. The puppets' snap rule uses his `sees` from T.
+
+**His state at T** is the puppet's, untouched: position, velocity (with no input he coasts to a stop under friction),
+view, weapon (a grenade the script drew for a throw stays drawn), ammo, HP, armor and items. Nothing is teleported.
+`ExpectedEncounters` already describes the recording, so a human on course right after T is the recording: he is
+within the puppet's drift of his track (15.1 u RMS; up to 93 u at the 13.0 s jump, ~100 u just before the puppet's
+snaps at 14.38, 21.77, 29.38 and 64.28 s, where he starts off course). Idle, he leaves his course as his track moves on.
+
+### Lokier's encounter by takeover time
+
+The scheduled encounter is active while cart is the human, i.e. from T. While nobody plays the Core only notes the
+first tick Lokier (REPLAY) sees the puppet cart within `humanSpotToleranceUnits` of the spot (`puppetSightTick`, 2D:
+17.59 s, tick 1126; the recording's sighting is 17.45 s): state, nothing sent. At T (`Divergence.takeover`):
+
+| T | encounter | what happens |
+| --- | --- | --- |
+| before Lokier saw the puppet at the window (T ≤ 17.59 s) | `waiting` | as at the setup: the recorded tap and aim are suppressed and Lokier holds the angle on the spot from the recorded aim's start (18.14 s). The hit comes `encounterDelaySec` after he sees cart at the spot: 18.59 s if cart is there (as a human from the start gets it). Logged `active from the takeover at tick T, waiting …`; a takeover on tick 1126 itself (17.6 s) is seen on that same tick |
+| after that sighting, before the recorded hit was sent (17.59 s < T ≤ tick 1183) | `seen` from the puppet's sighting | the hit due 1 s after it (tick 1190, 18.59 s), and at least one latency after T; the run-time aim from T (the recorded aim, if it began at 18.14 s, runs to its end at the same target). The gate applies on the hit's tick: Lokier still REPLAY and cart in his sight within 192 u of the spot, else Lokier goes LIVE (`encounter`). Logged `cart in sight at the spot since tick 1126 (+0.1 s …), before the takeover at tick T; scripted hit due at tick 1190` |
+| after the recorded hit (B3 sent it to the puppet on tick 1183; it landed at 18.50 s), Lokier alive (T ≤ 18.80 s) | `fired` on the recorded ticks (no shift) | cart has 27 HP / 93 armor. Lokier's view of him at the spot is still the recorded duel and cart's fire at Lokier recorded fire. Cart's recorded kill of Lokier (18.80 s) is no longer scripted (the human isn't): he must kill Lokier himself, else Lokier outlives his recording at 21.80 s (LIVE, `hold` on B) and barely kills him at 22.17 s (as in never-peeks). Logged `the recorded hit (73 hp) landed on tick 1184, before the takeover at tick T` |
+| after Lokier's death | none | `none after the takeover at tick T, lokier is dead` |
+
+So a takeover any time before the hit gives an on-course cart the hit a human from the start gets (18.59 s: the 2D
+sight sees him 0.14 s after the recorded sighting, and the delay is a round 1 s against the recorded 1.05 s), and a
+takeover after it keeps what the puppet got (18.50 s).
+
+**Recorded damage on cart after T**: Lokier's 73 is the encounter above, never B3's recorded tick. sp4rtan's
+post-round kill (69.40 s) is real: B3's implied tap goes ahead (a puppet shooting at the human), the engine decides,
+and the scripted lethal damage is skipped. Teammates can't hurt him (friendly fire off).
+
+### Rewind, seek, checkpoints
+
+The takeover is part of the run, like the human's inputs (`Session`, `docs/app.md`):
+
+- A checkpoint records who controlled cart and since when (the driver's `human`, `takeoverTick`; the Core's snapshot
+  has `human`, the encounter state and the script's suppressions and holds). **Rewinding to a checkpoint before T
+  returns to watching**: exact (host snapshot, whose `human` is null there): what follows is the no-human round byte
+  for byte (tested: take over at 25 s, play to 30 s, rewind to 20 s, run to the end: the golden digest); resync (CS2):
+  the driver gives the pawn back to the bot before the resync step (2D: `setHuman(null)`), and the resync prefix, made
+  from the checkpoint's observe (`human` null), sets cart REPLAY and blocks all 60 pairs again. The player can then
+  take over at another tick (tested: 40 s, both paths).
+- The takeover stays on the **tape**: a forward seek through T replays it on its tick, before his inputs, and lands
+  where the straight run did, byte for byte (exact path). Playing on live drops the tape and its takeover.
+- The automatic checkpoint of a 5 s multiple is taken just before that tick's step, so a takeover on that very tick
+  is in it: rewinding there keeps cart controlled.
+
+### Release, death, after the round
+
+- **Release** (`observe.human` from cart to null without a rewind; CS2: the player leaves or goes spectator and the
+  bot plays on; the app never does this): cart goes LIVE (trigger `released`) with his regular goal, his blocks stay
+  lifted, and G1 brings him back to his recording once calm.
+- **A dead cart** can't be taken over (`Session.takeControlBlocked`: `cart is dead`; CS2 has no bot left to take).
+- **After the round end** it is allowed while he lives (to 69.41 s): the post-round kill is then real. Idle from 68 s,
+  he dies on the tape's tick (4442).
+
+### Results: idle after the takeover (`tests/takeover.test.ts`)
+
+The player takes control at T and does nothing (no input: cart stands still). Every run's first T lines are the golden
+master's; T = 0 is the `--human cart` run byte for byte. Times in seconds; bold = the golden master's tick (the tape:
+plant 27.52, barely → Zwomp 44.20, sp4rtan → donk 50.34 (kill feed 50.35), sp4rtan → barely 58.84 (58.85), defuse
+66.80).
+
+| T | outcome | plant | Zwomp | donk | barely | defuse | why |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 0 | CT defuse 12 – 15, 0.83 s left | 27.63 (+7) | **44.20** | **50.34** | **58.84** | **66.80** | cart stands on his start spot all round: Lokier outlives (21.80), barely goes LIVE, kills him (22.16) and rejoins (23.17) 0.6 s behind his tape, so his plant runs 7 ticks late (G1's late planter, as in never-peeks since G3); sp4rtan meets cart on his flank (40.09), kills him and rejoins; barely hears it, goes LIVE and rejoins |
+| 5 | CT defuse, 0.83 s left | 27.63 (+7) | **44.20** | **50.34** | **58.84** | **66.80** | as T = 0 (he has hardly left his start: 64 u) |
+| 17.6 | CT defuse, 0.83 s left | 27.63 (+7) | **44.20** | **flagged** 47.70 | **58.84** | **66.80** | hit at 18.59; cart stays at the Apartments window on 27 HP; the plant as T = 0. sp4rtan's recorded flank passes the window at 46.7 s: he sees cart (off course), goes LIVE and kills him; the gunfire makes donk (904 u away, dwelling in the Apartments) and barely LIVE; LIVE sp4rtan kills LIVE donk at 47.70 (the toy AI's fight). Both rejoin; the rest is the tape |
+| 18.0 | CT defuse, 0.83 s left | 27.63 (+7) | **44.20** | **flagged** 47.59 | **58.84** | **66.80** | as 17.6 (the same hit, from the puppet's sighting) |
+| 18.6 | CT defuse, 0.83 s left | 27.63 (+7) | **44.20** | **flagged** 47.56 | **58.84** | **66.80** | the recorded hit already landed (27 HP); then as 17.6 |
+| 30 | CT defuse 12 – 15, 0.72 s left | – | **44.20** | **50.34** | **58.84** | **66.80** | Lokier already dead; cart stands where his track had him on the B side, nobody's recorded way passes in sight; sp4rtan's post-round shot (69.41) misses: cart ends on 27 HP |
+| 45 | CT defuse 12 – 15, 0.72 s left | – | – | **50.34** | **58.84** | **66.80** | as 30 |
+| 60 | CT defuse 12 – 15, 0.72 s left | – | – | – | – | **66.80** | as 30 |
+| 68 | CT defuse 12 – 15, 0.72 s left | – | – | – | – | – | after the round; the post-round kill lands on the tape's tick: "Played it like the tape" |
+
+(– after T: before the takeover, so the golden master's by construction.) Every run ends in the recorded CT defuse.
+What moves is not the takeover's doing: with cart idle before 18.8 s Lokier outlives his recording and the LIVE barely
+who kills him rejoins too late for his plant tick (+7 ticks, as in never-peeks); and an idle cart left at the window
+is in the path of sp4rtan's recorded flank half a minute later, where B4/G1 divergence and the 2D toy AI
+(`docs/ai.md`) cost donk 2.6 s. A cart that follows his recording after the takeover (`takeover-duel` below), or just
+leaves the window, meets neither.
+
+**Scenario `takeover-duel`** (`fixtures/scenarios/takeover-duel.json`, `tests/takeover-rewind.test.ts`): watch to
+18.0 s, take control at the window, aim at Lokier, take the time-shifted hit (18.59 s, 27 HP), kill him for real
+(18.72 s, HS; the tape 18.80 s), then play the recording to the end. No pawn goes LIVE; every other event is on the
+golden master's tick, CT defuse 12 – 15 with 0.72 s left, and sp4rtan's post-round shot kills cart at 69.41 s as
+recorded ("Same result, different round: … 1 kill changed").
+
+**Harness and tests**: `npm run harness -- --takeover <t>` (and `--script`, or a scenario's `"takeover": 18.6`)
+watches to t and has cart taken over there (`docs/golden.md`); `--takeover 0` is `--human cart`. **Port fixture**
+`round-cart-takeover`: takeover at 15 s, idle, to 24 s.
+
+### Known limits
+
+- Encounters exist for the default human only (cart); the Session offers only cart (`SessionConfig.playable`).
+- Taken over just before one of cart's puppet snaps (14.38, 21.77, 29.38, 64.28 s), he is up to ~100 u behind his
+  track: off course at once, so an enemy that sees him then goes LIVE.
+- The release path exists for CS2 (a player leaving); the 2D app has no "give control back" (rewind instead).

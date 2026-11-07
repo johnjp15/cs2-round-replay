@@ -14,8 +14,10 @@
  *   weapon(weapon)           switch weapon (the app's weapon-slot keys)
  *
  * Steps run one after the other; `teleport`, `aimAt` and `weapon` take no time. Scenario files
- * (`fixtures/scenarios/*.json`) are `{name, description, human, seed, until, steps: [{do: <command>, …}]}`;
- * `npm run harness -- --scenario <file>` runs one, tests/scenarios.test.ts asserts them.
+ * (`fixtures/scenarios/*.json`) are `{name, description, human, seed, until, takeover?, steps: [{do: <command>, …}]}`;
+ * `npm run harness -- --scenario <file>` runs one, tests/scenarios.test.ts asserts them. G4: `takeover` (seconds) has
+ * nobody play until then (the no-human round), where the human takes control of his pawn as the puppet left it; the
+ * steps start on that tick (aim and view from where the puppet looked). Absent or null: the human plays from tick 0.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -81,6 +83,8 @@ export interface Scenario {
   readonly seed: number;
   /** Last observe tick to run: seconds (tick round(t × 64)) or 'end'. */
   readonly until: number | 'end';
+  /** G4: seconds; the human takes control on tick round(t × 64) (nobody plays before), or null: from the start. */
+  readonly takeover: number | null;
   readonly steps: readonly BotStep[];
 }
 
@@ -167,19 +171,22 @@ export function parseScenario(json: unknown): Scenario {
   const v = typeof json === 'string' ? (JSON.parse(json) as unknown) : json;
   if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new ScenarioError('scenario: expected an object');
   const o = v as Record<string, unknown>;
-  keys(o, ['name', 'description', 'human', 'seed', 'until', 'steps'], 'scenario');
+  keys(o, ['name', 'description', 'human', 'seed', 'until', 'takeover', 'steps'], 'scenario');
   const human = o['human'] ?? 'cart';
   if (typeof human !== 'string' || !isPlayerId(human)) throw new ScenarioError('scenario.human: expected a player id');
   const until = o['until'] ?? 'end';
   if (until !== 'end') num(until, 'scenario.until');
   const steps = o['steps'];
   if (!Array.isArray(steps)) throw new ScenarioError('scenario.steps: expected an array');
+  const takeover = o['takeover'] ?? null;
+  if (takeover !== null && num(takeover, 'scenario.takeover') < 0) throw new ScenarioError('scenario.takeover: expected seconds >= 0');
   return {
     name: typeof o['name'] === 'string' ? o['name'] : '',
     description: typeof o['description'] === 'string' ? o['description'] : '',
     human,
     seed: o['seed'] === undefined ? 1 : num(o['seed'], 'scenario.seed'),
     until: until as number | 'end',
+    takeover: takeover as number | null,
     steps: steps.map((s: unknown, i) => parseStep(s, `scenario.steps[${i}]`)),
   };
 }
@@ -225,6 +232,8 @@ export class HumanBot implements HumanDriver {
   private look: { id: PlayerId; band: AimBand; offsetDeg: number } | null = null;
   private yaw: number;
   private pitch = 0;
+  /** G4: false until the first tick the session has a human (a takeover: the steps start there). */
+  private playing = false;
 
   constructor(data: SessionData, id: PlayerId, seed = 1) {
     this.id = id;
@@ -291,7 +300,16 @@ export class HumanBot implements HumanDriver {
     let o = canonicalize(session.observe());
     if (o.tick !== tick) throw new Error(`HumanBot: observe tick ${o.tick}, expected ${tick}`);
     this.stepShadow(o);
+    // G4: before a takeover nobody plays (the shadow still sees every tick); from it, the view is where the puppet left it.
+    if (o.human === null) return { input: null, weapon: null };
     const me = pawn(o, this.id);
+    if (!this.playing) {
+      this.playing = true;
+      if (tick > 0 && me !== undefined) {
+        this.yaw = roundYaw(me.yaw);
+        this.pitch = me.pitch;
+      }
+    }
     // The setup tick's observe predates the setup: hold still at the setup yaw.
     if (tick === 0 || me === undefined) return { input: this.neutral(), weapon: null };
     if (!me.alive) return { input: null, weapon: null };
@@ -534,7 +552,10 @@ export function describeStep(s: BotStep): string {
 
 export interface TimelineEvent {
   readonly tick: number;
-  /** `live`, `rejoin` (G1: heading back, or back on the tape), `death`, `encounter`, `bomb`, `round_end`, `dropped` (B3's dropped scripted item). */
+  /**
+   * `live`, `rejoin` (G1: heading back, or back on the tape), `death`, `encounter`, `bomb`, `round_end`, `dropped` (B3's
+   * dropped scripted item), `takeover` (G4: the human took control of his pawn).
+   */
   readonly kind: string;
   readonly text: string;
 }
@@ -559,6 +580,7 @@ export function timeline(entries: readonly LogEntry[]): TimelineEvent[] {
       if (/^[a-z0-9]+ LIVE: /.test(a.text)) out.push({ tick: o.tick, kind: 'live', text: a.text });
       else if (/^[a-z0-9]+ (REPLAY: rejoined|rejoin: )/.test(a.text) || a.text.startsWith('script: plant by ')) out.push({ tick: o.tick, kind: 'rejoin', text: a.text });
       else if (a.text.startsWith('encounter ')) out.push({ tick: o.tick, kind: 'encounter', text: a.text });
+      else if (a.text.startsWith('takeover: ')) out.push({ tick: o.tick, kind: 'takeover', text: a.text });
       else if (a.text.startsWith('script: dropped')) out.push({ tick: o.tick, kind: 'dropped', text: a.text });
     }
   }

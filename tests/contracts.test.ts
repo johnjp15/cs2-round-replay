@@ -71,6 +71,7 @@ const CONTROLS: { readonly [K in ControlType]: Extract<Control, { type: K }> } =
   rewind: { type: 'rewind', id: 'cp1' },
   pause: { type: 'pause', paused: true },
   speed: { type: 'speed', x: 0.25 },
+  take_control: { type: 'take_control', id: 'cart' },
 };
 
 function fullObserve(): Observe {
@@ -130,7 +131,7 @@ describe('contract types', () => {
     }
     expect(Object.keys(EVENTS)).toHaveLength(6);
     expect(Object.keys(ACTIONS)).toHaveLength(15);
-    expect(Object.keys(CONTROLS)).toHaveLength(7);
+    expect(Object.keys(CONTROLS)).toHaveLength(8);
   });
 
   it('exports the ten player ids sorted and runtime helpers from the barrel', () => {

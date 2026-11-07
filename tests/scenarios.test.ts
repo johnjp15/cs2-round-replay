@@ -34,7 +34,7 @@ interface ScenarioRun {
 function play(name: string): ScenarioRun {
   const s = loadScenario(`${ROOT}/fixtures/scenarios/${name}.json`);
   const bot = HumanBot.fromScenario(data, s);
-  const run = runHarness(data, { human: s.human, driver: bot, lastTick: s.until === 'end' ? 'end' : tickOf(s.until), seed: s.seed });
+  const run = runHarness(data, { human: s.human, driver: bot, lastTick: s.until === 'end' ? 'end' : tickOf(s.until), seed: s.seed, takeover: s.takeover === null ? null : tickOf(s.takeover) });
   const tl = timeline(run.entries);
   console.log(`[scenario ${name}] ${s.description}\n${formatTimeline(tl)}\n`);
   return { run, bot, tl };
@@ -164,7 +164,7 @@ function tapeAfterLokier(run: HarnessRun): (string | number)[][] {
 
 describe('scenario files', () => {
   it('parse, and bad ones are refused with the path', () => {
-    for (const n of ['lokier-late', 'never-peeks', 'mid-zwomp', 'flank-sp4rtan', 'cart-dies', 'block-barely', 'block-sp4rtan', 'smoke-window', 'cart-goes-a', 'miss-lokier-shop']) {
+    for (const n of ['lokier-late', 'never-peeks', 'mid-zwomp', 'flank-sp4rtan', 'cart-dies', 'block-barely', 'block-sp4rtan', 'smoke-window', 'cart-goes-a', 'miss-lokier-shop', 'takeover-duel']) {
       expect(loadScenario(`${ROOT}/fixtures/scenarios/${n}.json`).name).toBe(n);
     }
     expect(() => parseScenario({ steps: [{ do: 'dance' }] })).toThrow(ScenarioError);

@@ -19,6 +19,7 @@ import {
   formatHumanScript,
   loadHarnessData,
   logDigest,
+  optionsFromArgs,
   parseCliArgs,
   parseHumanScript,
   runHarness,
@@ -104,9 +105,10 @@ describe('input scripts', () => {
 
 describe('harness', () => {
   it('parses the CLI options', () => {
-    expect(parseCliArgs([])).toEqual({ human: null, script: null, until: 'end', seed: 1, out: null, scenario: null, untilGiven: false });
+    expect(parseCliArgs([])).toEqual({ human: null, takeover: null, script: null, until: 'end', seed: 1, out: null, scenario: null, untilGiven: false });
     expect(parseCliArgs(['--human', 'cart', '--script', 'x.json', '--until', '20', '--seed', '7', '--out', 'o'])).toEqual({
       human: 'cart',
+      takeover: null,
       script: 'x.json',
       until: 20,
       seed: 7,
@@ -120,6 +122,13 @@ describe('harness', () => {
     expect(() => parseCliArgs(['--human', 'bob'])).toThrow(/--human/);
     expect(() => parseCliArgs(['--until', 'soon'])).toThrow(/--until/);
     expect(() => parseCliArgs(['--fast'])).toThrow(/unknown option/);
+    // G4: --takeover is of cart unless --human names another pawn; not with --human none.
+    expect(parseCliArgs(['--takeover', '18.6'])).toMatchObject({ human: 'cart', takeover: 18.6 });
+    expect(parseCliArgs(['--human', 'donk', '--takeover', '5'])).toMatchObject({ human: 'donk', takeover: 5 });
+    expect(optionsFromArgs(parseCliArgs(['--takeover', '18.6']))).toMatchObject({ human: 'cart', driver: null, takeover: 1190 });
+    expect(optionsFromArgs(parseCliArgs(['--human', 'cart']))).toMatchObject({ human: 'cart', takeover: null });
+    expect(() => parseCliArgs(['--human', 'none', '--takeover', '5'])).toThrow(/needs a human/);
+    expect(() => parseCliArgs(['--takeover', '-1'])).toThrow(/--takeover/);
   });
 
   it('logDigest is SessionLog.digest (FNV-1a over UTF-8), also for non-ASCII text', () => {

@@ -12,14 +12,17 @@
  * the skipped ticks), then the Scene restarts from where it landed. The summary overlay (summary-overlay.ts)
  * appears 2 s of round time after the round end, without pausing (the post-round kill still happens).
  *
- * URL parameters: `?seed=<int>` (default 1); `?human=cart|none` (default cart, or none on touch-only
- * devices, which have no controls for the human yet).
+ * G4: the page starts watching (nobody controls cart; the round plays as recorded). "Take control of cart" or E hands
+ * him to the player from that tick on (Session.takeControl; a 4× speed drops to 1×); Restart, or a rewind to before
+ * it, is watching again. Touch-only devices have no controls for the human, so they only watch (takeover.ts).
+ *
+ * URL parameters: `?seed=<int>` (default 1); `?human=cart` plays cart from the start (`none`, the default: watching).
  *
  * Data: `loadAssets()` fetches the round, nav and sight-mask JSON and the radar (assets.ts). The single-file
  * build (vite.single.config.ts) redirects that import to assets-embedded.ts, which reads them from the page.
  */
 import tuningJson from '../../data/tuning.json';
-import { isPlayerId, type PlayerId, type RoundSummary } from '../contracts/index';
+import { type PlayerId, type RoundSummary } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { loadAssets } from './assets';
 import type { Camera } from './camera';
@@ -33,9 +36,10 @@ import { FixedLoop, RateMeter, TICK_MS } from './loop';
 import { screenToWorld, worldToScreen } from './radar';
 import { FOLLOWED, Renderer } from './renderer';
 import { Scene, interpolationAlpha } from './scene';
-import { DEFAULT_HUMAN, Session, parseSessionData, type SessionData } from './session';
+import { Session, parseSessionData, type SessionData } from './session';
 import { STANDING_HULL, TRACE_SKIN } from '../sim2d/index';
 import { SUMMARY_DELAY_TICKS, SummaryOverlay, summaryDue, summaryView } from './summary-overlay';
+import { TAKEOVER_KEY, startHuman, takeoverButtonView, youNote } from './takeover';
 import { TimelineDom, seekFraction, seekStepForKey, stepTarget, timelineSpanTicks } from './timeline';
 
 /** A seek's wall-time budget per animation frame (ms), so the page stays responsive. */
@@ -54,6 +58,9 @@ export interface AppStats {
   readonly droppedTicks: number;
   readonly speed: number;
   readonly human: PlayerId | null;
+  /** G4: the tick the player took control (0: from the start), or null while watching; and whether he can now. */
+  readonly takeoverTick: number | null;
+  readonly canTakeControl: boolean;
   readonly fps: number;
   readonly tps: number;
   readonly overlays: Overlays;
@@ -82,6 +89,8 @@ declare global {
       summary: () => RoundSummary;
       /** B5: seek to video second t, as the timeline does (chunked per frame). */
       seek: (t: number) => void;
+      /** G4: take control of cart, as the button and E do (no-op when it can't). */
+      takeControl: () => void;
     };
   }
 }
@@ -104,12 +113,9 @@ function download(name: string, text: string, type: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-function initialHuman(params: URLSearchParams): PlayerId | null {
-  const h = params.get('human');
-  if (h === 'none' || h === 'spectate') return null;
-  if (h !== null && isPlayerId(h)) return h;
-  const touchOnly = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-  return touchOnly ? null : DEFAULT_HUMAN;
+/** Touch-only devices (phones, tablets without a mouse) have no controls for the human: they watch. */
+function isTouchOnly(): boolean {
+  return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 }
 
 class App {
@@ -124,7 +130,12 @@ class App {
   private readonly tpsMeter = new RateMeter(1000);
   private session: Session;
   private scene: Scene;
-  private human: PlayerId | null;
+  /** Who plays from the start (`?human=`): null = watching until the player takes control (G4). */
+  private readonly human: PlayerId | null;
+  /** G4: no keyboard and mouse: watch only. */
+  private readonly touchOnly = isTouchOnly();
+  /** G4: the takeover button's last view (it changes with cart's death and seeks, so it is checked every frame). */
+  private takeoverKey = '';
   private phase: Phase = 'ready';
   private overlays: Overlays;
   /** The map layers: the radar, and (G3) the height map. */
@@ -150,7 +161,7 @@ class App {
     start: HTMLButtonElement;
     pause: HTMLButtonElement;
     restart: HTMLButtonElement;
-    spectate: HTMLButtonElement;
+    takeover: HTMLButtonElement;
     summary: HTMLButtonElement;
     back5: HTMLButtonElement;
     back10: HTMLButtonElement;
@@ -222,7 +233,7 @@ class App {
       start: el('start', HTMLButtonElement),
       pause: el('pause', HTMLButtonElement),
       restart: el('restart', HTMLButtonElement),
-      spectate: el('spectate', HTMLButtonElement),
+      takeover: el('takeover', HTMLButtonElement),
       summary: el('summary-open', HTMLButtonElement),
       back5: el('back5', HTMLButtonElement),
       back10: el('back10', HTMLButtonElement),
@@ -243,6 +254,7 @@ class App {
       },
       summary: () => summarize(this.session.model, this.session.log()),
       seek: (t) => this.startSeek(t),
+      takeControl: () => this.takeControl(),
     };
     requestAnimationFrame(this.frame);
   }
@@ -296,6 +308,21 @@ class App {
     this.updateControls();
   }
 
+  /**
+   * G4: the player takes control of cart from the next tick on (the button, or E while watching). The pawn keeps what
+   * the puppet had; a 4× (or any) speed drops to 1×, since nobody plays at 4× (the speed buttons still work).
+   */
+  private takeControl(): void {
+    const s = this.session;
+    if (this.touchOnly || this.seekResume !== null || !s.canTakeControl) return;
+    if (this.loop.speed !== 1) {
+      this.loop.speed = 1;
+      s.control({ type: 'speed', x: 1 });
+    }
+    s.takeControl();
+    this.updateControls();
+  }
+
   /** Back to the ready state (the Restart button and the summary's Restart). */
   private restart(): void {
     this.session.cancelSeek();
@@ -328,16 +355,6 @@ class App {
     this.scene.ingest(o, act, this.effects(this.session).activeEffects());
   }
 
-  /** A new session in the ready state: tick 0 (the round setup) has run, so the pawns are on their spots. */
-  private newSession(): Session {
-    this.seekResume = null;
-    this.overlay.hide();
-    this.summaryDismissed = false;
-    const s = new Session({ ...this.data, seed: this.seed, human: this.human });
-    this.scene = this.ready(s);
-    return s;
-  }
-
   /** Put a session in the ready state (setup tick run, paused) and start a Scene on it. */
   private ready(s: Session): Scene {
     if (this.loop.speed !== 1) s.control({ type: 'speed', x: this.loop.speed });
@@ -361,6 +378,12 @@ class App {
   /** View toggles: F follow, G ghost, T tracks, Tab status panel, H height map (G3); B5: `[` / `]` seek 5 s back / ahead. */
   private onKey(e: KeyboardEvent): void {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    // G4: E while watching takes control (while playing it is USE, InputDom's).
+    if (e.code === TAKEOVER_KEY && this.session.human === null) {
+      e.preventDefault();
+      this.takeControl();
+      return;
+    }
     const step = seekStepForKey(e.code);
     if (step !== null) {
       e.preventDefault();
@@ -411,10 +434,7 @@ class App {
     on(b.back5, () => this.startSeek(stepTarget(this.session.tick, -5)));
     on(b.back10, () => this.startSeek(stepTarget(this.session.tick, -10)));
     on(b.fwd5, () => this.startSeek(stepTarget(this.session.tick, 5)));
-    on(b.spectate, () => {
-      this.human = this.human === null ? DEFAULT_HUMAN : null;
-      this.session = this.newSession();
-    });
+    on(b.takeover, () => this.takeControl());
     for (const sb of b.speeds) {
       on(sb, () => {
         const x = Number(sb.dataset['speed']);
@@ -451,7 +471,7 @@ class App {
     b.back10.disabled = !started;
     b.fwd5.disabled = !this.session.capabilities.seek;
     b.start.disabled = this.phase !== 'ready' || seeking;
-    b.spectate.setAttribute('aria-pressed', String(this.human === null));
+    this.updateTakeover(true);
     for (const sb of b.speeds) sb.setAttribute('aria-pressed', String(Number(sb.dataset['speed']) === this.loop.speed));
     for (const ob of b.overlays) {
       const key = ob.dataset['overlay'] as OverlayKey | undefined;
@@ -459,8 +479,25 @@ class App {
     }
   }
 
+  /** G4: the takeover button (label, E cap, disabled, pressed, tooltip); only touches the DOM when it changed. */
+  private updateTakeover(force = false): void {
+    const s = this.session;
+    const v = takeoverButtonView(s.human, s.playable, s.takeControlBlocked(), this.touchOnly, this.seekResume !== null);
+    const key = `${v.label}|${v.disabled}|${v.pressed}|${v.key}|${v.title}`;
+    if (!force && key === this.takeoverKey) return;
+    this.takeoverKey = key;
+    const b = this.buttons.takeover;
+    const label = b.querySelector('span');
+    if (label !== null) label.textContent = v.label;
+    const cap = b.querySelector('kbd');
+    if (cap !== null) cap.hidden = !v.key;
+    b.disabled = v.disabled;
+    b.title = v.title;
+    b.setAttribute('aria-pressed', String(v.pressed));
+  }
+
   private fileStem(): string {
-    return `cs2-replay-seed${this.seed}-${this.session.human ?? 'spectate'}-tick${this.scene.cur.tick}`;
+    return `cs2-replay-seed${this.seed}-${this.session.human ?? 'watching'}-tick${this.scene.cur.tick}`;
   }
 
   private readonly frame = (now: number): void => {
@@ -496,6 +533,7 @@ class App {
       clock: s.clock,
       human: s.human,
       you: s.human ?? FOLLOWED,
+      youNote: youNote(s.human, s.human ?? FOLLOWED, s.playable, s.canTakeControl, this.touchOnly),
       phase: this.phase,
       speed: this.loop.speed,
       panelOpen: this.overlays.panel,
@@ -506,6 +544,7 @@ class App {
       floorZ: this.floorZ,
     });
     this.updateTimeline();
+    this.updateTakeover();
     this.updateCursor();
     requestAnimationFrame(this.frame);
   };
@@ -574,6 +613,8 @@ class App {
       droppedTicks: this.loop.droppedTicks,
       speed: this.loop.speed,
       human: this.session.human,
+      takeoverTick: this.session.takeoverTick,
+      canTakeControl: !this.touchOnly && this.session.canTakeControl,
       fps: this.fpsMeter.rate(now),
       tps: this.tpsMeter.rate(now),
       overlays: this.overlays,
@@ -598,7 +639,7 @@ async function boot(): Promise<void> {
     const seed = Number.isInteger(seedParam) ? seedParam : 1;
     const a = await loadAssets();
     const data = parseSessionData(a.round, a.nav, tuningJson, a.vision, a.world3d);
-    new App(data, a.radar, seed, initialHuman(params), a.height);
+    new App(data, a.radar, seed, startHuman(params.get('human')), a.height);
     status.hidden = true;
   } catch (err) {
     status.textContent = `Could not start: ${err instanceof Error ? err.message : String(err)}`;

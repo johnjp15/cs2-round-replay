@@ -16,6 +16,7 @@ order without reading anything else first.
 | [P5](P5-replay-live-handoff.md) | Does a puppet unlocked mid-walk carry on with Bot-Nav and engage? | `ai.reactionSec`, `ai.aimErrorDeg` |
 | [P6](P6-visibility-cost.md) | Are 10 × 5 visibility traces per tick cheap, and do they agree with native perception? | `ai.fovDeg`, `grenades.smokeSec`, `grenades.molotovSec` |
 | [P7](P7-round-start.md) | After freeze time: clock 1:39, ten pawns placed and kitted, first kill at 0.50 s, bomb timings | `bomb.*`; picks the clock route |
+| [P8](P8-takeover.md) | G4: can the player take over cart's locked bot with E mid-round (cart only), and can it be undone and done again? | the `take_control` / `human` rows; whether CS2 offers rewinds after a takeover |
 
 ## Order and dependencies
 
@@ -34,6 +35,7 @@ card builds on those answers.
 | 8 | P6 | S0 (P2 for the FOV part) | Independent; can run any time after S0 |
 | 9 | P5 | P1, P2 | Handoff needs a working puppet |
 | 10 | P7 | P0, P1, P4 (P2, P3 for bomb part B) | Integration: everything at once |
+| 11 | P8 | P1, a CS2 client | G4's takeover; independent of the damage and view routes |
 
 A card that fails stops only the cards that depend on it. Record the failure, take the card's fallback, and carry on
 with independent cards.
@@ -54,7 +56,8 @@ Agent wall-clock hours, assuming the server is already provisioned and reachable
 | P5 | 3–4 h | |
 | P6 | 2 h | |
 | P7 | 4–6 h | Parts A and B |
-| **Total** | **≈ 30–40 h**, plus 1–2 days if the fork is needed | |
+| P8 | 2–3 h | Needs a human on a client |
+| **Total** | **≈ 32–43 h**, plus 1–2 days if the fork is needed | |
 
 ## Server access needed
 
