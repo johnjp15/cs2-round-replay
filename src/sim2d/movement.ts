@@ -627,7 +627,11 @@ export function stepMove3d(s: MoveState, input: MoveInput | null, weapon: string
     groundFound = mv.walkMove(dt);
   } else {
     if (input !== null) {
-      const w = wishFromInput(input, weapon, m, opts);
+      // Source's HandleDuckingSpeedCrop crops the move by the duck factor only with a ground entity (gamemovement.cpp
+      // `( player->GetFlags() & FL_DUCKING ) && ( player->GetGroundEntity() != NULL )`): ducking in the air does not
+      // slow air strafing (V1, docs/audit/v1-e2e-2026-11-07.md).
+      const airInput = buttons.includes('DUCK') ? { ...input, buttons: input.buttons.filter((b) => b !== 'DUCK') } : input;
+      const w = wishFromInput(airInput, weapon, m, opts);
       if (w.speed > 0) {
         const cap = Math.min(w.speed, m.airMaxWishSpeed);
         const add = cap - (mv.vx * w.dirX + mv.vy * w.dirY);
