@@ -85,6 +85,7 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 | 50 | 11-07 11:09 | Fix the bullet tracers, especially first person — badly drawn | in progress (W3) | W3: CS2-style tracers (thin, fast, from the muzzle, only some shots — CS2 `weapon_tracers` 1 in N per weapon), impacts |
 | 51 | 11-07 11:09 | Is moving inaccuracy implemented (counter-strafe to be accurate)? Can't tell — add bullet impacts | in progress (W3) | W3: bullet impact decals/particles on world geometry and on players; moving inaccuracy is in `src/engine/weapons` (#35) — W3 verifies in the 3D app and makes it visible |
 | 52 | 11-07 11:09 | Friendly fire, with CS2's reduced team damage | in progress (W3) | W3/B1: `mp_friendlyfire 1`, `ff_damage_reduction_bullets 0.33`, `ff_damage_reduction_grenade 0.85`, `ff_damage_reduction_other 0.4` (competitive defaults; verify), team-kill penalties out of scope |
+| 53 | 11-07 11:18 | Totally block Ctrl+W and Ctrl+scroll — they're disruptive to the game | in progress (W1) | #33's fullscreen Keyboard Lock only covers Chromium in fullscreen; John wants them blocked outright: auto-enter fullscreen + keyboard lock on Start/first click, `keydown` preventDefault for Ctrl/⌘+W, wheel+ctrl preventDefault, and a visible fallback when the browser can't block (Safari/Firefox: the leave-site guard) |
 
 ## Queued (not started)
 - **H3** generic maps + scenarios + free play + LIVE AI on the CS2 nav (plan card).
