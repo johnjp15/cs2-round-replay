@@ -24,9 +24,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import type { LogEntry, Observe } from '../src/contracts/index';
 import { NO_HUMAN, ROOT, ScriptDriver, deaths, loadHarnessData, parseHumanScript, roundEvents, runHarness, type HarnessOptions } from './harness';
-import { shots2d, shots3d, type Shot } from './parity/browser';
+import { loadHarness3dData, runHarness3d } from './harness3d';
+import { shots2d, shots3d, VIEW3D, type Shot } from './parity/browser';
 import {
-  COLOUR, buildTimes, checkKeys, compareEvents, compareFrame, regressions, summarize, summaryMarkdown, tickOfT, watchedAt,
+  COLOUR, buildTimes, cameraAt, checkKeys, compareEvents, compareFrame, regressions, summarize, summaryMarkdown, tickOfT,
   type Baseline, type FrameResult, type RoundLite, type RunReport, type SimEvents, type SimFrame, type Truth,
 } from './parity/metrics';
 
@@ -120,7 +121,7 @@ function runSim(name: string): SimRun {
     const script = parseHumanScript(readFileSync(resolve(ROOT, FOLLOW_SCRIPT), 'utf8'));
     options = { human: 'cart', driver: new ScriptDriver(script, 'cart'), lastTick: 'end', seed: 1 };
   } else throw new Error(`--runs: unknown run "${name}" (watch, follow)`);
-  const run = runHarness(data, options);
+  const run = APP === '3d' ? runHarness3d(loadHarness3dData(), options) : runHarness(data, options);
   const ev = roundEvents(run.entries);
   const plant = ev.find((e) => e.kind === 'bomb planted');
   const end = ev.find((e) => e.kind === 'round_end');
@@ -166,6 +167,52 @@ function writeDocs(path: string, generated: string): void {
   log(`wrote the summary into ${relative(ROOT, path)}`);
 }
 
+// ---- 3D view similarity ------------------------------------------------------------------------------------------
+
+interface ViewSummary {
+  readonly shots: number;
+  readonly edgeF: { readonly mean: number; readonly median: number; readonly min: number };
+  readonly ssim: { readonly mean: number; readonly median: number; readonly min: number };
+  /** Per spectated player (the camera schedule): shots, mean edge F, mean SSIM. */
+  readonly byCamera: Readonly<Record<string, { shots: number; edgeF: number; ssim: number }>>;
+  readonly worst: readonly { t: number; watched: string; edgeF: number; ssim: number }[];
+}
+
+const r3 = (x: number): number => Math.round(x * 1000) / 1000;
+function stats(xs: readonly number[]): { mean: number; median: number; min: number } {
+  const v = [...xs].sort((a, b) => a - b);
+  const mid = v.length === 0 ? 0 : v.length % 2 === 1 ? (v[(v.length - 1) / 2] as number) : ((v[v.length / 2 - 1] as number) + (v[v.length / 2] as number)) / 2;
+  return { mean: r3(v.reduce((a, b) => a + b, 0) / Math.max(1, v.length)), median: r3(mid), min: r3(v[0] ?? 0) };
+}
+
+function similaritySummary(xs: readonly { t: number; edgeF: number; ssim: number; watched: string }[]): ViewSummary {
+  const byCamera: Record<string, { shots: number; edgeF: number; ssim: number }> = {};
+  for (const id of [...new Set(xs.map((x) => x.watched))].sort()) {
+    const g = xs.filter((x) => x.watched === id);
+    byCamera[id] = { shots: g.length, edgeF: stats(g.map((x) => x.edgeF)).mean, ssim: stats(g.map((x) => x.ssim)).mean };
+  }
+  return {
+    shots: xs.length,
+    edgeF: stats(xs.map((x) => x.edgeF)),
+    ssim: stats(xs.map((x) => x.ssim)),
+    byCamera,
+    worst: [...xs].sort((a, b) => a.edgeF + a.ssim - (b.edgeF + b.ssim)).slice(0, 8),
+  };
+}
+
+function similarityLine(xs: readonly { t: number; edgeF: number; ssim: number; watched: string }[]): string {
+  const v = similaritySummary(xs);
+  return `${v.shots} shots, edge F mean ${v.edgeF.mean} (median ${v.edgeF.median}, min ${v.edgeF.min}), SSIM mean ${v.ssim.mean} (median ${v.ssim.median}, min ${v.ssim.min})`;
+}
+
+function similarityMarkdown(v: ViewSummary): string {
+  const rows = Object.entries(v.byCamera).map(([id, x]) => `| ${id} | ${x.shots} | ${x.edgeF} | ${x.ssim} |`);
+  const worst = v.worst.map((x) => `${x.t} s (${x.watched}: F ${x.edgeF}, SSIM ${x.ssim})`).join(', ');
+  return `\n### 3D view vs the video (spectated player's eyes, HUD masked; \`sheets.py similarity\`)\n\n` +
+    `Edge F-score (Canny, 3 px) mean ${v.edgeF.mean}, median ${v.edgeF.median}, min ${v.edgeF.min}; blurred SSIM mean ${v.ssim.mean}, median ${v.ssim.median}, min ${v.ssim.min} over ${v.shots} shots.\n\n` +
+    `| camera | shots | edge F | SSIM |\n| --- | ---: | ---: | ---: |\n${rows.join('\n')}\n\nLowest: ${worst}.\n\n`;
+}
+
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
   const snapped = (JSON.parse(readFileSync(resolve(ROOT, 'data/geometry/mirage-tracks.json'), 'utf8')) as { tracks: RoundLite['snapped'] }).tracks;
@@ -183,6 +230,7 @@ async function main(): Promise<void> {
   const reports: RunReport[] = [];
   const sheetSpec: { focus: string | null; out: string; video: string; sim: string | null; title: string; lines: string[]; dots: unknown[]; simRadar: boolean }[] = [];
   const sheetsOf = new Map<string, string>();
+  let similarity: { t: number; edgeF: number; ssim: number; watched: string }[] = [];
   const sheetDir = join(OUT, 'sheets');
   mkdirSync(sheetDir, { recursive: true });
 
@@ -211,15 +259,34 @@ async function main(): Promise<void> {
         log(`app screenshots: ${list.length}, page vs Node positions at the landed ticks: max ${worst.toFixed(3)} u`);
         if (worst > 0.01) throw new Error('the page does not show the Node run (positions differ): parity screenshots would be wrong');
       } else {
-        const list = await shots3d(ROOT, times.map((t) => ({ t, watched: watchedAt(round, t) })), join(OUT, 'app3d'));
+        const schedule = times.map((t) => ({ t, tick: Math.min(tickOfT(t) + 1, sim.entries.length - 1), watched: cameraAt(round, t) }));
+        const list = await shots3d(ROOT, schedule, join(OUT, 'app3d'));
         shots = new Map(list.map((s) => [s.t, s]));
-        const pairs = list.map((s) => ({ t: s.t, video: join(OUT, 'truth', 'frames', `f_${String(Math.round(s.t * 60)).padStart(5, '0')}.jpg`), sim: s.path }));
+        let worst = 0;
+        let tickMismatch = 0;
+        for (const s of list) {
+          const want = schedule.find((x) => x.t === s.t)?.tick ?? -1;
+          if (s.tick !== want) tickMismatch++;
+          const e = sim.entries[s.tick];
+          if (e === undefined) continue;
+          for (const p of s.pawns) {
+            const q = e.observe.pawns.find((x) => x.id === p.id);
+            if (q !== undefined) worst = Math.max(worst, Math.hypot(q.pos.x - p.x, q.pos.y - p.y, q.pos.z - p.z));
+          }
+        }
+        const cam = list[0]?.camera;
+        log(`3D screenshots: ${list.length} at ${VIEW3D.width}x${VIEW3D.height} (hfov ${cam?.hfovDeg.toFixed(2) ?? '?'}°, vfov ${cam?.vfovDeg.toFixed(2) ?? '?'}°), ` +
+          `ticks off ${tickMismatch}, page vs Node (Sim3DHost) positions at the landed ticks: max ${worst.toFixed(3)} u`);
+        if (worst > 0.01 || tickMismatch > 0) throw new Error('the 3D page does not show the Node Sim3DHost run (positions or ticks differ)');
+        const pairs = list.map((s) => ({ t: s.t, watched: s.watched, video: join(OUT, 'truth', 'frames', `f_${String(Math.round(s.t * 60)).padStart(5, '0')}.jpg`), sim: s.path }));
         const specPath = join(OUT, 'similarity-spec.json');
         writeFileSync(specPath, JSON.stringify({ pairs }));
         const r = spawnSync(PYTHON, ['-I', resolve(ROOT, 'tools/parity/sheets.py'), 'similarity', specPath], { encoding: 'utf8' });
         if (r.status !== 0) throw new Error(`similarity failed: ${r.stderr}`);
-        writeFileSync(join(OUT, 'similarity.json'), r.stdout);
-        log(`3D view similarity written to ${relative(ROOT, join(OUT, 'similarity.json'))}`);
+        const sim3 = (JSON.parse(r.stdout) as { t: number; edgeF: number; ssim: number }[]).map((x) => ({ ...x, watched: cameraAt(round, x.t) }));
+        similarity = sim3;
+        writeFileSync(join(OUT, 'similarity.json'), JSON.stringify(sim3, null, 1));
+        log(`3D view similarity: ${similarityLine(sim3)} (${relative(ROOT, join(OUT, 'similarity.json'))})`);
       }
     }
     const frames: FrameResult[] = [];
@@ -264,21 +331,22 @@ async function main(): Promise<void> {
 
   const summaries = reports.map(summarize);
   const date = new Date().toISOString().slice(0, 10);
-  writeFileSync(join(OUT, 'report.json'), JSON.stringify({ app: APP, times, truthEvents: truth.events, summaries, reports }, null, 1));
-  writeFileSync(join(OUT, 'summary.md'), summaryMarkdown(APP, date, summaries, reports));
+  const view = similarity.length === 0 ? null : similaritySummary(similarity);
+  writeFileSync(join(OUT, 'report.json'), JSON.stringify({ app: APP, times, truthEvents: truth.events, summaries, view, similarity, reports }, null, 1));
+  writeFileSync(join(OUT, 'summary.md'), summaryMarkdown(APP, date, summaries, reports) + (view === null ? '' : similarityMarkdown(view)));
   writeFileSync(join(OUT, 'index.html'), html(APP, reports, sheetsOf));
   for (const s of summaries) {
     log(`${s.run}: ${s.pass}/${s.timestamps} timestamps pass; radar ${s.radar.checks} checks, ${s.radar.fail} > 40 u, RMS ${s.radar.rms} u, worst ${s.radar.max} u (${s.radar.maxAt}); ` +
       `recording-observed ${s.recObserved.fail}/${s.recObserved.checks} > 40 u; inferred CTs ${s.inferred.fail}/${s.inferred.checks} outside radius; alive/dead ${s.status.fail}; HUD ${Object.entries(s.hud).map(([k, v]) => `${k} ${v.fail}/${v.checks}`).join(', ')}; events ${s.events.fail}/${s.events.checks} (worst ${s.events.worstOffset} ticks)`);
   }
   log(`index: ${relative(ROOT, join(OUT, 'index.html'))}`);
-  if (WRITE_DOCS !== '') writeDocs(resolve(WRITE_DOCS), summaryMarkdown(APP, date, summaries, reports, true));
+  if (WRITE_DOCS !== '') writeDocs(resolve(WRITE_DOCS), summaryMarkdown(APP, date, summaries, reports, true) + (view === null ? '' : similarityMarkdown(view)));
 
   let code = 0;
   if (BASELINE !== '') {
     const path = resolve(BASELINE);
     if (UPDATE_BASELINE || !existsSync(path)) {
-      const base: Baseline = { app: APP, runs: Object.fromEntries(reports.map((r, i) => [r.run, { summary: summaries[i] as (typeof summaries)[number], checks: checkKeys(r) }])) };
+      const base: Baseline = { app: APP, ...(view === null ? {} : { view }), runs: Object.fromEntries(reports.map((r, i) => [r.run, { summary: summaries[i] as (typeof summaries)[number], checks: checkKeys(r) }])) };
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, JSON.stringify(base, null, 1) + '\n');
       log(`baseline written: ${relative(ROOT, path)}`);

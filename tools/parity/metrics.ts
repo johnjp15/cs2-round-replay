@@ -143,6 +143,12 @@ export function buildTimes(spec: string, round: RoundLite, events: boolean, end 
 export const tickOfT = (t: number): number => Math.round(t * TICKS_PER_SEC);
 
 /** Who the video's camera shows at t (the breakdown's camera schedule = round.json pov), or null (death cam, next round). */
+/** The player whose view the video shows at t (the camera schedule, round.json `pov`), death cams included. */
+export function cameraAt(round: RoundLite, t: number): string {
+  for (const s of round.pov) if (t >= s.t0 && t < s.t1) return s.target;
+  return (round.pov[round.pov.length - 1] as RoundLite['pov'][number]).target;
+}
+
 export function watchedAt(round: RoundLite, t: number): string | null {
   for (const s of round.pov) {
     if (t >= s.t0 && t < s.t1) return s.note === '' || s.note.startsWith('own') ? s.target : null;
@@ -494,6 +500,8 @@ export function summarize(r: RunReport): RunSummary {
 /** The committed baseline: per run, the verdict of every check, so a later run lists what got worse. */
 export interface Baseline {
   readonly app: string;
+  /** 3D only: the view similarity summary of the committed run (informational; not a pass/fail check). */
+  readonly view?: unknown;
   readonly runs: Record<string, { readonly summary: RunSummary; readonly checks: Record<string, Verdict> }>;
 }
 

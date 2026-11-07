@@ -6,7 +6,7 @@
  * view. The page's observe at the landed tick is returned with the shot so the caller can check it is the same state
  * as the Node run it compares (it is: docs/golden.md "Browser parity").
  *
- * 3D: `dist-3d/` (H1's `npm run build:3d`) with the hook documented in docs/parity.md ("What the 3D mode needs").
+ * 3D: `dist-3d/` (H1's `npm run build:3d`) through `window.__cs2sim3d.test` (docs/app3d.md "Test API"), see shots3d.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
@@ -90,45 +90,54 @@ export async function shots2d(root: string, times: readonly number[], dir: strin
   return out;
 }
 
+/** One 3D shot: the page's state at the landed tick, the camera it drew and the spectated pawn's view angles. */
+export interface Shot3d extends Shot {
+  readonly watched: string;
+  readonly pawns: readonly { id: string; x: number; y: number; z: number; yaw: number; pitch: number; alive: boolean; hp: number; armor: number; clip: number }[];
+  readonly camera: { mode: string; followed: string; eye: { x: number; y: number; z: number } | null; yaw: number | null; pitch: number | null; hfovDeg: number; vfovDeg: number; width: number; height: number };
+}
+
+/** Viewport of the 3D shots: the video's 16:9 at 2/3 size (the similarity compares at 480 x 270; software WebGL). */
+export const VIEW3D = { width: 1280, height: 720 } as const;
+
 /**
- * The 3D app (H1). Expects `window.__cs2sim3d` with: `ready: boolean`, `seek(t): Promise<void>` (deterministic: the
- * state at observe tick round(t*64) whatever the path), `spectate(id: string | null)` (first-person camera of that
- * pawn at its eye, its view angles, CS2's 90° 4:3 horizontal FOV at 16:9 = 106.26°), `hud(): {hp, armor, clip,
- * reserve, clock, bombPlanted}`, `project(x, y, z): {x, y, visible} | null` (screen px of a world point through the
- * current camera) and `pawns(): [{id, x, y, z, yaw, pitch, alive}]`; rendering must not depend on wall time
- * (no animation clocks; tracers/muzzle flash keyed to ticks) so a screenshot after seek is reproducible.
+ * The 3D app (H1's src/app3d, `npm run build:3d` -> dist-3d/) through its deterministic test API,
+ * `window.__cs2sim3d.test` (docs/app3d.md "Test API"): `freeze(true)` once, then per timestamp in ascending order
+ * `seekTick(k)` (k = the observe after tick round(64 t), as the 2D comparison), `eyes(id)` of the player the video is
+ * spectating then (round.json `pov`: the camera schedule), `render()` (exactly that tick: no interpolation, effects at
+ * tick x 15.625 ms) and a screenshot of `#view`. The page's pawns at that tick are returned for the Node cross-check.
  */
-export async function shots3d(root: string, schedule: readonly { t: number; watched: string | null }[], dir: string): Promise<(Shot & { hud: unknown; projected: unknown })[]> {
-  if (!existsSync(join(root, 'dist-3d', 'index.html'))) throw new Error('dist-3d/index.html missing: the 3D app (H1, npm run build:3d) is not built');
+export async function shots3d(root: string, schedule: readonly { t: number; tick: number; watched: string }[], dir: string): Promise<Shot3d[]> {
+  if (!existsSync(join(root, 'dist-3d', 'index.html'))) throw new Error('dist-3d/index.html missing: run npm run build:3d first');
   mkdirSync(dir, { recursive: true });
   const server = startPreview(root, 'dist-3d');
-  const out: (Shot & { hud: unknown; projected: unknown })[] = [];
+  const out: Shot3d[] = [];
   try {
     const origin = `http://127.0.0.1:${PORT}`;
     await waitForServer(origin + '/', 20_000);
     const browser = await launch();
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    const page = await browser.newPage({ viewport: VIEW3D });
     await page.goto(origin + '/?human=none&seed=1');
-    await page.waitForFunction(() => (window as unknown as { __cs2sim3d?: { ready: boolean } }).__cs2sim3d?.ready === true, null, { timeout: 60_000 });
-    for (const { t, watched } of [...schedule].sort((a, b) => a.t - b.t)) {
-      const st = await page.evaluate(async ([s, id]) => {
-        interface Hook3d {
-          seek(t: number): Promise<void>;
-          spectate(id: string | null): void;
-          hud(): unknown;
-          pawns(): { id: string; x: number; y: number; z: number; alive: boolean }[];
-          project(x: number, y: number, z: number): { x: number; y: number; visible: boolean } | null;
-        }
-        const h = (window as unknown as { __cs2sim3d: Hook3d }).__cs2sim3d;
-        await h.seek(s as number);
-        h.spectate(id as string | null);
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        const pawns = h.pawns();
-        return { tick: Math.round((s as number) * 64), pawns, hud: h.hud(), projected: pawns.map((p) => ({ id: p.id, head: h.project(p.x, p.y, p.z + 64), feet: h.project(p.x, p.y, p.z) })) };
-      }, [t, watched] as const);
+    await page.waitForFunction(() => window.__cs2sim3d?.test !== undefined && (window.__cs2sim3d.stats().triangles ?? 0) > 0, null, { timeout: 120_000 });
+    await page.evaluate(() => window.__cs2sim3d?.test.freeze(true));
+    const canvas = page.locator('#view');
+    for (const { t, tick, watched } of [...schedule].sort((a, b) => a.t - b.t)) {
+      const st = await page.evaluate(([k, id]) => {
+        const api = window.__cs2sim3d;
+        if (api === undefined) throw new Error('no __cs2sim3d');
+        const reached = api.test.seekTick(k as number);
+        api.test.eyes(id as Parameters<typeof api.test.eyes>[0]);
+        const s = api.test.render();
+        const o = api.session().observe();
+        return {
+          reached,
+          camera: s.camera,
+          pawns: o.pawns.map((p) => ({ id: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, pitch: p.pitch, alive: p.alive, hp: p.hp, armor: p.armor, clip: p.ammo.clip })),
+        };
+      }, [tick, watched] as const);
       const path = join(dir, `sim3d-${t.toFixed(3)}.jpg`);
-      await page.screenshot({ path, type: 'jpeg', quality: 85 });
-      out.push({ t, path, tick: st.tick, pawns: st.pawns, hud: st.hud, projected: st.projected });
+      await canvas.screenshot({ path, type: 'jpeg', quality: 85 });
+      out.push({ t, path, tick: st.reached, watched, pawns: st.pawns, camera: st.camera as Shot3d['camera'] });
     }
     await browser.close();
   } finally {
