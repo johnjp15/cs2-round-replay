@@ -117,7 +117,7 @@ CSV columns: `t_video_s, round_clock, shooter, weapon, event, target, damage, he
 | --- | --- | --- |
 | `kills[] {t, tick, killer, victim, weapon, hs, assist, postRound, kpos, vpos, kplace, vplace}` | page `kills` | 69.4 s (Sp4rtaN → cart) has `postRound: true` |
 | `damage[] {t, tick, attacker, victim, amount, armor, weapon, note, apos, vpos, source}` | page `damage` (`source: "damage"`) plus CSV rows with a damage figure that the page lacks (`source: "shots_csv"`: Sp4rtaN's 13-damage kill shot on donk at 50.3 s, with `apos/vpos` `null`) | `armor` only where the CSV gives it (7 at 18.5 s), else `null` |
-| `utility[] {t, tick, thrower, kind, place, throwPos, radio}` | page `util` | `throwPos` matches the thrower's track at the throw time, so it is where the grenade was thrown from, not where it landed |
+| `utility[] {t, tick, thrower, kind, place, throwPos, landing, radio}` | page `util`; `landing` from `MEASURED_LANDINGS` in `tools/extract-round.ts` (V0, measured on the video) | `throwPos` matches the thrower's track at the throw time (where it was thrown from). `landing {x, y, z, uncertainty}` is where it comes to rest and pops (smoke bloom, flash/HE detonation, fire), `uncertainty` a radius in units; `null` where the recording never shows it. See "Grenade landings" below |
 | `radio[] {t, tick, who, place, text, kind}` | page `events` texts of the form `who @ place (RADIO): text` (`kind: "radio"`), plus the plant call-out without `(RADIO)` at 24.4 s (`kind: "callout"`) | |
 | `chat[] {t, tick, who, dead, text}` | page `events` of kind `chat` (all `*DEAD*` all-chat) | |
 | `sightings[] {who, t0, tick0, t1, tick1, place, by}` | page `sightings` | when a CT was seen, and by whom |
@@ -140,3 +140,43 @@ Not copied: the page's `nav` and `places` (the nav mesh is task A3's `data/mirag
 - **Shots:** exact times only for shots seen on the ammo HUD of the spectated player, plus a few audio-confirmed first shots. Off-camera sprays are counts over a time window, and kill-feed-only kills don't say how many shots were fired.
 - **Resampled samples:** a few tens of grid samples per affected track are interpolated (see above), so they can differ by a few units from where the player really was.
 - **Level flips:** `z` is the 2020 nav floor under the radar dot, so where floors overlap it can be the wrong one. barely 35.1–44.7 s is on the underpass / Tunnel Stairs in `round.json` (dz −198 in, +154 out) but was on Catwalk; `round.json` keeps the source as is and `tools/snap-tracks.ts` pass 0 (`levelFlips`, `docs/geometry.md` "barely 33–48 s") corrects it in `data/geometry/mirage-tracks.json`, which is what the hosts use.
+
+## Grenade landings and the plant spot (V0, measured on the video)
+
+Measured on eradicate's recording (the same frames `tools/video-parity.ts` reads; the video stays outside the repo).
+The 2020 CS:GO radar draws **no** smoke, fire or flash markers (checked on the POV radar 0-12.75 s and the spectator
+radar 13.2-70 s: only player dots, the C4 icon, view cones and last-known markers), so a landing can only come from a
+first-person view that shows it. The demo draws grenade trajectories as yellow lines, which helps where they are in view.
+
+| t | thrower | kind | landing | uncertainty | evidence |
+| ---: | --- | --- | --- | ---: | --- |
+| 4.8 | cart | smoke | `null` | | not on camera: eradicate faces the Apartments door in Back Alley 4.8-12.7 s (frames 5.0-11.0 s show no cloud or trajectory) |
+| 5.6 | snarlbot | smoke | `null` | | not on camera (Palace Alley; the camera is eradicate's) |
+| 7.8 | snarlbot | flash | `null` | | not on camera; eradicate is not blinded |
+| 8.8 | donk | flash | `null` | | not on camera (pops behind eradicate; he is not blinded) |
+| 17.8 | barely | HE | `null` | | not resolved: cart's POV 17.8-20.3 s looks out of the Apartments window at B; no detonation in view, no damage row |
+| 19.2 | donk | molotov | `null` | | not resolved: no fire in cart's views of B 19.4-22.5 s; trajectory lines in view at 20.0 s but no end point |
+| 25.8 | cart | smoke | (−2035, −305, −94) | 35 | cart throws from the B side into the Market window (POV 25.8-27.3 s, the trajectory line enters the window); from inside Shop 29.5-31 s the line ends on the counter just inside the window and the cloud fills the window. The counter top on the CS2 mesh is z −94 at x −2040…−1990, y ≤ −294, right behind the window (x −2066…−2026 in the wall at y −248…−264). It blocks the window, as John remembers, and does not land deeper inside Market |
+| 29.8 | barely | smoke | `null` | | not resolved: its trajectory line is in barely's POV 32.2-33.4 s, but without his view angles (V2) the end point can't be placed |
+
+**The plant spot** (John: "planted behind the cylinder stack, aka planted for catwalk"). Measured: **(−1981, 305, −160) ± 25 u**,
+the centre of the planted C4 icon on the spectator radar from 27.6 s to the defuse (and of the carried C4 icon while
+barely plants, 24.3-27.5 s), through the radar registration of `docs/parity.md` (dots vs this file's observed samples:
+RMS 21 u). The data's (−1982, 311, −160) is 7 u from that, inside the measurement's error, so **it is not moved**.
+The cylinder stack is the solid of the CS2 mesh at x −1968…−1888, y 348…432 (75 u high): cart walks past it at
+22.5 s and its cylinder ends fill the right of his view from about 150 u. The bomb is just off its south-west corner
+(16 u west, 37 u south), on the side a T on catwalk sees: barely's view from catwalk at 58.3 s shows the bomb's red
+light on the floor at the stack's foot. Two things don't fit and are left open (they need the players' view angles, V2):
+in that view the light looks just north of the stack rather than south, and at 65.9-66.6 s cart sprays at the stack
+with Sp4rtaN defusing out of his sight, while in the 3D app at 66 s the defuser at his recorded spot (−2005, 345) is in
+plain view from cart's eyes (`docs/parity/2026-11-07-3d.md`). Sp4rtaN's spot is where his dot went under the C4 icon, not
+an observation of where he crouched.
+
+A recheck of barely's 58.3 s frame that does not depend on the recorded yaw (angles measured against the stack's own
+edges in the frame, 106.26 deg FOV): the light is 1.6 deg right of the stack's north silhouette, i.e. on a bearing of
+165-167 deg from barely's spot (-1370, 312), which on the CS2 mesh passes just north of the stack (y 440-455). The CS2
+mesh has no standable floor there (a 20 u gap at z -176 between the stack and the site's north wall), so that reading
+cannot be reproduced on the CS2 map, and the recorded yaws near the stack are about 20 deg high (V2's image fit for
+cart at 65-66.7 s), so yaw-based bearings don't settle it either. The plant spot stays where the radar puts it until
+the 2020 map (X1) or V2's view angles can place the stack and the bomb against each other.
+
