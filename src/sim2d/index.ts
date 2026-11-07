@@ -13,13 +13,14 @@ export {
   accelerate,
   stepMove,
   stepMove3d,
+  stepMove3dSubtick,
   settle,
   restingState,
   hullOf,
   fallDamageFor,
   unstick,
 } from './movement';
-export type { MoveState, MoveInput, MoveStep, Wish } from './movement';
+export type { MoveState, MoveInput, MoveOptions, MoveStep, Wish } from './movement';
 export { MapGeometry, GeometryError, combineMeshes, decodeGeometry, encodeGeometry, STANDING_HULL, CROUCHING_HULL, TRACE_SKIN } from './geometry';
 export type { GeometryMesh, Hull, BoxTrace, FloorHit } from './geometry';
 export { Sim2DHost, UNSUPPORTED_V0 } from './host';

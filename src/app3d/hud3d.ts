@@ -2,14 +2,18 @@
  * H1: the 3D page's HUD (DOM over the canvas; docs/app3d.md "HUD"): crosshair and hit marker, score and round clock
  * (bomb timer once planted), the bomb line, the kill feed, the radar minimap (the CS2 radar around the viewer with
  * every alive pawn as a dot and the viewer's view cone), the team panel (HP, weapon, mode), HP / armor and ammo of
- * the pawn being viewed, the mode line (watching / you), fps and ticks/s. Text nodes are only written when they
- * change. The clock and names reuse the 2D app's pure HUD model (src/app/hud-model.ts).
+ * the pawn being viewed, the mode line (watching / you), fps and ticks/s. U1: the radar follows CS2's rules
+ * (radar3d.ts: teammates always, enemies while spotted, the "?" ghost, the fading X; or everyone, the panel toggle),
+ * the spectator panel and edge vignette while spectating, the crosshair at the aim and the scope overlay of the
+ * viewed pawn. Text nodes and attributes are only written when they change. The clock and names reuse the 2D app's pure HUD model (src/app/hud-model.ts).
  */
-import type { Observe, PawnObs, PawnStatus, PlayerId } from '../contracts/index';
+import type { Observe, PawnObs, PawnStatus, PlayerId, Team } from '../contracts/index';
 import type { RoundClock } from '../core/index';
 import { clockView, hasAmmo, weaponName } from '../app/hud-model';
 import type { Scene } from '../app/scene';
 import { radarPx, type RadarTransform } from './coords';
+import type { RadarRules, RadarTracker } from './radar3d';
+import type { SpectatePanel } from './spectate';
 
 export interface HudFrame {
   readonly scene: Scene;
@@ -20,7 +24,17 @@ export interface HudFrame {
   /** Viewer position and yaw for the minimap (the camera's). */
   readonly at: { readonly x: number; readonly y: number; readonly yaw: number };
   readonly mode: string;
+  /** The mode line's style: playing, watching (nobody controlled) or the human dead and spectating. */
+  readonly modeKind: 'you' | 'watching' | 'dead';
   readonly crosshair: boolean;
+  /** The crosshair's offset from the screen centre (px; the aim punch), rounded by the caller. */
+  readonly crosshairAt: { readonly x: number; readonly y: number };
+  /** The scope overlay (the viewed pawn scoped in first person). */
+  readonly scope: boolean;
+  /** The radar: whose team's view (null: everyone) under which rules, from the tracker. */
+  readonly radar: { readonly tracker: RadarTracker; readonly team: Team | null; readonly rules: RadarRules };
+  /** The bottom spectator panel, or null while playing. */
+  readonly spectate: SpectatePanel | null;
   /** ms since the human's last hit, and whether it was a headshot (null: none recently). */
   readonly hit: { readonly ageMs: number; readonly head: boolean } | null;
   readonly perf: string;
@@ -113,11 +127,24 @@ export class Hud3D {
     this.text('clip', v !== null && hasAmmo(v.weapon) ? String(v.ammo.clip) : '–');
     this.text('reserve', v !== null && hasAmmo(v.weapon) ? `/ ${v.ammo.reserve}` : '');
     this.text('mode', f.mode);
+    this.attr('mode', 'class', `slab ${f.modeKind}`);
+    const sp = f.spectate;
+    this.attr('spec', 'hidden', sp === null ? '' : null);
+    this.attr('vignette', 'hidden', sp === null ? '' : null);
+    if (sp !== null) {
+      this.attr('spec', 'class', `slab ${sp.team === 'T' ? 't' : 'ct'}`);
+      this.text('spec-name', sp.name);
+      this.text('spec-mode', sp.mode);
+      this.text('spec-stats', sp.stats);
+      this.text('spec-hints', sp.hints);
+    }
     if (f.nowMs - this.perfAt >= 500) {
       this.perfAt = f.nowMs;
       this.text('perf', f.perf);
     }
     this.attr('crosshair', 'hidden', f.crosshair ? null : '');
+    this.attr('crosshair', 'style', f.crosshairAt.x === 0 && f.crosshairAt.y === 0 ? null : `transform:translate(${f.crosshairAt.x}px,${f.crosshairAt.y}px)`);
+    this.attr('scope', 'hidden', f.scope ? null : '');
     const showHit = f.hit !== null && f.hit.ageMs < 180;
     this.attr('hitmarker', 'hidden', showHit ? null : '');
     this.attr('hitmarker', 'class', showHit && f.hit?.head === true ? 'head' : null);
@@ -156,25 +183,51 @@ export class Hud3D {
     ctx.arc(vx, vy, 70, a - 0.65, a + 0.65);
     ctx.closePath();
     ctx.fill();
-    for (const p of o.pawns) {
-      const [x, y] = toMap(p.pos.x, p.pos.y);
+    const r = f.radar;
+    const marks = r.team === null ? r.tracker.marks(o, 'T', 'all') : r.tracker.marks(o, r.team, r.rules);
+    for (const m of marks) {
+      const [x, y] = toMap(m.x, m.y);
       if (x < -10 || y < -10 || x > W + 10 || y > W + 10) continue;
-      ctx.fillStyle = !p.alive ? 'rgba(200,200,200,0.5)' : p.team === 'T' ? '#ebc75e' : '#8bbcf3';
-      if (!p.alive) {
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillText('×', x - 5, y + 6);
-        continue;
+      ctx.globalAlpha = m.alpha;
+      const colour = m.team === 'T' ? '#ebc75e' : '#8bbcf3';
+      if (m.kind === 'dead') {
+        ctx.fillStyle = 'rgba(220,220,220,0.85)';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('×', x, y);
+      } else if (m.kind === 'ghost') {
+        // CS2's last-seen marker: a "?" in the enemy's colour where it was last spotted.
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.beginPath();
+        ctx.arc(x, y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.strokeText('?', x, y);
+        ctx.fillStyle = colour;
+        ctx.fillText('?', x, y);
+      } else {
+        ctx.fillStyle = colour;
+        ctx.beginPath();
+        ctx.arc(x, y, m.id === f.viewer ? 9 : 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = m.id === f.human ? 3 : 1.5;
+        ctx.strokeStyle = m.id === f.human ? '#ffffff' : 'rgba(0,0,0,0.8)';
+        ctx.stroke();
+        if (m.bomb) {
+          ctx.fillStyle = '#ff5450';
+          ctx.fillRect(x + 5, y - 13, 10, 7);
+        }
       }
-      ctx.beginPath();
-      ctx.arc(x, y, p.id === f.viewer ? 9 : 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineWidth = p.id === f.human ? 3 : 1.5;
-      ctx.strokeStyle = p.id === f.human ? '#ffffff' : 'rgba(0,0,0,0.8)';
-      ctx.stroke();
     }
-    const b = o.round.bomb;
-    if (b.pos !== null && b.state !== 'carried') {
-      const [x, y] = toMap(b.pos.x, b.pos.y);
+    ctx.globalAlpha = 1;
+    const b = r.team === null ? r.tracker.bomb(o, 'T', 'all') : r.tracker.bomb(o, r.team, r.rules);
+    if (b !== null) {
+      const [x, y] = toMap(b.x, b.y);
       ctx.fillStyle = b.state === 'defused' ? '#4cc982' : '#ff5450';
       ctx.fillRect(x - 6, y - 4, 12, 8);
     }
