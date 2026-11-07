@@ -34,6 +34,7 @@ Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.githu
 
 ## Operating rules John set
 - Merge PRs without asking (2026-11-05). Fable orchestrates; Opus 5.5 agents do the expensive work (2026-11-07 02:02). Permission to read anything on any website (04:26). John's messages are not stop requests; agents stopped by client-side interrupts get resumed.
+- **Usage (11-07 13:31):** 76 % of the weekly budget used; it resets Monday evening. From now: no new agents until the running ones land; then at most 3–4 at a time on what John sees first (crosshair, bomb spot, sp4rtan–barely, 2020 map, pistols/pickup, Ctrl+W); defer polish/review work (M2, H4 extras, phone layout, more audits); agents told to finish without gold-plating; the orchestrator polls less often and batches merges/deploys.
 - **Fidelity bar (03:23):** "good enough for a seasoned CS2 player to not be able to tell the difference in movement and shooting mechanics — 95 % of the way there." Competitive CS2 values only, never KZ values.
 
 ## Requests
