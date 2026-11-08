@@ -77,7 +77,7 @@ describe('EventSchedule', () => {
   });
 
   it('has the plant and the defuse', () => {
-    expect(schedule.ofType('plant')).toEqual([{ type: 'plant', tick: 1761, id: 'barely', pos: { x: -1982, y: 311, z: -160 } }]);
+    expect(schedule.ofType('plant')).toEqual([{ type: 'plant', tick: 1761, id: 'barely', pos: { x: -1882, y: 243, z: -160 } }]);
     expect(schedule.ofType('defuse_start')).toEqual([{ type: 'defuse_start', tick: tickOf(61.8), id: 'sp4rtan' }]);
     expect(schedule.ofType('defuse_end')).toEqual([{ type: 'defuse_end', tick: tickOf(66.8), id: 'sp4rtan' }]);
   });

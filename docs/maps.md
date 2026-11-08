@@ -64,7 +64,7 @@ brushes and prop hulls are wound outward, the CS2 mesh isn't, so `mirage-cs2` is
 | B van | a "Truck" box x −2400…−2176, y 784…850 with clip prisms flooded from the CS2 nav (C1 patched 19 pieces) | `props_vehicles/van.mdl` at (−2328, 706) yawed 79.5° (its `.phy` hulls) and a 44 u player-clip box round a rusty barrel at (−2356, 798) (brush 291, z −160…−84) | no invisible nav clips; Lokier's recorded spot (−2387, 815, −127) is inside the barrel's clip, so his track starts 32 u west of it (−2419, 825) |
 | B-site brick pier | the block x −1970…−1880, y 350…440 | the same block plus a brick pier x −1880…−1848, y 356…472 and x −1948…−1848, y 440…472 (brushes 6725–6730, z −168…−8) | barely's recorded 22.9–23.1 s samples are inside it: the inside-solid rule re-routes him round it |
 | B tarps | not in the CS2 mesh's render | `bomb_site_tarp.mdl` (prop_dynamic at (−2252, 472, −158)) and `tarp_a.mdl` ((−2414, 150, 56)): drawn from their meshes, not solid (solid 0, as in the game) | drawn |
-| cylinder stack / bomb spot (−1982, 311) | the tanks' top z −45…−47 at x −1960…−1900, y 200 | the same stack (`bomb_tanks.mdl` at (−1928, 200, −160)) and a shell pallet at (−1928, 389); `func_bomb_target` B is x −2216…−1880, y 72…440, z −159…−143 | (−1982, 311) is open floor z −160 on both, inside the target box; the plant location is a follow-up (B2) |
+| cylinder stack / bomb spot | the stack (`bomb_tanks.mdl` on an ammo pallet) x −1978…−1878, y 75…226, top z −36; the shorter north stack x −1970…−1888, y 348…435 | the same two stacks (`bomb_tanks.mdl` at (−1928, 200), a shell pallet at (−1928, 389)); `func_bomb_target` "B site" is x −2216…−1880, y 72…440, z −159…−143 | P3: the C4 is at (−1882, 243), the corridor's east mouth north of the stack, where barely's POV shows its light (the radar's (−1982, 311) is open floor at the corridor's west end); `docs/round-data.md` "The plant spot" |
 
 ### The round on it (`--map mirage-2020`)
 
@@ -133,6 +133,12 @@ sites and spawns are comes from a small hand-made file, cited:
 | `de_mirage` | the 2020 nav's "Bombsite A/B" areas (one rect each: what the plant rule always used), planter spots from cs2-retakes | the 2020 nav's "T Spawn" / "CT Spawn" areas |
 
 With `"bspPackage": "mirage-2020"` and that package built, its `func_bomb_target` boxes and `info_player_*` spawns win.
+A site's plant zone is then its target box grown by the player hull (a trigger fires while the 32 × 32 × 72 hull
+touches it: x and y ± 16, the origin's z from the box's bottom − 72 to its top; `bombTargetFor` matches the 2020 names
+"A site" / "B site"). Before P3 the lookup wanted names ending in the letter, never matched, and B2's interim zones (the
+retakes planter spots' box grown 130 units: B x −2329…−1762, y −41…580; A x −685…−124, y −2264…−1906) stood in. Now
+Mirage's zones are A x −632…−248, y −2344…−1992, z −252…−156 and B x −2232…−1864, y 56…456, z −231…−143, the same
+rects as `LEGACY_PLANT_ZONES` (src/sim2d/ai.ts) for the 2D host.
 From the zones, `build-map` takes five spawn spots per team: CS2 nav area centroids in the zone, nearest its centre
 first, at least 56 units apart, facing the sites; a site's z band is its nav floors −32 / +96; its plant spot is the
 planter spots' mean (else the rects' centre), moved into the rects and onto the nav.

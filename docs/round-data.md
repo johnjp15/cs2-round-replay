@@ -129,7 +129,7 @@ CSV columns: `t_video_s, round_clock, shooter, weapon, event, target, damage, he
 | `sightings[] {who, t0, tick0, t1, tick1, place, by}` | page `sightings` | when a CT was seen, and by whom |
 | `lastKnown[] {who, t0, tick0, t1, tick1, pos {x, y}}` | page `lastknown` | radar last-known markers |
 | `pov[] {t0, tick0, t1, tick1, target, note}` | page `pov` | which player the recording's camera follows |
-| `bomb {carrier, plantT, plantTick, pos, defuseStartT, defuseStartTick, defuseT, defuseTick}` | page `bomb` | plant 27.517 s at (−1982, 311, −160), defuse 61.8 → 66.8 s (kit) |
+| `bomb {carrier, plantT, plantTick, pos, defuseStartT, defuseStartTick, defuseT, defuseTick}` | page `bomb`; `pos` from `PLANT_SPOT` (P3) | plant 27.517 s at (−1882, 243, −160) (measured on barely's POV; the page has (−1982, 311)), defuse 61.8 → 66.8 s (kit) |
 | `timelines.hp/money .<id>[] {t, tick, value}` | page `hp`, `money` | Ts only |
 | `timelines.weapon.<id>[] {t, tick, weapon, raw}` | page `weapons`, plus the shots CSV's weapon switches | `weapon` is the first item of the display text; `raw` keeps it (`"AK-47 · C4"`); CTs shown as `—` have `weapon: null`. Every CSV `switch` row adds a point (`raw` `"<CSV weapon> (shots CSV)"`), and so does a switch back named in its note as `back to <weapon> at <t>` (`raw` `"<weapon> (shots CSV note)"`): donk's Glock at 49.93 s and his AWP again at 50.083 s. Points are sorted by `t` (page first on a tie); one that repeats a page point is not added. |
 | `events[] {t, tick, kind, text, who, victim, util}` | page `events` | the narrative feed, ids lowercased |
@@ -191,26 +191,53 @@ eradicate's POV radar (±10–20 u). On the CS2 mesh:
 If H5's throws from these spots bounce back at every pitch, the assumed yaw points into the near wall. Aim along the
 clear directions above, or treat the spots as ±20 u and step out to the free side (H5's free-stand search).
 
-**The plant spot** (John: "planted behind the cylinder stack, aka planted for catwalk"). Measured: **(−1981, 305, −160) ± 25 u**,
-the centre of the planted C4 icon on the spectator radar from 27.6 s to the defuse (and of the carried C4 icon while
-barely plants, 24.3-27.5 s), through the radar registration of `docs/parity.md` (dots vs this file's observed samples:
-RMS 21 u). The data's (−1982, 311, −160) is 7 u from that, inside the measurement's error, so **it is not moved**.
-The cylinder stack is the solid of the CS2 mesh at x −1968…−1888, y 348…432 (75 u high): cart walks past it at
-22.5 s and its cylinder ends fill the right of his view from about 150 u. The bomb is just off its south-west corner
-(16 u west, 37 u south), on the side a T on catwalk sees: barely's view from catwalk at 58.3 s shows the bomb's red
-light on the floor at the stack's foot. Two things don't fit and are left open (they need the players' view angles, V2):
-in that view the light looks just north of the stack rather than south, and at 65.9-66.6 s cart sprays at the stack
-with Sp4rtaN defusing out of his sight, while in the 3D app at 66 s the defuser at his recorded spot (−2005, 345) is in
-plain view from cart's eyes (`docs/parity/2026-11-07-3d.md`). Sp4rtaN's spot is where his dot went under the C4 icon, not
-an observation of where he crouched.
+**The plant spot** (John: "planted behind the cylinder stack, aka planted for catwalk"; "trust barely's POV frame over
+the radar data"). P3 measured it on the video against the 2020 BSP and moved it: **(−1882, 243, −160)** (was the page's
+(−1982, 311), the radar's C4 icon). Tools: `tools/viewfit/plant.py` (ray casts the 2020 package's drawn mesh with the
+CS:GO camera of `tools/viewfit/scene.py`; `render` an eye/yaw/pitch, `ray` a pixel onto the mesh and a z plane).
 
-A recheck of barely's 58.3 s frame that does not depend on the recorded yaw (angles measured against the stack's own
-edges in the frame, 106.26 deg FOV): the light is 1.6 deg right of the stack's north silhouette, i.e. on a bearing of
-165-167 deg from barely's spot (-1370, 312), which on the CS2 mesh passes just north of the stack (y 440-455). The CS2
-mesh has no standable floor there (a 20 u gap at z -176 between the stack and the site's north wall), so that reading
-cannot be reproduced on the CS2 map, and the recorded yaws near the stack are about 20 deg high (V2's image fit for
-cart at 65-66.7 s), so yaw-based bearings don't settle it either. The plant spot stays where the radar puts it until
-the 2020 map (X1) or V2's view angles can place the stack and the bomb against each other.
+- **The stack.** The cylinder stack is `bomb_tanks.mdl` on its ammo pallet, x −1978…−1878, y 75…226, top z −36 (the
+  south one; render mesh and `.phy` hulls of `mirage-2020`, the same block on the CS2 mesh). Its cylinder ends face
+  east (catwalk) and west (Market). V0c's "stack at y 348…432" is the shorter north stack (shell pallet, top z −85);
+  between the two runs a corridor, y 224…348, open at both ends.
+- **The light.** The C4's red light shows on barely's POV only at 58.23–58.33, 58.58–58.67 (and 58.92–58.98 s, the
+  death cam), on the floor just right of the south stack's east face (1920 × 1080: (864.0, 581.8) at 58.3 s, (934.5,
+  539.9) at 58.6 s). Each frame's camera is V2's fit (eye (−1377, 263, −106); yaw 174.38 / −178.25, pitch 2.90 / 5.60),
+  rendered on the 2020 mesh and aligned to the frame by edge correlation in a window round the stack (shift (4, 1) and
+  (−19, −4) px; the stack's edges, the cylinders, the van behind and the overhead beam then line up within ~1 px). The
+  light's ray: bearing 182.32° / 182.27° (it passes 17 u north of the stack's north face), depression 6.09° / 5.91°,
+  crossing the floor (z −160) at (−1883, 242.5) / (−1898, 242.3) and a light 3 u up at (−1855, 244) / (−1869, 244).
+  **Measured (−1876 ± 20, 243 ± 6)**: the x spread is the light's height and ±1.5 px; y is pinned by the bearing. The
+  frames all look from the east along the corridor, so the range comes from the floor plane, not from a second
+  bearing. The radar's spot (−1982, 311) would show its light 86 px right of and 17 px above where it is (open floor
+  down the corridor, at the centre of the view); a spot on the light's bearing at the radar's x, (−1982, 238), would
+  sit 13.5 px above it.
+- **Cart's view as the second constraint.** At 65.0–66.8 s cart sprays into the stack and never sees sp4rtan. From
+  each of V2's 40 fitted eyes of cart in 65–67 s, eye-to-body rays (z +30, +46, +60) on the 2020 mesh reach a defuser
+  at (−1905, 277) on 0 of 120, at the radar's spot (−2005, 345) on 63 of 120, and at (−2005, 277) (the same y, the
+  radar's x) on 97 of 120: only the corridor's east end, behind the stack, hides him.
+- **The data.** `PLANT_SPOT` in `tools/extract-round.ts`: the nearest point of the measurement inside the BSP's
+  `func_bomb_target` "B site" (x −2216…−1880, y 72…440). The radar's B-site dots read ~(−100, +68) off there:
+  `RADAR_SHIFTS` moves **barely** by that from 23.0 s (ramped in by 24.0, pinned on the C4 24.2–27.4 s, ramped out
+  28.9–29.9 s; the radar walks him out across the north stack at 28.4–28.9 s, moved he leaves along the brick pier's
+  south face) and **sp4rtan** from 58.9 s (after his kill on barely) to the defuse spot **(−1900, 270)** (`DEFUSE_SPOT`:
+  (−18, +27) from the C4, the radar's own dot-to-icon offset (−24, +40) within its ±20 u, moved to the nearest spot
+  that cart's snapped track can't see at any 10 Hz sample of 65.0–66.8 s), back on his recorded path by 68.0 s. Moved
+  samples are `estimated`, `uncertainty` 20. The snapper fits them better: OK samples 2,144 → 2,184 (CS2) and 2,007 →
+  2,036 (2020), impossible 114 → 110 on 2020. barely's walk in from the Apartments exit is the snapper's reroute (round
+  the brick pier and the stack); the radar's x of the Apartments stairs is ~90 u off the other way, so the offset is
+  local to the C4, not a radar-wide shift.
+
+![barely 58.3 s: the video and the 2020 mesh from the aligned camera; red the old plant spot, green the new one](img/p3-plant-barely-58.3.jpg)
+
+*barely at 58.3 s. Left: the video (the C4's light under the green ring); right: the 2020 mesh from the aligned camera.
+Red: the page's (−1982, 311), where the radar put it; green: (−1882, 243), 3 u above the floor.*
+
+![B site from above: cart's 65.0–66.8 s positions and his lines to sp4rtan defusing, before and after](img/p3-defuse-cover.png)
+
+*Cart's snapped positions at 65.0–66.8 s (blue) and his sight of the defuser (MeshSight on the 2020 package, sp4rtan
+crouched): before, at the radar spot, 7 of 19 clear (red); after, behind the stack, 0 of 19. In the 3D harness (the
+engine's own `sees`, ticks 4160–4275) cart saw sp4rtan on 58 of 116 ticks before and 0 after.*
 
 ## sp4rtan's kill on barely, 58.85 s (K1)
 
