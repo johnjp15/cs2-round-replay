@@ -290,6 +290,8 @@ export interface UtilityItem {
   /** `set_weapon <previous>` if the pawn holds something else. */
   readonly restoreTick: number;
   readonly previous: WeaponId;
+  /** S1: the release look (yaw, pitch) from the data, or null: the track's yaw and `throwPitchDeg`. */
+  readonly aim: { readonly pitch: number; readonly yaw: number } | null;
 }
 
 /** The bomb plant (act ticks). */
@@ -376,6 +378,7 @@ export class ScriptPlan {
         releaseTick: release,
         restoreTick: release + 1,
         previous: recordedWeaponAt(model, schedule, u.id, u.tick),
+        aim: u.aim,
       };
     });
 
@@ -1019,7 +1022,7 @@ export class ScriptedEvents {
     }
 
     const u = this.plan.utility.find((x) => x.id === p.id && tick >= x.selectTick && tick <= x.releaseTick && !this.liveDuring(x.id, x.selectTick, x.restoreTick)) ?? null;
-    if (u !== null && tick >= u.attackFrom) look = { yaw: look === null ? base.yaw : look.yaw, pitch: r.throwPitchDeg };
+    if (u !== null && tick >= u.attackFrom) look = u.aim !== null ? { yaw: u.aim.yaw, pitch: u.aim.pitch } : { yaw: look === null ? base.yaw : look.yaw, pitch: r.throwPitchDeg };
 
     let input = look === null || (look.yaw === base.yaw && look.pitch === base.pitch) ? base : withLook(base, look.yaw, look.pitch);
 

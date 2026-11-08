@@ -482,6 +482,7 @@ export function runHarness(data: SessionData, options: HarnessOptions): HarnessR
     tuning: data.tuning,
     vision: data.vision,
     geometry: data.geometry ?? null,
+    world: data.world ?? null,
     seed,
     human: takeover === null ? human : null,
     playable: human,

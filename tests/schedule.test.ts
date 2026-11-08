@@ -105,7 +105,7 @@ describe('EventSchedule', () => {
 
   it('has utility, radio and chat', () => {
     expect(schedule.ofType('utility')).toHaveLength(round.utility.length);
-    expect(schedule.ofType('utility')[0]).toEqual({ type: 'utility', tick: tickOf(4.8), id: 'cart', kind: 'smoke', throwPos: { x: -468, y: 924, z: -80 } });
+    expect(schedule.ofType('utility')[0]).toEqual({ type: 'utility', tick: tickOf(4.8), id: 'cart', kind: 'smoke', throwPos: { x: -468, y: 924, z: -80 }, aim: null });
     expect(schedule.ofType('radio')).toHaveLength(round.radio.length);
     expect(schedule.ofType('radio').find((r) => r.tick === tickOf(24.4))).toEqual({ type: 'radio', tick: 1562, id: 'barely', text: "I'm planting the bomb." });
     expect(schedule.ofType('chat')).toHaveLength(round.chat.length);

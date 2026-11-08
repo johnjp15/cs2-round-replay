@@ -32,7 +32,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { PLAYER_IDS, parseRound, parseTuning, type MovementTuning, type PlayerId, type RoundData } from '../src/contracts/index';
-import { TRACKS3D_FORMAT, type Tracks3d, type Tracks3dJump } from '../src/contracts/tracks3d';
+import { TRACKS3D_FORMAT, applyTracks3d, type Tracks3d, type Tracks3dJump } from '../src/contracts/tracks3d';
+import { utilityAims } from './utility-aim';
 import { EventSchedule, RoundModel, recordedWeapons, runSpeedOf, weaponAt } from '../src/core/index';
 import { MapGeometry, TRACE_SKIN, combineMeshes, decodeGeometry } from '../src/sim2d/geometry';
 import { restingState, settle, stepMove3d, type MoveState } from '../src/sim2d/movement';
@@ -942,6 +943,7 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
     },
     tracks,
     jumps,
+    utility: utilityAims(applyTracks3d(round, { format: TRACKS3D_FORMAT, note: '', sources: [], params: {}, stats: {}, tracks, jumps }), world, tuning),
   };
   const text = stableText(data);
   const report = [
@@ -1316,7 +1318,8 @@ function stableText(d: Tracks3d): string {
   const ids = PLAYER_IDS.filter((id) => d.tracks[id] !== undefined);
   ids.forEach((id, k) => lines.push(`    ${JSON.stringify(id)}: ${JSON.stringify(d.tracks[id])}${k + 1 < ids.length ? ',' : ''}`));
   lines.push('  },');
-  lines.push(`  "jumps": ${JSON.stringify(d.jumps)}`);
+  lines.push(`  "jumps": ${JSON.stringify(d.jumps)}${d.utility === undefined ? '' : ','}`);
+  if (d.utility !== undefined) lines.push(`  "utility": ${JSON.stringify(d.utility)}`);
   lines.push('}');
   return lines.join('\n') + '\n';
 }

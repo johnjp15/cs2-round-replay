@@ -207,6 +207,11 @@ export interface Utility {
    */
   readonly landing: GrenadeLanding | null;
   readonly radio: string;
+  /**
+   * S1: the release view angles (Source degrees; pitch positive = down) that land this throw on `landing` with the CS2
+   * grenade engine. Not in round.json: `applyTracks3d` sets it from data/geometry/mirage-tracks.json `utility`.
+   */
+  readonly aim?: { readonly pitch: number; readonly yaw: number };
 }
 
 /** A measured grenade landing (Source units). */
