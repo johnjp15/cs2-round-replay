@@ -102,9 +102,17 @@ function snapTicks(run: HarnessRun): Map<PlayerId, number[]> {
  * never snaps in the human's sight (B2), and on CS2 Mirage the golden master snaps where the recording runs into CS2's
  * walls (docs/core.md "Snaps").
  */
-function replayDeviation(run: HarnessRun): Map<PlayerId, number> {
-  const out = new Map<PlayerId, number>();
+/**
+ * The largest distance of each REPLAY pawn from its golden-master position while both runs have it REPLAY and alive,
+ * up to its first body block, LIVE switch or missed golden snap: `strict` until the scenario first changes its look
+ * (act yaw or pitch), `loose` after. F1: a different look (a dropped fight's pre-aim) rotates the stick, whose 6-decimal
+ * rounding can flip a stair step later (barely on the tunnel stairs at 42.8 s when cart has killed Zwomp).
+ */
+function replayDeviation(run: HarnessRun): { strict: Map<PlayerId, number>; loose: Map<PlayerId, number> } {
+  const strict = new Map<PlayerId, number>();
+  const loose = new Map<PlayerId, number>();
   const firstBlock = new Map<PlayerId, number>();
+  const lookFrom = new Map<PlayerId, number>();
   for (const b of run.bodyBlocks) if (!firstBlock.has(b.id)) firstBlock.set(b.id, b.tick);
   for (const s of liveSwitches(run.entries)) if ((firstBlock.get(s.id) ?? Infinity) > s.tick) firstBlock.set(s.id, s.tick);
   const mine = snapTicks(run);
@@ -117,17 +125,24 @@ function replayDeviation(run: HarnessRun): Map<PlayerId, number> {
     const g = golden.entries[k] as LogEntry;
     for (const id of PLAYER_IDS) {
       if ((firstBlock.get(id) ?? Infinity) <= k) continue;
+      const ie = e.act.inputs.find((q) => q.id === id);
+      const ig = g.act.inputs.find((q) => q.id === id);
+      if (!lookFrom.has(id) && ie !== undefined && ig !== undefined && (ie.yaw !== ig.yaw || ie.pitch !== ig.pitch)) lookFrom.set(id, k);
       const p = pawnAt(e, id);
       const q = pawnAt(g, id);
       if (statusAt(e, id)?.mode !== 'REPLAY' || statusAt(g, id)?.mode !== 'REPLAY' || !p.alive || !q.alive) continue;
+      const out = (lookFrom.get(id) ?? Infinity) <= k ? loose : strict;
       out.set(id, Math.max(out.get(id) ?? 0, dist(p.pos, q.pos)));
     }
   }
-  return out;
+  return { strict, loose };
 }
 
 function expectUntouchedReplay(run: HarnessRun): void {
-  for (const [id, d] of replayDeviation(run)) expect(d, `${id} off the golden master while REPLAY`).toBeLessThan(0.01);
+  const d = replayDeviation(run);
+  for (const [id, x] of d.strict) expect(x, `${id} off the golden master while REPLAY`).toBeLessThan(0.01);
+  // One stair step (tuning.movement.stepSize 18) at most once the look differs.
+  for (const [id, x] of d.loose) expect(x, `${id} off the golden master while REPLAY, after its look changed`).toBeLessThan(tuning.movement.stepSize);
 }
 
 /** The single round_end, checked against the game rules (who is alive, the bomb). */
