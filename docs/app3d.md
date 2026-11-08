@@ -30,11 +30,36 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
 - **Sound** (A1): CS2's sound events with positional HRTF audio, CS2's distance curves and occlusion on the mesh,
   starting with the first click or key; placeholders until John's CS2 files are packed. docs/cs2-sounds.md;
   A2: CS2's mixer volumes, instance limits, a limiter, tick-accurate cues, re-made placeholders (docs/audio.md).
-- **HUD**: score and round clock (the bomb timer once planted, red; green while defusing), the bomb line (carrier,
-  planted, who is defusing and how long is left, defused), the kill feed, the radar minimap (the CS2 radar around the
+- **HUD**: score (CT left, T right) and round clock, the kill feed, the radar minimap (the CS2 radar around the
   camera, every pawn as a dot, the view cone), the team panel (HP bar, mode: REPLAY / LIVE / YOU), HP / armor and
   weapon / ammo of the pawn being viewed, the mode line, the headroom meter (Performance, below), and the
   end-of-round summary line 2 s after the round end. While spectating: the spectator panel and an edge vignette (below).
+- **CS2's HUD rules (H6, #65 / #67)**, for the viewed pawn's team (the human's, else the spectated player's; never a
+  constant), `hud3d.ts` (`bombHud`, `plantAlert`, `winBanner`), `economy.ts`, `scene.ts`; tests/app3d-hud-cs2.test.ts:
+  - **Bomb**: nobody gets a countdown. Once planted the clock gives way to the red C4 icon for both teams, pulsing
+    faster as the timer runs down (CS2's `BombStatus`, `BombPlantedPulse__Slow/Medium/Fast` 0.8 / 0.5 / 0.3 s cycles in
+    `hudteamcounter.css`; the switch at 10 s / 5 s left is ours, since CS2 decides it in C++), green when defused. The
+    defuse bar ("Defusing bomb WITH / WITHOUT defuse kit.") is only on the defusing CT's screen. The C4 carrier's tag in
+    the team panel is only shown to Ts. Score order: `hudteamcounter.xml` (ScoreCT left, ScoreT right).
+  - **Plant alert**: "The bomb has been planted / 40 seconds till detonation" (`Cstrike_TitlesTXT_Bomb_Planted`) for
+    3.7 s, then a 1 s fade (CS2's `CSGOHudAlerts` FlashAnim / HideFlash, `hudalerts.css`), for both teams.
+  - **Win banner**: "Counter-Terrorists Win" / "Terrorists Win" with the reason ("The bomb has been defused",
+    "Target successfully bombed", "Target has been saved"; nothing for an elimination), held while the round is over.
+    (The video's 2020 match had team names: "Sk8er bois Wins The Round".)
+  - **Kill feed**: each notice stays 5 s, then fades for 1 s (6 s in all); a notice the local player (the human) is
+    in stays 1.5× as long (`huddeathnotice.css` DeathNoticeLifetime 5.0, FadeOutTime 1.0, LocalPlayerLifetimeMod 1.5).
+    After a seek or rewind the Scene is rebuilt and `Scene.restore` puts back the feed, the deaths (the death fade),
+    the bomb (the defuse start) and the round end from the session log's ~30 lines with a death, bomb or round_end
+    event (`eventHistory`).
+  - **Money**: the viewed pawn's cash (round.json `startMoney`, known for the five Ts; CTs and free play show the
+    flashes only) and CS2 competitive's awards as they happen (`gamemode_competitive.cfg`; kill awards from
+    weapons.vdata), e.g. "+$300" in CS2's #8fff6f for 2.9 s (`hudmoney.css`). At this round's end the Ts get
+    $1400 + $600 (CS2's `cash_team_planted_bomb_but_defused`), so cart ends on $8150. The video shows +$2200 to
+    $8350 because CS:GO 2020 paid $800 there. The loss streak before this round isn't recorded; we use the first
+    step ($1400), which matches the tape. Not modelled: purchases and `cash_team_bonus_shorthanded`.
+
+![27.6 s through cart's eyes (T): the plant alert, the C4 icon instead of the clock, CT 11 left, T 15 right, $6150](img/app3d-h6-plant-t.jpg)
+![66.0 s through sp4rtan's eyes: the defuse bar, his alone](img/app3d-h6-defuse-ct.jpg)
 - **Bar**: Start, Pause, Restart, Take control of cart (E), Camera (V), Radar (CS2 rules / show everyone), speed
   0.25–4×, the settings (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov, and **Recoil tracking**), and FPS
   limit, Res (render scale) and Low latency (Performance, below). These and the radar toggle are kept in localStorage,
@@ -194,8 +219,8 @@ docs/app.md "Ctrl+W, fullscreen and key bindings".
   frozen where they looked (no turn to the killer, no free look), the eye drops to the ground (to 14 u, CS's
   `VEC_DEAD_VIEWHEIGHT`, in 0.5 s) and the screen fades to black over 2 s (CS2's `cl_deathcam_audio_mix_phase1_fade_time`
   2 and `spec_freeze_time` 2); a headshot goes black in 0.4 s (our pick: CS2 documents no headshot fade; 0.4 s is its
-  `cl_deathcam_audio_mix_phase2_fade_time`), the black then held to 2 s. Then the next living teammate. The fade needs
-  the death to have happened in front of the Scene (after a seek past it there is none). `deathFade` in spectate.ts,
+  `cl_deathcam_audio_mix_phase2_fade_time`), the black then held to 2 s. Then the next living teammate. After a seek
+  the deaths come back from the session log (`Scene.restore`), so the fade is the same seeked or live. `deathFade` in spectate.ts,
   `#deathfade` under the HUD text; `npm run check:browser:3d -- --only h6` checks it live (cart's death, 69.4 s).
 
 ![Cart's death fade at 70.4 s: his own view from the ground, half black](img/app3d-h6-death-fade.jpg)

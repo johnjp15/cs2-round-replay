@@ -6,11 +6,20 @@
  * (radar3d.ts: teammates always, enemies while spotted, the "?" ghost, the fading X; or everyone, the panel toggle),
  * the spectator panel and edge vignette while spectating, the crosshair at the aim and the scope overlay of the
  * viewed pawn. Text nodes and attributes are only written when they change. The clock and names reuse the 2D app's pure HUD model (src/app/hud-model.ts).
+ *
+ * H6, CS2's HUD, team-correct for the viewed pawn (the human, else the spectated one; its team, never a constant):
+ * the score CT left, T right (CS2's `hudteamcounter.xml`: ScoreCT in GameScore__BGL, ScoreT in GameScore__BGR); once
+ * planted the clock gives way to the pulsing C4 icon for both teams (`BombStatus`, `BombPlantedPulse__*`), green when
+ * defused: no bomb countdown for anyone; the defuse progress bar only for the defusing CT; the C4 carrier marked in
+ * the team panel only for Ts; the "The bomb has been planted" alert (CS2's `CSGOHudAlerts`); the win banner
+ * ("Counter-Terrorists Win" + the reason); the kill feed's 6 s (scene.ts); the money and "+$300" award flashes
+ * (economy.ts). Pure view helpers: bombHud, plantAlert, winBanner.
  */
-import type { Observe, PawnObs, PawnStatus, PlayerId, Team } from '../contracts/index';
+import type { Observe, PawnObs, PawnStatus, PlayerId, RoundEndReason, Team } from '../contracts/index';
 import type { RoundClock } from '../core/index';
 import { clockView, hasAmmo, weaponName } from '../app/hud-model';
-import type { Scene } from '../app/scene';
+import type { BombState, Scene } from '../app/scene';
+import type { CashAward } from './economy';
 import { radarPx, type RadarTransform } from './coords';
 import type { RadarRules, RadarTracker } from './radar3d';
 import type { SpectatePanel } from './spectate';
@@ -21,6 +30,10 @@ export interface HudFrame {
   /** The pawn whose HP / ammo is shown (the human, else the followed pawn). */
   readonly viewer: PlayerId;
   readonly human: PlayerId | null;
+  /** H6: the viewed pawn's team (the HUD shows what that team sees of the bomb). */
+  readonly viewerTeam: Team | null;
+  /** H6: the viewed pawn's money (null: unknown) and its award flashes now. */
+  readonly money: { readonly cash: number | null; readonly flashes: readonly CashAward[] };
   /** Viewer position and yaw for the minimap (the camera's). */
   readonly at: { readonly x: number; readonly y: number; readonly yaw: number };
   readonly mode: string;
@@ -129,18 +142,47 @@ export class Hud3D {
   update(f: HudFrame): void {
     const o: Observe = f.scene.cur;
     const cv = clockView(o, f.clock, f.scene.bomb, f.scene.roundEnd);
-    this.text('clock', cv.text);
-    this.attr('clock', 'class', cv.mode === 'round' || cv.mode === 'over' ? null : cv.mode);
+    const bh = bombHud(o, f.scene.bomb, f.viewer, f.viewerTeam);
+    this.text('clock-text', bh.icon === null ? cv.text : '');
+    this.attr('clock', 'class', bh.icon === null ? null : `c4 ${bh.icon}`);
     this.text('score-t', String(o.round.score.t));
     this.text('score-ct', String(o.round.score.ct));
-    this.text('bombline', bombLine(o));
-    // Kill feed.
-    const feed = f.scene.killFeed
-      .visible(f.tick)
+    // The defuse bar: the defuser's own HUD only.
+    this.attr('defuse', 'hidden', bh.defuse === null ? '' : null);
+    if (bh.defuse !== null) {
+      this.text('defuse-text', bh.defuse.kit ? 'Defusing bomb WITH defuse kit.' : 'Defusing bomb WITHOUT defuse kit.');
+      this.attr('defuse-bar', 'style', `transform:scaleX(${bh.defuse.progress.toFixed(3)})`);
+    }
+    // The plant alert, both teams.
+    const al = plantAlert(o.round.bomb.plantTick ?? f.scene.bomb.plantTick, f.tick, f.clock.bombTimerSec);
+    this.attr('alert', 'hidden', al === null ? '' : null);
+    if (al !== null) {
+      this.text('alert-sub', al.sub);
+      this.attr('alert', 'style', al.opacity >= 1 ? null : `opacity:${al.opacity.toFixed(1)}`);
+    }
+    // The win banner.
+    const wb = winBanner(o.round.winner, o.round.reason);
+    this.attr('banner', 'hidden', wb === null ? '' : null);
+    if (wb !== null) {
+      this.attr('banner', 'class', wb.team === 'T' ? 't' : 'ct');
+      this.text('banner-title', wb.title);
+      this.text('banner-reason', wb.reason);
+    }
+    // Money and the award flashes.
+    const m = f.money;
+    this.attr('money', 'hidden', m.cash === null && m.flashes.length === 0 ? '' : null);
+    this.text('money-val', m.cash === null ? '' : `$${m.cash}`);
+    this.html('money-awards', m.flashes.map((a) => `<div class="${a.amount < 0 ? 'neg' : ''}" title="${a.text.trim()}">${a.amount < 0 ? '-' : '+'}$${Math.abs(a.amount)}</div>`).join(''));
+    // Kill feed (CS2: 5 s + 1 s fade, 1.5× for the local player's own).
+    const local = f.human;
+    const kf = f.scene.killFeed;
+    const feed = kf
+      .visible(f.tick, local)
       .map((k) => {
         const cls = (t: string | null): string => (t === 'T' ? 't' : t === 'CT' ? 'ct' : '');
-        const you = f.human !== null && (k.killer === f.human || k.victim === f.human) ? ' you' : '';
-        return `<div class="slab${you}"><span class="${cls(k.killerTeam)}">${k.killer ?? ''}</span><span class="w">${weaponName(k.weapon)}${k.headshot ? ' ◎' : ''}</span><span class="${cls(k.victimTeam)}">${k.victim}</span></div>`;
+        const you = local !== null && (k.killer === local || k.victim === local) ? ' you' : '';
+        const op = Math.round(kf.opacity(k, f.tick, local) * 10) / 10;
+        return `<div class="slab${you}"${op >= 1 ? '' : ` style="opacity:${op.toFixed(1)}"`}><span class="${cls(k.killerTeam)}">${k.killer ?? ''}</span><span class="w">${weaponName(k.weapon)}${k.headshot ? ' ◎' : ''}</span><span class="${cls(k.victimTeam)}">${k.victim}</span></div>`;
       })
       .join('');
     const ff = (f.teamDamage?.feed ?? []).map((l) => `<div class="slab ff">${l}</div>`).join('');
@@ -152,7 +194,7 @@ export class Hud3D {
     const rows = (team: 'T' | 'CT'): string =>
       o.pawns
         .filter((p) => p.team === team)
-        .map((p) => teamRow(p, f.scene.statusOf(p.id), f.human))
+        .map((p) => teamRow(p, f.scene.statusOf(p.id), f.human, f.viewerTeam === 'T' && o.round.bomb.state === 'carried' && o.round.bomb.carrier === p.id))
         .join('');
     this.html('teams', rows('T') + '<div style="height:6px"></div>' + rows('CT'));
     // The viewed pawn.
@@ -277,25 +319,68 @@ export class Hud3D {
   }
 }
 
-function bombLine(o: Observe): string {
-  const b = o.round.bomb;
-  switch (b.state) {
-    case 'carried':
-      return b.carrier === null ? '' : `C4: ${b.carrier}`;
-    case 'dropped':
-      return 'C4 dropped';
-    case 'planted':
-      return b.defuser !== null && b.defuseEndTick !== null ? `${b.defuser} defusing · ${Math.max(0, (b.defuseEndTick - o.tick) / 64).toFixed(1)} s` : 'Bomb planted';
-    case 'defused':
-      return `Defused by ${b.defuser ?? '?'}`;
-    case 'exploded':
-      return 'Bomb exploded';
-  }
+/** H6: the clock's C4 icon (null: the round clock) and the defuse bar (only the defuser's own HUD). */
+export interface BombHud {
+  /** planted (pulsing: slow / medium / fast), defused, exploded, or null before the plant. */
+  readonly icon: 'pulse-slow' | 'pulse-medium' | 'pulse-fast' | 'defused' | 'exploded' | null;
+  readonly defuse: { readonly progress: number; readonly kit: boolean } | null;
 }
 
-function teamRow(p: PawnObs, st: PawnStatus | null, human: PlayerId | null): string {
+/**
+ * CS2 gives nobody a bomb countdown (the C4 icon replaces the clock for both teams) and shows the defuse progress only
+ * to the defusing CT. The pulse quickens as the timer runs down (CS2's BombPlantedPulse__Slow / Medium / Fast are 0.8 /
+ * 0.5 / 0.3 s cycles; when CS2 switches between them is in its C++, not the Panorama files: 10 s and 5 s left here,
+ * unverified).
+ */
+export function bombHud(o: Observe, bomb: BombState, viewer: PlayerId, viewerTeam: Team | null): BombHud {
+  const b = o.round.bomb;
+  if (b.state === 'defused') return { icon: 'defused', defuse: null };
+  if (b.state === 'exploded') return { icon: 'exploded', defuse: null };
+  if (b.state !== 'planted') return { icon: null, defuse: null };
+  const left = o.round.timeLeftSec;
+  const icon = left > 10 ? 'pulse-slow' : left > 5 ? 'pulse-medium' : 'pulse-fast';
+  let defuse: BombHud['defuse'] = null;
+  if (viewerTeam === 'CT' && b.defuser === viewer && b.defuseEndTick !== null) {
+    // The start from the Scene's defuse_start (restored after a seek); a kit defuse is 5 s, without 10 s.
+    const start = bomb.defuser === viewer && bomb.defuseStartTick !== null ? bomb.defuseStartTick : null;
+    const total = start === null ? null : b.defuseEndTick - start;
+    const kit = total === null ? true : total <= 5.5 * 64;
+    const len = total ?? (kit ? 5 : 10) * 64;
+    defuse = { progress: Math.min(1, Math.max(0, 1 - (b.defuseEndTick - o.tick) / len)), kit };
+  }
+  return { icon, defuse };
+}
+
+/**
+ * H6: CS2's "The bomb has been planted" alert (`Cstrike_TitlesTXT_Bomb_Planted`: "The bomb has been planted\n%s1
+ * seconds till detonation"; `CSGOHudAlerts` in hudalerts.css: the 3.7 s FlashAnim, then the 1.0 s HideFlash fade), from
+ * the plant tick; null when not showing.
+ */
+export const PLANT_ALERT_TICKS = Math.round(3.7 * 64);
+export const PLANT_ALERT_FADE_TICKS = 64;
+export function plantAlert(plantTick: number | null, tick: number, bombTimerSec: number): { sub: string; opacity: number } | null {
+  if (plantTick === null) return null;
+  const age = tick - plantTick;
+  if (age < 0 || age >= PLANT_ALERT_TICKS + PLANT_ALERT_FADE_TICKS) return null;
+  const opacity = age < PLANT_ALERT_TICKS ? 1 : Math.round((1 - (age - PLANT_ALERT_TICKS) / PLANT_ALERT_FADE_TICKS) * 10) / 10;
+  return { sub: `${Math.round(bombTimerSec)} seconds till detonation`, opacity };
+}
+
+/**
+ * H6: CS2's round-end banner (csgo_english.txt): `SFUI_WinPanel_CT_Win` "Counter-Terrorists Win" / `SFUI_WinPanel_T_Win`
+ * "Terrorists Win", with the reason: `SFUI_Notice_Bomb_Defused` "The bomb has been defused", `SFUI_Notice_Target_Bombed`
+ * "Target successfully bombed", `SFUI_Notice_Target_Saved` "Target has been saved" (time); none for an elimination.
+ * (The video's CS:GO 2020 match had team names: "Sk8er bois Wins The Round".)
+ */
+export function winBanner(winner: Team | null, reason: RoundEndReason | null): { team: Team; title: string; reason: string } | null {
+  if (winner === null) return null;
+  const why = reason === 'bomb_defused' ? 'The bomb has been defused' : reason === 'bomb_exploded' ? 'Target successfully bombed' : reason === 'time' ? 'Target has been saved' : '';
+  return { team: winner, title: winner === 'CT' ? 'Counter-Terrorists Win' : 'Terrorists Win', reason: why };
+}
+
+function teamRow(p: PawnObs, st: PawnStatus | null, human: PlayerId | null, c4: boolean): string {
   const mode = p.id === human ? 'YOU' : (st?.mode ?? '');
   const cls = mode === 'LIVE' ? 'live' : mode === 'YOU' ? 'human' : '';
   const hp = p.alive ? Math.max(0, Math.min(100, p.hp)) : 0;
-  return `<div class="row ${p.team === 'T' ? 't' : 'ct'}${p.alive ? '' : ' dead'}"><span class="n">${p.id}</span><span class="bar"><i style="width:${hp}%"></i></span><span class="m ${cls}">${p.alive ? mode : '✕'}</span></div>`;
+  return `<div class="row ${p.team === 'T' ? 't' : 'ct'}${p.alive ? '' : ' dead'}"><span class="n">${p.id}${c4 ? '<b class="c4">C4</b>' : ''}</span><span class="bar"><i style="width:${hp}%"></i></span><span class="m ${cls}">${p.alive ? mode : '✕'}</span></div>`;
 }
