@@ -57,6 +57,29 @@ const MEASURED_LANDINGS: Readonly<Record<string, GrenadeLanding>> = {
   '25.8 cart smoke': { x: -1890, y: -585, z: -166, uncertainty: 40 },
 };
 
+/**
+ * V4 (second video review, docs/parity/review-2-2026-11-07.md): HUD facts the page's data has wrong, read off the
+ * recording's own HUD frame by frame. Weapon draws the page times late, keyed by the page's point: the draw moves to
+ * the video's first frame of the new weapon.
+ */
+const WEAPON_DRAWS: readonly { readonly id: PlayerId; readonly pageT: number; readonly t: number; readonly weapon: WeaponId; readonly why: string }[] = [
+  // cart's knife -> AK-47 (V3 finding 7, backlog 60): his ammo HUD shows 24/90 from the frame at 61.40 s (the knife,
+  // with no counter, until 61.35 s) and the AK's draw animation plays at 61.4-61.6 s; the page has 63.5 s.
+  { id: 'cart', pageT: 63.5, t: 61.4, weapon: 'ak47', why: 'ammo HUD 24/90 from 61.40 s (V4)' },
+];
+
+/**
+ * V4: armor a recorded hit took, keyed "<t> <attacker> <victim>" like the page's damage list, where the shots CSV has
+ * no armor figure. donk's HUD through sp4rtan's spray (60 fps): armor 100 -> 96 at 49.90 s (27 HP: a chest hit at
+ * ~525 u, CS2/CS:GO armor rule (damage - damage x 0.775) / 2 = 4) -> 91 at 50.00 s (34 HP: the stomach, 5) -> 91 at
+ * 50.10 s (26 HP: a leg, which armor doesn't cover, 0).
+ */
+const HIT_ARMOR: Readonly<Record<string, number>> = {
+  '49.9 sp4rtan donk': 4,
+  '50 sp4rtan donk': 5,
+  '50.1 sp4rtan donk': 0,
+};
+
 // ---------- source shapes (the web-apps page's embedded JSON) ----------
 
 type Arr3 = [number, number, number];
@@ -158,7 +181,8 @@ const KITS: Record<PlayerId, KitSpec> = {
   cart: spec({ primary: 'ak47', grenades: ['smoke', 'smoke'], roles: ['take_b'] }),
   // donk's Glock is seen on his HUD at 49.93 s (shots CSV).
   donk: spec({ primary: 'awp', secondary: 'glock', grenades: ['flash', 'molotov'], roles: ['take_b'] }),
-  eradicate: spec({ primary: 'ak47', roles: ['take_b'] }),
+  // V4: eradicate starts on 89 armor (his own HUD reads 100 HP / 89 armor from 0.0 s to his death; a kept vest).
+  eradicate: spec({ primary: 'ak47', armor: 89, roles: ['take_b'] }),
   incredibad: spec({ primary: 'm4a4', assumed: true, roles: ['hold_a'] }),
   lokier: spec({ primary: 'ssg08', roles: ['hold_b'] }),
   snakelore: spec({ primary: 'm4a4', assumed: true, roles: ['hold_a'] }),
@@ -379,9 +403,11 @@ export function switchBack(note: string, owner: PlayerId): { t: number; weapon: 
  * (same tick and weapon) is not added.
  */
 function weaponTimeline(id: PlayerId, rows: [number, string][], shots: readonly Shot[]): WeaponTimelinePoint[] {
-  const page = rows.map(([t, raw]): WeaponTimelinePoint => {
+  const page = rows.map(([pageT, raw]): WeaponTimelinePoint => {
     const w = weaponOrNull(raw);
-    return { t, tick: toTick(t), weapon: id === 'lokier' && w === 'awp' ? 'ssg08' : w, raw };
+    const fix = WEAPON_DRAWS.find((f) => f.id === id && f.pageT === pageT && f.weapon === w);
+    const t = fix?.t ?? pageT;
+    return { t, tick: toTick(t), weapon: id === 'lokier' && w === 'awp' ? 'ssg08' : w, raw: fix === undefined ? raw : `${raw} (${fix.why}; page ${pageT})` };
   });
   const extra: WeaponTimelinePoint[] = [];
   for (const s of shots) {
@@ -634,7 +660,7 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
       attacker,
       victim,
       amount: d.amount,
-      armor: csvRow?.armorDamage ?? null,
+      armor: csvRow?.armorDamage ?? HIT_ARMOR[`${d.t} ${attacker} ${victim}`] ?? null,
       weapon: weapon(d.weapon, attacker),
       note: d.note,
       apos: refinedAt(attacker, d.t, vec3(d.apos)),
@@ -711,6 +737,12 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
     money: sortedRecord(byId(src.money).map(([id, rows]): [PlayerId, TimelinePoint[]] => [id, points(rows)])),
     weapon: sortedRecord(byId(src.weapons).map(([id, rows]): [PlayerId, WeaponTimelinePoint[]] => [id, weaponTimeline(id, rows, shots)])),
   };
+  for (const f of WEAPON_DRAWS) {
+    if (!(timelines.weapon[f.id] ?? []).some((p) => p.t === f.t && p.weapon === f.weapon)) throw new Error(`WEAPON_DRAWS: ${f.id} has no ${f.weapon} at ${f.pageT} s in the page`);
+  }
+  for (const k of Object.keys(HIT_ARMOR)) {
+    if (!damage.some((d) => `${d.t} ${d.attacker} ${d.victim}` === k)) throw new Error(`HIT_ARMOR: no recorded hit "${k}"`);
+  }
 
   const events = src.events.map(
     (e): RoundEvent => ({

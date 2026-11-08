@@ -545,7 +545,8 @@ describe('weapons and utility', () => {
         [3204, 'set_weapon', 'donk', 'awp'],
         [3685, 'set_weapon', 'barely', 'knife'],
         [3813, 'set_weapon', 'cart', 'knife'],
-        [4063, 'set_weapon', 'cart', 'ak47'],
+        // V4: the video's HUD has cart's AK out at 61.40 s (tick 3930; the page said 63.5 s).
+        [3929, 'set_weapon', 'cart', 'ak47'],
       ]),
     );
     expect(rows.filter((r) => r[0] === 1253 && r[1] === 'set_weapon')).toHaveLength(1);
