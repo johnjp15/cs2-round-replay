@@ -239,6 +239,8 @@ function logs(log: SessionLog): { tick: number; level: string; text: string }[] 
 // One golden-master run of the act stream (human null), shared by most tests; `seeing`: the same with everyone in sight.
 const FULL = 4460;
 const golden = stubRun(FULL);
+/** Lokier's scout shot at eradicate (act tick of the ATTACK; the kill is observed on 816). */
+const LOKIER_FIRES = 814;
 const seeing = stubRun(FULL, { seeAll: true });
 
 // ---------------------------------------------------------------------------
@@ -434,7 +436,8 @@ describe('the human', () => {
     const lk = o?.pawns.find((p) => p.id === 'lokier');
     const ct = o?.pawns.find((p) => p.id === 'cart');
     if (lk === undefined || ct === undefined) throw new Error('missing pawns');
-    expect(Math.abs((input(human.log, 1183, 'lokier')?.yaw ?? NaN) - bearing(lk.pos, ct.pos))).toBeLessThan(0.5);
+    // (F1: the hold is eased in, so it is within a degree rather than exactly on the spot.)
+    expect(Math.abs((input(human.log, 1183, 'lokier')?.yaw ?? NaN) - bearing(lk.pos, ct.pos))).toBeLessThan(1);
     expect(Math.abs((input(human.log, 1150, 'lokier')?.yaw ?? NaN) - bearing(lk.pos, ct.pos))).toBeGreaterThan(5);
   });
 });
@@ -461,31 +464,35 @@ describe('aim', () => {
       ['cart', 'lokier'],
       ['sp4rtan', 'barely'],
     ]);
-    const o = seeing.log.get(814)?.observe;
+    // F1: the view is exactly on the head on the ATTACK tick (the eased flick closes the last degree there).
+    const k = LOKIER_FIRES;
+    expect(spans(seeing.log, 'lokier', 'ATTACK', 800, 816)).toEqual([{ from: k, to: k }]);
+    const o = seeing.log.get(k)?.observe;
     const lk = o?.pawns.find((p) => p.id === 'lokier');
     const er = o?.pawns.find((p) => p.id === 'eradicate');
     if (lk === undefined || er === undefined) throw new Error('missing pawns');
-    expect(input(seeing.log, 814, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, er.pos, false, 'head', tuning.damage));
+    expect(input(seeing.log, k, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, er.pos, false, 'head', tuning.damage));
   });
 
     it('G6: out of sight it holds the pre-aim on the recorded spot, and tracks the body only in sight', () => {
     const eng = plan.engagements.find((e) => e.shooter === 'lokier' && e.target === 'eradicate');
     if (eng === undefined) throw new Error('no engagement');
-    const spot = aimSpotAt(eng, 814);
+    const k = LOKIER_FIRES;
+    const spot = aimSpotAt(eng, k);
     expect(spot).not.toBeNull();
-    const o = golden.log.get(814)?.observe;
+    const o = golden.log.get(k)?.observe;
     const lk = o?.pawns.find((p) => p.id === 'lokier');
     const er = o?.pawns.find((p) => p.id === 'eradicate');
     if (lk === undefined || er === undefined || spot === null) throw new Error('missing pawns');
     // Nobody sees anyone (the stub's empty sees): Lokier looks at eradicate's recorded spot where the kill lands.
-    expect(spot.tick >= 814 && spot.tick <= eng.toTick).toBe(true);
+    expect(spot.tick >= k && spot.tick <= eng.toTick).toBe(true);
     // (eradicate's track ends just before the kill: the spot is its last sample)
     const last = model.track('eradicate').at(-1);
     expect(spot.pos).toEqual(model.trackAtTick('eradicate', spot.tick + tuning.replay.inputLatencyTicks)?.pos ?? { x: last?.x, y: last?.y, z: last?.z });
-    expect(input(golden.log, 814, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, spot.pos, false, 'head', tuning.damage));
-    expect(Math.abs((input(golden.log, 814, 'lokier')?.yaw ?? NaN) - bearing(lk.pos, spot.pos))).toBeLessThan(0.01);
+    expect(input(golden.log, k, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, spot.pos, false, 'head', tuning.damage));
+    expect(Math.abs((input(golden.log, k, 'lokier')?.yaw ?? NaN) - bearing(lk.pos, spot.pos))).toBeLessThan(0.01);
     // In sight: the body, wherever it is (the two differ while eradicate moves).
-    expect(input(seeing.log, 814, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, er.pos, false, 'head', tuning.damage));
+    expect(input(seeing.log, k, 'lokier')?.pitch).toBe(aimPitchAt(lk.pos, false, er.pos, false, 'head', tuning.damage));
     // Every engagement has its spots, one per merged window end, in tick order, inside the engagement.
     for (const e of plan.engagements) {
       const ticks = (e.spots ?? []).map((x) => x.tick);
@@ -508,17 +515,19 @@ it('agrees with the 2D hitscan on band pitches (shared tuning.damage)', () => {
     }
   });
 
-  it('turns at most aimTurnRateDegPerTick, writes the yaw back to the puppet, and hands back to the movement yaw', () => {
+  it('F1: eases the view (no snaps), stays on the target after the shot, writes the yaw back and hands back to the movement yaw', () => {
     const core = new ReplayCore(model, schedule, tuning, 3, OPEN);
-    const { log } = stubRun(60, {}, core);
-    const yaws = Array.from({ length: 50 }, (_, k) => input(log, k + 1, 'snarlbot')?.yaw ?? NaN);
-    for (let k = 1; k < yaws.length; k++) {
-      const d = Math.abs(((((yaws[k] as number) - (yaws[k - 1] as number)) % 360) + 540) % 360 - 180);
-      expect(d, `tick ${k + 1}`).toBeLessThanOrEqual(k + 1 >= 9 && k + 1 <= 31 ? 30 : 12);
-    }
-    // After the engagement the puppet continues from the aim yaw (B2's limit of 12°/tick).
-    expect(Math.abs(((((yaws[31] as number) - (yaws[30] as number)) % 360) + 540) % 360 - 180)).toBe(12);
-    expect(core.puppet('snarlbot')?.state.yaw).toBe(input(log, 59, 'snarlbot')?.yaw);
+    const { log } = stubRun(160, {}, core);
+    const yaws = Array.from({ length: 150 }, (_, k) => input(log, k + 1, 'snarlbot')?.yaw ?? NaN);
+    const steps = yaws.slice(1).map((y, k) => Math.abs(((((y - (yaws[k] as number)) % 360) + 540) % 360) - 180));
+    // Never more than the flick's peak; B2's own limit (12°/tick) once the fight aim has let go.
+    for (const [k, d] of steps.entries()) expect(d, `tick ${k + 2}`).toBeLessThanOrEqual(tuning.replay.aimTurnRateDegPerTick);
+    // After the kill (act tick 31) it stays on incredibad for aimAfterSec, then eases back and lets go.
+    const after = Math.round(tuning.replay.aimAfterSec * 64);
+    for (let k = 32; k <= 31 + after; k++) expect(steps[k - 2] as number, `tick ${k}`).toBeLessThan(2);
+    expect(core.script.state.aim.some((m) => m.id === 'snarlbot')).toBe(false);
+    for (let k = 31 + after + 40; k < 150; k++) expect(steps[k - 2] as number, `tick ${k}`).toBeLessThanOrEqual(tuning.replay.maxTurnRateDegPerTick);
+    expect(core.puppet('snarlbot')?.state.yaw).toBe(input(log, 159, 'snarlbot')?.yaw);
   });
 });
 

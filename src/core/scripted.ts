@@ -38,7 +38,8 @@ import {
   type WeaponTuning,
 } from '../contracts/index';
 import { TICK_RATE } from './clock';
-import { bandPoint, lookToward, type AimBand, type Look } from './aim';
+import { bandPoint, type AimBand, type Look } from './aim';
+import { FightAim, copyMotions, type AimGoal, type AimMotion } from './fight-aim';
 import { withLook } from './puppet';
 import type { RoundModel } from './round-model';
 import type { BurstEntry, DamageEntry, EventSchedule, KillEntry, ShotEntry } from './schedule';
@@ -677,6 +678,8 @@ export interface ScriptState {
   liveSpans: LiveSpan[];
   /** G1: ticks the scripted plant (USE window and fallback) runs late: the planter rejoined inside his plant window. */
   plantShift: number;
+  /** F1: the view motion of each pawn whose look the fight aim moves (src/core/fight-aim.ts), in the order they started. */
+  aim: AimMotion[];
 }
 
 /** G1: one LIVE period of a pawn, [from, to) in ticks (`to` null while it lasts). */
@@ -706,7 +709,7 @@ export interface PawnMode {
 }
 
 export function initialScriptState(): ScriptState {
-  return { plantedTick: null, defuseStartedTick: null, defuseEndedTick: null, decisions: [], extraFire: [], extraEngagements: [], holds: [], liveSpans: [], plantShift: 0 };
+  return { plantedTick: null, defuseStartedTick: null, defuseEndedTick: null, decisions: [], extraFire: [], extraEngagements: [], holds: [], liveSpans: [], plantShift: 0, aim: [] };
 }
 
 function copyFire(f: FireItem): FireItem {
@@ -730,11 +733,16 @@ export class ScriptedEvents {
   private readonly model: RoundModel;
   private readonly tuning: Tuning;
   private st: ScriptState;
+  /** F1: lead-ins, the after phase and the eased motion of every scripted look. */
+  readonly fightAim: FightAim;
+  /** F1: the pawns' modes of the current step (`actions` runs before the inputs every step); derived, not state. */
+  private modesNow: readonly PawnMode[] = [];
 
   constructor(model: RoundModel, schedule: EventSchedule, tuning: Tuning) {
     this.model = model;
     this.tuning = tuning;
     this.plan = new ScriptPlan(model, schedule, tuning);
+    this.fightAim = new FightAim(model, this.plan.engagements, tuning.replay, tuning.damage);
     this.st = initialScriptState();
   }
 
@@ -760,6 +768,8 @@ export class ScriptedEvents {
       // Snapshots from before G1 have neither.
       liveSpans: (s.liveSpans ?? []).map((x) => ({ id: x.id, from: x.from, to: x.to })),
       plantShift: s.plantShift ?? 0,
+      // Snapshots from before F1 have none: every look starts from rest.
+      aim: copyMotions(s.aim),
     };
   }
 
@@ -888,6 +898,7 @@ export class ScriptedEvents {
   actions(o: Observe, modes: readonly PawnMode[], out: Action[]): void {
     const tick = o.tick;
     const s = this.st;
+    this.modesNow = modes;
     this.noteBombEvents(o);
 
     // Inventory. A pickup and a switch to the same weapon on one tick send one set_weapon.
@@ -995,28 +1006,36 @@ export class ScriptedEvents {
     const d: DamageTuning = this.tuning.damage;
     const crouching = base.buttons.includes('DUCK');
     const prev: Look = { yaw: prevYaw, pitch: p.pitch };
-    let look: Look | null = null;
+    const aim = this.fightAim;
+    let goal: AimGoal | null = null;
 
     const df = this.plan.defuse;
     const defusing = df !== null && df.id === p.id && this.st.defuseEndedTick === null;
     if (defusing && tick >= df.lookFrom && tick <= df.useTo) {
-      look = lookToward(prev, p.pos, crouching, df.bombPos, d, r.aimTurnRateDegPerTick);
+      // On the bomb by the first USE tick, then held there.
+      goal = { point: df.bombPos, pace: 'hold', shotIn: Math.max(0, df.useFrom - tick) };
     } else {
       const eng = this.activeEngagement(p.id, tick);
       const target = eng === null ? undefined : pawnOf(o, eng.target);
       if (eng !== null && target !== undefined) {
         // G6: track the body only while the engine reports the target in the shooter's sight; otherwise pre-aim at the
-        // recorded spot (no tracking through walls). The recorded damage still lands on its tick.
+        // recorded spot (no tracking through walls). The recorded damage still lands on its tick. F1: a flick onto a
+        // seen target, on target by the next ATTACK tick.
         const seen = p.sees.includes(eng.target);
         const spot = seen ? null : aimSpotAt(eng, tick);
-        if (seen) look = lookToward(prev, p.pos, crouching, bandPoint(target.pos, target.crouching, eng.band, d), d, r.aimTurnRateDegPerTick);
-        else if (spot !== null) look = lookToward(prev, p.pos, crouching, bandPoint(spot.pos, false, eng.band, d), d, r.aimTurnRateDegPerTick);
+        const shotIn = this.nextShotIn(eng, tick);
+        if (seen) goal = { point: bandPoint(target.pos, target.crouching, eng.band, d), pace: 'flick', shotIn };
+        else if (spot !== null) goal = { point: bandPoint(spot.pos, false, eng.band, d), pace: 'hold', shotIn };
       }
     }
-    if (look === null) {
+    // F1: just before an engagement the shooter holds the angle its target appears from; just after, it stays on him.
+    // (Not for an engagement that was dropped, whose shooter went LIVE since it began, or whose target is LIVE now.)
+    goal ??= aim.leadOrAfter(p, o, tick, (key, from, target) => this.decision(key) !== false && !this.wentLiveDuring(p.id, Math.min(from, tick), tick) && modeOf(this.modesNow, target) !== 'LIVE');
+    if (goal === null) {
       const hold = this.holdAt(p.id, tick);
-      if (hold !== null) look = lookToward(prev, p.pos, crouching, hold.point, d, r.aimTurnRateDegPerTick);
+      if (hold !== null) goal = { point: hold.point, pace: 'hold', shotIn: null };
     }
+    let look: Look | null = goal === null ? aim.release(this.st.aim, p.id, prev, { yaw: base.yaw, pitch: base.pitch }, tick) : aim.move(this.st.aim, p, crouching, prev, goal, tick);
 
     const u = this.plan.utility.find((x) => x.id === p.id && tick >= x.selectTick && tick <= x.releaseTick && !this.liveDuring(x.id, x.selectTick, x.restoreTick)) ?? null;
     if (u !== null && tick >= u.attackFrom) look = { yaw: look === null ? base.yaw : look.yaw, pitch: r.throwPitchDeg };
@@ -1056,6 +1075,29 @@ export class ScriptedEvents {
       if (best === null || e.toTick < best.toTick || (e.toTick === best.toTick && (e.fromTick < best.fromTick || (e.fromTick === best.fromTick && compareOrdinal(e.target, best.target) < 0)))) best = e;
     }
     return best;
+  }
+
+  /**
+   * F1: act ticks from `tick` to the shooter's next ATTACK on `eng`'s target (0 = this tick) within the engagement, from
+   * its fire items that go ahead (at the target, or at no recorded target) and its recorded hit ticks (the spots); null
+   * when none is left.
+   */
+  private nextShotIn(eng: Engagement, tick: number): number | null {
+    let best: number | null = null;
+    const note = (t: number): void => {
+      if (t >= tick && t <= eng.toTick && (best === null || t < best)) best = t;
+    };
+    for (const f of this.fireItemsOf(eng.shooter)) {
+      // A shot of the shooter's with no recorded target inside the engagement is at it too.
+      if ((f.target !== eng.target && f.target !== null) || f.toTick < tick || f.fromTick > eng.toTick || this.decision(f.key) === false) continue;
+      for (const a of f.attack) {
+        if (a.to < tick) continue;
+        note(Math.max(a.from, tick));
+        break;
+      }
+    }
+    for (const sp of eng.spots ?? []) note(sp.tick);
+    return best === null ? null : best - tick;
   }
 
   private noteBombEvents(o: Observe): void {
