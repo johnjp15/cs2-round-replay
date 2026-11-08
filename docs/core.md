@@ -270,7 +270,7 @@ window is over). Each take-off is used once (`PuppetState.usedJumps`). Tested wi
 
 ### Snaps on CS2 Mirage (G3)
 
-With 3D movement on the snapped tracks the golden master snaps 8 times instead of main's 6
+With 3D movement on the snapped tracks the golden master snaps 7 times instead of main's 6
 (`tests/golden-round.test.ts` lists them). A puppet only snaps inside a teleport window (an over-speed stretch of its
 track) when it is more than `driftSnapUnits` (96) behind and the human doesn't see it.
 
@@ -282,9 +282,14 @@ track) when it is more than `driftSnapUnits` (96) behind and the human doesn't s
 | cart 1393 | main's cart 1350 | the recording's discontinuity, reached later |
 | snarlbot 633 | new | T ramp: the 2020 z is 80 above CS2's floor there; the track rejoins the recording's floor in one step |
 | donk 1344 | new (main's donk 923 is gone) | Apartments: CS2 raises the floor 32 units where the 2020 floor is flat; the track gets onto it in one step (a jump would do it: the snapping's detours have no jumps yet) |
-| cart 1880 | new | Shop (not A site): the recording walks in at 28.5 s through a full-height doorway the 2020 map had beside the Market window (2020 nav: a floor-level gap at x −2025…−1950 in Shop's north wall); CS2 has the window (42 u sill) and boxes there, and the Shop door is ~350 u west, too far in time |
 
-Gone with T2 (backlog 46): cart 4114, the way back out through that doorway at 63.5–64.3 s (a 138 u jump along the window line). `tools/snap-tracks.ts` `WAYS_ROUND` walks him out by CS2's Shop door instead (63.2–66.5 s, 663 u at 201 u/s; he is in the doorway for his spray at 65.9 s).
+Gone with T2 (backlog 46, #61): cart 1880 and 4114, cart's way into and out of Shop (28.5 s, 63.5–64.3 s) through a
+full-height doorway the 2020 map had beside the Market window (his POV shows the door frame; the 2020 nav has a
+floor-level gap at x −2025…−1950 in Shop's north wall). CS2 has the window there (sill z −128, 38 above B) and boxes;
+the snapped track jumped through the wall in one tick. `tools/snap-tracks.ts` `WAYS_ROUND`: in, he climbs the window
+(a jump at 28.4 s onto the sill, down into Shop by 28.7 s: the only CS2 way in time; V2's fitted eye is in the opening,
+raised, at 28.5 s); out, he walks up the west corridor and through the Shop door (61.5–65.9 s, 437 u at 99 u/s, in the
+doorway at 64.5 s, the video's 64.3), on the recording's B-side spot for his spray at sp4rtan from 65.9 s.
 
 Gone with T1 (`docs/geometry.md`, "barely 33–48 s"): barely 2299 (the recording's drop from Catwalk into the underpass
 at 35.1 s) and barely 2880 (main's 2879, its jump back up at 44.8 s). Both were one level flip of the radar dot over
