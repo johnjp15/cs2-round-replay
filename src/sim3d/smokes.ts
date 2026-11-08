@@ -11,6 +11,7 @@
 import { roundNumber, stableStringify, type GrenadeCs2Tuning, type PlayerId, type Team, type Vec3 } from '../contracts/index';
 import {
   createGrenadeState,
+  createSmoke,
   smokeBlocks,
   smokeDensityAt,
   smokeVoxels,
@@ -80,8 +81,10 @@ export class Cs2Smokes implements SmokeEngine {
     const pops: SmokePop[] = [];
     for (const e of events) {
       if (e.type !== 'smoke_start') continue;
-      // A new cloud: round it as a snapshot would (its centre and grid come from the unrounded impact point).
-      st.engine.smokes = JSON.parse(stableStringify(st.engine.smokes)) as GrenadeState['smokes'];
+      // A new cloud: rebuilt from the rounded pop point (as a restore rebuilds it: snapshots keep only the inputs).
+      const k = st.engine.smokes.findIndex((q) => q.seq === e.seq);
+      const s0 = st.engine.smokes[k];
+      if (s0 !== undefined) st.engine.smokes[k] = this.flood(s0.seq, s0.thrower, s0.team, rv(s0.center), s0.popTick);
       const m = st.seqs.find((s) => s.engine === e.seq);
       if (m !== undefined) pops.push({ seq: m.host, thrower: m.thrower, pos: rv(e.pos) });
     }
@@ -138,12 +141,39 @@ export class Cs2Smokes implements SmokeEngine {
     return this.st !== null;
   }
 
+  /**
+   * The state with each cloud reduced to what makes it (seq, thrower, team, centre, pop tick): a cloud is ~750
+   * voxels, too big for every checkpoint, and the hosts make no bullet or HE holes in it, so it is a pure function of
+   * those (rebuilt on restore, memoised).
+   */
   snapshot(): unknown {
-    return this.st;
+    const st = this.st;
+    if (st === null) return null;
+    return { ...st, engine: { ...st.engine, smokes: st.engine.smokes.map((q) => ({ seq: q.seq, thrower: q.thrower, team: q.team, center: q.center, popTick: q.popTick })) } };
   }
 
   restore(s: unknown): void {
-    this.st = s === null || s === undefined ? null : (JSON.parse(JSON.stringify(s)) as State);
+    if (s === null || s === undefined) {
+      this.st = null;
+      return;
+    }
+    const c = JSON.parse(JSON.stringify(s)) as { engine: Omit<GrenadeState, 'smokes'> & { smokes: { seq: number; thrower: string; team: Team; center: Vec3; popTick: number }[] }; seqs: State['seqs'] };
+    const smokes = c.engine.smokes.map((q) => this.flood(q.seq, q.thrower, q.team, q.center, q.popTick));
+    this.st = { engine: { ...c.engine, smokes }, seqs: c.seqs };
+  }
+
+  private readonly floods = new Map<string, string>();
+
+  /** createSmoke, rounded like a snapshot, memoised by its inputs (a fresh copy each time: cells are mutable). */
+  private flood(seq: number, thrower: string, team: Team, center: Vec3, popTick: number): GrenadeState['smokes'][number] {
+    const key = `${seq}|${thrower}|${team}|${center.x}|${center.y}|${center.z}|${popTick}`;
+    let text = this.floods.get(key);
+    if (text === undefined) {
+      text = stableStringify(createSmoke(seq, thrower, team, center, popTick, this.world, this.t));
+      if (this.floods.size > 32) this.floods.clear();
+      this.floods.set(key, text);
+    }
+    return JSON.parse(text) as GrenadeState['smokes'][number];
   }
 
   clear(): void {
