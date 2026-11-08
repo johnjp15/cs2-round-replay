@@ -102,6 +102,12 @@ const DETOUR_MAX_NODES = 6000;
 const RETIME_SPEED_FACTOR = 1;
 /** retime: a recorded step faster than this × run speed is a gap in the recording (tuning.replay.spikeSpeedFactor). */
 const RETIME_GAP_FACTOR = 1.6;
+/**
+ * lead (K1): an inferred stretch (a reconstructed route, never seen) is walked at no more than this × the recorded
+ * weapon's run speed per step on its way to the next sample that isn't inferred (puppets accelerate and turn corners,
+ * so they hold a little under the run speed).
+ */
+const LEAD_SPEED_FACTOR = 0.9;
 /** reroute: the lag that makes `reroute` look for a shorter way (units), how far back before the lag it starts (samples), the least it must save (units), and its A* budget. */
 const REROUTE_MIN_LAG = 48;
 const REROUTE_BACK = 5;
@@ -743,6 +749,7 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
   const schedule = new EventSchedule(round);
   const weapons = (id: PlayerId) => recordedWeapons(model, schedule, id);
   const retimed: string[] = [];
+  const led: string[] = [];
   const rerouted: string[] = [];
   const tracks: Partial<Record<PlayerId, number[][]>> = {};
   const jumps: Tracks3dJump[] = [];
@@ -820,10 +827,14 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
         detoured++;
       }
     }
-    // Pass 4: where the snapped track is longer than the recording (detours, corners), a puppet running at full speed
-    // can't keep up: let the track fall behind along its own path and catch up where the recording is slower (`retime`).
     const speeds = tr.samples.map((q) => runSpeedOf(weaponAt(weapons(id), q.tick), m));
     const isFrozen = (j: number): boolean => frozenTick(round, id, (tr.samples[j] as { tick: number }).tick);
+    // Pass 4 (K1, `lead`): an inferred route faster than a run before the next seen sample starts earlier instead.
+    const ld = lead(g, snapper, tr.samples, snapped, speeds, m.stepSize, isFrozen);
+    snapped = ld.out;
+    led.push(...ld.notes.map((x) => `${id} ${x}`));
+    // Pass 4a: where the snapped track is longer than the recording (detours, corners), a puppet running at full speed
+    // can't keep up: let the track fall behind along its own path and catch up where the recording is slower (`retime`).
     // The first lag worth it not tried yet, from its start (at most REROUTE_MAX_SPAN samples at a time), then
     // retime again and look again: a long lag is rerouted piece by piece, each piece as short as it can be.
     let rt = retime(g, snapper, tr.samples, snapped, speeds, m.stepSize, isFrozen);
@@ -948,6 +959,9 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
     '',
     `rerouted stretches (a shorter way than the snapped one, ${rerouted.length}):`,
     ...rerouted.map((x) => `  ${x}`),
+    '',
+    `led stretches (an inferred route faster than a run before a seen sample starts earlier along its own path; ${led.length}):`,
+    ...led.map((x) => `  ${x}`),
     '',
     `retimed stretches (the track falls behind the recording along its own path, then catches up; ${retimed.length}):`,
     ...retimed.map((x) => `  ${x}`),
@@ -1074,6 +1088,91 @@ function retime(
   if (lagFrom >= 0) windows.push({ from: lagFrom, to: n - 1, maxLag, forced: false });
   if (lagFrom >= 0) notes.push(`${(rec[lagFrom] as { t: number }).t.toFixed(1)} s–end: up to ${maxLag.toFixed(0)} u behind at the end`);
   return { out, notes, windows };
+}
+
+/**
+ * Pass 4 (`lead`, K1): an inferred stretch (CT routes outside sightings: reconstructed, never seen) can't be faster
+ * than its runner. Where the inferred samples before an anchor (the next sample that isn't inferred, or a frozen one,
+ * or a jump's take-off or landing) cover more path than LEAD_SPEED_FACTOR × run speed allows, the stretch starts
+ * earlier: with S the 2D arc length along the snapped samples, L_a = S_a at the anchor and L_i = max(S_i,
+ * L_{i+1} − A_{i+1}) going back, A the allowed step; a sample whose L_i > S_i moves ahead along the path to L_i (at
+ * the allowed stand level there nearest the path's z), and the lead ends where the inferred route was slow enough to
+ * absorb it. A lead that would reach back past the inferred stretch's first sample is capped there (the puppet still
+ * lags after it, as `retime` reports). Seen samples never move. Sp4rtaN 57.0–58.5 s (down the Apartments stairs to
+ * B in 1.6 s, 330 u/s with an AK): without this his puppet was 190 u behind at barely's kill (docs/round-data.md).
+ */
+function lead(
+  g: MapGeometry,
+  snapper: Snapper,
+  rec: readonly { t: number; confidence: string }[],
+  snapped: readonly SnappedSample[],
+  speeds: readonly number[],
+  step: number,
+  frozen: (i: number) => boolean,
+): { out: SnappedSample[]; notes: string[] } {
+  const n = snapped.length;
+  const S: number[] = [0];
+  for (let i = 1; i < n; i++) {
+    const a = snapped[i - 1] as SnappedSample;
+    const b = snapped[i] as SnappedSample;
+    S.push((S[i - 1] as number) + Math.hypot(b.x - a.x, b.y - a.y));
+  }
+  const out = snapped.slice();
+  const notes: string[] = [];
+  const fixed = (i: number): boolean =>
+    (rec[i] as { confidence: string }).confidence !== 'inferred' || frozen(i) || (snapped[i] as SnappedSample).jump !== undefined || (i > 0 && (snapped[i - 1] as SnappedSample).jump !== undefined);
+  const allow = (i: number): number =>
+    LEAD_SPEED_FACTOR * Math.max(speeds[i - 1] as number, speeds[i] as number) * ((rec[i] as { t: number }).t - (rec[i - 1] as { t: number }).t);
+  // The spot at arc length r (S[k − 1] ≤ r ≤ S[k]) at an allowed stand level near the path's z; null if none.
+  const at = (r: number, i: number): SnappedSample | null => {
+    let k = 1;
+    while (k < n - 1 && (S[k] as number) < r) k++;
+    const a = snapped[k - 1] as SnappedSample;
+    const b = snapped[k] as SnappedSample;
+    const len = (S[k] as number) - (S[k - 1] as number);
+    const f = len > 0 ? Math.min(1, Math.max(0, (r - (S[k - 1] as number)) / len)) : 1;
+    const x = q32(a.x + (b.x - a.x) * f);
+    const y = q32(a.y + (b.y - a.y) * f);
+    const lv = snapper.levels(x, y, a.z + (b.z - a.z) * f, Math.abs(b.z - a.z) + step)[0];
+    if (lv === undefined) return null;
+    const own = snapped[i] as SnappedSample;
+    return { ...withoutJump(own), x, y, z: q32(lv), kind: 'far', dxy: own.dxy + Math.hypot(own.x - x, own.y - y), connected: true };
+  };
+  for (let anchor = 1; anchor < n; anchor++) {
+    if (!fixed(anchor) || fixed(anchor - 1)) continue;
+    // anchor − 1 is inferred: walk back while the lead lasts.
+    let L = S[anchor] as number;
+    let first = anchor;
+    let maxLead = 0;
+    let capped = false;
+    const L_: number[] = [];
+    for (let i = anchor - 1; i >= 0; i--) {
+      const want = L - allow(i + 1);
+      if (want <= (S[i] as number)) break;
+      if (fixed(i)) {
+        capped = true;
+        break;
+      }
+      L = want;
+      L_[i] = L;
+      first = i;
+      maxLead = Math.max(maxLead, L - (S[i] as number));
+    }
+    if (first === anchor) continue;
+    let moved = 0;
+    for (let i = first; i < anchor; i++) {
+      const spot = at(L_[i] as number, i);
+      if (spot === null) continue;
+      const prev = out[i - 1] as SnappedSample | undefined;
+      if (prev !== undefined && !hullLineClear(g, prev, spot, step)) continue;
+      out[i] = spot;
+      moved++;
+    }
+    const t0 = (rec[first] as { t: number }).t;
+    const t1 = (rec[anchor] as { t: number }).t;
+    notes.push(`${t0.toFixed(1)}–${t1.toFixed(1)} s: up to ${maxLead.toFixed(0)} u ahead (${moved}/${anchor - first} samples moved)${capped ? `; capped at ${t0.toFixed(1)} s (a fixed sample before it): the rest lags` : ''}`);
+  }
+  return { out, notes };
 }
 
 /** A stretch where `retime` leaves the track behind: samples from..to − 1 lag, `to` is back on the snapped track. */

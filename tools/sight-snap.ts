@@ -8,7 +8,7 @@
  * little as it can so that every recorded duel is in sight on the mesh (docs/vision.md "Recorded duels").
  *
  * Duels: each trusted sighting of the vision labels (tools/vision-labels.ts: both ends backed by observed samples, not
- * excluded with evidence) whose window holds a trusted hit or kill between the pair. From the sighting's t0 until the
+ * excluded with evidence, or excluded for a position the pass fixes: `SNAP_FIXES`) whose window holds a trusted hit or kill between the pair. From the sighting's t0 until the
  * window ends (its t1, or the death of either), at every 10 Hz sample both must see each other (MeshSight, standing;
  * where a pawn's snapped track moves slower than SIGHT_PARAMS.crouchBelow but isn't standing still
  * (`replay.standSpeedThreshold`), crouched too, since the puppet may crouch-walk there).
@@ -27,7 +27,7 @@ import type { MeshSight } from '../src/sim2d/mesh-sight';
 import { SEES_AB, SEES_BA } from '../src/sim2d/vision';
 import { hullLineClear } from '../src/sim2d/walk-query';
 import type { Snapper, SnappedSample } from './snap-tracks';
-import { buildMustSee } from './vision-labels';
+import { SNAP_FIXES, buildMustSee } from './vision-labels';
 
 export const SIGHT_PARAMS = {
   /** How far a sample may move for sight (units), and the candidate grids inside and outside the duel window. */
@@ -57,7 +57,7 @@ export interface Duel {
 
 /** The recorded duels the pass enforces (see the file comment), in label order. */
 export function recordedDuels(round: RoundData): Duel[] {
-  const labels = buildMustSee(round).filter((m) => m.excluded === null);
+  const labels = buildMustSee(round).filter((m) => m.excluded === null || SNAP_FIXES.has(m.id));
   const out: Duel[] = [];
   for (const s of labels) {
     if (s.source !== 'sighting') continue;

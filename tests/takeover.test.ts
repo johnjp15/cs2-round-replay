@@ -116,10 +116,9 @@ describe('a takeover at T (G4)', () => {
       const cart = g.observe.pawns.find((p) => p.id === 'cart');
       expect(logsAt(r, k)[0]).toBe(`takeover: cart is the human from tick ${k} (${cart?.hp ?? 0} hp, ${cart?.weapon ?? ''}); 11 damage blocks lifted`);
       // Nothing moves him (a puppet's own snap on that tick, barely's at 45 s, is the golden master's too), and nothing
-      // re-blocks him but the recorded duel he is in (G5: taken over at the window, 17.6–18.6 s, his bullets on Lokier).
+      // re-blocks him: D1 (John 13:10), his bullets are real inside his recorded duels too (G5 blocked cart>lokier at 18–18.6 s).
       const reblocked = e.act.actions.flatMap((a) => (a.type === 'block_damage' && (a.attacker === 'cart' || a.victim === 'cart') ? [`${a.attacker}>${a.victim}`] : []));
-      // G6: not at 17.6 s: Lokier sees him at the window from tick 1138 on the CS2 mesh, after that takeover.
-      expect(reblocked, `T = ${t}`).toEqual(t >= 18 && t <= 18.6 ? ['cart>lokier'] : []);
+      expect(reblocked, `T = ${t}`).toEqual([]);
       expect(e.act.actions.some((a) => (a.type === 'teleport' || a.type === 'set_mode') && a.id === 'cart')).toBe(false);
       // From the takeover on: HUMAN since T while alive, never in the Core's inputs, no scripted damage to or from him.
       for (let i = k; i < r.entries.length; i++) {
@@ -184,16 +183,18 @@ describe('a takeover at T (G4)', () => {
     // Lokier outlives an idle cart; barely, LIVE to kill him, rejoins and plants 7 ticks late (as in never-peeks).
     // T1: as in never-peeks, barely (LIVE again from sp4rtan's gunfire at cart) holds Catwalk now and kills Zwomp,
     // walking up it on his inferred route, for real at 2650 instead of the tape's 2829 (docs/core.md "Results: never-peeks").
-    const late = [1768, 2650, 3222, 3766, 4275];
+    // G8: plant 6 ticks late (1767: his LIVE leg jumps onto the Balcony's sill), and with G8's LIVE movement barely
+    // doesn't catch Zwomp before he is back on his tape: the tape's kill (2829).
+    const late = [1767, 2829, 3222, 3766, 4275];
     expect(got).toEqual({
       '0': { end: defuse, events: late },
       '5': { end: defuse, events: late },
       // Cart idle at the Apartments window: sp4rtan's recorded flank comes through the Apartments; he sees cart (off
       // course; G6: on the CS2 mesh only at 49.2–49.6 s, from the corridor), goes LIVE, kills donk (LIVE when hit) a
       // little before the tape's 50.34 s, then cart, and rejoins (before G6 he saw him through the mask at ~47.6 s).
-      '17.6': { end: defuse, events: [1768, 2829, 3190, 3766, 4275] },
-      '18': { end: defuse, events: [1768, 2829, 3193, 3766, 4275] },
-      '18.6': { end: defuse, events: [1768, 2829, 3214, 3766, 4275] },
+      '17.6': { end: defuse, events: [1767, 2829, 3190, 3766, 4275] },
+      '18': { end: defuse, events: [1767, 2829, 3193, 3766, 4275] },
+      '18.6': { end: defuse, events: [1767, 2829, 3214, 3766, 4275] },
       '30': { end: defuse, events: tape },
       '45': { end: defuse, events: tape },
       '60': { end: defuse, events: tape },
