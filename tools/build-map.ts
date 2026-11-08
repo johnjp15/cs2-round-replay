@@ -48,6 +48,8 @@ const SPAWNS_PER_TEAM = 5;
 const SPAWN_SPACING = 56;
 /** Bomb-site rects grow by this much around the outline and the planter spots (units); z band below / above the nav. */
 const SITE_MARGIN = 64;
+/** B2: how far past the planter spots' bounding box a Mirage plant zone reaches (CS2's real func_bomb_target boxes need the BSP). */
+const SITE_CLIP = 130;
 const SITE_Z_BELOW = 32;
 const SITE_Z_ABOVE = 96;
 
@@ -307,6 +309,16 @@ export function mapInfo(facts: MapFacts, src: MapSource, file: Cs2NavFile, nav: 
       const l = legacyPlaceRects(s.legacyPlace);
       rects = l.rects;
       z = { zMin: l.zMin, zMax: l.zMax };
+      // B2: the 2020 nav paints every area around a site with its place (B reaches Apartments and Market: 1,500 x 950
+      // units). The plant zone is the planter spots' bounding box grown by SITE_CLIP (some CS2 planter spots fall in gaps of the 2020 nav), z from the CS2 nav floors in it.
+      if (planter.length > 0) {
+        const bx1 = Math.min(...planter.map((p) => p[0])) - SITE_CLIP;
+        const bx2 = Math.max(...planter.map((p) => p[0])) + SITE_CLIP;
+        const by1 = Math.min(...planter.map((p) => p[1])) - SITE_CLIP;
+        const by2 = Math.max(...planter.map((p) => p[1])) + SITE_CLIP;
+        rects = [{ x1: bx1, y1: by1, x2: bx2, y2: by2 }];
+        z = navZ(rects);
+      }
     } else {
       // The radar outline and the planter spots, grown by SITE_MARGIN: one bounding rect.
       const xs: number[] = [];

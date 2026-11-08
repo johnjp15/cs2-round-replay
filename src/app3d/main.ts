@@ -16,8 +16,9 @@
  * The view is CS2's (view-cs2.ts, with sources): mouse counts × sensitivity × m_yaw / m_pitch (0.022°), no
  * acceleration; FOV 90° horizontal at 4:3, hor+ on wider screens (vertical ≈ 73.74°); scoped FOVs and the zoomed
  * sensitivity (mouse 2 with the AWP / SSG 08); viewmodel_fov 60 in its own camera; the eye eases between 64 and 46
- * through a duck. Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b);
- * the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
+ * through a duck at CS2's duck speed (M2: 0.166 s, smooth in the air too); the human's own camera is predicted a tick
+ * ahead (Sim3DHost.predictHumanMove, as CS2 predicts the local player), the other pawns are drawn between two ticks.
+ * Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b); the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
  * shake; the crosshair stays at the centre (CS2's cl_crosshair_recoil 0; "Crosshair follows recoil" puts it where the
  * next bullet goes). W1: Q lastinv, F inspect, the knife's slash / stab, wheel jump, the round hotkeys (Enter, P,
  * Backspace twice) and the Ctrl+W / Ctrl+scroll guards (docs/app3d.md "Controls").
@@ -29,7 +30,7 @@ import tuningJson from '../../data/tuning.json';
 import { parseMapId, type Observe, type PawnObs, type PlayerId, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { FixedLoop, TICK_MS } from '../app/loop';
-import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
+import { Scene, interpolationAlpha, lerpAngle, type Pose } from '../app/scene';
 import { Session, parseSessionData, type SessionData } from '../app/session';
 import { SummaryCache } from '../app/run-entries';
 import { weaponName } from '../app/hud-model';
@@ -67,7 +68,7 @@ import {
   VIEWMODEL_FOV_MAX,
   VIEWMODEL_FOV_MIN,
   VIEW_RECOIL_TRACKING,
-  duckStep,
+  ViewEye,
   effectiveSensitivity,
   eyeHeightFor,
   verticalFov,
@@ -273,8 +274,8 @@ class App3D {
   private autoFullscreen = true;
   /** L1: the bottom menu is slid out of view (the ` key, the ▾ Hide button, the Hide menu setting). */
   private barHidden = false;
-  /** The camera's duck amount (0..1, view-cs2.ts duckStep). */
-  private duck = 0;
+  /** The camera's duck and its eye height above the drawn feet (view-cs2.ts ViewEye, M2). */
+  private readonly viewEye = new ViewEye();
   private session: Session;
   private scene: Scene;
   private phase: Phase = 'ready';
@@ -947,14 +948,27 @@ class App3D {
     }
     if (!firstPerson && this.zoom !== 0) this.setZoom('', 0);
     const viewId = firstPerson ? (human as PlayerId) : this.followed;
-    const vp = this.scene.pose(viewId, alpha);
     const vo = this.scene.pawn(viewId);
+    // M2: the human's own camera is predicted (as CS2 predicts the local player): drawn from this tick toward the next
+    // one the host will run with his input (Sim3DHost.predictHumanMove), not from the last tick to this one, so he sees
+    // a landing when the sim lands. Everything else is drawn between the last two ticks.
+    const next = firstPerson && !exact && !this.loop.paused && vo !== null ? this.host(s).predictHumanMove() : null;
+    const cur = this.scene.cur.tick;
+    const vp: Pose | null =
+      next === null || vo === null
+        ? this.scene.pose(viewId, alpha)
+        : { x: vo.pos.x + (next.pos.x - vo.pos.x) * alpha, y: vo.pos.y + (next.pos.y - vo.pos.y) * alpha, z: vo.pos.z + (next.pos.z - vo.pos.z) * alpha, yaw: vo.yaw };
     const crouch = vo?.crouching ?? false;
-    if (this.lastView !== viewId) this.duck = crouch ? 1 : 0;
+    if (this.lastView !== viewId || exact) this.viewEye.reset(crouch);
     this.lastView = viewId;
-    this.duck = exact ? (crouch ? 1 : 0) : duckStep(this.duck, crouch, Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000));
+    const before = this.scene.prev?.pawns.find((p) => p.id === viewId);
+    const ends =
+      next !== null && vo !== null
+        ? { a: { tick: cur, crouching: vo.crouching, onGround: vo.onGround }, b: { tick: cur + 1, crouching: next.crouching, onGround: next.onGround } }
+        : { a: before === undefined || this.scene.prev === null ? null : { tick: this.scene.prev.tick, crouching: before.crouching, onGround: before.onGround }, b: { tick: cur, crouching: crouch, onGround: vo?.onGround ?? true } };
+    const dtSec = Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000);
     this.lastDraw = now;
-    this.eyeZ = eyeHeightFor(this.duck);
+    this.eyeZ = exact ? eyeHeightFor(crouch ? 1 : 0) : this.viewEye.step(ends.a, ends.b, alpha, dtSec, this.tuning.movement.airDuckLift);
     let eye: Vec3;
     let yaw: number;
     let pitch: number;
@@ -1109,6 +1123,7 @@ class App3D {
       nowMs: now,
       items: this.host(s).pawnState(viewId)?.inventory.map((q) => q.item) ?? null,
       teamDamage: { feed: this.teamDamage.feed(o.tick), hint: this.teamDamage.hint(human, o.tick) },
+      plant: firstPerson && human !== null ? this.host(s).plantHud(human) : undefined,
     });
     const r2 = performance.now();
     if (this.probing) this.probe.mark('hud', r2);

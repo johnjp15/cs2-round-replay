@@ -601,6 +601,20 @@ export class Sim3DHost implements IHost {
     return JSON.parse(JSON.stringify(this.bomb)) as BombData;
   }
 
+  /**
+   * B2: what the planter's HUD shows for pawn `id`: the plant progress (0..1) while it plants, and `needZone` while
+   * it holds USE / ATTACK with the c4 drawn outside a bombsite (CS2: "You must be in a bomb zone to plant").
+   */
+  plantHud(id: PlayerId): { progress: number | null; needZone: boolean } {
+    const p = this.pawn(id);
+    const pl = this.bomb.plant;
+    if (p === null) return { progress: null, needZone: false };
+    if (pl !== null && pl.id === id) return { progress: Math.max(0, Math.min(1, (this.tickNo - pl.startTick) / (pl.endTick - pl.startTick))), needZone: false };
+    const bp = this.bombPawns().find((q) => q.id === id);
+    const needZone = bp !== undefined && p.alive && p.team === 'T' && p.weapon === 'c4' && this.bomb.state === 'carried' && bp.use && !bp.inSite;
+    return { progress: null, needZone };
+  }
+
   /** Deep copy of the round state (score, end, round clock). */
   roundState(): RoundState {
     return JSON.parse(JSON.stringify(this.round)) as RoundState;
@@ -698,35 +712,8 @@ export class Sim3DHost implements IHost {
         p.move = roundMove({ ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } });
         continue;
       }
-      const input = this.inputFor(p.id);
-      const isLocked = locked.includes(p.id);
-      const from = p.move.pos;
-      const lockedInput = input === null ? null : { ...input, forward: 0, side: 0, buttons: input.buttons.filter((b) => b !== 'JUMP') };
-      const base: MoveState = isLocked ? { ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } } : p.move;
-      const step: MoveStep = stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT, this.moveOptionsFor(p, input));
-      let next = step.state;
-      if (!isLocked) {
-        const obstacles = this.solidFor(p, next);
-        if (obstacles.length > 0) {
-          const c = collideMove(from, next.pos, obstacles, this.tuning.collision.pawnRadius, new HullClamp(g, next.pos.z, hullOf(next.crouching)));
-          if (c.blockedBy !== null) {
-            let z = next.pos.z;
-            let x = c.x;
-            let y = c.y;
-            if (g.hullBlocked(x, y, z, hullOf(next.crouching))) {
-              // Back where it was in xy, at its old height if that fits (else it doesn't move at all).
-              if (!g.hullBlocked(x, y, from.z, hullOf(next.crouching))) z = from.z;
-              else {
-                x = from.x;
-                y = from.y;
-                z = from.z;
-              }
-            }
-            next = { ...next, pos: { x, y, z }, vel: { x: (x - from.x) / TICK_DT, y: (y - from.y) / TICK_DT, z: next.vel.z } };
-            p.blockedBy = c.blockedBy;
-          }
-        }
-      }
+      const { step, next, blockedBy } = this.nextMove(p, locked.includes(p.id));
+      if (blockedBy !== null) p.blockedBy = blockedBy;
       p.move = roundMove(next);
       if (step.landSpeed >= m.landSoundSpeed) this.sound(p, 'land');
       if (step.fallDamage > 0) this.hurt(null, p, null, 'generic', step.fallDamage, 0, false, false);
@@ -736,6 +723,61 @@ export class Sim3DHost implements IHost {
         p.nextFootstepTick = roundNumber(t + snd.footstepIntervalSec * TICKS_PER_SEC);
       }
     }
+  }
+
+  /**
+   * One alive pawn's move this tick from its current state and input, without changing anything: `stepMove3d` (a
+   * locked pawn keeps its position, still turning and crouching), then cut against the solid pawns. `moveAll` applies
+   * it; `predictHumanMove` shows it.
+   */
+  private nextMove(p: PawnState, isLocked: boolean): { step: MoveStep; next: MoveState; blockedBy: PlayerId | null } {
+    const m = this.tuning.movement;
+    const g = this.geometry;
+    const input = this.inputFor(p.id);
+    const from = p.move.pos;
+    const lockedInput = input === null ? null : { ...input, forward: 0, side: 0, buttons: input.buttons.filter((b) => b !== 'JUMP') };
+    const base: MoveState = isLocked ? { ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } } : p.move;
+    const step: MoveStep = stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT, this.moveOptionsFor(p, input));
+    let next = step.state;
+    if (!isLocked) {
+      const obstacles = this.solidFor(p, next);
+      if (obstacles.length > 0) {
+        const c = collideMove(from, next.pos, obstacles, this.tuning.collision.pawnRadius, new HullClamp(g, next.pos.z, hullOf(next.crouching)));
+        if (c.blockedBy !== null) {
+          let z = next.pos.z;
+          let x = c.x;
+          let y = c.y;
+          if (g.hullBlocked(x, y, z, hullOf(next.crouching))) {
+            // Back where it was in xy, at its old height if that fits (else it doesn't move at all).
+            if (!g.hullBlocked(x, y, from.z, hullOf(next.crouching))) z = from.z;
+            else {
+              x = from.x;
+              y = from.y;
+              z = from.z;
+            }
+          }
+          next = { ...next, pos: { x, y, z }, vel: { x: (x - from.x) / TICK_DT, y: (y - from.y) / TICK_DT, z: next.vel.z } };
+          return { step, next, blockedBy: c.blockedBy };
+        }
+      }
+    }
+    return { step, next, blockedBy: null };
+  }
+
+  /**
+   * M2 (docs/movement.md "M2"): the human pawn's movement state one tick ahead, as the next `tick()` will move it
+   * with the stored human input, changing nothing. CS2 (as Source) predicts the local player: the client runs the
+   * same movement code on its own input at once and draws other players in the past (entity interpolation); the 3D
+   * app draws the human's camera between the current tick and this, so a landing shows when the sim lands (a press
+   * on it is in time for a perfect bunny hop) instead of a tick later. Not predicted: what the tick does after the
+   * move (damage, items) and pawns that move earlier in the same tick. null: no human, no input or not alive.
+   */
+  predictHumanMove(): MoveState | null {
+    if (this.human === null || this.humanInput === null) return null;
+    const p = this.pawn(this.human);
+    if (p === null || !p.alive) return null;
+    const locked = lockedPawns(this.bomb, this.tickNo, this.bombPawns(), this.tuning.bomb);
+    return roundMove(this.nextMove(p, locked.includes(p.id)).next);
   }
 
   private pawnIndex(id: PlayerId): number {
@@ -1250,9 +1292,15 @@ export class Sim3DHost implements IHost {
   private bombPawns(): BombPawn[] {
     return this.pawns.map((p) => {
       const input = this.inputFor(p.id);
-      const use = input !== null && input.buttons.includes('USE');
+      const useHeld = input !== null && input.buttons.includes('USE');
       const hasC4 = p.inventory.some((q) => q.item === 'c4');
-      const inSite = p.alive && p.team === 'T' && use && p.weapon === 'c4' && this.nav.inBombsite(p.move.pos);
+      // B2: CS2 plants with the c4 drawn and USE or ATTACK held. The c4 must be out (deployed, 1.233 s) before the 3.2 s arm
+      // starts, for the human and LIVE pawns (a puppet's recorded plant is scripted and keeps its tape timing).
+      const mech = p.id === this.human ? input !== null : this.mechanical(p);
+      const planter = p.team === 'T' && p.weapon === 'c4';
+      const plantKey = useHeld || (planter && mech && input !== null && input.buttons.includes('ATTACK'));
+      const use = planter ? plantKey && (!mech || reached(this.tickNo, p.wpn.deployEndTick)) : useHeld;
+      const inSite = p.alive && planter && use && this.nav.inBombsite(p.move.pos);
       return { id: p.id, team: p.team, pos: copyVec(p.move.pos), alive: p.alive, weapon: p.weapon, use, hasC4, hasKit: p.inventory.some((q) => q.item === 'defuser'), inSite };
     });
   }
