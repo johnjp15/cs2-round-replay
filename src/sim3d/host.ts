@@ -882,7 +882,8 @@ export class Sim3DHost implements IHost {
       const mech = ctx !== null && this.mechanical(p);
       const pen = mech && ctx !== null ? { weapon: weaponDef(ctx.table, this.armsWeapon(p.weapon)), query: (this.solids ??= meshSolidQuery(world)), model: ctx.model } : null;
       const shot = mech ? traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir, pen) : traceShot3(shotPawn(p), targets, world, this.tuning.damage);
-      this.shotsOut.push(mech || dir === null ? shot : traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir));
+      const drawn = mech || dir === null ? shot : traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir);
+      this.shotsOut.push({ ...drawn, tracer: this.tracerFor(p, held === null ? null : held.clip) });
       if (shot.victim !== null && shot.hitgroup !== null) {
         const victim = this.pawn(shot.victim) as PawnState;
         // Open air: the 2D table's damage (as before); through a wall: the damage penetration left, then hitgroup and armor.
@@ -1100,6 +1101,20 @@ export class Sim3DHost implements IHost {
   }
 
   // ---- damage --------------------------------------------------------------------------------
+
+  /**
+   * W3: whether this bullet draws a tracer (CS `CCSPlayer::CreateWeaponTracer`): bullet number n = clip size − rounds
+   * left before the shot + 1, a tracer when n % TracerFrequency = 0 (weapons.vdata `m_nTracerFrequency`: rifles and
+   * SMGs 3, pistols and snipers 1, 0 = never). Without the weapon table: always.
+   */
+  private tracerFor(p: PawnState, clipBefore: number | null): boolean {
+    const ctx = this.armsCtx;
+    const w = ctx === null ? undefined : ctx.table.weapons[p.weapon];
+    if (w === undefined || clipBefore === null) return true;
+    const freq = w.tracerFrequency;
+    const n = w.clip - clipBefore + 1;
+    return freq !== 0 && n % freq === 0;
+  }
 
   /** Bullet or grenade damage: skipped (logged) for a blocked pair, else applied. */
   private engineDamage(attacker: PlayerId, victim: PawnState, weapon: WeaponId, hitgroup: Hitgroup, dmg: HitDamage): void {
