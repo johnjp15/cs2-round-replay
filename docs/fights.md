@@ -118,6 +118,13 @@ Rows that stay as they were, and why:
 eradicate 0.22 s sooner (57.39 vs 57.61) and kills him at 57.88 instead of 58.00; barely then kills sp4rtan at 60.30
 instead of 60.08. Every REPLAY-only fight is as in the golden master.
 
+Takeovers (`tests/takeover.test.ts`, cart idle after taking control): at 17.6 s Lokier, pre-aiming the Apartments window
+from 16.0 s, sees the idle cart at tick 1146 (+0.5 s, on course: the hit is due on the recorded tick 1184), but his
+recorded peek takes him out of sight of that spot first (1183): no hit, he goes LIVE holding, barely kills him at
+20.36 s and plants on the tape's tick (before: seen at 1202, hit at 1266, plant 6 ticks late). At 18.6 s sp4rtan's
+lead-in for donk changes when he sees cart and goes LIVE; LIVE, he kills donk 7 ticks sooner (3207). Digests:
+golden no-human `81b488a8`, never-peeks with rejoin off `7c824e6e` (`tests/rejoin.test.ts`).
+
 ## Frames (video | main | this branch)
 
 From the shooter's eyes in the 3D app (`tools/fight-shots.ts`, headless, `npm run build:3d` on each side), next to the
