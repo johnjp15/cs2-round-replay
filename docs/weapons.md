@@ -261,7 +261,7 @@ patterns')`, unless named otherwise.
 | G7 | Spread vs inaccuracy | Two independent cones, inaccuracy (penalty + movement + air) and `m_flSpread`, summed (`fFinalInaccuracy = fInaccuracy + fSpread`, S9). `weapon_accuracy_nospread false` and `weapon_accuracy_shotgun_spread_patterns true` (S2) | two cones from the seeded RNG | G7, `weapons-spray` | matches the structure. Finding: CS:GO seeds each shot from the command's random seed `& 255` and draws inside code that isn't in the published source, so the sim's per-shot cone values are its own (same distribution); shotgun spread patterns are not modelled |
 | G8 | Aim / view punch | `HybridDecay(aim, 8, 18)` (× e^(−8 dt), then length −18 dt), velocity half-steps with `e^(−4.5 dt)`; view punch += kick × 0.055, decays with `view_punch_decay` 18 (S9; 18 verified in S2) | same | `weapons-spray` "camera, crosshair and punch" | matches |
 | G9 | Air, take-off, landing | S9 (2020): floor stand + `m_flInaccuracyJump` × `weapon_air_spread_scale`; air term `RemapVal(√\|vz\|, 0.25√J, √J, 0, m_flInaccuracyJumpInitial)`, clamped to [0, 2 × JumpInitial]; recovery in the air = crouch × 4; no take-off penalty (`OnJump` is empty); landing adds `m_flInaccuracyLand × fall speed` and an aim punch | floor stand + `JumpApex`; take-off adds `JumpInitial`; air term `airScale × m_flInaccuracyJump`; landing adds `Land × airSpreadScale` | `weapons-engine` "jump and land" | **finding**: CS2 has `m_flInaccuracyJumpApex`, which the 2020 code doesn't read, so CS2's air model changed and S9 doesn't settle it. Proposed: take S9's air term (JumpInitial, 2× cap) and landing (× fall speed) once a CS2 measurement of a jump shot exists |
-| G10 | Moving inaccuracy | `RemapValClamped(speed, max × 0.34, max × 0.95, 0, 1)`, then `^ MOVEMENT_CURVE01_EXPONENT` = **0.25** unless walking (shift: linear), × `m_flInaccuracyMove` (S9) | exponent `moveCurveExponent` 1 | `weapons-engine` "inaccuracy model" | **finding for W3** (owns the move-inaccuracy curve): exponent 0.25 when not walking. At half the band that is 84 % of the move inaccuracy, not 50 % |
+| G10 | Moving inaccuracy | `RemapValClamped(speed, max × 0.34, max × 0.95, 0, 1)`, then `^ MOVEMENT_CURVE01_EXPONENT` = **0.25** unless walking (shift: linear), × `m_flInaccuracyMove` (S9) | **fixed by W3**: `moveCurveExponent` 0.25, `moveWalkCurveExponent` 1 (Motion.walking = WALK held) | `weapons-engine` "inaccuracy model", `sim3d-ff-move` | matches. At half the band a run is 84 % of the move inaccuracy (walking: 50 %) |
 | G11 | Inaccuracy cap | `fAccuracy ≤ 1` (S9) | `maxInaccuracy` 1 | — | matches |
 | G12 | Fire rate | `m_flCycleTime` (S1; AK 0.1 s). Held fire: next attack = previous + cycle, served on the tick it falls in (64 tick: AK on ticks 0, 7, 13, 20, …) | same, fractional cadence | "AK-47 held for 1.0 s" | matches at 64 tick. Finding: CS2's sub-tick timestamps each shot inside the tick; the punch and decay in between are then sub-tick too. The sim fires on tick boundaries (≤ 1/64 s early or late per shot) |
 | G13 | Scoped weapons | Per-mode inaccuracy and spread (scoped = alt mode, S1); `m_nZoomLevels`, `m_nZoomFOV1/2`, `m_bUnzoomsAfterShot` (S1) | same, from the table | `weapons-engine` scope tests | matches. `m_flInaccuracyAltSoundThreshold` only affects sound: not modelled |
@@ -421,6 +421,7 @@ direction from view + aim punch × `recoilScale` (1.884) + the cone, RNG `Rng(se
 | first shot crouched | 0.00481 | 5.5 u |
 | walking 111.8 u/s (shift) | 0.05807 | 60 u |
 | running 215 u/s | 0.18147 | 186 u |
+| slowing through 111.8 u/s (no shift: the run curve ^0.25) | 0.1354 | 145 u |
 | moving ≤ 73.1 u/s (34 % of 215: counter-strafed) | 0.00641 | 7.2 u (the movement term is instantaneous) |
 | take-off | ≈ 0.239 | 245 u |
 | near the apex | < 0.02 (air term ~0, take-off penalty decaying) | < 21 u |
@@ -442,7 +443,9 @@ All in the game's units (tangent of the cone half-angle; radius at 1,024 u = 1,0
 3. **Shot:** penalty += `fire` (AK 0.0078); take-off adds `jumpInitial` (AK 0.10094), landing adds `land`.
 4. **Inaccuracy at the shot** (`inaccuracy`): penalty + `movementScale × move` + (in the air) `airScale × jump ×
    airSpreadScale`, capped at `maxInaccuracy` 1.
-   - `movementScale` = clamp((speed − 0.34 max) / (0.95 max − 0.34 max), 0, 1)^`moveCurveExponent`, max = the weapon's
+   - `movementScale` = clamp((speed − 0.34 max) / (0.95 max − 0.34 max), 0, 1)^e, e = `moveCurveExponent` 0.25
+     (`MOVEMENT_CURVE01_EXPONENT`, S9 `weapon_csbase.cpp` `GetInaccuracy`) or, holding WALK, `moveWalkCurveExponent` 1
+     (CS's separate walk function, linear); max = the weapon's
      speed in the current mode (AK: 0 up to 73.1 u/s, full from 204.25 u/s).
    - `airScale` = clamp((√|vz| − 0.25 √J) / (√J − 0.25 √J), 0, 2), J = 301.99338 (S2): 1 at take-off, 0 near the apex.
 5. **Direction** (`drawSpread`, `shotDirection`): r1, θ1 (inaccuracy, shared by all pellets), then r2, θ2 per pellet,
@@ -521,7 +524,7 @@ passed beside that frame: it is a position error of the recording, not a wallban
 | viewPunchDecay | 18 | S2 `view_punch_decay` | verified |
 | recoilIndexDecay / recoilIndexDelayCycles | 2 / 1.1 | S9 `weapon_recoil_decay_coefficient` (× ln 10 per second) / `WEAPON_RECOIL_DECAY_THRESHOLD` | CS:GO source (G2) |
 | burstShots | 3 | common knowledge | unverified |
-| moveStartFraction / moveFullFraction / moveCurveExponent | 0.34 / 0.95 / 1 | M (0.34 = CS duck speed modifier, same as `movement.crouchFactor`) | unverified |
+| moveStartFraction / moveFullFraction / moveCurveExponent / moveWalkCurveExponent | 0.34 / 0.95 / 0.25 / 1 | S9 `CWeaponCSBase::GetInaccuracy` (`CS_PLAYER_SPEED_DUCK_MODIFIER` 0.34, 0.95, `MOVEMENT_CURVE01_EXPONENT` 0.25, linear while walking) | CS:GO source (CS2 not public) |
 | airSpreadScale | 1 | S2 `weapon_air_spread_scale` | verified |
 | airLowSpeedFraction / airMaxPenalty | 0.25 / 2 | M | unverified |
 | jumpImpulse | 301.99338 | S2 `sv_jump_impulse` | verified |

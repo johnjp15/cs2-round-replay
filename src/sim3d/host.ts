@@ -834,7 +834,7 @@ export class Sim3DHost implements IHost {
     }
     const ai = this.pawnIndex(p.id);
     const ctx = this.armsCtx;
-    const motion: Motion = { velocity: p.move.vel, onGround: p.move.onGround, crouched: p.move.crouching, onLadder: false };
+    const motion: Motion = { velocity: p.move.vel, onGround: p.move.onGround, crouched: p.move.crouching, onLadder: false, walking: buttons.includes('WALK') };
     if (ctx !== null && ai >= 0) {
       this.arms[ai] = trackArms(ctx, this.arms[ai] as ArmsState, {
         tick: t,
@@ -881,16 +881,20 @@ export class Sim3DHost implements IHost {
       const targets = this.pawns.map((q) => shotPawn(q));
       const mech = ctx !== null && this.mechanical(p);
       const pen = mech && ctx !== null ? { weapon: weaponDef(ctx.table, this.armsWeapon(p.weapon)), query: (this.solids ??= meshSolidQuery(world)), model: ctx.model } : null;
-      const shot = mech ? traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir, pen) : traceShot3(shotPawn(p), targets, world, this.tuning.damage);
+      // W3: mp_friendlyfire: the bullets of a pawn that plays by the mechanics may hit teammates (puppets' never do).
+      const dmgT = mech && this.tuning.damage.mpFriendlyfire && !this.tuning.damage.friendlyFire ? { ...this.tuning.damage, friendlyFire: true } : this.tuning.damage;
+      const shot = mech ? traceShot3(shotPawn(p), targets, world, dmgT, dir, pen) : traceShot3(shotPawn(p), targets, world, this.tuning.damage);
       const drawn = mech || dir === null ? shot : traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir);
       this.shotsOut.push({ ...drawn, tracer: this.tracerFor(p, held === null ? null : held.clip) });
       if (shot.victim !== null && shot.hitgroup !== null) {
         const victim = this.pawn(shot.victim) as PawnState;
+        // W3: a teammate takes ff_damage_reduction_bullets of the damage, before hitgroup and armor.
+        const ff = this.teamDamageRatio(p.id, victim, 'bullet');
         // Open air: the 2D table's damage (as before); through a wall: the damage penetration left, then hitgroup and armor.
         const dmg =
           shot.penDamage !== undefined && pen !== null
-            ? damageAfterHitgroup(pen.weapon, shot.penDamage, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage)
-            : bulletDamage(gun, shot.distance, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
+            ? damageAfterHitgroup(pen.weapon, shot.penDamage * ff, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage)
+            : bulletDamage(ff === 1 ? gun : { ...gun, damage: gun.damage * ff }, shot.distance, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
         // G5: the human's bullet on a blocked pair (a recorded duel, docs/core.md): report where it would have hit.
         if (p.id === this.human && this.isBlocked(p.id, victim.id)) this.outbox.push({ type: 'blocked_hit', attacker: p.id, victim: victim.id, weapon: p.weapon, hitgroup: shot.hitgroup });
         // H2: tagging and hit punch for a hit that lands (not on a blocked pair, so the recording's runs are unchanged).
@@ -921,7 +925,9 @@ export class Sim3DHost implements IHost {
     // bFirstSwing = m_flNextPrimaryAttack + 0.4 < curtime.
     const firstSwing = slashAt + FIRST_SWING_SEC * TICKS_PER_SEC < t;
     const world = this.meshSight.geometry();
-    const tr = traceMelee3(shotPawn(p), this.pawns.map((q) => shotPawn(q)), world, this.tuning.damage, attack, KNIFE_RANGE[attack], KNIFE_HULL_HALF, (q) => hullOf(q.crouching));
+    // W3: with mp_friendlyfire a swing can hit a teammate (× ff_damage_reduction_other below).
+    const dmgT = this.tuning.damage.mpFriendlyfire && !this.tuning.damage.friendlyFire ? { ...this.tuning.damage, friendlyFire: true } : this.tuning.damage;
+    const tr = traceMelee3(shotPawn(p), this.pawns.map((q) => shotPawn(q)), world, dmgT, attack, KNIFE_RANGE[attack], KNIFE_HULL_HALF, (q) => hullOf(q.crouching));
     const d = knifeDelays(attack, tr.victim !== null || tr.wall);
     const next: MeleeTimers = { id: p.id, slash: roundNumber(t + d.slash * TICKS_PER_SEC), stab: roundNumber(t + d.stab * TICKS_PER_SEC) };
     this.melee = [...this.melee.filter((m) => m.id !== p.id), next].sort((a, b) => compareOrdinal(a.id, b.id));
@@ -933,7 +939,7 @@ export class Sim3DHost implements IHost {
     const backstab = isBackstab(p.move.pos, victim.move.pos, victim.move.yaw);
     const raw = knifeDamage(attack, backstab, firstSwing);
     this.swingsOut.push({ ...tr, backstab, damage: raw });
-    const dmg = armorDamage(raw, armorPen(weaponDef(ctx.table, 'knife')), victim.armor, isArmored('generic', victim.helmet), this.tuning.damage);
+    const dmg = armorDamage(raw * this.teamDamageRatio(p.id, victim, 'other'), armorPen(weaponDef(ctx.table, 'knife')), victim.armor, isArmored('generic', victim.helmet), this.tuning.damage);
     if (p.id === this.human && this.isBlocked(p.id, victim.id)) this.outbox.push({ type: 'blocked_hit', attacker: p.id, victim: victim.id, weapon: p.weapon, hitgroup: 'generic' });
     const vi = this.pawnIndex(victim.id);
     if (vi >= 0 && !this.isBlocked(p.id, victim.id)) this.arms[vi] = applyHit(ctx, this.arms[vi] as ArmsState, 'knife', victim.armor > 0);
@@ -1071,7 +1077,8 @@ export class Sim3DHost implements IHost {
       nav: this.grenadeNav,
       pawns: this.pawns.map((p) => ({ id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, alive: p.alive })),
       grenades: this.tuning.grenades,
-      damage: this.tuning.damage,
+      // W3: with mp_friendlyfire the step reports teammates too; applyGrenadeOutcome keeps a puppet's off them.
+      damage: this.tuning.damage.mpFriendlyfire && !this.tuning.damage.friendlyFire ? { ...this.tuning.damage, friendlyFire: true } : this.tuning.damage,
       ai: this.tuning.ai,
     });
     this.grenades = r.grenades;
@@ -1087,7 +1094,13 @@ export class Sim3DHost implements IHost {
       case 'hurt': {
         const victim = this.pawn(o.victim);
         if (victim === null || !victim.alive) return;
-        const dmg = armorDamage(o.damage, o.armorPen, victim.armor, isArmored('generic', victim.helmet), this.tuning.damage);
+        // W3: team damage (the grenades step with friendly fire on, see stepGrenades): only from a thrower that plays
+        // by the mechanics; HE × ff_damage_reduction_grenade, fire × _other; the thrower's own HE × _grenade_self.
+        const thrower = this.pawn(o.thrower);
+        const mate = thrower !== null && thrower.id !== victim.id && thrower.team === victim.team;
+        if (mate && !(this.tuning.damage.friendlyFire || this.mechanical(thrower))) return;
+        const ff = this.teamDamageRatio(o.thrower, victim, o.kind === 'he' ? 'grenade' : 'other');
+        const dmg = armorDamage(o.damage * ff, o.armorPen, victim.armor, isArmored('generic', victim.helmet), this.tuning.damage);
         this.engineDamage(o.thrower, victim, o.kind, 'generic', dmg);
         return;
       }
@@ -1101,6 +1114,22 @@ export class Sim3DHost implements IHost {
   }
 
   // ---- damage --------------------------------------------------------------------------------
+
+  /**
+   * W3: CS2's team-damage ratio (`CCSPlayer::OnTakeDamage`; competitive values from gamemode_competitive.cfg, docs/
+   * combat.md "Friendly fire"): 1 for an enemy (or no attacker); the attacker's own HE × ff_damage_reduction_grenade_self;
+   * a teammate's bullets × _bullets, HE × _grenade, anything else (knife, fire) × _other. 0 for a teammate without
+   * mp_friendlyfire.
+   */
+  teamDamageRatio(attacker: PlayerId | null, victim: Pick<PawnState, 'id' | 'team'>, kind: 'bullet' | 'grenade' | 'other'): number {
+    const a = attacker === null ? null : this.pawn(attacker);
+    if (a === null) return 1;
+    const d = this.tuning.damage;
+    if (a.id === victim.id) return kind === 'grenade' ? d.ffDamageReductionGrenadeSelf : 1;
+    if (a.team !== victim.team) return 1;
+    if (!d.mpFriendlyfire && !d.friendlyFire) return 0;
+    return kind === 'bullet' ? d.ffDamageReductionBullets : kind === 'grenade' ? d.ffDamageReductionGrenade : d.ffDamageReductionOther;
+  }
 
   /**
    * W3: whether this bullet draws a tracer (CS `CCSPlayer::CreateWeaponTracer`): bullet number n = clip size − rounds

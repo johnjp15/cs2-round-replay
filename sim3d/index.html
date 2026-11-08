@@ -67,6 +67,9 @@
       #killfeed div { padding: 2px 8px; }
       #killfeed .t { color: var(--t); } #killfeed .ct { color: var(--ct); } #killfeed .w { color: var(--sand-dim); margin: 0 6px; }
       #killfeed .you { outline: 1px solid #d33; }
+      #killfeed .ff { color: #f0c36a; font-size: 13px; }
+      #ffhint { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); padding: 6px 14px; font-size: 16px; color: #ffd27a; }
+      #ffhint[hidden] { display: none; }
       #minimap { position: absolute; top: 8px; left: 8px; width: 208px; height: 208px; border-radius: 4px; background: rgba(0,0,0,0.55); }
       #teams { position: absolute; top: 224px; left: 8px; width: 208px; font-size: 14px; padding: 4px 6px; }
       #teams .row { display: grid; grid-template-columns: 1fr 50px 34px; gap: 4px; align-items: center; height: 19px; }
@@ -146,6 +149,7 @@
           <div id="spec" class="slab" hidden><div class="l1"><span class="k">SPECTATING</span><b id="spec-name"></b><span id="spec-mode"></span></div><div class="l2" id="spec-stats"></div><div class="l3" id="spec-hints"></div></div>
           <div id="perf"></div>
           <div id="summary" class="slab" hidden></div>
+          <div id="ffhint" class="slab" hidden></div>
         </div>
         <p id="status">Loading the 3D world…</p>
         <p id="kbhint" role="status" hidden></p>

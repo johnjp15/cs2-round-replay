@@ -229,8 +229,10 @@ export interface WeaponModelTuning {
   moveStartFraction: number;
   /** ... and is full at this fraction. */
   moveFullFraction: number;
-  /** Exponent on the 0–1 movement scale (1 = linear). */
+  /** Exponent on the 0–1 movement scale when not walking (CS `MOVEMENT_CURVE01_EXPONENT` 0.25; 1 = linear). */
   moveCurveExponent: number;
+  /** ... and while walking (CS: linear, 1). */
+  moveWalkCurveExponent: number;
   /** Jumping inaccuracy scale (CS2 `weapon_air_spread_scale`). */
   airSpreadScale: number;
   /** In the air: no vertical-speed penalty below this fraction of √(jump impulse) of √|vz| ... */
@@ -549,8 +551,24 @@ export interface DamageTuning {
   pawnRadius: number;
   /** Bullets travel at most this far (units). */
   maxRange: number;
-  /** false = bullets pass through teammates and grenades never hurt the thrower's teammates. */
+  /**
+   * The 2D host's and the pure modules' switch: false = bullets pass through teammates and grenades never hurt the
+   * thrower's teammates. The 3D host uses `mpFriendlyfire` and the ff ratios below instead.
+   */
   friendlyFire: boolean;
+  /**
+   * W3, the 3D host: CS2 `mp_friendlyfire` (competitive: 1). Team damage only from shooters and throwers that play by
+   * the mechanics (the human and LIVE pawns); puppets keep the recording's outcomes.
+   */
+  mpFriendlyfire: boolean;
+  /** CS2 `ff_damage_reduction_bullets` (competitive 0.33): × a teammate's bullet damage (before hitgroup and armor). */
+  ffDamageReductionBullets: number;
+  /** CS2 `ff_damage_reduction_grenade` (competitive 0.85): × a teammate's HE damage. */
+  ffDamageReductionGrenade: number;
+  /** CS2 `ff_damage_reduction_grenade_self` (competitive 1): × the thrower's own HE damage. */
+  ffDamageReductionGrenadeSelf: number;
+  /** CS2 `ff_damage_reduction_other` (competitive 0.4): × a teammate's other damage (knife, fire). */
+  ffDamageReductionOther: number;
   /** Deploy time for held items without their own (knife, c4). */
   defaultDeploySec: number;
   /** false = classic reload (top up from reserve); true = CS2 since March 2026 (the old magazine's rounds are lost). */
@@ -780,6 +798,7 @@ const WEAPON_MODEL_KEYS = [
   'moveStartFraction',
   'moveFullFraction',
   'moveCurveExponent',
+  'moveWalkCurveExponent',
   'airSpreadScale',
   'airLowSpeedFraction',
   'airMaxPenalty',
@@ -963,6 +982,10 @@ const DAMAGE_KEYS = [
   'pawnRadius',
   'maxRange',
   'defaultDeploySec',
+  'ffDamageReductionBullets',
+  'ffDamageReductionGrenade',
+  'ffDamageReductionGrenadeSelf',
+  'ffDamageReductionOther',
 ] as const;
 /** Hitgroups that need a multiplier (head uses the weapon's headshotMult) and the aim bands hitscan picks from. */
 const HITGROUP_MULT_KEYS = ['chest', 'stomach', 'arm', 'leg', 'neck', 'generic'] as const;
@@ -1046,6 +1069,7 @@ export function parseTuning(json: unknown): Tuning {
     hitgroupMult: pickNumbers(asObject(damageObj['hitgroupMult'], 'damage.hitgroupMult'), HITGROUP_MULT_KEYS, 'damage.hitgroupMult'),
     bandHeights: pickNumbers(asObject(damageObj['bandHeights'], 'damage.bandHeights'), BAND_KEYS, 'damage.bandHeights'),
     friendlyFire: asBoolean(damageObj['friendlyFire'], 'damage.friendlyFire'),
+    mpFriendlyfire: asBoolean(damageObj['mpFriendlyfire'], 'damage.mpFriendlyfire'),
     reloadDiscardsMagazine: asBoolean(damageObj['reloadDiscardsMagazine'], 'damage.reloadDiscardsMagazine'),
   };
   const collisionObj = asObject(root['collision'], 'collision');
