@@ -43,8 +43,10 @@ live 2020-03-05…22) with John's `materials/` and `models/` (not in git; symlin
 | `manifest.json` | 51,618 | | provenance, parameters, counts, entities (spawns T 17 / CT 16, both `func_bomb_target`s, buy zones) |
 
 `?map=mirage-2020` loads in the 3D app (headless Chromium, software WebGL: 464,846 triangles drawn, no page errors) and
-stays inside the frame budget (`docs/perf/README.md`): `inround-5s-120hz` frame p50 **1.47 ms** (render 0.62 ms, 19
-draw calls), `watch-1x-480hz` 0.62 ms, against 1.50 / 0.56 ms (14 draw calls) on `mirage-cs2` in P1's table.
+stays inside the frame budget (`docs/perf/README.md`, `bench:3d --frames 300`, the same session): `inround-5s-120hz`
+main-thread frame p50 **1.47 ms** (render 0.62 ms, 19 draw calls) against 1.38 ms (render 0.52 ms, 20 draw calls) on
+`mirage-cs2`; `watch-1x-480hz` 0.62 vs 0.65 ms. The GPU draws 3.5× the triangles: software WebGL ran 3 fps instead of
+14, which a phone GPU doesn't notice at 465 k triangles.
 
 Build rules added in X1c: the Market-window shutter (`shutter_window_l_breakable.mdl`, `prop_data` "Wooden.Medium",
 health 1: the first bullet breaks it) is placed as broken, neither solid nor drawn (`PACKAGE_PARAMS.brokenProps`;
