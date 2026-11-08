@@ -295,8 +295,16 @@ export const ENGAGEMENTS: readonly Engagement[] = [
 
 /** Refinements are tapered over this long outside each window. */
 const TAPER_SEC = 0.8;
-/** A refinement never moves a sample further than this (the radar's accuracy is 20-40 u; CTs carry their radius). */
-const MAX_MOVE_T = 60;
+/** A refinement never moves a sample further than this: the radar's accuracy (its dots are good to ~20-40 u). */
+const MAX_MOVE_T = 40;
+/**
+ * V2's "push until the line opens" step: after the fitted offset, move the watched player forward / sideways until
+ * every scripted shot line of the pair is open on the CS2 mesh. Off (decision 2026-11-07, option (a)): players stay
+ * where the evidence puts them (the fitted eye, capped by MAX_MOVE_T); no position within the radar's accuracy opens
+ * cart <-> Lokier on CS2 Mirage, which is a CS2-vs-2020 map difference at the Apartments window (docs/vision.md), fixed
+ * in the map, not in the positions.
+ */
+export const OPEN_LINES = false;
 
 export interface Move {
   readonly player: PlayerId;
@@ -406,7 +414,7 @@ export function engagementMoves(round: RoundData, frames: readonly FitFrame[], s
     let toff = place(off);
     let depth = 0;
     let side = 0;
-    for (const c of cands) {
+    for (const c of OPEN_LINES ? cands : []) {
       const o = { dx: base.dx + ux * c.s - uy * c.l, dy: base.dy + uy * c.s + ux * c.l };
       const to = place(o);
       if (open(o, to)) {
@@ -439,7 +447,7 @@ export function engagementMoves(round: RoundData, frames: readonly FitFrame[], s
       const bo = otherOff(f.t);
       const b0 = snappedAt(sn, e.other, f.t);
       const b = { x: b0.x + bo.dx, y: b0.y + bo.dy, z: b0.z };
-      for (const c of cands) {
+      for (const c of OPEN_LINES ? cands : []) {
         const o = { dx: o0.dx + fx * c.s - fy * c.l, dy: o0.dy + fy * c.s + fx * c.l };
         const pa = { x: a.x + o.dx, y: a.y + o.dy, z: a.z };
         if (lineOpen(g, pa, b, HEAD) && lineOpen(g, b, pa, HEAD)) return { t: f.t, ...o };

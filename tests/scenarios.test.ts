@@ -174,10 +174,8 @@ const GRACE = Math.round(tuning.replay.outliveGraceSec * 64);
 // G3: the plant 7 ticks after the tape's 1761. On CS2 Mirage barely, LIVE after killing Lokier, leaves the Balcony by
 // its west end (CS2 walls in the 2020 drop under the Apartments window) and goes round the B-site box the recording
 // walks through, so G1's plant shift starts his USE 7 ticks late; everything after it is on the tape's ticks.
-// V2: 1769 (a tick later again): Lokier stands where cart's first-person frames put him (docs/viewfit.md), so barely's
-// LIVE kill of the outlived Lokier lands at 1419 instead of 1418 and the plant shift follows.
 const TAPE_AFTER_LOKIER = [
-  ['bomb', 1769, 'planted'],
+  ['bomb', 1768, 'planted'],
   ['kill', 2829, 'barely>zwomp'],
   ['kill', 3222, 'sp4rtan>donk'],
   ['kill', 3766, 'sp4rtan>barely'],
@@ -478,8 +476,8 @@ describe('6. cart dies early', () => {
     // sp4rtan's kill of snarlbot, barely's plant.
     const ticks = deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim]);
     for (const k of [[32, 'snarlbot', 'incredibad'], [794, 'snarlbot', 'snakelore'], [1142, 'sp4rtan', 'snarlbot']]) expect(ticks).toContainEqual(k);
-    // G6: barely's plant is late (V2: 1769; G6: 1768; the tape's 1761), as in never-peeks: he went LIVE for the outlived Lokier.
-    expect(run.entries.some((e) => e.observe.tick === 1769 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
+    // G6: barely's plant is 7 ticks late (1768, the tape's 1761), as in never-peeks: he went LIVE for the outlived Lokier.
+    expect(run.entries.some((e) => e.observe.tick === 1768 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
     expectUntouchedReplay(run);
   });
 });
@@ -534,12 +532,8 @@ describe('8. smoke on Lokier’s angle', () => {
     const atSpot = run.entries.filter((e) => e.observe.tick >= 1150 && e.observe.tick <= 1250 && dist(pawnAt(e, 'cart').pos, spot) <= tol);
     expect(atSpot.length).toBeGreaterThan(50);
     for (const e of atSpot) expect(pawnAt(e, 'lokier').sees).not.toContain('cart');
-    // G6: it is the smoke that hides him: at the window, on the CS2 mesh, the two would see each other (V2: at the
-    // video-fitted spot, docs/viewfit.md; the scenario's smoke and step-out were re-aimed for it).
-    // (Checked on the ticks he stands at the spot: at the window's west edge some of his aim points are behind the wall.)
-    const near = atSpot.filter((x) => x.observe.tick % 8 === 0 && dist(pawnAt(x, 'cart').pos, { x: -1777, y: 679 }) <= 24);
-    expect(near.length).toBeGreaterThan(0);
-    expect(near.some((e) => clearAimPoints(data.geometry as MapGeometry, tuning, pawnAt(e, 'lokier'), pawnAt(e, 'cart')).length > 0)).toBe(true);
+    // G6: it is the smoke that hides him: at the window, on the CS2 mesh, the two would see each other.
+    for (const e of atSpot.filter((x) => x.observe.tick % 16 === 0 && dist(pawnAt(x, 'cart').pos, { x: -1712, y: 700 }) <= 24)) expect(clearAimPoints(data.geometry as MapGeometry, tuning, pawnAt(e, 'lokier'), pawnAt(e, 'cart')).length).toBeGreaterThan(0);
     // The encounter starts on the first tick Lokier sees cart at the spot, the hit lands encounterDelaySec later.
     const seen = seenTick(run) as number;
     const firstSeen = run.entries.find((e) => e.observe.tick > 1100 && pawnAt(e, 'lokier').sees.includes('cart') && dist(pawnAt(e, 'cart').pos, spot) <= tol)?.observe.tick;
@@ -591,8 +585,8 @@ describe('10. cart misses Lokier at the window and hides in Shop (G1)', () => {
     // G5: he is in the recorded duel, but none of his shots would hit Lokier, so nothing is forced: Lokier lives.
     expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'blocked_hit'))).toBe(false);
     expect(coreLogs(run.entries).filter((l) => l.text.startsWith('duel cart -> lokier')).map((l) => l.text)).toEqual([
-      // V2: from 1133 (G6: 1138, 1126 before): Lokier first sees him through the first window, at the video-fitted spot.
-      'duel cart -> lokier: in the recorded duel from tick 1133 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203',
+      // G6: from 1138 (1126 before): Lokier first sees him at the window on the CS2 mesh then.
+      'duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203',
       'duel cart -> lokier: over at tick 1217, the recorded duel is over; 0 would-hit shots blocked',
     ]);
     expect(switches(run).find((s) => s.id === 'lokier')).toMatchObject({ tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });

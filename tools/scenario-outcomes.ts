@@ -11,6 +11,20 @@ import { tickOf } from '../src/core/index';
 import { NO_HUMAN, ROOT, deaths, loadHarnessData, runHarness, type HarnessRun } from './harness';
 import { HumanBot, liveSwitches, loadScenario } from './human-bot';
 
+/**
+ * Audit lines that are a known CS2-vs-2020 map difference, not a position error (docs/vision.md): the window duel's
+ * scripted hits, with cart and Lokier at their video-fitted positions (tools/sight-snap.ts MAP_DIFFERENCES).
+ */
+const MAP_DIFFERENCE_AUDIT: readonly { pair: string; tick: number }[] = [
+  { pair: 'lokier -> cart', tick: 1184 },
+  { pair: 'cart -> lokier', tick: 1203 },
+];
+
+export function auditLabel(text: string): string {
+  const known = MAP_DIFFERENCE_AUDIT.some((k) => text.includes(`: ${k.pair} `) && text.includes(` at tick ${k.tick} `));
+  return known ? `${text} [known CS2-vs-2020 map difference: the Apartments window over B; not a position error]` : text;
+}
+
 function report(name: string, run: HarnessRun): void {
   const host = run.host as unknown as { combatLog?: () => readonly { tick: number; text: string }[] };
   const audit = (host.combatLog?.() ?? []).filter((l) => l.text.startsWith('script: scripted hit through geometry'));
@@ -18,7 +32,7 @@ function report(name: string, run: HarnessRun): void {
   console.log(`headline: ${summarize(run.model, run.entries).headline}`);
   console.log(`kills: ${deaths(run.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}`).join(', ')}`);
   console.log(`LIVE: ${liveSwitches(run.entries).map((s) => `${s.tick} ${s.id} (${s.trigger ?? '?'})`).join(', ') || 'none'}`);
-  for (const l of audit) console.log(`  ${l.text}`);
+  for (const l of audit) console.log(`  ${auditLabel(l.text)}`);
   console.log('');
 }
 

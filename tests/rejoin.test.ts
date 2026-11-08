@@ -102,9 +102,7 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
   it('ends CT bomb_defused with 0.72 s on the bomb, like the tape (B4 alone: Ts won by elimination)', () => {
     expect(roundEnd(run)).toEqual({ tick: 4275, winner: 'CT', reason: 'bomb_defused' });
     // G3: 0.83 s on the bomb, not the tape's 0.72: the plant is 7 ticks late (below), the defuse on the tape's tick.
-    // V2: 0.84 s, the plant 8 ticks late (barely's LIVE kill of Lokier, who stands where cart's frames put him, is a
-    // tick later).
-    expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.timeLeftSec).toBeCloseTo(0.84375, 6);
+    expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.timeLeftSec).toBeCloseTo(0.828125, 6);
     expect(roundEnd(before)).toMatchObject({ winner: 'T', reason: 'elimination' });
   });
 
@@ -123,10 +121,9 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     // Measured: all of them on the golden master's (= the recording's) observe ticks but the plant. G3: on CS2 Mirage
     // barely, LIVE after Lokier, leaves the Balcony by its west end (the 2020 drop under the Apartments window is a
     // wall in CS2) and goes round the B-site box the recording walks through: G1's plant shift starts his USE 7 ticks
-    // after the recorded 1555, so the bomb is planted at 1768 (27.63 s, recorded 27.52 s). V2: 1769, a tick later again
-    // (Lokier at his video-fitted spot, docs/viewfit.md).
+    // after the recorded 1555, so the bomb is planted at 1768 (27.63 s, recorded 27.52 s).
     expect([bombTick(run, 'planted'), kill(run, 'barely', 'zwomp'), kill(run, 'sp4rtan', 'donk'), kill(run, 'sp4rtan', 'barely'), bombTick(run, 'defuse_start'), bombTick(run, 'defused')]).toEqual([
-      1769, 2650, 3222, 3766, 3955, 4275,
+      1768, 2650, 3222, 3766, 3955, 4275,
     ]);
     const z = (run.entries[2650] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === 'barely' && ev.victim === 'zwomp');
     expect(z?.type === 'damage' ? z.scripted : null, 'barely -> zwomp (LIVE)').toBe(false);

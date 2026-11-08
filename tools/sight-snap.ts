@@ -46,6 +46,18 @@ export const SIGHT_PARAMS = {
   crouchBelow: 120,
 } as const;
 
+/**
+ * Recorded duels this pass leaves alone, by vision-label id: the recorded (video-fitted) positions are right and the
+ * line is blocked because CS2 Mirage differs from the 2020 map there. V2 (docs/viewfit.md "Engagement positions"):
+ * cart's first-person frames put him and Lokier within the radar's accuracy of their dots, and no position within it
+ * opens the window duel on CS2 Mirage; the 2020 opening of the Apartments window starts ~60 u further west than CS2's.
+ * The positions stay; the map gets the 2020 opening (a separate map patch). The G6 audit lines of the duel's scripted
+ * hits (ticks 1184, 1203) are labelled as this map difference (docs/vision.md).
+ */
+export const MAP_DIFFERENCES: Readonly<Record<string, string>> = {
+  'sighting@17.45 cart->lokier': 'the Apartments window over B: the 2020 opening is wider (west) than CS2 Mirage\'s; a map difference, not a position error (docs/viewfit.md)',
+};
+
 export interface Duel {
   readonly a: PlayerId;
   readonly b: PlayerId;
@@ -144,6 +156,11 @@ export function sightPass(input: SightPassInput): SightPassResult {
     const ta = tracks.get(duel.a);
     const tb = tracks.get(duel.b);
     if (ta === undefined || tb === undefined) continue;
+    const known = MAP_DIFFERENCES[duel.label];
+    if (known !== undefined) {
+      notes.push(`${duel.label} (${duel.a} ↔ ${duel.b}, ${duel.t0}–${duel.t1} s): left as fitted — known CS2-vs-2020 map difference: ${known}`);
+      continue;
+    }
     const w0 = Math.ceil(duel.t0 * 10 - 1e-9);
     const w1 = Math.floor(duel.t1 * 10 + 1e-9);
     const slow = (track: readonly SnappedSample[], i: number): boolean => {
