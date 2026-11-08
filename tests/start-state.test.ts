@@ -10,6 +10,8 @@ const actions = startActions(model, tuning);
 type Give = [item: string, clip: number, reserve: number];
 interface Expected {
   hp: number;
+  /** V4: eradicate's HUD reads 89 armor from 0 s (a kept vest); everyone else 100. */
+  armor?: number;
   gives: Give[];
   weapon: string;
 }
@@ -20,7 +22,7 @@ const EXPECTED: Record<PlayerId, Expected> = {
   barely: { hp: 100, gives: [['ak47', 30, 90], ['glock', 20, 120], ['he', 0, 0], ['smoke', 0, 0], ['c4', 0, 0]], weapon: 'ak47' },
   cart: { hp: 100, gives: [['ak47', 30, 90], ['glock', 20, 120], ['smoke', 0, 0], ['smoke', 0, 0]], weapon: 'ak47' },
   donk: { hp: 100, gives: [['awp', 10, 30], ['glock', 20, 120], ['flash', 0, 0], ['molotov', 0, 0]], weapon: 'awp' },
-  eradicate: { hp: 100, gives: [['ak47', 30, 90], ['glock', 20, 120]], weapon: 'ak47' },
+  eradicate: { hp: 100, armor: 89, gives: [['ak47', 30, 90], ['glock', 20, 120]], weapon: 'ak47' },
   incredibad: { hp: 100, gives: [['m4a4', 30, 90], ['usps', 12, 24]], weapon: 'm4a4' },
   lokier: { hp: 100, gives: [['ssg08', 10, 90], ['usps', 12, 24]], weapon: 'ssg08' },
   snakelore: { hp: 100, gives: [['m4a4', 30, 90], ['usps', 12, 24]], weapon: 'm4a4' },
@@ -48,7 +50,7 @@ describe('startActions', () => {
     for (const id of PLAYER_IDS) {
       const e = EXPECTED[id];
       const acts = forPlayer(id);
-      expect(acts[1], id).toEqual({ type: 'set_hp', id, hp: e.hp, armor: 100, helmet: true });
+      expect(acts[1], id).toEqual({ type: 'set_hp', id, hp: e.hp, armor: e.armor ?? 100, helmet: true });
       const gives = acts.filter((a) => a.type === 'give').map((a) => [a.item, a.clip, a.reserve]);
       expect(gives, id).toEqual(e.gives);
       expect(acts.at(-1), id).toEqual({ type: 'set_weapon', id, weapon: e.weapon });

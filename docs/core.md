@@ -972,6 +972,12 @@ plant 27.52, barely → Zwomp 44.20, sp4rtan → donk 50.34 (kill feed 50.35), s
 | 68 | CT defuse 12 – 15, 0.72 s left | – | – | – | – | – | after the round; the post-round kill lands on the tape's tick: "Played it like the tape" |
 
 (– after T: before the takeover, so the golden master's by construction.) Every run ends in the recorded CT defuse.
+**P3** (the plant spot measured on barely's POV, `docs/round-data.md` "The plant spot"): the C4 is now at the B-site
+corridor's east mouth, ~110 u further on barely's way from the Balcony, so where he plants late (T = 0, 5, 18, 18.6 and
+never-peeks) the plant lands on 1792 (+31) instead of 1767 and the defuse leaves 1.20 s; and at T = 17.6 his re-snapped
+walk to B changes the chain after the plant: sp4rtan, LIVE from his fight with cart in the Apartments, is still LIVE at
+58.8 s, his scripted kill on barely is dropped and LIVE barely kills him at 59.88 s: **T elimination 11 – 16** (the
+golden master is unchanged).
 What moves is not the takeover's doing: with cart idle before 18.8 s Lokier outlives his recording and the LIVE barely
 who kills him rejoins too late for his plant tick (+7 ticks, as in never-peeks); and an idle cart left at the window
 is in the path of sp4rtan's recorded flank half a minute later, where B4/G1 divergence and the 2D toy AI

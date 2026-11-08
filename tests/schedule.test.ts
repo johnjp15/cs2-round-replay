@@ -77,7 +77,7 @@ describe('EventSchedule', () => {
   });
 
   it('has the plant and the defuse', () => {
-    expect(schedule.ofType('plant')).toEqual([{ type: 'plant', tick: 1761, id: 'barely', pos: { x: -1982, y: 311, z: -160 } }]);
+    expect(schedule.ofType('plant')).toEqual([{ type: 'plant', tick: 1761, id: 'barely', pos: { x: -1882, y: 243, z: -160 } }]);
     expect(schedule.ofType('defuse_start')).toEqual([{ type: 'defuse_start', tick: tickOf(61.8), id: 'sp4rtan' }]);
     expect(schedule.ofType('defuse_end')).toEqual([{ type: 'defuse_end', tick: tickOf(66.8), id: 'sp4rtan' }]);
   });
@@ -98,7 +98,8 @@ describe('EventSchedule', () => {
       [tickOf(50.083), 'donk', 'awp'],
       [tickOf(57.6), 'barely', 'knife'],
       [tickOf(59.6), 'cart', 'knife'],
-      [tickOf(63.5), 'cart', 'ak47'],
+      // V4: the video's HUD has cart's AK out at 61.40 s (the page says 63.5; tools/extract-round.ts WEAPON_DRAWS).
+      [tickOf(61.4), 'cart', 'ak47'],
     ]);
     expect(schedule.at(1254).map((e) => e.type)).toEqual(['pickup', 'weapon_switch']);
   });

@@ -57,6 +57,93 @@ const MEASURED_LANDINGS: Readonly<Record<string, GrenadeLanding>> = {
   '25.8 cart smoke': { x: -1890, y: -585, z: -166, uncertainty: 40 },
 };
 
+/**
+ * V4 (second video review, docs/parity/review-2-2026-11-07.md): HUD facts the page's data has wrong, read off the
+ * recording's own HUD frame by frame. Weapon draws the page times late, keyed by the page's point: the draw moves to
+ * the video's first frame of the new weapon.
+ */
+const WEAPON_DRAWS: readonly { readonly id: PlayerId; readonly pageT: number; readonly t: number; readonly weapon: WeaponId; readonly why: string }[] = [
+  // cart's knife -> AK-47 (V3 finding 7, backlog 60): his ammo HUD shows 24/90 from the frame at 61.40 s (the knife,
+  // with no counter, until 61.35 s) and the AK's draw animation plays at 61.4-61.6 s; the page has 63.5 s.
+  { id: 'cart', pageT: 63.5, t: 61.4, weapon: 'ak47', why: 'ammo HUD 24/90 from 61.40 s (V4)' },
+];
+
+/**
+ * P3 (docs/round-data.md "The plant spot"): where the C4 was planted, measured on barely's POV (58.23-58.67 s, the
+ * light right of the cylinder stack's north-east corner) against the 2020 BSP (tools/viewfit/plant.py): the light's
+ * ray from two independently aligned frames crosses the floor at (-1898...-1855, 242...244) = (-1876 +- 20,
+ * 243 +- 6); the spot is the nearest point of that inside the BSP's `func_bomb_target` "B site" (x <= -1880). The
+ * page (the radar's C4 icon) has (-1982, 311): the spectator radar reads ~(-100, +68) off around the C4, which also
+ * walks barely out of the plant across the north stack and leaves sp4rtan in cart's view while he defuses. `from`
+ * must match the page.
+ */
+const PLANT_SPOT = { from: { x: -1982, y: 311, z: -160 }, to: { x: -1882, y: 243, z: -160 } } as const;
+
+/**
+ * P3: sp4rtan's kit-defuse spot (61.8-66.8 s). The radar has his dot at (-2005, 345), (-24, +40) from the C4 icon; on
+ * the measured spot that puts him in the corridor between the stacks, behind the south stack from cart. The spot is
+ * (-1900, 270): (-18, +27) from the C4, within the radar's +-20 u of that offset, and the nearest such spot hidden from
+ * cart's snapped track at every 10 Hz sample of 65.0-66.8 s on both packages (MeshSight, standing and crouched; at
+ * (-1905, 277) his left side shows past the stack's north-west corner from cart's 66.3-66.6 s samples). From each of
+ * V2's 40 fitted eyes of cart at 65-67 s no eye-to-body ray reaches him on the 2020 mesh (at the radar spot 63 of 120
+ * do). `from` must match his samples through the defuse.
+ */
+const DEFUSE_SPOT = { from: { x: -2005, y: 345 }, to: { x: -1900, y: 270 } } as const;
+
+/**
+ * P3: track samples moved off the radar (whose B-site dots read ~(-100, +70) off around the C4), by `d`, full between
+ * t1 and t2 and ramped from / back to nothing over [t0, t1] and [t2, t3]; `pin` holds the samples in it at the plant
+ * spot (the C4 drops at the planter's feet). Moved samples become `estimated` with `uncertainty` 20.
+ *  - barely, from the corridor between the stacks (23.0 s) to the corridor east of the brick pier (29.9 s): planting at
+ *    the corridor's east mouth, then leaving along the pier's south face, where the radar has him walk across the north
+ *    stack (28.4-28.9 s). His walk in from the Apartments exit is left to the snapper (tools/snap-tracks.ts reroutes
+ *    it round the pier and the stack); a ramp over 22.0-22.8 s left him > driftSnapUnits behind on the CS2 mesh.
+ *  - sp4rtan, after his kill on barely (58.85 s) to the end of the defuse (66.8 s), then back onto his recorded path
+ *    by 68.0 s: kit-defusing at DEFUSE_SPOT.
+ */
+const RADAR_SHIFTS: readonly { readonly id: PlayerId; readonly d: readonly [number, number]; readonly t0: number; readonly t1: number; readonly t2: number; readonly t3: number; readonly pin?: readonly [number, number] }[] = [
+  { id: 'barely', d: [PLANT_SPOT.to.x - PLANT_SPOT.from.x, PLANT_SPOT.to.y - PLANT_SPOT.from.y], t0: 23.0, t1: 24.0, t2: 28.9, t3: 29.9, pin: [24.2, 27.4] },
+  { id: 'sp4rtan', d: [DEFUSE_SPOT.to.x - DEFUSE_SPOT.from.x, DEFUSE_SPOT.to.y - DEFUSE_SPOT.from.y], t0: 58.9, t1: 59.9, t2: 66.8, t3: 68.0 },
+];
+const SHIFT_UNCERTAINTY = 20;
+
+function applyRadarShifts(tracks: Record<PlayerId, Track>, bomb: { defuseStart: number; defuseT: number }): Record<PlayerId, Track> {
+  const out = { ...tracks };
+  for (const s of out.sp4rtan?.samples ?? []) {
+    if (s.t >= bomb.defuseStart - 1e-6 && s.t <= bomb.defuseT + 1e-6 && (s.x !== DEFUSE_SPOT.from.x || s.y !== DEFUSE_SPOT.from.y)) {
+      throw new Error(`DEFUSE_SPOT: sp4rtan is at (${s.x}, ${s.y}) at ${s.t} s, not (${DEFUSE_SPOT.from.x}, ${DEFUSE_SPOT.from.y})`);
+    }
+  }
+  for (const sh of RADAR_SHIFTS) {
+    const tr = out[sh.id];
+    if (tr === undefined) throw new Error(`RADAR_SHIFTS: no track for ${sh.id}`);
+    const w = (t: number): number => (t <= sh.t0 || t >= sh.t3 ? 0 : t < sh.t1 ? (t - sh.t0) / (sh.t1 - sh.t0) : t <= sh.t2 ? 1 : (sh.t3 - t) / (sh.t3 - sh.t2));
+    const samples = tr.samples.map((s): TrackSample => {
+      const pinned = sh.pin !== undefined && s.t >= sh.pin[0] - 1e-6 && s.t <= sh.pin[1] + 1e-6;
+      const k = w(s.t);
+      if (!pinned && k === 0) return s;
+      const x = pinned ? PLANT_SPOT.to.x : Math.round(s.x + k * sh.d[0]);
+      const y = pinned ? PLANT_SPOT.to.y : Math.round(s.y + k * sh.d[1]);
+      return { ...s, x, y, confidence: s.confidence === 'inferred' ? s.confidence : 'estimated', uncertainty: SHIFT_UNCERTAINTY };
+    });
+    if (tr.offGridSamples.some((s) => s.t > sh.t0 && s.t < sh.t3)) throw new Error(`RADAR_SHIFTS: ${sh.id} has off-grid samples in ${sh.t0}-${sh.t3}`);
+    out[sh.id] = { ...tr, samples };
+  }
+  return out;
+}
+
+/**
+ * V4: armor a recorded hit took, keyed "<t> <attacker> <victim>" like the page's damage list, where the shots CSV has
+ * no armor figure. donk's HUD through sp4rtan's spray (60 fps): armor 100 -> 96 at 49.90 s (27 HP: a chest hit at
+ * ~525 u, CS2/CS:GO armor rule (damage - damage x 0.775) / 2 = 4) -> 91 at 50.00 s (34 HP: the stomach, 5) -> 91 at
+ * 50.10 s (26 HP: a leg, which armor doesn't cover, 0).
+ */
+const HIT_ARMOR: Readonly<Record<string, number>> = {
+  '49.9 sp4rtan donk': 4,
+  '50 sp4rtan donk': 5,
+  '50.1 sp4rtan donk': 0,
+};
+
 // ---------- source shapes (the web-apps page's embedded JSON) ----------
 
 type Arr3 = [number, number, number];
@@ -158,7 +245,8 @@ const KITS: Record<PlayerId, KitSpec> = {
   cart: spec({ primary: 'ak47', grenades: ['smoke', 'smoke'], roles: ['take_b'] }),
   // donk's Glock is seen on his HUD at 49.93 s (shots CSV).
   donk: spec({ primary: 'awp', secondary: 'glock', grenades: ['flash', 'molotov'], roles: ['take_b'] }),
-  eradicate: spec({ primary: 'ak47', roles: ['take_b'] }),
+  // V4: eradicate starts on 89 armor (his own HUD reads 100 HP / 89 armor from 0.0 s to his death; a kept vest).
+  eradicate: spec({ primary: 'ak47', armor: 89, roles: ['take_b'] }),
   incredibad: spec({ primary: 'm4a4', assumed: true, roles: ['hold_a'] }),
   lokier: spec({ primary: 'ssg08', roles: ['hold_b'] }),
   snakelore: spec({ primary: 'm4a4', assumed: true, roles: ['hold_a'] }),
@@ -379,9 +467,11 @@ export function switchBack(note: string, owner: PlayerId): { t: number; weapon: 
  * (same tick and weapon) is not added.
  */
 function weaponTimeline(id: PlayerId, rows: [number, string][], shots: readonly Shot[]): WeaponTimelinePoint[] {
-  const page = rows.map(([t, raw]): WeaponTimelinePoint => {
+  const page = rows.map(([pageT, raw]): WeaponTimelinePoint => {
     const w = weaponOrNull(raw);
-    return { t, tick: toTick(t), weapon: id === 'lokier' && w === 'awp' ? 'ssg08' : w, raw };
+    const fix = WEAPON_DRAWS.find((f) => f.id === id && f.pageT === pageT && f.weapon === w);
+    const t = fix?.t ?? pageT;
+    return { t, tick: toTick(t), weapon: id === 'lokier' && w === 'awp' ? 'ssg08' : w, raw: fix === undefined ? raw : `${raw} (${fix.why}; page ${pageT})` };
   });
   const extra: WeaponTimelinePoint[] = [];
   for (const s of shots) {
@@ -553,7 +643,7 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
 
   const builtTracks = sortedRecord(byId(src.tracks).map(([id, rows]): [PlayerId, Track] => [id, buildTrack(rows, yawBy.get(id) ?? [])]));
   const viewFit = inp.viewFit === undefined || inp.viewFit === null ? null : (JSON.parse(inp.viewFit) as ViewFitFile);
-  const tracks = viewFit === null ? builtTracks : applyViewFit(builtTracks, viewFit);
+  const tracks = applyRadarShifts(viewFit === null ? builtTracks : applyViewFit(builtTracks, viewFit), src.bomb);
 
   const players = src.players
     .map((p): Player => {
@@ -634,7 +724,7 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
       attacker,
       victim,
       amount: d.amount,
-      armor: csvRow?.armorDamage ?? null,
+      armor: csvRow?.armorDamage ?? HIT_ARMOR[`${d.t} ${attacker} ${victim}`] ?? null,
       weapon: weapon(d.weapon, attacker),
       note: d.note,
       apos: refinedAt(attacker, d.t, vec3(d.apos)),
@@ -698,7 +788,12 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
     carrier: pid(src.bomb.carrier),
     plantT: src.bomb.plantT,
     plantTick: toTick(src.bomb.plantT),
-    pos: vec3(src.bomb.pos),
+    pos: (() => {
+      const p = vec3(src.bomb.pos);
+      const f = PLANT_SPOT.from;
+      if (p.x !== f.x || p.y !== f.y || p.z !== f.z) throw new Error(`PLANT_SPOT: the page's bomb is at (${p.x}, ${p.y}, ${p.z}), not (${f.x}, ${f.y}, ${f.z})`);
+      return { ...PLANT_SPOT.to };
+    })(),
     defuseStartT: src.bomb.defuseStart,
     defuseStartTick: toTick(src.bomb.defuseStart),
     defuseT: src.bomb.defuseT,
@@ -711,6 +806,12 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
     money: sortedRecord(byId(src.money).map(([id, rows]): [PlayerId, TimelinePoint[]] => [id, points(rows)])),
     weapon: sortedRecord(byId(src.weapons).map(([id, rows]): [PlayerId, WeaponTimelinePoint[]] => [id, weaponTimeline(id, rows, shots)])),
   };
+  for (const f of WEAPON_DRAWS) {
+    if (!(timelines.weapon[f.id] ?? []).some((p) => p.t === f.t && p.weapon === f.weapon)) throw new Error(`WEAPON_DRAWS: ${f.id} has no ${f.weapon} at ${f.pageT} s in the page`);
+  }
+  for (const k of Object.keys(HIT_ARMOR)) {
+    if (!damage.some((d) => `${d.t} ${d.attacker} ${d.victim}` === k)) throw new Error(`HIT_ARMOR: no recorded hit "${k}"`);
+  }
 
   const events = src.events.map(
     (e): RoundEvent => ({

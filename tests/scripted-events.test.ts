@@ -545,7 +545,8 @@ describe('weapons and utility', () => {
         [3204, 'set_weapon', 'donk', 'awp'],
         [3685, 'set_weapon', 'barely', 'knife'],
         [3813, 'set_weapon', 'cart', 'knife'],
-        [4063, 'set_weapon', 'cart', 'ak47'],
+        // V4: the video's HUD has cart's AK out at 61.40 s (tick 3930; the page said 63.5 s).
+        [3929, 'set_weapon', 'cart', 'ak47'],
       ]),
     );
     expect(rows.filter((r) => r[0] === 1253 && r[1] === 'set_weapon')).toHaveLength(1);
@@ -585,8 +586,8 @@ describe('plant and defuse', () => {
 
   it('falls back to a plant action (logged) when no planted event arrives by plantTick + 3, then draws the gun', () => {
     expect(actionsAt(golden.log, 1764)).toEqual([
-      { type: 'plant', id: 'barely', pos: { x: -1982, y: 311, z: -160 } },
-      { type: 'log', level: 'info', text: 'script: no planted event by tick 1764, sending plant for barely at (-1982, 311, -160)' },
+      { type: 'plant', id: 'barely', pos: { x: -1882, y: 243, z: -160 } },
+      { type: 'log', level: 'info', text: 'script: no planted event by tick 1764, sending plant for barely at (-1882, 243, -160)' },
       { type: 'set_weapon', id: 'barely', weapon: 'ak47' },
     ]);
     expect(allActions(golden.log).filter((x) => x.a.type === 'plant')).toHaveLength(1);

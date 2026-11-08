@@ -186,7 +186,7 @@
         "confidence": "observed"
       },
       "startHp": 100,
-      "startArmor": 100,
+      "startArmor": 89,
       "startHelmet": true,
       "startMoney": 9150,
       "kit": {
@@ -2307,546 +2307,614 @@
         {
           "t": 23.1,
           "tick": 1478,
-          "x": -1944,
-          "y": 334,
+          "x": -1934,
+          "y": 327,
           "z": -162,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 23.2,
           "tick": 1485,
-          "x": -1954,
-          "y": 327,
+          "x": -1934,
+          "y": 313,
           "z": -162,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 23.3,
           "tick": 1491,
-          "x": -1964,
-          "y": 318,
+          "x": -1934,
+          "y": 298,
           "z": -162,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 23.4,
           "tick": 1498,
-          "x": -1978,
-          "y": 307,
+          "x": -1938,
+          "y": 280,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 23.5,
           "tick": 1504,
-          "x": -1987,
-          "y": 296,
+          "x": -1937,
+          "y": 262,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 23.6,
           "tick": 1510,
-          "x": -1988,
-          "y": 290,
+          "x": -1928,
+          "y": 249,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 23.7,
           "tick": 1517,
-          "x": -1989,
-          "y": 290,
+          "x": -1919,
+          "y": 242,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 23.8,
           "tick": 1523,
-          "x": -1991,
-          "y": 293,
+          "x": -1911,
+          "y": 239,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 23.9,
           "tick": 1530,
-          "x": -1991,
-          "y": 296,
+          "x": -1901,
+          "y": 235,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24,
           "tick": 1536,
-          "x": -1989,
-          "y": 301,
+          "x": -1889,
+          "y": 233,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24.1,
           "tick": 1542,
-          "x": -1984,
-          "y": 308,
+          "x": -1884,
+          "y": 240,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24.2,
           "tick": 1549,
-          "x": -1982,
-          "y": 311,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24.3,
           "tick": 1555,
-          "x": -1982,
-          "y": 311,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24.4,
           "tick": 1562,
-          "x": -1985,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24.5,
           "tick": 1568,
-          "x": -1988,
-          "y": 308,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24.6,
           "tick": 1574,
-          "x": -1989,
-          "y": 307,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24.7,
           "tick": 1581,
-          "x": -1989,
-          "y": 306,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24.8,
           "tick": 1587,
-          "x": -1989,
-          "y": 306,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 24.9,
           "tick": 1594,
-          "x": -1989,
-          "y": 306,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25,
           "tick": 1600,
-          "x": -1989,
-          "y": 307,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25.1,
           "tick": 1606,
-          "x": -1989,
-          "y": 308,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25.2,
           "tick": 1613,
-          "x": -1988,
-          "y": 309,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25.3,
           "tick": 1619,
-          "x": -1987,
-          "y": 309,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25.4,
           "tick": 1626,
-          "x": -1985,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25.5,
           "tick": 1632,
-          "x": -1983,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25.6,
           "tick": 1638,
-          "x": -1982,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25.7,
           "tick": 1645,
-          "x": -1982,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25.8,
           "tick": 1651,
-          "x": -1982,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 25.9,
           "tick": 1658,
-          "x": -1982,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26,
           "tick": 1664,
-          "x": -1982,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26.1,
           "tick": 1670,
-          "x": -1982,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26.2,
           "tick": 1677,
-          "x": -1982,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26.3,
           "tick": 1683,
-          "x": -1982,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26.4,
           "tick": 1690,
-          "x": -1981,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26.5,
           "tick": 1696,
-          "x": -1980,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26.6,
           "tick": 1702,
-          "x": -1979,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26.7,
           "tick": 1709,
-          "x": -1979,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26.8,
           "tick": 1715,
-          "x": -1979,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 26.9,
           "tick": 1722,
-          "x": -1979,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27,
           "tick": 1728,
-          "x": -1979,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27.1,
           "tick": 1734,
-          "x": -1979,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27.2,
           "tick": 1741,
-          "x": -1979,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27.3,
           "tick": 1747,
-          "x": -1979,
-          "y": 310,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27.4,
           "tick": 1754,
-          "x": -1979,
-          "y": 314,
+          "x": -1882,
+          "y": 243,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27.5,
           "tick": 1760,
-          "x": -1978,
-          "y": 344,
+          "x": -1878,
+          "y": 276,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27.6,
           "tick": 1766,
-          "x": -1978,
-          "y": 348,
+          "x": -1878,
+          "y": 280,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27.7,
           "tick": 1773,
-          "x": -1978,
-          "y": 351,
+          "x": -1878,
+          "y": 283,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27.8,
           "tick": 1779,
-          "x": -1978,
-          "y": 354,
+          "x": -1878,
+          "y": 286,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 27.9,
           "tick": 1786,
-          "x": -1978,
-          "y": 357,
+          "x": -1878,
+          "y": 289,
           "z": -160,
-          "confidence": "estimated"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28,
           "tick": 1792,
-          "x": -1978,
-          "y": 360,
+          "x": -1878,
+          "y": 292,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28.1,
           "tick": 1798,
-          "x": -1978,
-          "y": 363,
+          "x": -1878,
+          "y": 295,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28.2,
           "tick": 1805,
-          "x": -1978,
-          "y": 366,
+          "x": -1878,
+          "y": 298,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28.3,
           "tick": 1811,
-          "x": -1978,
-          "y": 369,
+          "x": -1878,
+          "y": 301,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28.4,
           "tick": 1818,
-          "x": -1976,
-          "y": 400,
+          "x": -1876,
+          "y": 332,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28.5,
           "tick": 1824,
-          "x": -1967,
-          "y": 404,
+          "x": -1867,
+          "y": 336,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28.6,
           "tick": 1830,
-          "x": -1946,
-          "y": 403,
+          "x": -1846,
+          "y": 335,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28.7,
           "tick": 1837,
-          "x": -1918,
-          "y": 402,
+          "x": -1818,
+          "y": 334,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28.8,
           "tick": 1843,
-          "x": -1892,
-          "y": 405,
+          "x": -1792,
+          "y": 337,
           "z": -162,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 28.9,
           "tick": 1850,
-          "x": -1878,
-          "y": 408,
+          "x": -1778,
+          "y": 340,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29,
           "tick": 1856,
-          "x": -1870,
-          "y": 408,
+          "x": -1780,
+          "y": 347,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29.1,
           "tick": 1862,
-          "x": -1854,
-          "y": 407,
+          "x": -1774,
+          "y": 353,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29.2,
           "tick": 1869,
-          "x": -1837,
-          "y": 402,
+          "x": -1767,
+          "y": 354,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29.3,
           "tick": 1875,
-          "x": -1819,
-          "y": 393,
+          "x": -1759,
+          "y": 352,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29.4,
           "tick": 1882,
-          "x": -1799,
-          "y": 384,
+          "x": -1749,
+          "y": 350,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29.5,
           "tick": 1888,
-          "x": -1780,
-          "y": 379,
+          "x": -1740,
+          "y": 352,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29.6,
           "tick": 1894,
-          "x": -1764,
-          "y": 384,
+          "x": -1734,
+          "y": 364,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29.7,
           "tick": 1901,
-          "x": -1747,
-          "y": 396,
+          "x": -1727,
+          "y": 382,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29.8,
           "tick": 1907,
-          "x": -1729,
-          "y": 410,
+          "x": -1719,
+          "y": 403,
           "z": -168,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 29.9,
@@ -40265,750 +40333,812 @@
         {
           "t": 59,
           "tick": 3776,
-          "x": -2068,
-          "y": 354,
+          "x": -2057,
+          "y": 346,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 59.1,
           "tick": 3782,
-          "x": -2058,
-          "y": 352,
+          "x": -2037,
+          "y": 337,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 59.2,
           "tick": 3789,
-          "x": -2047,
-          "y": 351,
+          "x": -2015,
+          "y": 328,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 59.3,
           "tick": 3795,
-          "x": -2036,
-          "y": 350,
+          "x": -1994,
+          "y": 320,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 59.4,
           "tick": 3802,
-          "x": -2026,
-          "y": 348,
+          "x": -1973,
+          "y": 311,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 59.5,
           "tick": 3808,
-          "x": -2016,
-          "y": 346,
+          "x": -1953,
+          "y": 301,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 59.6,
           "tick": 3814,
-          "x": -2005,
-          "y": 345,
+          "x": -1931,
+          "y": 292,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 59.7,
           "tick": 3821,
-          "x": -2005,
-          "y": 345,
+          "x": -1921,
+          "y": 285,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 59.8,
           "tick": 3827,
-          "x": -2005,
-          "y": 345,
+          "x": -1911,
+          "y": 278,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 59.9,
           "tick": 3834,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60,
           "tick": 3840,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60.1,
           "tick": 3846,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60.2,
           "tick": 3853,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60.3,
           "tick": 3859,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60.4,
           "tick": 3866,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60.5,
           "tick": 3872,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60.6,
           "tick": 3878,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60.7,
           "tick": 3885,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60.8,
           "tick": 3891,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 60.9,
           "tick": 3898,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61,
           "tick": 3904,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61.1,
           "tick": 3910,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61.2,
           "tick": 3917,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61.3,
           "tick": 3923,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61.4,
           "tick": 3930,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61.5,
           "tick": 3936,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61.6,
           "tick": 3942,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61.7,
           "tick": 3949,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61.8,
           "tick": 3955,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 61.9,
           "tick": 3962,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62,
           "tick": 3968,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62.1,
           "tick": 3974,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62.2,
           "tick": 3981,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62.3,
           "tick": 3987,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62.4,
           "tick": 3994,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62.5,
           "tick": 4000,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62.6,
           "tick": 4006,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62.7,
           "tick": 4013,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62.8,
           "tick": 4019,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 62.9,
           "tick": 4026,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63,
           "tick": 4032,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63.1,
           "tick": 4038,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63.2,
           "tick": 4045,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63.3,
           "tick": 4051,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63.4,
           "tick": 4058,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63.5,
           "tick": 4064,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63.6,
           "tick": 4070,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63.7,
           "tick": 4077,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63.8,
           "tick": 4083,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 63.9,
           "tick": 4090,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64,
           "tick": 4096,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64.1,
           "tick": 4102,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64.2,
           "tick": 4109,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64.3,
           "tick": 4115,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64.4,
           "tick": 4122,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64.5,
           "tick": 4128,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64.6,
           "tick": 4134,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64.7,
           "tick": 4141,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64.8,
           "tick": 4147,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 64.9,
           "tick": 4154,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 65,
           "tick": 4160,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 65.1,
           "tick": 4166,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
-          "confidence": "observed"
+          "confidence": "estimated",
+          "uncertainty": 20
         },
         {
           "t": 65.2,
           "tick": 4173,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 65.3,
           "tick": 4179,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 65.4,
           "tick": 4186,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 65.5,
           "tick": 4192,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 65.6,
           "tick": 4198,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 65.7,
           "tick": 4205,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 65.8,
           "tick": 4211,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 65.9,
           "tick": 4218,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 66,
           "tick": 4224,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 66.1,
           "tick": 4230,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 66.2,
           "tick": 4237,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 66.3,
           "tick": 4243,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 66.4,
           "tick": 4250,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 66.5,
           "tick": 4256,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 66.6,
           "tick": 4262,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 66.7,
           "tick": 4269,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 0
+          "uncertainty": 20
         },
         {
           "t": 66.8,
           "tick": 4275,
-          "x": -2005,
-          "y": 345,
+          "x": -1900,
+          "y": 270,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 66.9,
           "tick": 4282,
-          "x": -2014,
-          "y": 342,
+          "x": -1918,
+          "y": 273,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67,
           "tick": 4288,
-          "x": -2024,
-          "y": 339,
+          "x": -1937,
+          "y": 277,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67.1,
           "tick": 4294,
-          "x": -2033,
-          "y": 336,
+          "x": -1954,
+          "y": 280,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67.2,
           "tick": 4301,
-          "x": -2042,
-          "y": 332,
+          "x": -1972,
+          "y": 282,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67.3,
           "tick": 4307,
-          "x": -2051,
-          "y": 329,
+          "x": -1990,
+          "y": 285,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67.4,
           "tick": 4314,
-          "x": -2060,
-          "y": 326,
+          "x": -2008,
+          "y": 289,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67.5,
           "tick": 4320,
-          "x": -2070,
-          "y": 323,
+          "x": -2026,
+          "y": 292,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67.6,
           "tick": 4326,
-          "x": -2079,
-          "y": 320,
+          "x": -2044,
+          "y": 295,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67.7,
           "tick": 4333,
-          "x": -2088,
-          "y": 316,
+          "x": -2062,
+          "y": 297,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67.8,
           "tick": 4339,
-          "x": -2097,
-          "y": 313,
+          "x": -2079,
+          "y": 300,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 67.9,
           "tick": 4346,
-          "x": -2107,
-          "y": 312,
+          "x": -2098,
+          "y": 306,
           "z": -160,
           "confidence": "estimated",
-          "uncertainty": 60
+          "uncertainty": 20
         },
         {
           "t": 68,
@@ -46868,7 +46998,7 @@
       "attacker": "sp4rtan",
       "victim": "donk",
       "amount": 27,
-      "armor": null,
+      "armor": 4,
       "weapon": "ak47",
       "note": "donk 100 → 73",
       "apos": {
@@ -46889,7 +47019,7 @@
       "attacker": "sp4rtan",
       "victim": "donk",
       "amount": 34,
-      "armor": null,
+      "armor": 5,
       "weapon": "ak47",
       "note": "73 → 39",
       "apos": {
@@ -46910,7 +47040,7 @@
       "attacker": "sp4rtan",
       "victim": "donk",
       "amount": 26,
-      "armor": null,
+      "armor": 0,
       "weapon": "ak47",
       "note": "39 → 13",
       "apos": {
@@ -47406,8 +47536,8 @@
     "plantT": 27.517,
     "plantTick": 1761,
     "pos": {
-      "x": -1982,
-      "y": 311,
+      "x": -1882,
+      "y": 243,
       "z": -160
     },
     "defuseStartT": 61.8,
@@ -47610,10 +47740,10 @@
           "raw": "Knife"
         },
         {
-          "t": 63.5,
-          "tick": 4064,
+          "t": 61.4,
+          "tick": 3930,
           "weapon": "ak47",
-          "raw": "AK-47"
+          "raw": "AK-47 (ammo HUD 24/90 from 61.40 s (V4); page 63.5)"
         }
       ],
       "donk": [

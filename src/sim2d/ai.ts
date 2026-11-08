@@ -445,13 +445,14 @@ export function escapeSpot(nav: NavMesh, from: Vec3, bomb: Vec3, clear: number):
  * nearestBombsitePoint, placeCentre of "T Spawn" / "CT Spawn", escapeSpot, places starting with "Bombsite").
  */
 /**
- * B2: the 2020 nav's "Bombsite A/B" places also paint Apartments, the Market window and the ramp (B alone is 1,500 x 950
- * units). The plant zone is those places inside the boxes of the planter spots (B3none/cs2-retakes CanBePlanter, see
- * data/source/maps/de_mirage.json) grown 130 units: the same two rects tools/build-map.ts writes to mirage-cs2/map.json.
+ * The plant zones of the recorded round's map (B2 drew them from the 2020 nav's places and the retakes planter spots;
+ * the 2020 nav's "Bombsite A/B" places also paint Apartments, the Market window and the ramp). P3: they are the 2020
+ * BSP's `func_bomb_target` boxes grown by the player hull (16 units: a T is in the zone while his hull touches the
+ * trigger), the same two rects tools/build-map.ts writes to mirage-cs2/map.json (docs/maps.md "Map facts").
  */
 export const LEGACY_PLANT_ZONES: readonly { readonly name: 'A' | 'B'; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number }[] = [
-  { name: 'A', x1: -684.97, y1: -2264.08, x2: -123.97, y2: -1906.16 },
-  { name: 'B', x1: -2328.97, y1: -40.97, x2: -1762.41, y2: 580.03 },
+  { name: 'A', x1: -632, y1: -2344, x2: -248.008, y2: -1992 },
+  { name: 'B', x1: -2232, y1: 56, x2: -1864, y2: 456 },
 ];
 
 function inLegacyPlantZone(p: Vec3): boolean {
