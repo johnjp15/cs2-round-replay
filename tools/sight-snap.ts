@@ -47,7 +47,16 @@ export const SIGHT_PARAMS = {
 } as const;
 
 /**
- * Recorded duels this pass leaves alone, by vision-label id: the recorded (video-fitted) positions are right and the
+ * Option (a) of the V2 decision (2026-11-07): the window duel stays at the video-fitted positions (within the radar's
+ * accuracy) and the map gets the 2020 opening. Off until the map has it: on CS2 Mirage the fitted positions block
+ * every line of the duel, so a human cart's real shots (D1) could not reach Lokier and his hit could not reach cart;
+ * with this off, tools/fit-view-angles.ts writes no position edits and this pass moves the duel into sight as before
+ * (G6). Turn it on with the 2020 map package (X1): then MAP_DIFFERENCES below is the list to empty as well.
+ */
+export const WINDOW_DUEL_AS_FITTED = false;
+
+/**
+ * Recorded duels this pass leaves alone (with WINDOW_DUEL_AS_FITTED), by vision-label id: the recorded (video-fitted) positions are right and the
  * line is blocked because CS2 Mirage differs from the 2020 map there. V2 (docs/viewfit.md "Engagement positions"):
  * cart's first-person frames put him and Lokier within the radar's accuracy of their dots, and no position within it
  * opens the window duel on CS2 Mirage; the 2020 opening of the Apartments window starts ~60 u further west than CS2's.
@@ -156,7 +165,7 @@ export function sightPass(input: SightPassInput): SightPassResult {
     const ta = tracks.get(duel.a);
     const tb = tracks.get(duel.b);
     if (ta === undefined || tb === undefined) continue;
-    const known = MAP_DIFFERENCES[duel.label];
+    const known = WINDOW_DUEL_AS_FITTED ? MAP_DIFFERENCES[duel.label] : undefined;
     if (known !== undefined) {
       notes.push(`${duel.label} (${duel.a} ↔ ${duel.b}, ${duel.t0}–${duel.t1} s): left as fitted — known CS2-vs-2020 map difference: ${known}`);
       continue;

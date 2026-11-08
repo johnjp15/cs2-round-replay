@@ -140,7 +140,9 @@ describe('a takeover at T (G4)', () => {
     // 5 s: waiting (Lokier hasn't seen cart at the window yet). G6: on the CS2 mesh Lokier first sees the puppet at the
     // spot at tick 1138 (17.78 s, through the window, on the duel track; 1126 before). Taken over at 17.6 s (tick 1126)
     // cart stays where the puppet was, off his track, and Lokier's view finds him there at tick 1202 (+1.3 s): the hit
-    // 1 s later (1266). From 18.0 s he was seen on course at 1138, so the hit lands on its recorded tick (G5).
+    // 1 s later (1266). From 18.0 s he was seen on course, so the hit lands on its recorded tick (G5). V2: the puppet
+    // Lokier (SSG 08, slower than a walk) holds his angle instead of spinning to his jiggle's heading, so he first
+    // sees cart at 1163 (18.17 s), after the 18.0 s takeover; still on course, the hit is on 1184.
     expect(logsAt(run(5), 320)).toContain('encounter lokier -> cart: active from the takeover at tick 320, waiting for lokier to see cart at the spot');
     expect(logsAt(run(17.6), 1126)).toEqual([
       'takeover: cart is the human from tick 1126 (100 hp, ak47); 11 damage blocks lifted',
@@ -148,7 +150,7 @@ describe('a takeover at T (G4)', () => {
     ]);
     expect(logsAt(run(17.6), 1202)).toContain('encounter lokier -> cart: cart in sight at the spot at tick 1202 (+1.3 s against the recording), scripted hit due at tick 1266');
     expect(hitOnCart(run(17.6))).toEqual([{ tick: 1266, amount: 73, scripted: true }]);
-    expect(logsAt(run(18), 1152)).toContain('encounter lokier -> cart: cart in sight at the spot since tick 1138 (+0.3 s against the recording), before the takeover at tick 1152; scripted hit due at tick 1184 (on course: the recorded tick)');
+    expect(logsAt(run(18), 1163)).toContain('encounter lokier -> cart: cart in sight at the spot at tick 1163 (+0.7 s against the recording), scripted hit due at tick 1184 (on course: the recorded tick)');
     expect(hitOnCart(run(18))).toEqual([{ tick: 1184, amount: 73, scripted: true }]);
     // B3's recorded hit (1184) is skipped once he is the human; it is the encounter's.
     for (const t of [0, 5, 17.6, 18]) expect(coreLogs(run(t).entries).some((l) => l.text.startsWith('script: no scripted damage lokier -> cart (73 hp at tick 1184)'))).toBe(true);

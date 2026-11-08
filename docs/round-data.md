@@ -9,7 +9,7 @@ npx tsx tools/extract-round.ts ../web-apps/cs2/mirage-round-replay/index.html   
 npx tsx tools/validate-round.ts                                                 # [data/round.json] [--csv <csv>]
 ```
 
-- **Inputs:** (V2) `data/source/view-fit.json` when present (the fitted views and position refinements); the web-apps replay page (its `<script id="data" type="application/json">` block and the one inline `data:image/jpeg` radar), the shots CSV (default `<page dir>/source/shots/mirage-round-sp4rtan-1v3-shots.csv`), and `data/tuning.json` (clip/reserve per weapon).
+- **Inputs:** (V2) `data/source/view-fit.json` when present (the fitted views; position refinements, none at present); the web-apps replay page (its `<script id="data" type="application/json">` block and the one inline `data:image/jpeg` radar), the shots CSV (default `<page dir>/source/shots/mirage-round-sp4rtan-1v3-shots.csv`), and `data/tuning.json` (clip/reserve per weapon).
 - **Outputs:** `data/round.json` (2-space JSON, fixed key order, trailing newline), `data/mirage-radar.jpg` (1024×1024 overview, the bytes from the page), and `data/source/mirage-round-sp4rtan-1v3-shots.csv` (a verbatim copy, so CI can check the shot count without web-apps).
 - **Determinism:** same inputs give byte-identical outputs. `tests/round-data.test.ts` rebuilds the round twice and compares it with the committed file whenever the web-apps clone is found next to the repo (or at `$ROUND_SOURCE_HTML`); without it that one test is skipped.
 - `meta.sources` records the SHA-256 of both inputs, so a stale `round.json` is easy to spot.
@@ -95,64 +95,9 @@ The 6th column (CT tracks only) is the uncertainty radius in world units. It is 
 Resampling: the source is 10 Hz but jumps half a step at some event anchors (snarlbot from 13.05 s, Lokier from 12.75 s, Sp4rtaN around 17.85, 19.6, 68.75 and 70.0 s, eradicate's last sample at 12.75 s). Grid samples that fall between source rows are linearly interpolated, rounded to whole units, marked `resampled: true`, and take the less certain confidence (and larger uncertainty) of their two neighbours. The original off-grid rows are in `offGridSamples`, so nothing from the source is lost.
 
 `refined: 'viewfit'` (V2) marks a sample moved from the radar reading to where the video's first-person frames put the
-player (below).
-
-### View fit: position refinements (V2)
-
-`data/source/view-fit.json` `positions` (`tools/fit-view-angles.ts`, `docs/viewfit.md` "Engagement positions") moves
-the samples of the window duel (cart ↔ Lokier, 17.45–18.8 s) to the fitted eye: cart at the second window (18.2–18.8 s)
-by the median offset of his 13 observed frames 18.2–18.78 s, then 104 u forward and 56 u left along his view so that
-both scripted hits' lines are open on the CS2 mesh; on the approach past the first window (17.4–17.9 s) each frame's own
-fitted offset (median of 3), plus the least move that keeps Lokier in sight there (the recorded sighting from 17.45 s);
-Lokier onto cart's line of sight at the frames where cart's crosshair is on him (18.75–18.8 s). Tapered over 0.8 s.
-The kill and damage event positions at 18.5 / 18.8 s (`kpos`, `vpos`, `apos`) move with the refined samples (x, y). `to` is the refined spot relative to the snapped track the fit used (z stays the recording's;
-`tools/snap-tracks.ts` puts it on the floor). The extractor checks each `from` against the source sample.
-
-| player | t (s) | recording (x, y, z) | refined (x, y) | frames used |
-| --- | ---: | --- | --- | --- |
-| cart | 16.7 | (-1463, 742, -48) | (-1462, 736) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 16.8 | (-1484, 752, -48) | (-1482, 740) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 16.9 | (-1500, 757, -48) | (-1497, 739) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17 | (-1509, 757, -48) | (-1504, 732) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17.1 | (-1520, 751, -48) | (-1514, 720) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17.2 | (-1531, 742, -48) | (-1524, 705) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17.3 | (-1540, 736, -48) | (-1532, 693) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17.4 | (-1556, 735, -48) | (-1547, 686) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17.5 | (-1571, 736, -48) | (-1564, 684) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17.6 | (-1579, 745, -48) | (-1571, 689) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17.7 | (-1588, 763, -48) | (-1585, 689) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17.8 | (-1607, 776, -48) | (-1609, 679) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 17.9 | (-1636, 786, -48) | (-1644, 727) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18 | (-1665, 792, -48) | (-1675, 712) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18.1 | (-1697, 796, -48) | (-1710, 694) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18.2 | (-1723, 800, -48) | (-1738, 677) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18.3 | (-1739, 802, -48) | (-1754, 679) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18.4 | (-1754, 802, -48) | (-1769, 679) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18.5 | (-1764, 800, -48) | (-1779, 677) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18.6 | (-1766, 797, -48) | (-1781, 674) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18.7 | (-1764, 794, -48) | (-1779, 671) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18.8 | (-1758, 793, -48) | (-1773, 670) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 18.9 | (-1755, 794, -48) | (-1768, 687) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 19 | (-1761, 796, -48) | (-1772, 704) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 19.1 | (-1766, 799, -48) | (-1775, 722) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 19.2 | (-1771, 801, -48) | (-1779, 740) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 19.3 | (-1778, 804, -48) | (-1784, 758) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 19.4 | (-1795, 810, -48) | (-1797, 779) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| cart | 19.5 | (-1820, 814, -48) | (-1796, 789) | 13 observed frames 18.20-18.78 s; approach: 6 frames 17.4-17.9 s, each its own fit |
-| lokier | 17.5 | (-2123, 453, -160) | (-2118, 466) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 17.6 | (-2116, 460, -162) | (-2108, 462) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 17.7 | (-2109, 466, -163) | (-2096, 454) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 17.8 | (-2103, 473, -165) | (-2085, 454) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 17.9 | (-2103, 479, -166) | (-2080, 454) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 18 | (-2109, 487, -168) | (-2081, 457) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 18.1 | (-2103, 479, -168) | (-2070, 444) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 18.2 | (-2103, 472, -168) | (-2064, 431) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 18.3 | (-2110, 465, -166) | (-2069, 425) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 18.4 | (-2118, 459, -165) | (-2077, 425) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 18.5 | (-2125, 452, -164) | (-2084, 426) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 18.6 | (-2132, 445, -162) | (-2081, 425) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 18.7 | (-2139, 439, -161) | (-2086, 427) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
-| lokier | 18.8 | (-2146, 432, -160) | (-2087, 426) | cart's crosshair at 18.750, 18.767, 18.783, 18.800 s |
+player (`data/source/view-fit.json` `positions`, `tools/fit-view-angles.ts`, `docs/viewfit.md` "Engagement
+positions"). **None at present**: the window duel's fitted positions (cart and Lokier within the radar's ±40 u) wait
+for a map with the 2020 Apartments window (`tools/sight-snap.ts` `WINDOW_DUEL_AS_FITTED`).
 
 ### `shots[]` (one per CSV row, in CSV order)
 

@@ -23,6 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { MapGeometry, decodeGeometry } from '../src/sim2d/geometry';
 import { type Confidence, type PlayerId, type RoundData, type Vec3, type ViewSource } from '../src/contracts/index';
 import { VIEW_FIT_FORMAT, VIEW_FIT_PATH, type ViewFitFile } from './extract-round';
+import { WINDOW_DUEL_AS_FITTED } from './sight-snap';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const EYE = 64;
@@ -350,7 +351,8 @@ export function engagementMoves(round: RoundData, frames: readonly FitFrame[], s
   const moves: Move[] = [];
   const hits = engagementHits(round);
   for (const e of ENGAGEMENTS) {
-    if (!e.refine) continue;
+    // The engagement positions wait for a map with the 2020 window (tools/sight-snap.ts WINDOW_DUEL_AS_FITTED).
+    if (!e.refine || !WINDOW_DUEL_AS_FITTED) continue;
     const fr = frames.filter((f) => f.player === e.watched && f.t >= e.window[0] - 1e-9 && f.t <= e.window[1] + 1e-9 && f.confidence === 'observed');
     if (fr.length === 0) continue;
     const base = clampLen(median(fr.map((f) => f.view.dx)), median(fr.map((f) => f.view.dy)), MAX_MOVE_T);

@@ -1,7 +1,7 @@
 {
   "format": "cs2-round-replay/tracks3d@1",
   "note": "Every recorded track sample of data/round.json snapped onto CS2 Mirage (world mesh + player clips): the nearest spot within 64 units where a hull stands, z = that floor; and the samples a jump takes off from. Built by tools/snap-tracks.ts (docs/geometry.md \"Track snapping\"); applied by applyTracks3d.",
-  "sources": [{"file":"data/round.json","sha256":"b4f20242157af8140b29bfcf2888fd4faff6164736256c3f36c65763894740ac"},{"file":"data/geometry/mirage-geometry.bin","sha256":"4456186c18d2f9ff161dde5120ca0b10c36889bbc0f6cd6ebe02ada0a367ad6a"},{"file":"data/geometry/mirage-clips.bin","sha256":"30b8e23325178ba443004b1bb9f7e99c0d7e56ed4cf422dfc297cacf6faf4a57"},{"file":"data/source/cs2/de_mirage.nav","sha256":"2ba8608994c178dc5ff2553fefdd2a8473aadd0e0b09b8004201e1fa578bb0bd"}],
+  "sources": [{"file":"data/round.json","sha256":"6a81445384d47c57ccf00a56a694998b49f4e4cbc4b8a5210889c65e08bc3e42"},{"file":"data/geometry/mirage-geometry.bin","sha256":"4456186c18d2f9ff161dde5120ca0b10c36889bbc0f6cd6ebe02ada0a367ad6a"},{"file":"data/geometry/mirage-clips.bin","sha256":"30b8e23325178ba443004b1bb9f7e99c0d7e56ed4cf422dfc297cacf6faf4a57"},{"file":"data/source/cs2/de_mirage.nav","sha256":"2ba8608994c178dc5ff2553fefdd2a8473aadd0e0b09b8004201e1fa578bb0bd"}],
   "params": {"grid":2,"searchRadius":64,"zWindow":32,"continuity":24,"wideRadius":128,"followRadius":40,"followMaxMiss":96,"repairRadius":48,"repairGrid":8,"levelChange":48,"floorRun":10,"farZWindow":96,"climbSlack":2,"reachSec":0.6,"reachUnits":12,"reachZ":4},
   "stats": {"samples":3562,"ok":2163,"moved":142,"far":1162,"impossible":95,"unconnected":5,"jumps":0},
   "tracks": {

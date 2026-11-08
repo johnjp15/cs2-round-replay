@@ -110,7 +110,7 @@ death (58.85 s) is that ceiling stare. 40 samples are held (cart 24: before 37.4
 ### The view at the watched shots
 
 Angle between the fitted view and the line from the fitted eye to the target's head (track + 64). *Before*: the
-recorded positions; *after*: the refined ones (below), with the eye moved with them.
+recorded positions; *after*: V2's first attempt, cart pushed until the lines open (below; not used).
 
 | t (s) | shooter → target | frame conf. | fitted yaw / pitch | error before | error after |
 | ---: | --- | --- | --- | ---: | ---: |
@@ -133,43 +133,41 @@ rows say the target is not where the view is, or the fit is off — they are lef
 ## Engagement positions (the window duel)
 
 G6's audit found cart ↔ Lokier impossible on the CS2 mesh at the recorded positions: both scripted hits (Lokier's 73 on
-cart at 18.5 s, cart's headshot at 18.8 s) crossed the Apartments wall 5–10 u west of the window's edge, and G6's sight
-pass (pass 5 of `tools/snap-tracks.ts`) moved cart up to 108 u to compensate. V2 places them from the video instead
-(`tools/fit-view-angles.ts`, `ENGAGEMENTS`):
+cart at 18.5 s, cart's headshot at 18.8 s) cross the Apartments wall 5–10 u west of the window's edge, and G6's sight
+pass (pass 5 of `tools/snap-tracks.ts`) moves cart up to 106 u to compensate. `tools/fit-view-angles.ts`
+(`ENGAGEMENTS`, `engagementMoves`) places them from the video instead:
 
-1. **cart's eye**: the median fitted offset of his 13 observed frames 18.2–18.78 s.
+1. **cart's eye**: the median fitted offset of his 13 observed frames 18.2–18.78 s: **(+22, −11) u** from his snapped
+   track, i.e. 25 u — well inside the radar's accuracy. On the approach (17.4–17.9 s) each 10 Hz frame's own offset
+   (median of 3), (0…7, −40) after the cap.
 2. **Lokier** onto cart's line of sight at the frames where cart's crosshair is on him (18.75–18.8 s, the headshot), at
-   his radar distance, within 3° of the crosshair (the fit, spread and recoil), at most 60 u (he is radar-observed).
-3. **Depth.** The fit pins the eye across the view but hardly along it: moving cart's eye forward along the view costs
-   the 18.5–18.8 s frames only 0.02–0.08 of score over the first 80–100 u, then the score collapses when the eye reaches
-   the window (cart's 18.7 s frame, eye moved forward along the view, rotation re-fitted: 0 u 0.74, 40 u 0.67, 80 u 0.65, 120 u 0.63, 140 u 0.42; 18.8 s: 0.68, 0.60, 0.60, 0.55, 0.35). So cart is moved
-   by the least amount, forward along his view yaw (−136.7°) at half the cost of sideways (≤ 64 u), that opens both
-   scripted hits' eye-to-band lines with a margin (± 2 u, the band 4 u lower, and the victim crouched, since the
-   puppet's button plan crouches slow stretches). Result: **cart (+22.6, −92.7) + 104 u forward / 56 u left → (−15,
-   −123) from his snapped track; Lokier (+41, −44)**, tapered over 0.8 s at both ends.
-4. **The approach** (17.4–17.9 s, past the first window, where the recording's sighting of Lokier starts at 17.45 s):
-   each 10 Hz frame's own fitted offset (median of 3; the fit is strong there, scores 0.8–1.0, offsets (0…13, −51…−70)),
-   plus per frame the least move (same rule) that opens the eye-to-head line both ways to Lokier.
-   43 samples in all (cart 16.6–19.5 s, Lokier 17.5–18.8 s), each listed in `data/source/view-fit.json` `positions` and
-   in `docs/round-data.md`; the kill / damage event positions at 18.5 / 18.8 s move with them.
-5. Re-snapped: pass 5 then finds the duel (17.45–18.8 s) in sight and **leaves it alone** (it now moves only eradicate
-   12.5–12.7 s, up to 33 u, and donk 49.9–50.1 s, up to 6 u).
+   his radar distance, within 3° of the crosshair: **(+10, −10) u**.
+3. Every offset is capped at **40 u** (`MAX_MOVE_T`, the radar's accuracy).
 
-| check | before (G6 pass 5 on main) | before (recorded, no pass 5) | after (V2) |
-| --- | --- | --- | --- |
-| eye-to-head line cart ↔ Lokier, 18.2–18.8 s (`--check`) | – | 0 % of ticks open | **100 %** |
-| lokier → cart 73, chest, 18.50 s | through geometry (audit tick 1184) | blocked | **open** (no audit line) |
-| cart → lokier kill, head, 18.80 s | through geometry (audit tick 1203) | blocked | **open** (no audit line) |
-| cart's displacement from the recording | up to 106 u (pass 5, 17.0–19.3 s) | 0 | up to 124 u (fit 28 u + 104 u depth) |
+**The result: no position within the radar's accuracy opens the duel on CS2 Mirage.** At the fitted positions the
+eye-to-head line is open on 0 % of the ticks 18.2–18.8 s (`--check`), both scripted hits stay blocked, and the open
+region starts ~60 u past the window's west edge. V2 first tried pushing cart forward along his view until the lines
+open (the fit pins the eye across the view but hardly along it: cart's 18.7 s frame scores 0.74 / 0.67 / 0.65 / 0.63 /
+0.42 at 0 / 40 / 80 / 120 / 140 u forward); that needed 104 u forward + 56 u sideways and put cart 94–123 u from the
+radar dot (parity:2d: 44 regressions, 0 fixes). So it is a **CS2-vs-2020 map difference at the Apartments window**, not
+a position error.
 
-G6's no-human audit now lists 6 lines instead of main's 8: ticks 1184 and 1203 are gone; 32, 816, 1142, 3194, 3206 and
-3766 remain (`npx tsx tools/scenario-outcomes.ts nohuman`; T1 already removed 2829).
+**Decision (2026-11-07, option (a)):** players go where the evidence puts them; the map gets fixed separately. The
+"push until the line opens" step is off (`OPEN_LINES = false` in `tools/fit-view-angles.ts`). The fitted positions are
+behind one switch, `WINDOW_DUEL_AS_FITTED` in `tools/sight-snap.ts`, **off in this PR**: on CS2 Mirage the fitted
+positions block every line of the duel, and since D1 a human cart's shots are real, so a human aiming at Lokier's head
+could not get the tape's result (25 failures across duels / scenarios / takeover / rejoin with the switch on: every
+scenario where cart fights Lokier). With the switch off, `view-fit.json` has no position edits and pass 5 moves the duel
+into sight as on main (G6). With the 2020 map package (X1), turn the switch on: `fit-view-angles.ts` then writes the
+fitted positions above (43 samples, cart 16.7–19.5 s, Lokier 17.5–18.8 s), pass 5 leaves the duel alone
+(`MAP_DIFFERENCES`), and the duel's audit lines (ticks 1184, 1203) are gone if the 2020 window is in the mesh. Until
+then those two lines are labelled by `tools/scenario-outcomes.ts` as the known map difference (`docs/vision.md`).
 
 **Not refined** (`refine: false`): donk ↔ Sp4rtaN (49.9–50.35 s: donk's view at his missed AWP shot is 24.6° from
 Sp4rtaN's recorded spot, which is radar-observed from 49.9 s, so moving Sp4rtaN onto it would contradict the radar; the
 two corridor-door-frame audit lines 3194 / 3206 stay), barely ↔ Sp4rtaN (58.85 s: no frame shows Sp4rtaN at barely's
-crosshair; the B-pillar line 3766 stays), cart ↔ Sp4rtaN (65.9–69.4 s: cart sprays at the box Sp4rtaN defuses behind,
-no hit; the kill line at 69.4 s is open). barely ↔ Zwomp (44.2 s): the camera is on cart, nothing to fit.
+crosshair; K1's pass-5 fix handles the B-pillar line), cart ↔ Sp4rtaN (65.9–69.4 s: cart sprays at the box Sp4rtaN
+defuses behind, no hit; the kill line at 69.4 s is open). barely ↔ Zwomp (44.2 s): the camera is on cart, nothing to fit.
 
 ![cart ↔ Lokier: the fit at 18.4, 18.75 and 18.9 s](img/viewfit-lokier.jpg)
 
@@ -183,7 +181,7 @@ before; scripted aim overrides the recorded view during engagements):
 | **cart, 58.844 s (tick 3766, barely's death)** | −12.6° / **−75.83°** | −83.4° / −75.83° (held; the yaw is still turning at 12°/tick) |
 | cart, 59.5 s | −83.43° / −75.83° | −83.43° / −75.83° |
 | cart, 60.0 s | −14.7° / −26.0° | −8.4° / −24.0° (one tick behind a fast look-down) |
-| cart, 18.8 s | −140.6° / 16.3° | −136.7° / 14.5° (scripted aim at Lokier's refined head) |
+| cart, 18.8 s | −140.6° / 16.3° | −136.7° / 14.5° (scripted aim at Lokier's head) |
 | donk, 35.0 s | −16.19° / 1.59° | −16.10° / 1.85° |
 | barely, 53.0 s | 103.80° / −13.94° | 103.84° / −13.91° |
 | eradicate, 5.0 s | 179.57° / 1.17° | 179.68° / 1.33° |
@@ -192,25 +190,23 @@ before; scripted aim overrides the recorded view during engagements):
 
 The 3D host's FOV check for `sees` uses the yaw only (as 2D's, `src/sim3d/sight.ts`), so pitch changes no `sees`.
 
-## What the positions changed in the tests
+## What the views changed in the tests
 
-| test | before (main) | now | why |
+The positions are as on main (above), so only the view changes show:
+
+| test | main | now | why |
 | --- | --- | --- | --- |
-| `golden-round` snaps | cart 1392 | cart 1394 | he leaves the window duel from the fitted spot |
-| `sim3d-golden` audit ticks | 32, 816, 1142, 1184, 1203, 3194, 3206, 3766 | without 1184, 1203 | the window duel is in sight |
-| `duels`, `scenarios` (miss-lokier-shop) first sight of cart | 1138 | **1133** (17.70 s) | Lokier sees cart through the first window at his fitted spot (the recording's sighting starts at 17.45 s) |
-| plant in never-peeks, cart-dies, cart-goes-a, miss-lokier-shop, idle takeovers | 1768 | 1769 (0.84 s on the bomb) | barely's LIVE kill of the outlived Lokier, at Lokier's fitted spot, is a tick later |
-| `duel-perfect-aim` scenario | stops at 18.0 s | stops at **18.25 s** | at 18.0 s cart is between the windows, out of sight; at 18.25 s he is at the second window: his first shot (before 18.52 s) would hit, the kill lands on 18.80 s, nobody goes LIVE (the test is unchanged) |
-| `takeover-duel` scenario | aim, hold at the 18.0 s spot | aim, **walk to the second window** (−1777, 679), hold, fire at 18.7 s | the duel rule as before: the hit lands on 1184, cart's own shots resolve like the tape (kill on 1203), the round is the tape |
-| `smoke-window` scenario | smoke at (−1700, 790), spot (−1712, 700), step west to (−1900, 740) | smoke at (−1750, 790), spot (−1777, 679), step west to (−1930, 720) | the same story on the fitted geometry: hidden in the smoke at the spot, seen when he steps west along the window wall (20.09 s), the hit 1 s later, cart kills Lokier, nobody LIVE |
-| `takeover` T = 17.6 / 18 (idle) | Lokier's hit on the idle cart at 1266 / 1184 | **no hit; Lokier goes LIVE** (1345 / 1183) | idle at 17.6 s cart stands at the first window, 208 u from the hit's spot (> 192); idle at 18.0 s he is between the windows when the hit is due, out of sight. The block cart > lokier at T = 18 is still issued (the duel gate, not geometry). The idle rounds' later events are re-baselined (T = 18: barely survives, the LIVE defuse at 4299) |
-| `rejoin` never-peeks | 0.828 s left, digest 93e0dc15 (rejoin off) | 0.844 s, 68ec22fb | the plant a tick later |
+| `duels` (tape-identical input), `scenarios` 10 (miss-lokier-shop): the duel starts | tick 1138 | **1163** (18.17 s) | a puppet with a scoped rifle (Lokier, SSG 08) slower than a walk holds his angle instead of turning to the heading of his 20 u jiggle (on main he spun 140° → 17° → 90° → −174° in 0.6 s and saw cart through the window by chance at 1138); he sees cart when B3's aim turns him at 1163 |
+| `takeover` T = 18 | seen since 1138, before the takeover | seen at **1163**, after it | the same; still on course, so the hit lands on its recorded tick 1184 |
+| `rejoin` digests | no-human 9a994b97, never-peeks (rejoin off) 6d705c2e | **d889d3cf**, **b51aae40** | the views |
+| `puppet` (new) | – | recorded views interpolate (yaw across ±180, pitch linear), radar fallback, pitch rate-limited 12°/tick and levelled off, scoped rifles hold their angle | the puppet change |
+| `round-data` | – | the extractor's input includes `view-fit.json` | the merge |
 
 ## Known limits
 
 - The CS2 physics mesh is not the 2020 CS:GO map: no glass, window bars, props or skybox buildings, decimated on an
   8-unit grid. Frames dominated by those (B-site boxes up close, cart 68.8–69.3 s) fit poorly and are marked.
-- Depth along the view is weak (above); the engagement step uses that freedom on purpose and says so.
+- Depth along the view is weak (above): the fitted eye can sit ~±80 u along the view at almost the same score.
 - Plain ceilings and floors: up and down look alike to both cues; the sequence (Viterbi) decides. A frame whose
   neighbours are all plain could flip; none is left in the round (checked on the sheets).
 - Smoke / flash / motion-blur frames: 21 fall back to the radar yaw (no pitch); the puppet then holds its pitch.
