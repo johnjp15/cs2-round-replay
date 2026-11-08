@@ -2,11 +2,11 @@
  * X1: the map packages a session can run on (docs/maps.md). Both are Mirage in the round's frame; they differ in
  * where the 3D world comes from:
  *
- * - `mirage-cs2` (default): CS2's collision mesh (awpy-data, decimated, no clips) with player clips rebuilt from the
- *   CS2 nav (data/geometry/, docs/geometry.md).
- * - `mirage-2020`: the March 2020 CS:GO `de_mirage.bsp` the round was played on: its brushes, displacements, props
- *   and real player clips, plus a render mesh with its materials and lightmaps (data/maps/mirage-2020/, built by
- *   tools/extract-bsp.ts from John's extraction, docs/csgo-2020-files.md).
+ * - `mirage-2020` (default, X1c): the March 2020 CS:GO `de_mirage.bsp` the round was played on: its brushes,
+ *   displacements, props and real player clips, plus a render mesh with its materials and lightmaps
+ *   (data/maps/mirage-2020/, built by tools/extract-bsp.ts from John's extraction, docs/csgo-2020-files.md).
+ * - `mirage-cs2`: CS2's collision mesh (awpy-data, decimated, no clips) with player clips rebuilt from the CS2 nav
+ *   (data/geometry/, docs/geometry.md); free play on Mirage uses it.
  *
  * - H3: any awpy-data map built by tools/build-map.ts (`de_dust2`): its CS2 collision mesh, clips from its CS2 nav,
  *   the nav itself (`nav.json`), radar and facts (`map.json`: bomb sites, spawns) in data/maps/<id>/. No recording
@@ -17,7 +17,7 @@
 
 export const MAP_IDS = ['mirage-cs2', 'mirage-2020', 'de_dust2'] as const;
 export type MapId = (typeof MAP_IDS)[number];
-export const DEFAULT_MAP: MapId = 'mirage-cs2';
+export const DEFAULT_MAP: MapId = 'mirage-2020';
 
 export class MapIdError extends Error {
   override readonly name = 'MapIdError';

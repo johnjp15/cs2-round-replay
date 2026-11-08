@@ -3,7 +3,7 @@
   "name": "mirage-sp4rtan-1v3",
   "title": "Mirage: sp4rtan's 1v3 (the recorded round)",
   "description": "The recorded round on Mirage: B plant at 27.5 s, sp4rtan's 1v3 retake and defuse with 0.72 s left. Watch it, or take control of cart (E) at any time.",
-  "map": "mirage-cs2",
+  "map": "mirage-2020",
   "seed": 1,
   "rules": {
     "c4TimerSec": 40,
