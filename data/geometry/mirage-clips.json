@@ -3,8 +3,8 @@
   "note": "Player clips for G3 movement: prisms over walkable surfaces a pawn could reach that the CS2 nav does not cover (wall tops, ledges, roofs, out-of-map floors). G2GM like mirage-geometry.bin; merged into it for movement. Built by tools/extract-clips.ts; see docs/geometry.md \"Player clips\".",
   "binary": {
     "file": "data/geometry/mirage-clips.bin",
-    "bytes": 151199,
-    "sha256": "30b8e23325178ba443004b1bb9f7e99c0d7e56ed4cf422dfc297cacf6faf4a57"
+    "bytes": 150141,
+    "sha256": "d46fb378c912228e7c3bb7d5142b6cba211ddc1481285c8abfffb9c1fc4aebb4"
   },
   "sources": [
     {
@@ -34,7 +34,7 @@
     "seedDz": 24,
     "maxRounds": 8
   },
-  "pieces": 3864,
+  "pieces": 3845,
   "rounds": [
     {
       "round": 0,
@@ -86,35 +86,172 @@
     }
   ],
   "mesh": {
-    "caps": 7790,
-    "walls": 19702,
-    "degenerate": 329,
-    "vertices": 16593,
-    "triangles": 27155
+    "caps": 7749,
+    "walls": 19548,
+    "degenerate": 326,
+    "vertices": 16471,
+    "triangles": 26963
   },
+  "patch": [
+    {
+      "tri": 27941,
+      "ci": -302,
+      "cj": 83,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -302,
+      "cj": 84,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -302,
+      "cj": 85,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -302,
+      "cj": 86,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -302,
+      "cj": 87,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -302,
+      "cj": 88,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -302,
+      "cj": 89,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -302,
+      "cj": 90,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -302,
+      "cj": 91,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -301,
+      "cj": 91,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -301,
+      "cj": 92,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -301,
+      "cj": 93,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -301,
+      "cj": 94,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -301,
+      "cj": 95,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -301,
+      "cj": 96,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27941,
+      "ci": -301,
+      "cj": 97,
+      "why": "van roof (Mirage B, near Lokier): prism over the walkable van top"
+    },
+    {
+      "tri": 27904,
+      "ci": -300,
+      "cj": 98,
+      "why": "van cab roof: 512-unit prism over an interior z 0 sliver walls the cab roof"
+    },
+    {
+      "tri": 27904,
+      "ci": -299,
+      "cj": 98,
+      "why": "van cab roof: same sliver, next cell"
+    },
+    {
+      "tri": 7599,
+      "ci": -301,
+      "cj": 83,
+      "why": "B crate (top z -80): corner cell walled, 512 units tall"
+    }
+  ],
   "validation": {
-    "reachedLevels": 243495,
-    "notAllowedByNav": 35,
+    "reachedLevels": 244742,
+    "notAllowedByNav": 1267,
     "notAllowedCells": [
       "-128,-2432,-163",
       "-1600,-2432,-240",
       "-1600,-2432,-241",
       "-192,-1664,-71",
+      "-2176,768,-16",
+      "-2176,832,-16",
+      "-2240,768,-16",
+      "-2240,832,-113",
+      "-2240,832,-114",
+      "-2240,832,-115",
+      "-2240,832,-116",
+      "-2240,832,-16",
       "-2304,-704,-168",
-      "-320,-2112,-102",
-      "-384,-2368,-151",
-      "-448,-2368,-151",
-      "-960,-2560,-158",
-      "256,-576,-125",
-      "320,-576,-162",
-      "320,-576,-163",
-      "320,-640,-163",
-      "384,640,-259",
-      "704,-1280,-257",
-      "704,-1472,-262",
-      "704,-1472,-263",
-      "704,-1472,-264",
-      "704,-1536,-264"
+      "-2304,768,-16",
+      "-2304,768,-28",
+      "-2304,768,-8",
+      "-2304,832,-112",
+      "-2304,832,-113",
+      "-2304,832,-114",
+      "-2304,832,-115",
+      "-2304,832,-116",
+      "-2304,832,-16",
+      "-2304,832,-28",
+      "-2304,832,-8",
+      "-2368,768,-8",
+      "-2368,832,-111",
+      "-2368,832,-112",
+      "-2368,832,-113",
+      "-2368,832,-114",
+      "-2368,832,-115",
+      "-2368,832,-116",
+      "-2368,832,-117",
+      "-2368,832,-118",
+      "-2368,832,-119",
+      "-2368,832,-28",
+      "-2368,832,-8",
+      "-2432,576,0",
+      "-2432,640,-80",
+      "-2432,640,0",
+      "-2432,640,20"
     ]
   }
 }

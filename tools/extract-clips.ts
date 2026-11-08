@@ -573,6 +573,20 @@ export interface ClipSpec {
    * more than `navExactDz` off it, and a prism there walls the way off. Mirage's committed clips predate this (off).
    */
   readonly navRelief?: boolean;
+  /**
+   * C1: pieces to drop from the flooded clips by id (the world triangle and its 8-unit cell), after the flood and
+   * before nav relief. For prisms the flood puts where a pawn must be able to stand or jump (docs/geometry.md,
+   * "Clip patches"). Each entry says why; the manifest lists them under `patch`.
+   */
+  readonly patch?: readonly ClipPatch[];
+}
+
+/** C1: one flooded clip piece to remove (`ClipPiece.tri`, `ci`, `cj`). */
+export interface ClipPatch {
+  readonly tri: number;
+  readonly ci: number;
+  readonly cj: number;
+  readonly why: string;
 }
 
 /** H3 `navRelief`: points of a nav area a standing player must fit at (centroid, corners and edge midpoints pulled in). */
@@ -648,6 +662,22 @@ function relieveNav(world: MapGeometry, worldMesh: GeometryMesh, areas: readonly
 
 const MIRAGE_CLIPS_NOTE = 'Player clips for G3 movement: prisms over walkable surfaces a pawn could reach that the CS2 nav does not cover (wall tops, ledges, roofs, out-of-map floors). G2GM like mirage-geometry.bin; merged into it for movement. Built by tools/extract-clips.ts; see docs/geometry.md "Player clips".';
 
+/**
+ * C1: Mirage B's van (the Truck near Lokier's spot, docs/geometry.md "Clip patches"). The van's top has no CS2 nav, so
+ * the flood walls it with prisms that stand 512 units tall over the roof itself (its whole length, y 667–781 at
+ * x ≈ −2416…−2403, z 21–24) and over a z 0 sliver inside the cab roof (z 24–30), so nothing can stand, walk or
+ * jump on it. The flood reaches the roof by jumping (platform z −45 → box z −8 → cab z 24), so it is walkable
+ * in CS2; these 18 pieces are removed. One more: a crate top's corner cell next to it.
+ */
+const VAN = 'van roof (Mirage B, near Lokier): prism over the walkable van top';
+export const MIRAGE_CLIP_PATCH: readonly ClipPatch[] = [
+  ...[83, 84, 85, 86, 87, 88, 89, 90, 91].map((cj): ClipPatch => ({ tri: 27941, ci: -302, cj, why: VAN })),
+  ...[91, 92, 93, 94, 95, 96, 97].map((cj): ClipPatch => ({ tri: 27941, ci: -301, cj, why: VAN })),
+  { tri: 27904, ci: -300, cj: 98, why: 'van cab roof: 512-unit prism over an interior z 0 sliver walls the cab roof' },
+  { tri: 27904, ci: -299, cj: 98, why: 'van cab roof: same sliver, next cell' },
+  { tri: 7599, ci: -301, cj: 83, why: 'B crate (top z -80): corner cell walled, 512 units tall' },
+];
+
 export function mirageClipSpec(): ClipSpec {
   return {
     worldPath: BIN_PATH,
@@ -658,6 +688,7 @@ export function mirageClipSpec(): ClipSpec {
     seedsPath: 'data/round.json',
     previewRgba: () => jpeg.decode(readFileSync(resolve(ROOT, 'data/mirage-radar.jpg')), { useTArray: true }).data,
     note: MIRAGE_CLIPS_NOTE,
+    patch: MIRAGE_CLIP_PATCH,
   };
 }
 
@@ -698,6 +729,17 @@ export function buildClipsFor(spec: ClipSpec, worldBytesIn: Uint8Array | null = 
     merged = new MapGeometry(combineMeshes(worldMesh, built.mesh));
   }
   if (first === null) throw new Error('clips: no flood');
+  const patched: ClipPatch[] = [];
+  if (spec.patch !== undefined && spec.patch.length > 0) {
+    for (const pt of spec.patch) {
+      const i = clipped.findIndex((pc) => pc.tri === pt.tri && pc.ci === pt.ci && pc.cj === pt.cj);
+      if (i < 0) throw new Error(`clips: patch piece ${pt.tri}/${pt.ci}/${pt.cj} (${pt.why}) is not a flooded clip piece`);
+      clipped.splice(i, 1);
+      patched.push(pt);
+    }
+    built = prismMesh(clipped, worldMesh.quant);
+    merged = new MapGeometry(combineMeshes(worldMesh, built.mesh));
+  }
   let relief: { removed: number; samples: number } | null = null;
   if (spec.navRelief === true) {
     const r = relieveNav(world, worldMesh, areas, clipped);
@@ -735,6 +777,7 @@ export function buildClipsFor(spec: ClipSpec, worldBytesIn: Uint8Array | null = 
     pieces: clipped.length,
     rounds,
     mesh: built.stats,
+    ...(patched.length === 0 ? {} : { patch: patched }),
     ...(relief === null ? {} : { navRelief: relief }),
     validation: {
       reachedLevels: check.stats['reachedLevels'],

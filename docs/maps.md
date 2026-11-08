@@ -53,7 +53,7 @@ npx tsx tools/build-map.ts <map> --release 2000942 --offline --skip-geometry --s
    the spawns (Mirage: the ten recorded start positions, as always).
 
 Mirage stays byte-identical: `mirage-geometry.bin` / `.json`, `mirage-clips.bin` / `.json` and the height image's
-pixels are rebuilt through `build-map` and compared (`npm run map:check`; `tests/maps-h3.test.ts` checks the mesh,
+pixels are rebuilt through `build-map` and compared (`npm run map:check`, with Mirage's 19 clip patches applied: `MIRAGE_CLIP_PATCH`, docs/geometry.md "Clip patches"; `tests/maps-h3.test.ts` checks the mesh,
 `nav.json` and `map.json` quickly). Mirage's clips predate nav relief and keep it off.
 
 | `de_dust2` file | bytes | what |
