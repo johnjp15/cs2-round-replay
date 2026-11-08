@@ -615,7 +615,8 @@ describe('10. cart misses Lokier at the window and hides in Shop (G1)', () => {
     expect(coreLogs(run.entries).filter((l) => l.text.startsWith('duel cart -> lokier')).map((l) => l.text)).toEqual([
       // G6: from 1138 (1126 before): Lokier first sees him at the window on the CS2 mesh then. D1: the log wording.
       // V2: 1163, Lokier (scoped rifle, slower than a walk) holds his angle instead of spinning to his heading.
-      'duel cart -> lokier: in the recorded duel from tick 1163 (+0.0 s against the recording, to tick 1215); his shots on lokier are real (the tape: kill (ak47, head) at tick 1203)',
+      // F1: 1138 again, he holds the window from 1.5 s before the recorded sighting (the encounter's lead-in).
+      'duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on lokier are real (the tape: kill (ak47, head) at tick 1203)',
       'duel cart -> lokier: over at tick 1217, the recorded duel is over; 0 hits on lokier in it',
     ]);
     expect(switches(run).find((s) => s.id === 'lokier')).toMatchObject({ tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });

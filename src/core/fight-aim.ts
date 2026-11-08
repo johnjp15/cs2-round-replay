@@ -102,6 +102,16 @@ function recordedFeet(model: RoundModel, id: PlayerId, tick: number): Vec3 | nul
 }
 
 /**
+ * The first tick of a lead-in for an aim window starting at `windowFrom`: `lead` ticks before the anticipated sight,
+ * which is `sightTick` (the tape's first sighting of the pair, null without one) clamped to [windowFrom − lead,
+ * windowFrom]. Also B4's encounter hold (src/core/divergence.ts `buildEncounters`).
+ */
+export function leadStart(windowFrom: number, sightTick: number | null, lead: number): number {
+  const sight = Math.max(Math.min(sightTick ?? windowFrom, windowFrom), windowFrom - lead);
+  return sight - lead;
+}
+
+/**
  * The lead-ins of the plan's engagements (those with recorded spots: run-time engagements have no recorded approach).
  * Anticipated sight: the earliest tape sighting of the pair overlapping [fromTick − 3 s, toTick], clamped to
  * [fromTick − lead, fromTick]; the window start without one. The lead-in starts `aimLeadSec` before it.

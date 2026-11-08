@@ -25,6 +25,7 @@ import type { RoundModel } from './round-model';
 import type { DamageEntry, EventSchedule } from './schedule';
 import { secTicks, type PawnMode, type ScriptPlan, type ScriptedEvents } from './scripted';
 import { fateGone, survivorGoal } from './fate';
+import { leadStart } from './fight-aim';
 
 // ---------------------------------------------------------------------------
 // Triggers
@@ -430,7 +431,10 @@ export interface EncounterPlan {
   /** The plan's recorded fire items and engagements of this hit, suppressed while the encounter is active. */
   readonly fireKeys: readonly string[];
   readonly aimKeys: readonly string[];
-  /** From this tick (the recorded aim's start) the shooter holds the angle on the spot until the encounter ends. */
+  /**
+   * From this tick the shooter holds the angle on the spot until the encounter ends: F1's lead-in before the recorded
+   * aim's start (`leadStart`: `aimLeadSec` before the recorded sighting, or before the aim's start).
+   */
   readonly holdFromTick: number;
 }
 
@@ -504,6 +508,8 @@ export function buildEncounters(model: RoundModel, schedule: EventSchedule, plan
     const aims = plan.engagements.filter((e) => e.shooter === d.attacker && e.target === d.victim && e.fromTick <= d.tick - li && e.toTick >= d.tick - li);
     let holdFrom = d.tick - li - secTicks(tuning.replay.preAimSec);
     for (const e of aims) if (e.fromTick < holdFrom) holdFrom = e.fromTick;
+    // F1: the shooter holds the angle from aimLeadSec before the anticipated sight, as a puppet's lead-in (fight-aim.ts).
+    holdFrom = leadStart(holdFrom, sight, secTicks(tuning.replay.aimLeadSec));
     out.push({
       key: `enc:${out.length}`,
       shooter: d.attacker,

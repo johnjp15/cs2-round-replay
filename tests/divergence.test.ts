@@ -207,7 +207,7 @@ describe('expected encounters and the scheduled encounter', () => {
   it('builds one encounter: Lokier’s 73 HP / 7 armor SSG 08 hit on cart, from the 17.45 s sighting, at the window', () => {
     expect(encs).toHaveLength(1);
     const e = encs[0];
-    expect(e).toMatchObject({ key: 'enc:0', shooter: 'lokier', victim: 'cart', band: 'chest', weapon: 'ssg08', recordedSightTick: 1117, holdFromTick: 1161 });
+    expect(e).toMatchObject({ key: 'enc:0', shooter: 'lokier', victim: 'cart', band: 'chest', weapon: 'ssg08', recordedSightTick: 1117, holdFromTick: 1021 });
     expect(e?.damage).toMatchObject({ tick: 1184, amount: 73, armor: 7, lethal: false });
     expect(e?.spot).toEqual(model.trackAtTick('cart', 1184)?.pos);
     expect(e?.fireKeys.map((k) => script.plan.fire.find((f) => f.key === k)?.shotTicks)).toEqual([[1184]]);
