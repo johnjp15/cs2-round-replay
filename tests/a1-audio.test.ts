@@ -8,7 +8,7 @@ import manifest from '../data/audio/cs2-sound-events.json';
 import type { ObsEvent, Observe, PawnObs } from '../src/contracts/index';
 import type { Effect } from '../src/app/effects';
 import { GUNS, SOUNDS, SOUND_IDS, cs2EventNames, type SoundDef } from '../src/app3d/audio/events';
-import { SoundDirector, type CueOptions, type DirectorInput, type SoundSink } from '../src/app3d/audio/director';
+import { SoundDirector, c4BeepTicks, type CueOptions, type DirectorInput, type SoundSink } from '../src/app3d/audio/director';
 import { closestApproach, distanceGain, evalCurve, occlusion, occlusionTargets } from '../src/app3d/audio/spatial';
 import { renderSynth, wavBytes } from '../src/app3d/audio/synth';
 import { AUDIO_TUNING } from '../src/app3d/audio/tuning';
@@ -99,17 +99,18 @@ describe('CS2 distance curves and occlusion', () => {
 });
 
 describe('placeholder sounds', () => {
-  it('renders every sound, deterministically, at its peak gain', () => {
+  it('renders every sound, deterministically, under −1 dBFS (A2: normalised by loudness, tests/a2-sound.test.ts)', () => {
     for (const id of SOUND_IDS) {
-      const s = (SOUNDS[id] as { synth: { dur: number; gain?: number } }).synth;
+      const s = (SOUNDS[id] as { synth: { dur: number } }).synth;
       const a = renderSynth((SOUNDS[id] as SoundDef).synth, id, 8000);
-      expect(a.length).toBe(Math.max(1, Math.round(s.dur * 8000)));
+      expect(a.length).toBe(Math.max(16, Math.round(s.dur * 8000)));
       let peak = 0;
       for (const v of a) {
         expect(Number.isFinite(v)).toBe(true);
         peak = Math.max(peak, Math.abs(v));
       }
-      expect(peak, id).toBeCloseTo(s.gain ?? 0.8, 6);
+      expect(peak, id).toBeGreaterThan(0.01);
+      expect(peak, id).toBeLessThanOrEqual(Math.pow(10, -1 / 20) + 1e-6);
     }
     const ak = (SOUNDS['fire.ak47'] as SoundDef).synth;
     expect(renderSynth(ak, 'fire.ak47', 8000)).toEqual(renderSynth(ak, 'fire.ak47', 8000));
@@ -193,7 +194,7 @@ describe('the director', () => {
     expect(sink.ids().at(-1)).toBe('victim.body');
   });
 
-  it('steps by team and surface, beeps the bomb, ends the round by side', () => {
+  it('steps by team and surface, leaves the host beep to the CS2 cadence (A2), ends the round by side', () => {
     const sink = new FakeSink();
     const d = new SoundDirector(sink, () => 'wood');
     d.ingest(input(obs(2000, [cart, lokier])));
@@ -206,8 +207,8 @@ describe('the director', () => {
         ]),
       ),
     );
-    expect(sink.ids()).toEqual(['step.CT.wood', 'c4.beep', 'round.lost', 'announce.ctwin']);
-    expect(sink.played[2]?.opts.gain).toBe(AUDIO_TUNING.music.roundEnd);
+    expect(sink.ids()).toEqual(['step.CT.wood', 'round.lost', 'announce.ctwin']);
+    expect(sink.played[1]?.opts.gain).toBe(AUDIO_TUNING.music.roundEnd);
   });
 
   it('throws, bounces, pops and burns grenades from the effects', () => {
@@ -249,7 +250,10 @@ describe('the director on the recorded round (Sim3DHost, nobody plays)', () => {
     expect(count('c4.plant')).toBe(1);
     expect(count('c4.defuse.start')).toBe(1);
     expect(count('c4.defused')).toBe(1);
-    const beeps = run.entries.flatMap((e) => e.observe.events.filter((ev) => ev.type === 'sound' && ev.kind === 'bomb')).length;
+    // A2: the beeps follow CS2's cadence from the plant (c4BeepTicks), on every tick of it while the bomb is planted.
+    const planted = run.entries.find((e) => e.observe.round.bomb.plantTick !== null)?.observe.round.bomb.plantTick as number;
+    const beepTicks = new Set(c4BeepTicks(planted, 40).map((b) => b.tick));
+    const beeps = run.entries.filter((e) => e.observe.round.bomb.state === 'planted' && beepTicks.has(e.observe.tick)).length;
     expect(beeps).toBeGreaterThan(20);
     expect(count('c4.beep')).toBe(beeps);
     expect(ids.filter((i) => i === 'round.won').length).toBe(0);

@@ -1,5 +1,7 @@
 # Sound: CS2's sound events in the 3D app (A1), and the recipe for the real files
 
+A2's fixes and their before / after measurements (mix, placeholders, timing): [audio.md](audio.md).
+
 The 3D page (`cs2/sim3d/`) plays every game sound through a Web Audio engine built on **CS2's own sound events**:
 the names, file lists, volumes, pitch ranges, distance curves and occlusion intensities come from CS2's
 `soundevents/*.vsndevts`. Until John extracts the sound files from his CS2 install, every event plays a
@@ -14,7 +16,7 @@ files: they only exist inside the encrypted single page.
 | `src/app3d/audio/events.ts` | The sound table: 145 sounds by id (`fire.ak47`, `reload.awp.clipin`, `step.CT.concrete`, `c4.beep`, …), each with its CS2 sound event(s), mix bus, positional or in-the-head, and a placeholder recipe. Reload-stage timing fractions per gun (`RELOAD_STAGES`, shared with the viewmodel animations). |
 | `tools/cs2-sound-events.ts` | Builds the manifest `data/audio/cs2-sound-events.json` (and the page's compact `cs2-sound-runtime.json`) from a checkout of the public [SteamDatabase/GameTracking-CS2](https://github.com/SteamDatabase/GameTracking-CS2) (commit `cce7bf1f`, 2026-11-05): resolves `base` inheritance and child events (`Weapon_AK47.Single` → `Weapon_AK47.SingleDistant`), records the `.vsnd` files and their sizes in `pak01_dir.txt`. Uses `tools/kv3.ts` (a KeyValues3 text reader). 155 events, 315 files, none missing; one dead reference in CS2's own data (`explo_gas_can_01`, child of `BaseExplosionEffect.Sound`) dropped. |
 | `src/app3d/audio/director.ts` | Turns each simulated tick into cues (pure, tested): shots, reload stages at the state machine's reload time, footsteps and landings, hits / headshot dink / attacker feedback / kill confirm / the victim's own hit, deaths, world impacts and ricochets, bullet whiz, grenade throw / bounce / pop / molotov burn loop / extinguish, bomb plant / beeps / defuse / explosion, round-end music and announcer. Seeks and rewinds reset it silently. |
-| `src/app3d/audio/engine.ts` | The Web Audio graph, started on the first click or key: per voice source → low-pass → gain → HRTF `PannerNode` → bus → effects / music → master → limiter. Listener at the camera. Voice pool (40 world + 10 in-head). |
+| `src/app3d/audio/engine.ts` | The Web Audio graph, started on the first click or key: per voice source → low-pass → gain → HRTF `PannerNode` → bus → effects / music → master → limiter (compressor + soft clip). Listener at the camera. Voice pool (40 world + 10 in-head). A2: CS2 mixgroup volumes, `instance_limit`, no voice past the curve, tick-scheduled cues, lazy 48 kHz placeholders with variants; see [audio.md](audio.md). |
 | `src/app3d/audio/spatial.ts`, `tuning.ts` | Attenuation and occlusion (below), all tunables with their sources. |
 | `src/app3d/audio/synth.ts`, `tools/gen-placeholder-sounds.ts` | Placeholders: deterministic synthesized bursts (gun crack + body + thump, clicks, steps, beeps, booms, hiss, crackle loop, dink, stings). The page renders them at audio start (nothing embedded); the tool writes them as WAVs, and with `--as-cs2 <dir>` at the CS2 paths, as a stand-in for John's folder. |
 | `tools/pack-sounds.ts` | John's decompiled folder → `local/cs2-sound-bank.json` (mono Opus, base64). `--list` prints the files to extract. |
@@ -128,6 +130,7 @@ never does; "head": played in the listener's head (own weapon handling, feedback
 | `bounce.smoke` | grenades | `SmokeGrenade.Bounce` + `SmokeGrenade.Bounce_Can` | `sounds/weapons/smokegrenade/` grenade_hit1, can_01, can_02 | 1700 |
 | `burn.molotov` | grenades | `Inferno.Loop` | `sounds/weapons/molotov/` fire_loop_1 | 1200 |
 | `c4.beep` | bomb | `C4.PlantSound` | `sounds/weapons/c4/` c4_beep2 | 1300 |
+| `c4.beep.10s` | bomb | `C4.PlantSound_10sec` | `sounds/weapons/c4/` c4_beep2_10sec | 1300 |
 | `c4.defuse.start` | bomb | `c4.disarmstart` | `sounds/weapons/c4/` c4_disarmstart | 2000 |
 | `c4.defused` | bomb | `c4.disarmfinish` | `sounds/weapons/c4/` c4_disarmfinish | 2000 |
 | `c4.explode` | bomb | `c4.explode` | `sounds/weapons/c4/` c4_explode1 | all map |

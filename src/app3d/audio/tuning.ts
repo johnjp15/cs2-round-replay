@@ -41,8 +41,42 @@ export const AUDIO_TUNING = {
    * the listener's own walking steps play locally at `ownWalkGain` (0 = silent like CS2). **Assumed** 0.
    */
   ownWalkGain: 0,
-  /** Placeholder sample rate (synth.ts). */
-  placeholderRate: 24000,
+  /** Sample rate of the placeholder WAVs the tools write (the page renders at its AudioContext's rate; A1 used 24 kHz there). */
+  placeholderRate: 48000,
+  /**
+   * A2: the mix under the master. CS2's own mixer (its mixgroup volumes) is applied per event from the manifest
+   * (engine.ts `mixgroupGain`), so the buses stay at 1; `headroomDb` lowers the whole mix before the limiter.
+   * **Assumed.**
+   */
+  mix: {
+    headroomDb: 3,
+    bus: { weapons: 1, foley: 1, footsteps: 1, impacts: 1, grenades: 1, bomb: 1, ui: 1, music: 1 },
+  },
+  /**
+   * A2: the master limiter: a fast compressor (its automatic make-up gain removed again, `makeupDb`, from the Web
+   * Audio spec's formula (1 / gain at 0 dBFS)^0.6) and a soft clipper (linear to `clipKnee`, never beyond
+   * `clipCeiling`), so no sum of sounds can clip. **Assumed** settings (CS2's own master dynamics aren't public).
+   */
+  limiter: {
+    thresholdDb: -4,
+    kneeDb: 2,
+    ratio: 20,
+    attackSec: 0.002,
+    releaseSec: 0.15,
+    /** 0.6 × the compressor's reduction of a 0 dBFS input: −(T + (0 − T) / ratio) × 0.6. */
+    makeupDb: 0.6 * (4 - 4 / 20),
+    clipKnee: 0.85,
+    clipCeiling: 0.98,
+  },
+  /**
+   * A2: cue timing. A cue carries its tick; ticks map to audio time 1 / (64 × speed) s apart after a jitter buffer of
+   * `bufferSec` (one tick), re-anchored when a tick arrives later than now (up to `lateSec`) or more than
+   * `maxAheadSec` ahead. `stealFadeSec`: fade of an instance stopped by CS2's instance_limit when the event has no
+   * fade-time curve of its own (CS2 fades shots over 0.1 s, `fadetime_volume_mapping_curve`).
+   */
+  timing: { bufferSec: 1 / 64, maxAheadSec: 0.045, lateSec: 0.25, stealFadeSec: 0.1 },
+  /** A2: seconds without a simulated tick after which the game counts as paused (loops fade out). */
+  pauseAfterSec: 0.3,
   /** Grenade bounce: a flying grenade whose vertical speed flips from falling to rising by more than this (units/s) bounced. */
   bounceMinSpeed: 60,
 } as const;
