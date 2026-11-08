@@ -209,6 +209,8 @@ export class Scene {
   roundEnd: RoundEnd | null = null;
   /** Tick each pawn died at (from death events). */
   readonly deaths = new Map<PlayerId, number>();
+  /** H6: how each pawn died (from its death event: killer, weapon, headshot), for the death fade. */
+  readonly deathInfo = new Map<PlayerId, KillEntry>();
   private readonly sight: SightQuery | null;
   private readonly born = new Map<number, Born>();
   private flying = new Map<number, Effect>();
@@ -231,6 +233,7 @@ export class Scene {
     this.bomb = NO_BOMB;
     this.roundEnd = null;
     this.deaths.clear();
+    this.deathInfo.clear();
     this.born.clear();
     this.flying.clear();
     this.setEffects(effects, o.tick);
@@ -293,7 +296,9 @@ export class Scene {
           const victimTeam = team(e.victim);
           if (victimTeam === null) break;
           this.deaths.set(e.victim, tick);
-          this.killFeed.push({ tick, killer: e.attacker, killerTeam: team(e.attacker), victim: e.victim, victimTeam, weapon: e.weapon, headshot: e.headshot });
+          const k: KillEntry = { tick, killer: e.attacker, killerTeam: team(e.attacker), victim: e.victim, victimTeam, weapon: e.weapon, headshot: e.headshot };
+          this.deathInfo.set(e.victim, k);
+          this.killFeed.push(k);
           break;
         }
         case 'shot':

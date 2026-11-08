@@ -8,6 +8,37 @@
  */
 import type { PawnObs, PlayerId, Team } from '../contracts/index';
 
+/**
+ * H6 (#85, John 11-07 17:47): the death fade. When you die (the human, or the player spectated in first person) you
+ * keep your own view, frozen where you were looking (no turn to the killer, no free look), while the eye drops to the
+ * ground, and the screen fades to black over 2 s; a headshot fades almost at once (no info for the dead), though not
+ * in one frame; then spectating starts (the next living teammate).
+ * - 2 s: CS2's `cl_deathcam_audio_mix_phase1_fade_time` 2 ("the amount of time we fade out over" on the death cam fade
+ *   out; CS2 console dump) and `spec_freeze_time` 2 (cfg/gamemode_competitive.cfg, GameTracking-CS2).
+ * - 0.4 s for a headshot: CS2 documents no headshot fade; 0.4 s is our pick, the length of CS2's second death-cam
+ *   audio fade (`cl_deathcam_audio_mix_phase2_fade_time` 0.4).
+ * - The drop: to `VEC_DEAD_VIEWHEIGHT` 14 u above the feet (CS:GO's cs_gamerules.cpp) over `CS_DEATH_ANIMATION_TIME`
+ *   0.5 s (cs_shareddefs.h), accelerating like a fall.
+ */
+export const DEATH_FADE = { sec: 2, headshotSec: 0.4, groundEye: 14, dropSec: 0.5 } as const;
+
+export interface DeathFade {
+  /** Black over the view, 0..1. */
+  readonly black: number;
+  /** The eye's height above the feet (units). */
+  readonly eyeHeight: number;
+  /** The fade is over: spectate the next player. */
+  readonly done: boolean;
+}
+
+/** The death fade `t` s after the death, from an eye `eyeHeight` u above the feet (64 standing, 46 crouched). */
+export function deathFade(t: number, headshot: boolean, eyeHeight: number): DeathFade {
+  const s = Math.max(0, t);
+  const fall = Math.min(1, s / DEATH_FADE.dropSec);
+  const black = Math.min(1, s / (headshot ? DEATH_FADE.headshotSec : DEATH_FADE.sec));
+  return { black: black * black * (3 - 2 * black), eyeHeight: eyeHeight + (DEATH_FADE.groundEye - eyeHeight) * fall * fall, done: s >= DEATH_FADE.sec };
+}
+
 export type SpectateMode = 'pov' | 'follow' | 'free';
 
 /** V's order, starting from the default (first person). */

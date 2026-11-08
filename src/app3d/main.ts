@@ -27,7 +27,7 @@
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
  */
 import tuningJson from '../../data/tuning.json';
-import { parseMapId, type Observe, type PlayerId, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
+import { parseMapId, type Observe, type PawnObs, type PlayerId, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { FixedLoop, TICK_MS } from '../app/loop';
 import { Scene, interpolationAlpha, lerpAngle, type Pose } from '../app/scene';
@@ -56,7 +56,7 @@ import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn } from './renderer3d';
 import { worldMuzzle } from './effects/shot-fx';
 import { TeamDamageNotes } from './team-damage';
-import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
+import { DEATH_FADE, deathFade, type DeathFade, aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
 import { A1Mount } from './audio/mount';
 import { RadarSampler, buildRenderTiles, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
 import { decodeRenderMesh } from './render-package';
@@ -303,6 +303,8 @@ class App3D {
   private frozen = false;
   private lastCamera: { eye: Vec3; yaw: number; pitch: number; viewId: PlayerId } | null = null;
   private lastView: PlayerId | null = null;
+  /** H6: the human was alive (first person) on the last frame drawn: their death starts their own death fade. */
+  private wasFirstPerson = false;
   private lastDraw: number | null = null;
   private lastFrame: number | null = null;
   private frames = 0;
@@ -930,11 +932,18 @@ class App3D {
     const human = s.human;
     const humanPawn = human === null ? null : this.scene.pawn(human);
     const firstPerson = humanPawn !== null && humanPawn.alive;
+    // H6 (#85): the human just died: their own death fade in first person, then spectating.
+    if (!firstPerson && this.wasFirstPerson && human !== null) {
+      this.followed = human;
+      this.camMode = 'pov';
+    }
+    this.wasFirstPerson = firstPerson;
     if (!firstPerson) {
       const f = this.scene.pawn(this.followed);
       if (f === null || !f.alive) {
+        // The next living teammate once the death fade (DEATH_FADE.sec, 2 s) is over.
         const targets = this.spectateTargets();
-        if (targets.length > 0 && this.camMode !== 'free' && f !== null && this.scene.deaths.has(f.id) && this.scene.cur.tick - (this.scene.deaths.get(f.id) ?? 0) > 128) this.followed = cycleTarget(targets, f.id, 1);
+        if (targets.length > 0 && this.camMode !== 'free' && f !== null && this.scene.deaths.has(f.id) && this.scene.renderTick(alpha) - (this.scene.deaths.get(f.id) ?? 0) >= DEATH_FADE.sec * 64) this.followed = cycleTarget(targets, f.id, 1);
       }
     }
     if (!firstPerson && this.zoom !== 0) this.setZoom('', 0);
@@ -968,7 +977,14 @@ class App3D {
     let aim = { yaw: 0, pitch: 0 };
     let specFov = 90;
     let specZoom = 0;
-    if (firstPerson || this.camMode === 'pov') {
+    // H6 (#85): the first-person death fade of the viewed pawn (only for a death this Scene saw happen).
+    const fade = this.deathFadeOf(firstPerson ? null : vo, alpha);
+    if (fade !== null && vo !== null) {
+      // Their own view, frozen as they died, the eye dropping to the ground.
+      eye = { x: vo.pos.x, y: vo.pos.y, z: vo.pos.z + fade.eyeHeight };
+      yaw = vo.yaw;
+      pitch = vo.pitch;
+    } else if (firstPerson || this.camMode === 'pov') {
       eye = vp === null ? this.freePos : { x: vp.x, y: vp.y, z: vp.z + this.eyeZ };
       if (firstPerson) {
         // H2b: the camera follows `recoilTracking` (view_recoil_tracking, default 0.45) of the recoil plus the screen
@@ -1018,7 +1034,7 @@ class App3D {
         alive: p.alive,
         human: p.id === human,
         tag: p.alive && p.id !== viewId && (p.team === viewTeam || viewSees.includes(p.id)),
-        hidden: (firstPerson || this.camMode === 'pov') && p.id === viewId && p.alive,
+        hidden: (firstPerson || this.camMode === 'pov') && p.id === viewId && (p.alive || fade !== null),
         weapon: p.weapon,
       };
     });
@@ -1095,6 +1111,7 @@ class App3D {
       mode: this.phase === 'ready' && human === null ? 'Watching · press Start, or E to play cart' : mode,
       modeKind: firstPerson ? 'you' : human !== null ? 'dead' : 'watching',
       crosshair: (firstPerson || specPov) && !scoped,
+      deathFade: fade?.black ?? 0,
       crosshairAt: { x: Math.round(off.x * 2) / 2, y: Math.round(off.y * 2) / 2 },
       scope: scoped,
       radar: { tracker: this.radar, team: radarTeam, rules: this.radarRules },
@@ -1112,6 +1129,19 @@ class App3D {
     if (this.probing) this.probe.mark('hud', r2);
     this.cost.render = this.cost.render * 0.95 + (r1 - r0) * 0.05;
     this.cost.hud = this.cost.hud * 0.95 + (r2 - r1) * 0.05;
+  }
+
+  /**
+   * H6 (#85): the death fade of `p` (dead, viewed in first person) now, or null: not dead, not first person, over, or a
+   * death this Scene didn't see (after a seek the Scene starts without the round's deaths).
+   */
+  private deathFadeOf(p: PawnObs | null, alpha: number): DeathFade | null {
+    if (p === null || p.alive || this.camMode !== 'pov') return null;
+    const how = this.scene.deathInfo.get(p.id);
+    const at = this.scene.deaths.get(p.id);
+    if (how === undefined || at === undefined) return null;
+    const f = deathFade((this.scene.renderTick(alpha) - at) / 64, how.headshot, p.crouching ? 46 : 64);
+    return f.done ? null : f;
   }
 
   /** Test API: seek synchronously (no frame slicing), the Scene restarted where it lands, tracers cleared. */
