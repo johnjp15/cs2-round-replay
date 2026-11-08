@@ -59,10 +59,38 @@
       #hitmarker.head i { background: #ff5a4f; }
       #top { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 4px 12px; font-size: 22px; }
       #top .t { color: var(--t); } #top .ct { color: var(--ct); }
-      #clock { min-width: 64px; text-align: center; font-size: 26px; }
-      #clock.bomb { color: var(--bomb); } #clock.defusing, #clock.defused { color: var(--defuse); }
-      #bombline { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); font-size: 15px; padding: 2px 10px; }
-      #bombline:empty { display: none; }
+      #clock { min-width: 64px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+      /* H6: CS2's BombStatus: the C4 icon replaces the clock once planted (no countdown), pulsing (0.8 / 0.5 / 0.3 s), green when defused. */
+      #c4icon { display: none; width: 40px; height: 26px; }
+      #clock.c4 #c4icon { display: block; }
+      #clock.c4 #c4icon path { fill: #e01010; }
+      #clock.defused #c4icon path { fill: #45aa2e; }
+      #clock.pulse-slow #c4icon { animation: c4pulse 0.8s ease-in-out infinite; }
+      #clock.pulse-medium #c4icon { animation: c4pulse 0.5s ease-in-out infinite; }
+      #clock.pulse-fast #c4icon { animation: c4pulse 0.3s ease-in-out infinite; }
+      @keyframes c4pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+      /* H6: the defuse progress bar (the defusing CT's HUD only). */
+      #defuse { position: absolute; bottom: calc(100px + var(--bar-h)); left: 50%; transform: translateX(-50%); width: 300px; padding: 5px 12px 7px; text-align: center; font-size: 15px; }
+      #defuse .bar { display: block; height: 6px; margin-top: 4px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; }
+      #defuse .bar i { display: block; height: 100%; background: var(--defuse); transform-origin: 0 50%; transform: scaleX(0); }
+      #defuse[hidden], #alert[hidden], #banner[hidden], #money[hidden] { display: none; }
+      /* H6: CS2's HUD alert (CSGOHudAlerts: y 120 px, 400 px wide, 18 px white text). */
+      #alert { position: absolute; top: 120px; left: 50%; transform: translateX(-50%); width: 400px; padding: 8px 24px; text-align: center; background: rgba(0,0,0,0.5); border-left: 2px solid #fff; border-right: 2px solid #fff; border-radius: 3px; font-size: 18px; color: #fff; }
+      #alert small { display: block; font-size: 14px; color: var(--sand-dim); }
+      /* H6: the round-end banner (CS2's win panel: the winning side's colour). */
+      #banner { position: absolute; top: 92px; left: 50%; transform: translateX(-50%); min-width: 420px; padding: 10px 28px 12px; text-align: center; background: rgba(10,14,19,0.82); border-top: 4px solid var(--sand-dim); border-radius: 4px; }
+      #banner.ct { border-top-color: var(--ct); } #banner.t { border-top-color: var(--t); }
+      #banner b { display: block; font-size: 32px; letter-spacing: 0.04em; text-transform: uppercase; }
+      #banner.ct b { color: var(--ct); } #banner.t b { color: var(--t); }
+      #banner small { display: block; font-size: 16px; color: var(--sand); margin-top: 2px; }
+      #banner small:empty { display: none; }
+      /* H6: money (CS2's money panel under the radar) and the award flashes (AddMoneyColor #8fff6f, 2.9 s). */
+      #money { position: absolute; top: 222px; left: 8px; max-width: 208px; display: flex; gap: 8px; align-items: baseline; padding: 3px 8px; font-size: 20px; white-space: nowrap; overflow: hidden; }
+      #money-val:empty { display: none; }
+      #money-awards { display: flex; gap: 6px; }
+      #money-awards div { color: #8fff6f; font-size: 16px; }
+      #money-awards div.neg { color: #fd3535; }
+      #teams .c4 { font-size: 10px; color: #fff; background: #b80000; border-radius: 2px; padding: 0 3px; margin-left: 5px; }
       #killfeed { position: absolute; top: 8px; right: 10px; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 15px; }
       #killfeed div { padding: 2px 8px; }
       #killfeed .t { color: var(--t); } #killfeed .ct { color: var(--ct); } #killfeed .w { color: var(--sand-dim); margin: 0 6px; }
@@ -75,7 +103,7 @@
       #plantfill { display: block; height: 100%; background: #ffd27a; }
       #planthint[hidden], #plantbar[hidden] { display: none; }
       #minimap { position: absolute; top: 8px; left: 8px; width: 208px; height: 208px; border-radius: 4px; background: rgba(0,0,0,0.55); }
-      #teams { position: absolute; top: 224px; left: 8px; width: 208px; font-size: 14px; padding: 4px 6px; }
+      #teams { position: absolute; top: 258px; left: 8px; width: 208px; font-size: 14px; padding: 4px 6px; }
       #teams .row { display: grid; grid-template-columns: 1fr 50px 34px; gap: 4px; align-items: center; height: 19px; }
       #teams .row.dead { opacity: 0.4; }
       #teams .row.t .n { color: var(--t); } #teams .row.ct .n { color: var(--ct); }
@@ -131,7 +159,7 @@
       #bar kbd { font: 11px var(--text); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
       #bar .sep { width: 1px; height: 22px; background: var(--rule); }
       #bar .help { color: var(--sand-dim); font-size: 12px; margin-left: auto; }
-      @media (max-width: 700px) { #teams, #perf, #bar .help, #spec .l3 { display: none; } #minimap { width: 140px; height: 140px; } #spec { min-width: 0; bottom: calc(64px + var(--bar-h)); } }
+      @media (max-width: 700px) { #teams, #perf, #bar .help, #spec .l3 { display: none; } #minimap { width: 140px; height: 140px; } #money { top: 154px; } #spec { min-width: 0; bottom: calc(64px + var(--bar-h)); } #alert { width: 300px; top: 96px; } #banner { min-width: 0; width: 92%; } #banner b { font-size: 24px; } }
     </style>
   </head>
   <body>
@@ -144,8 +172,11 @@
           <div id="scope" hidden></div>
           <div id="crosshair" hidden><i></i><i></i><i></i><i></i></div>
           <div id="hitmarker" hidden><i></i><i></i><i></i><i></i></div>
-          <div id="top" class="slab"><span class="t" id="score-t">15</span><span id="clock">1:39</span><span class="ct" id="score-ct">11</span></div>
-          <div id="bombline" class="slab"></div>
+          <div id="top" class="slab"><span class="ct" id="score-ct">11</span><span id="clock"><span id="clock-text">1:39</span><svg id="c4icon" viewBox="0 0 40 26" aria-label="C4"><path d="M3 6h26v16H3z M30 9h7v3h-7z M30 15h7v3h-7z M6 2h4v4H6z" /></svg></span><span class="t" id="score-t">15</span></div>
+          <div id="defuse" class="slab" hidden><span id="defuse-text"></span><span class="bar"><i id="defuse-bar"></i></span></div>
+          <div id="alert" hidden><span>The bomb has been planted</span><small id="alert-sub"></small></div>
+          <div id="banner" hidden><b id="banner-title"></b><small id="banner-reason"></small></div>
+          <div id="money" class="slab" hidden><b id="money-val"></b><div id="money-awards"></div></div>
           <div id="killfeed"></div>
           <canvas id="minimap" width="416" height="416"></canvas>
           <div id="teams" class="slab"></div>
