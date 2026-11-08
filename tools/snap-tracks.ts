@@ -83,6 +83,19 @@ const REPAIR_BEFORE = 3;
 const REPAIR_AFTER = 3;
 const UNCONNECTED_COST = 1000;
 /** detour: grid (units), how far it may stray from the gap, its length limits, the samples re-spread on each side, and the search budget. */
+/**
+ * T2 (backlog 46): where the recording goes through an opening the 2020 map had and CS2's Mirage hasn't, checked on the
+ * video, the CS2 way a player takes instead (`waysRound`, walked: A* without jumps), with the samples of [from, to] spread
+ * evenly along it. cart leaves Shop at 63.5-64.3 s through a full-height doorway (his POV: door frame, floor through
+ * it, no jump; the 2020 nav has a floor-level gap at x -2025...-1950 in Shop's north wall), where CS2 has the Market
+ * window over a 42-unit sill and boxes: on CS2 he walks out by the Shop door (x -2356...-2292) and is outside it for his
+ * spray at sp4rtan from 65.9 s (the breakdown: "from the Shop door"). Without this the gap stays and the puppet snaps
+ * through the window (tick 4114).
+ */
+const WAYS_ROUND: readonly { readonly id: PlayerId; readonly from: number; readonly to: number }[] = [{ id: 'cart', from: 63.2, to: 66.5 }];
+const WAY_ROUND_MAX = 1200;
+const WAY_ROUND_NODES = 40000;
+
 const DETOUR_GRID = 8;
 const DETOUR_REACH = 160;
 const DETOUR_MAX_RATIO = 2.5;
@@ -827,6 +840,12 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
         detoured++;
       }
     }
+    for (const w of WAYS_ROUND.filter((x) => x.id === id)) {
+      const r = wayRound(g, snapper, tr.samples, snapped, w.from, w.to, m.stepSize);
+      if (r === null) throw new Error(`snap-tracks: no CS2 way round for ${id} ${w.from}-${w.to} s`);
+      snapped = r.out;
+      rerouted.push(`${id} ${r.note}`);
+    }
     const speeds = tr.samples.map((q) => runSpeedOf(weaponAt(weapons(id), q.tick), m));
     const isFrozen = (j: number): boolean => frozenTick(round, id, (tr.samples[j] as { tick: number }).tick);
     // Pass 4 (K1, `lead`): an inferred route faster than a run before the next seen sample starts earlier instead.
@@ -1182,6 +1201,61 @@ interface LagWindow {
   readonly maxLag: number;
   /** Closed at a frozen sample (the puppet snaps there). */
   readonly forced: boolean;
+}
+
+/** T2: `WAYS_ROUND`: the samples of [from, to] (seconds) spread evenly (by time) along CS2's walked way between them. */
+function wayRound(
+  g: MapGeometry,
+  snapper: Snapper,
+  rec: readonly { t: number; x: number; y: number }[],
+  snapped: readonly SnappedSample[],
+  from: number,
+  to: number,
+  step: number,
+): { out: SnappedSample[]; note: string } | null {
+  const i0 = rec.findIndex((q) => Math.abs(q.t - from) < 1e-6);
+  const i1 = rec.findIndex((q) => Math.abs(q.t - to) < 1e-6);
+  if (i0 < 0 || i1 <= i0 + 1) return null;
+  const a = snapped[i0] as SnappedSample;
+  const b = snapped[i1] as SnappedSample;
+  const path = snapper.astar(a, b, WAY_ROUND_MAX, WAY_ROUND_NODES, false);
+  if (path === null) return null;
+  const cum = [0];
+  for (let k = 1; k < path.length; k++) cum.push((cum[k - 1] as number) + Math.hypot((path[k] as PathPoint).x - (path[k - 1] as PathPoint).x, (path[k] as PathPoint).y - (path[k - 1] as PathPoint).y));
+  const total = cum[cum.length - 1] as number;
+  const t0 = (rec[i0] as { t: number }).t;
+  const t1 = (rec[i1] as { t: number }).t;
+  const out = [...snapped];
+  let prevArc = 0;
+  for (let j = i0 + 1; j < i1; j++) {
+    const target = Math.max(prevArc, (total * ((rec[j] as { t: number }).t - t0)) / (t1 - t0));
+    let k = 1;
+    while (k < path.length - 1 && (cum[k] as number) < target) k++;
+    const p0 = path[k - 1] as PathPoint;
+    const p1 = path[k] as PathPoint;
+    const seg = (cum[k] as number) - (cum[k - 1] as number);
+    const f = seg > 0 ? Math.min(1, Math.max(0, (target - (cum[k - 1] as number)) / seg)) : 0;
+    // The point at this share of the way, else (a corner between it and the previous sample) the way's corners back
+    // to the previous sample's arc: the first a hull walks to in a straight line.
+    const cands: { x: number; y: number; z: number; arc: number }[] = [{ x: p0.x + (p1.x - p0.x) * f, y: p0.y + (p1.y - p0.y) * f, z: f < 0.5 ? p0.z : p1.z, arc: target }];
+    for (let c = k - 1; c >= 1 && (cum[c] as number) > prevArc; c--) cands.push({ ...(path[c] as PathPoint), arc: cum[c] as number });
+    const prev = out[j - 1] as SnappedSample;
+    let chosen: SnappedSample | null = null;
+    for (const c of cands) {
+      const lv = snapper.levels(c.x, c.y, c.z, step)[0];
+      if (lv === undefined) continue;
+      const q = { x: q32(c.x), y: q32(c.y), z: q32(lv) };
+      if (!hullLineClear(g, prev, q, step)) continue;
+      const old = withoutJump(snapped[j] as SnappedSample);
+      chosen = { ...old, ...q, kind: 'far', dxy: Math.hypot(q.x - (rec[j] as { x: number }).x, q.y - (rec[j] as { y: number }).y), connected: true };
+      prevArc = c.arc;
+      break;
+    }
+    if (chosen === null) return null;
+    out[j] = chosen;
+  }
+  for (let j = i0 + 1; j <= i1; j++) if (!stepOk(g, out[j - 1] as SnappedSample, out[j] as SnappedSample, step)) return null;
+  return { out, note: `${from.toFixed(1)}-${to.toFixed(1)} s: way round on CS2 (${total.toFixed(0)} u, ${(total / (t1 - t0)).toFixed(0)} u/s)` };
 }
 
 /**
