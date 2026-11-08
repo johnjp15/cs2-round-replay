@@ -237,16 +237,16 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     }
   });
 
-  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; W2 pistols: b861137b; K1: 7ce7345e, sp4rtan\'s route on time; G8: 6d705c2e, survivors LIVE for good and G8\'s LIVE movement; S1: 64ad6d38, smokes on the CS2 engine)', () => {
-    expect(logDigest(before.log)).toBe('64ad6d38');
+  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; W2 pistols: b861137b; K1: 7ce7345e, sp4rtan\'s route on time; G8: 6d705c2e, survivors LIVE for good and G8\'s LIVE movement; S1: 64ad6d38, smokes on the CS2 engine); V2: fc6f7bda, the fitted views', () => {
+    expect(logDigest(before.log)).toBe('fc6f7bda');
     expect(rejoins(before.entries)).toEqual([]);
   });
 });
 
 describe('nobody leaves the tape: rejoin never runs', () => {
-  it('golden no-human round: no rejoin line, no path query, digest cf57c99a (T2: cart into Shop by the window, out by the Shop door; S1: fe9750d5, smokes on the CS2 engine; K1: 9a994b97; W2 pistols: 9f07df0b; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
+  it('golden no-human round: no rejoin line, no path query, digest f4129248 (V2: the fitted views; T2: cf57c99a, cart into Shop by the window, out by the Shop door; S1: fe9750d5, smokes on the CS2 engine; K1: 9a994b97; W2 pistols: 9f07df0b; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
     const g = runHarness(data, { ...NO_HUMAN, recordWalk: true });
-    expect(logDigest(g.log)).toBe('cf57c99a');
+    expect(logDigest(g.log)).toBe('f4129248');
     expect(g.paths).toEqual([]);
     expect(coreLogs(g.entries).some((l) => / (rejoin|REPLAY): /.test(l.text))).toBe(false);
   });

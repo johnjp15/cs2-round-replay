@@ -198,7 +198,7 @@ The positions are as on main (above), so only the view changes show:
 | --- | --- | --- | --- |
 | `duels` (tape-identical input), `scenarios` 10 (miss-lokier-shop): the duel starts | tick 1138 | **1163** (18.17 s) | a puppet with a scoped rifle (Lokier, SSG 08) slower than a walk holds his angle instead of turning to the heading of his 20 u jiggle (on main he spun 140° → 17° → 90° → −174° in 0.6 s and saw cart through the window by chance at 1138); he sees cart when B3's aim turns him at 1163 |
 | `takeover` T = 18 | seen since 1138, before the takeover | seen at **1163**, after it | the same; still on course, so the hit lands on its recorded tick 1184 |
-| `rejoin` digests | no-human 9a994b97, never-peeks (rejoin off) 6d705c2e | **d889d3cf**, **b51aae40** | the views |
+| `rejoin` digests | no-human cf57c99a, never-peeks (rejoin off) 64ad6d38 | **f4129248**, **fc6f7bda** | the views |
 | `puppet` (new) | – | recorded views interpolate (yaw across ±180, pitch linear), radar fallback, pitch rate-limited 12°/tick and levelled off, scoped rifles hold their angle | the puppet change |
 | `round-data` | – | the extractor's input includes `view-fit.json` | the merge |
 

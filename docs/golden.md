@@ -14,7 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest d889d3cf (V2's fitted views; 9a994b97 at K1)
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest f4129248 (V2's fitted views; cf57c99a at T2)
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
@@ -164,7 +164,7 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 980,948 | (see manifest) | `d889d3cf` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 979,292 | (see manifest) | `f4129248` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `72d1547f` |
 | `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `fb19a2fa` |
 | `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `6cd197f2` |
@@ -311,8 +311,8 @@ tested (no WebKit here).
 
 - V2 (`docs/viewfit.md`: every watched player's yaw and pitch fitted to the video, puppets follow them; scoped rifles
   slower than a walk hold their angle; the window duel's positions as on main, see "Engagement positions"): no-human
-  `9a994b97` → `d889d3cf` (walk `a29f7a43` → `c657360f`), cart-idle `6cfbb02a` → `e9da49a3`, cart-takeover `2e354be4`
-  → `652bdb4f`; never-peeks without rejoin `6d705c2e` → `b51aae40`. `tools/fixture-diff.ts` on all three: the acts
+  `cf57c99a` → `f4129248`, cart-idle → `8beda596`, cart-takeover → `6bd4b304` (manifest); never-peeks without rejoin
+  `64ad6d38` → `fc6f7bda`. `tools/fixture-diff.ts` on all three: the acts
   differ in input.yaw / pitch and input.forward / side (the stick is relative to the yaw), a few buttons and the
   targets of the same snap teleports (same ticks); the observes in yaw, pitch, `sees`, pos (up to 19 u, barely, from
   the stick's rounding and the walk) and footstep `sound`; **no shot, damage, death, bomb or round event differs** and
