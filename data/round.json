@@ -186,7 +186,7 @@
         "confidence": "observed"
       },
       "startHp": 100,
-      "startArmor": 100,
+      "startArmor": 89,
       "startHelmet": true,
       "startMoney": 9150,
       "kit": {
@@ -46868,7 +46868,7 @@
       "attacker": "sp4rtan",
       "victim": "donk",
       "amount": 27,
-      "armor": null,
+      "armor": 4,
       "weapon": "ak47",
       "note": "donk 100 → 73",
       "apos": {
@@ -46889,7 +46889,7 @@
       "attacker": "sp4rtan",
       "victim": "donk",
       "amount": 34,
-      "armor": null,
+      "armor": 5,
       "weapon": "ak47",
       "note": "73 → 39",
       "apos": {
@@ -46910,7 +46910,7 @@
       "attacker": "sp4rtan",
       "victim": "donk",
       "amount": 26,
-      "armor": null,
+      "armor": 0,
       "weapon": "ak47",
       "note": "39 → 13",
       "apos": {
@@ -47610,10 +47610,10 @@
           "raw": "Knife"
         },
         {
-          "t": 63.5,
-          "tick": 4064,
+          "t": 61.4,
+          "tick": 3930,
           "weapon": "ak47",
-          "raw": "AK-47"
+          "raw": "AK-47 (ammo HUD 24/90 from 61.40 s (V4); page 63.5)"
         }
       ],
       "donk": [
