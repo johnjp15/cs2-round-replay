@@ -944,6 +944,26 @@ export class MapGeometry {
     return this.segmentTrace(ax, ay, az, bx, by, bz, firstOnly, false);
   }
 
+  /**
+   * W3: `traceLine`, and the unit normal of the triangle it hit turned to face a (the side the segment came from);
+   * null if the segment is clear. For bullet impacts (decals along the surface), not for sight.
+   */
+  traceLineNormal(ax: number, ay: number, az: number, bx: number, by: number, bz: number): { readonly f: number; readonly normal: { x: number; y: number; z: number } } | null {
+    this.hitTri = -1;
+    const f = this.segmentTrace(ax, ay, az, bx, by, bz, false, false);
+    const t = this.hitTri;
+    if (f >= 1 || t < 0) return null;
+    let nx = this.normal[t * 3] as number;
+    let ny = this.normal[t * 3 + 1] as number;
+    let nz = this.normal[t * 3 + 2] as number;
+    if (nx * (bx - ax) + ny * (by - ay) + nz * (bz - az) > 0) {
+      nx = -nx;
+      ny = -ny;
+      nz = -nz;
+    }
+    return { f, normal: { x: nx, y: ny, z: nz } };
+  }
+
   /** True if the segment a → b crosses a triangle (any triangle, player clips included). */
   lineBlocked(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): boolean {
     return this.segmentTrace(a.x, a.y, a.z, b.x, b.y, b.z, true, false) < 1;

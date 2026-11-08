@@ -1,6 +1,6 @@
 {
   "name": "duel-perfect-aim",
-  "description": "G5: cart plays his recording into the Apartments, stops at 18.0 s (0.5 s before his recorded first shot), aims at Lokier's head and fires, every shot on target from the first. Lokier's recorded hit lands first (18.50 s), cart's shots before the recorded kill do nothing, and the kill (AK-47, head) lands on the recorded tick (18.80 s), not on his first shot. Then he plays his recording again to the end.",
+  "description": "G5/D1: cart plays his recording into the Apartments, stops at 18.0 s (0.5 s before his recorded first shot), aims at Lokier's head and fires, every shot on target from the first. D1 (John 2026-11-07 13:10): his shots do real damage inside the recorded duel too, so his first shot (18.05 s), a headshot, kills Lokier at once, before Lokier's recorded hit (18.50 s) can land; inside the drift window the rest of the round stays on script. Then he plays his recording again to the end.",
   "human": "cart",
   "seed": 1,
   "until": "end",

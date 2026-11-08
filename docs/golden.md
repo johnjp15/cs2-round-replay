@@ -14,7 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 7bbf8618 (V2's fitted views and window duel; 7168c0a5 at T1)
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 9a994b97 (K1's sp4rtan route)
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
@@ -127,6 +127,10 @@ entries), and the generator checks that playing the file reproduces the generati
   through the Apartments window (2D has no spread) before the time-shifted hit was due (18.59 s), so cart kept
   100 HP and survived the post-round shot (on 73 HP): "Same result, different round: CT defuse, 0.72 s left; 2 kills
   changed". `docs/core.md` "Recorded duels of the human", "Divergence" scenario 1.
+- **D1 (John 2026-11-07 13:10): real damage in the duel.** Lokier's hit still lands on 18.50 s (cart 27 HP); his
+  first would-hit bullet is now real and kills Lokier at 18.61 s (tick 1191, 0.19 s early); nobody goes LIVE, every
+  other kill, the plant and the defuse are on the tape's ticks, and the post-round shot still kills cart: "Same result,
+  different round: CT defuse, 0.72 s left; 1 kill changed".
 - The shadow is a `ReplayCore` with `{divergence: false}` (B2/B3 only).
 
 ## The golden master (CI gate)
@@ -160,7 +164,7 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `7bbf8618` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 970,577 | (see manifest) | `9a994b97` |
 | `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `72d1547f` |
 | `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `fb19a2fa` |
 | `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `6cd197f2` |
@@ -305,15 +309,18 @@ tested (no WebKit here).
 
 ## History
 
-- V2 (`docs/viewfit.md`: the watched player's yaw and pitch fitted to the video, puppets follow them; the window duel
-  placed from cart's first-person frames, so G6's pass 5 leaves it alone): no-human `7168c0a5` → `7bbf8618`, cart-idle
-  `12bf92f7` → `1aa49119`, cart-takeover `53e00fa6` → `c93e3266`. `tools/fixture-diff.ts` (now splits acts by part),
-  no-human: the acts differ in input.yaw / pitch (and forward / side, the stick being relative to the yaw), 31 button
-  lines (behind-the-track thresholds crossed by rounding-level position differences) and 5 snap teleports; the observes
-  in yaw, pitch, `sees` (555 lines), pos (rounding-level, except cart 17.4–19.5 s and Lokier 17.5–18.8 s, the refined
-  samples), footstep `sound`; **every shot, damage, death, bomb and round_end event is identical** (2D = 3D, "Played it
-  like the tape: CT defuse, 0.72 s left"). cart-idle / cart-takeover: barely's LIVE kill of the outlived Lokier (at his
-  fitted spot) moves 1418 → 1419, and in cart-idle the plant 1768 → 1769.
+- K1 (`tools/snap-tracks.ts` pass 4 `lead` and pass 5's barely ↔ sp4rtan duel, docs/round-data.md "sp4rtan's kill on
+  barely"): no-human `9f07df0b` → `9a994b97` (walk oracle `29adfc6e` → `a29f7a43`), cart-idle `384e6c75` → `b3a92236`
+  (walk unchanged), cart-takeover unchanged (`f49d323c`); never-peeks without rejoin `b861137b` → `7ce7345e`.
+  `tools/fixture-diff.ts`, no-human: Core acts from tick 3146 (sp4rtan's and, from 58.4 s, barely's puppet inputs),
+  pawn pos/vel/yaw/pitch/sees/onGround and footstep `sound` events; no shot, damage, death, bomb or round event
+  differs. cart-idle: one act (sp4rtan's LIVE route waypoints at tick 2564, a few units), no observe line.
+
+- W2 (every pawn gets a pistol in the setup: the recorded one, else Glock-18 T / USP-S CT, docs/core.md "Start state"):
+  no-human `7168c0a5` → `9f07df0b`, cart-idle `12bf92f7` → `384e6c75`, cart-takeover `53e00fa6` → `f49d323c`; never-peeks without rejoin
+  `93e0dc15` → `b861137b`. `tools/fixture-diff.ts` on all three: one act differs (tick 0: eight more `give`s, glock
+  20/120 for barely, cart, eradicate, snarlbot; usps 12/24 for incredibad, lokier, snakelore, zwomp), every observe
+  line identical (no pawn field, event or round state moves), walk oracles unchanged.
 - T1 (`tools/snap-tracks.ts` pass 0, barely back on Catwalk 35.1–44.7 s): on G6's base no-human `150f77b4` → `7168c0a5`
   (walk oracle `8d41dc25` → `29adfc6e`), cart-idle `8f471b88` → `5770cd34` (`f9a434ca` → `7fae11b5`), cart-takeover
   unchanged (`cae23207`, it ends at tick 1536). `tools/fixture-diff.ts`, no-human: only barely's pawn fields differ (pos from tick

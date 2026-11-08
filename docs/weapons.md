@@ -14,7 +14,8 @@ spray patterns, the inaccuracy and spread model, aim / view punch, tagging, fire
 | S3 | Source SDK 2013, [`src/public/vstdlib/random.h`](https://github.com/ValveSoftware/source-sdk-2013) | `CUniformRandomStream` layout (`m_idum`, `m_iy`, `m_iv[NTAB]`, NTAB 32) = Numerical Recipes `ran1`. The SDK has **no Counter-Strike code** (no `cs_weapon_parse.cpp` / `weapon_csbase.cpp`), so the formulas below could not be cross-checked against Valve source. | verified (layout) |
 | S4 | CS:GO console defaults, [totalcsgo.com](https://totalcsgo.com/commands/weaponrecoildecay2exp) pages for `weapon_recoil_decay2_exp` 8, `weapon_recoil_decay2_lin` 18, `weapon_recoil_vel_decay` 4.5, `weapon_recoil_scale` 2, `weapon_recoil_variance` 0.55, `weapon_recoil_view_punch_extra` 0.055 (the site lists some defaults inconsistently; the values used are the ones its own "default" examples give) | Recoil dynamics constants | CS:GO only; validated by S5 |
 | S5 | [csstats.gg/spray-patterns](https://csstats.gg/spray-patterns) (updated 22 Aug 2023): CS2 spray height / width in degrees for 12 spray weapons and the difference to CS:GO | The only per-weapon CS2 recoil numbers found | community-measured |
-| S6 | [csdb.gg recoil patterns](https://csdb.gg/recoil-patterns/) ("computed from the game's own recoil parameters"; AK-47 "climbs almost straight up for roughly the first 9–10 bullets, then drifts left before swinging back to the right"), [cs2pulse AK-47](https://cs2pulse.com/spray-patterns/ak-47/) ("the first 4 or 5 going straight") | Qualitative spray shapes; the yaw sign | community |
+| S6 | [cs2pulse AK-47](https://cs2pulse.com/spray-patterns/ak-47) ("the first 4 or 5 going straight and the last 4 to 5 curving slightly to the left … After the 10th bullet … the spray moves toward the right for 4 to 5 bullets … then the bullets move to the left once and then to the right"), [counterstrikewiki](https://counterstrikewiki.com/Spray_Patterns_and_Recoil_Control) (AK "11–15: pull down and to the left, 16–20: pull to the right"), [metabot.gg](https://metabot.gg/en/cs2/guides/cs2-spray-control-recoil-patterns) ("the AK-47 kicks right, then sweeps hard left"), all read 2026-11-07. [csdb.gg](https://csdb.gg/recoil-patterns/) says the opposite ("drifts left before swinging back to the right") and is outvoted by S9. | Qualitative spray shapes | community |
+| S9 | CS:GO's 2020 game source as published in [SwagSoftware/Kisak-Strike](https://github.com/SwagSoftware/Kisak-Strike) (`game/shared/cstrike15/`): `cs_weapon_parse.cpp` `WeaponRecoilData::GenerateRecoilTable` and the `weapon_recoil_suppression_shots 4` / `_factor 0.75` / `weapon_recoil_variance 0.55` cvars; `cs_player_shared.cpp` `CCSPlayer::KickBack` (`angleVelocity[YAW] = -sinf(DEG2RAD(fAngle)) * fMagnitude`, `[PITCH] = -cosf(…)`, view punch × `weapon_recoil_view_punch_extra 0.055`) and `GetAimPunchAngle` (× `weapon_recoil_scale 2.0`); `cs_gamemovement.cpp` `DecayAimPunchAngle` / `HybridDecay`; `weapon_csbase.cpp` the `weapon_recoil_*` defaults (decay2_exp 8, decay2_lin 18, vel_decay 4.5, decay_coefficient 2, cooldown 0.55 "DEPRECATED") and the recoil-index decay; `baseplayer_shared.cpp` `view_recoil_tracking 0.45`, `view_punch_decay 18`; `vstdlib/random.cpp` `CUniformRandomStream` | The recoil algorithm itself (CS:GO; CS2 keeps the vdata fields it reads) | Valve source (CS:GO) |
 | S7 | `docs/combat.md` and `data/round.json`: the recorded hits (SSG 08 73 HP / 7 armor; AK-47 27 / 34 / 26) | Hitgroup multipliers stomach 1.25 and leg 0.75, armor bonus 0.5, the rounding | verified by the recording |
 | S8 | [PC Gamer, March 2026 reload change](https://www.pcgamer.com/games/fps/counter-strike-2-introduces-the-games-biggest-shake-up-in-years-now-when-reloading-you-lose-all-the-mags-remaining-ammo) | Reserve counted in magazines (`m_bReserveAmmoAsClips`), a reload discards the magazine | verified (matches S1) |
 | M | The CS:GO-era model as publicly documented by the community (structure of `GetInaccuracy`, `UpdateAccuracyPenalty`, the recoil table, `FireBullet` penetration). No public Valve source exists for these (S3); everything built on them is **unverified** and its constants are tunables in `data/tuning.json` → `weapons._engine`. | Formulas | unverified |
@@ -27,11 +28,12 @@ and S6 (see "Recoil").
 
 - **Weapon table: 3,028 numbers** (48 rows × up to 63 fields) all copied from S1. Two are interpretations, flagged
   below: `reloadTime` (= `m_flDisallowAttackAfterReloadStartDuration`) and the derived `reserve`.
-- **Spray patterns: 1,608 numbers** (26 weapons) generated from S1 by the model; 10 of the 12 weapons S5 covers match
-  within 2.5 % in height (geometric mean of the ratios 1.0023 for height, 0.9970 for width).
-- **`weapons._engine`: 39 constants.** 5 verified in CS2 (S2), 1 fitted to S5 (`recoilScale`), 5 CS:GO defaults (S4)
-  that reproduce CS:GO's spray envelopes within 0.5 % (so the generator and dynamics are right for CS:GO, not
-  confirmed for CS2), **28 unverified** (table below, including the CS:GO `view_recoil_tracking` 0.45).
+- **Spray patterns: 1,608 numbers** (26 weapons) generated from S1 by Valve's algorithm (S9); 10 of the 12 weapons S5
+  covers match within 2.5 % in height at `recoilScale` 1.884 (see "Recoil" for why not 2).
+- **`weapons._engine`: 39 constants.** 5 verified in CS2 (S2), 1 fitted to S5 (`recoilScale`), 9 read from CS:GO's
+  source (S9: the recoil decay, variance, suppression, view punch extra, view tracking and the kick's yaw sign) that
+  reproduce CS:GO's spray envelopes within 0.5 % (right for CS:GO, not confirmed for CS2, which hides them),
+  **24 unverified** (table below).
 - Global damage numbers (`tuning.damage`): hitgroup stomach 1.25 / leg 0.75 / armor bonus 0.5 / falloff 500 verified
   by S7; arm 1, neck 1, generic 1 unverified.
 
@@ -159,51 +161,112 @@ Primary mode; cycle in brackets = alt; speed in brackets = scoped/alt; reload "+
 
 ## Recoil (`recoil.ts`)
 
-**Generator** (structure M, constants S4). Per weapon and mode, a `ValveUniformRandom` (S3: Park–Miller with a
-32-entry shuffle, float32 `RandomFloat`) seeded with `m_nRecoilSeed` yields 64 entries. For bullet j:
+**Generator** (S9 `WeaponRecoilData::GenerateRecoilTable`, line for line). Per weapon and mode, a `ValveUniformRandom`
+(S9 `CUniformRandomStream`, checked against vstdlib/random.cpp: Park–Miller with a 32-entry shuffle, float32
+`RandomFloat`) seeded with `m_nRecoilSeed` yields 64 entries. For bullet j:
 
 - `a' = angle + U(−angleVariance, angleVariance)`, `m' = magnitude + U(−magnitudeVariance, magnitudeVariance)`;
-- full-auto weapons smooth: `a_j = a_{j−1} + (a' − a_{j−1}) × recoilVariance` (0.55), same for m (j > 0);
+- full-auto weapons smooth: `a_j = lerp(0.55, a_{j−1}, a')` (`weapon_recoil_variance`), same for m (j > 0);
   semi-automatic weapons use `a'`, `m'` directly;
-- full-auto weapons damp the first `recoilSuppressionShots` (4) stored magnitudes by
-  `lerp(j / 4, recoilSuppressionFactor 0.75, 1)`.
+- full-auto weapons then damp the **running** magnitude of the first 4 bullets, `m_j ×= lerp(j / 4, 0.75, 1)`
+  (`fMagnitude *= fSuppressionFactor`), so the damping carries into the next bullets through the smoothing (AK:
+  22.5, 21.63, 22.96, 25.15, 27.82, 29.02, 29.56, 29.80, 29.91, 29.96).
 
-**Kick and decay.** A shot at recoil index i (⌊i⌋, clamped to 63) adds to the aim punch velocity
-`(pitch −cos a × m, yaw recoilYawSign × sin a × m)` and the same × `recoilViewPunchExtra` (0.055) to the view punch.
-Each tick (dt = 1/64): `|aim| ← max(0, |aim|·e^(−8 dt) − 18 dt)`; `aim += vel·dt/2; vel ×= e^(−4.5 dt); aim += vel·dt/2`;
-`view ×= e^(−18 dt)` (S2). The bullet leaves along view + aim × `recoilScale`.
+**Kick and decay** (S9 `KickBack`, `DecayAimPunchAngle`). A shot at recoil index i (⌊i⌋ mod 64, `GetRecoilOffsets`)
+adds `(pitch −cos a × m, yaw −sin a × m)` to the aim punch velocity (`recoilYawSign` −1: a positive angle kicks to
+the player's **right**) and the same × `recoilViewPunchExtra` (0.055) to the view punch. Each tick (dt = 1/64):
+`aim ×= e^(−8 dt)`, then its length −= 18 dt (to 0); `aim += vel·dt/2; vel ×= e^(−4.5 dt); aim += vel·dt/2`;
+`view ×= e^(−18 dt)` (S2). The bullet leaves along view + aim × `recoilScale`; the camera shows view + aim ×
+recoilScale × `view_recoil_tracking` (0.45) + the view punch (S9 `EyeAngles` + `GetAimPunchAngle() × tracking`).
+
+**What was wrong until #54 (R1, 2026-11-07).** (1) **The pattern was mirrored**: the kick used `+sin a`, chosen to
+match csdb.gg's "drifts left" (S6), where Valve's `KickBack` has `−sin a`. In the game the AK leans slightly left on
+bullets 6–9, swings **right** on 10–17 (up to 4.3°, ~38 u at 500 u), left on 19–27 and right again on 28–30 (S6:
+cs2pulse, counterstrikewiki, metabot; csdb is the odd one out). (2) The suppression damped a stored copy instead of
+the running magnitude, so bullets 2–9 kicked up to 19 % too hard and the first 5 bullets climbed ~1° too fast (bullet
+5: 4.48° up, was 5.43°). (3) Past bullet 64 the index stuck on the last entry; Valve wraps it (Negev 150 rounds).
+
+**Measured in the 3D app** (`tools/spray-wall3d.ts`: headless Chromium, cart takes control at 18.2 s, mouse still,
+mouse 1 held for 30 bullets; impacts on a wall 500 u ahead, x + = the player's right, grid 10 u; blue = the camera):
+
+| before (mirrored) | after |
+| --- | --- |
+| ![before](img/spray-ak47-wall-before.png) | ![after](img/spray-ak47-wall-after.png) |
+
+Before, bullets 7–9 landed 10–14 u right and 10–17 −12 to −44 u (left); after, 7–9 land −7 to −16 u (left), 10–17
++13 to +43 u (right), 19–27 −6 to −25 u, 29–30 +25 to +36 u (one seeded run, so the cone is on top). The camera
+moved by exactly 0.45 of the bullets' punch on every bullet after the first (the tool divides (camera − camera at
+tracking 0) by (crosshair − view): 0.4500), and the view did not move.
+
+**Scale: why `recoilScale` stays 1.884, not 2.** CS:GO's `weapon_recoil_scale` is 2.0 (S9). CS2 has no
+`weapon_recoil_*` or `view_recoil_tracking` convar at all (S2, re-checked 2026-11-07 against the current
+`DumpSource2/convars.txt`, which lists even development-only cvars such as `sv_suppress_viewpunch`), so its value
+can't be read. The only CS2 measurement (S5) puts every spray weapon's height ~5.6 % below CS:GO's (AK 11.06° vs
+11.75°; ten weapons, 4.0–7.1 %), and the generator at scale 2 reproduces S5's CS:GO heights to 0.0 % (geometric mean
+1.0001 after the fix). A different measuring distance or `view_recoil_tracking` can't explain the 1.884 (S5 is in
+degrees; tracking would scale it by 0.45, not 0.94); the tick rate can't either (128 tick shrinks the AK by 2.5 %, not
+6 %). So the fit stands as the best CS2 number: **fitted, not verified**. Widths shrink less (~3.8 %) than heights in
+S5, so CS2's change may be in the decay rather than a pure scale; with 1.884 the widths are within 2.2 %.
 
 **Validation.** The model's 30-bullet envelopes (standing, holding ATTACK, 64 tick) against S5:
 
 | weapon | model height ° (scale 1.884) | CS2 (S5) | model width ° | CS2 (S5) | model height ° at scale 2 / CS:GO (S5) |
 | --- | ---: | ---: | ---: | ---: | --- |
-| AK-47 | 11.09 | 11.06 | 6.99 | 7.14 | 11.77 / 11.75 |
-| M4A4 | 8.94 | 9.06 | 6.25 | 6.29 | 9.49 / 9.44 |
-| SG 553 | 8.72 | 8.59 | 9.66 | 9.70 | 9.26 / 9.19 |
-| AUG | 7.84 | 7.84 | 5.63 | 5.67 | 8.32 / 8.25 |
-| Galil AR | 7.37 | 7.31 | 7.04 | 7.06 | 7.83 / 7.81 |
-| FAMAS | 7.03 | 6.96 | 4.86 | 4.89 | 7.47 / 7.43 |
-| UMP-45 | 9.12 | 8.95 | 3.72 | 3.56 | 9.68 / 9.63 |
-| MP7 | 6.22 | 6.27 | 3.37 | 3.39 | 6.61 / 6.57 |
-| P90 | 7.44 | 7.47 | 6.06 | 6.15 | 7.90 / 7.88 |
-| MP5-SD | 6.22 | 6.27 | 3.37 | 3.39 | 6.61 / 6.57 |
-| M4A1-S | 8.47 | 5.93 | 5.85 | 4.62 | **mismatch** |
-| MP9 | 10.63 | 9.13 | 8.22 | 7.20 | **mismatch** |
+| AK-47 | 11.09 | 11.06 | 6.98 | 7.14 | 11.77 / 11.75 |
+| M4A4 | 8.94 | 9.06 | 6.23 | 6.29 | 9.49 / 9.44 |
+| SG 553 | 8.68 | 8.59 | 9.66 | 9.70 | 9.22 / 9.19 |
+| AUG | 7.80 | 7.84 | 5.63 | 5.67 | 8.28 / 8.25 |
+| Galil AR | 7.36 | 7.31 | 7.04 | 7.06 | 7.82 / 7.81 |
+| FAMAS | 7.03 | 6.96 | 4.84 | 4.89 | 7.46 / 7.43 |
+| UMP-45 | 9.10 | 8.95 | 3.53 | 3.56 | 9.67 / 9.63 |
+| MP7 | 6.21 | 6.27 | 3.38 | 3.39 | 6.60 / 6.57 |
+| P90 | 7.44 | 7.47 | 6.04 | 6.15 | 7.90 / 7.88 |
+| MP5-SD | 6.21 | 6.27 | 3.38 | 3.39 | 6.60 / 6.57 |
+| M4A1-S | 8.29 | 5.93 | 5.82 | 4.62 | **mismatch** |
+| MP9 | 10.63 | 9.13 | 8.16 | 7.20 | **mismatch** |
 
-With CS:GO's `weapon_recoil_scale` 2 the generator matches S5's CS:GO heights to 0.5 % (geometric mean 1.0048, s.d.
-0.2 %), which confirms the generator, the seeds and the decay constants. S5's CS2 values are uniformly ~6 % smaller;
-CS2 exposes no recoil variables, so `recoilScale` = **1.884** is a fit (unverified: it could equally be a change in
-CS2's decay). MP7 and MP5-SD share seed 61649 and identical parameters, and S5 lists identical envelopes for them, which
-supports the seed-based generation. The M4A1-S and MP9 differ, most likely because their parameters changed after S5's
-August 2023 measurement (M4A1-S now 20 rounds; not confirmed).
-
-Shape (S6): the AK-47 pattern in `data/weapons.json` → `sprays.ak47` is centred on bullet 1, goes straight up for
-bullets 2–5 (|yaw| < 0.25°), reaches ~10° by bullet 9 with a slight lean right, swings left (+yaw, up to +4.8° at
-scale 2) for bullets 10–16 and back right. The left drift after bullet 10 fixes `recoilYawSign` = +1 (S6 csdb); the
-sign is unverified against the game.
+The mirror fix doesn't change any envelope and the suppression fix moves them by ≤ 0.6 %. MP7 and MP5-SD share seed
+61649 and identical parameters, and S5 lists identical envelopes for them, which supports the seed-based generation.
+The M4A1-S and MP9 differ, most likely because their parameters changed after S5's August 2023 measurement (M4A1-S
+now 20 rounds; not confirmed). Leetify's per-weapon patterns (leetify.com/cs2-spray-patterns, John's reference) could
+not be read from this environment: the egress proxy refuses the host (HTTP 403 to curl and to headless Chromium,
+2026-11-07), so the per-weapon comparison against it is still open.
 
 `sprays` holds, for the 16 spray weapons (full magazine) and 10 pistols (10 shots at the cycle time), the per-bullet
 `[pitch, yaw]` offsets in degrees (pitch − = up) of the deterministic part of the shot; inaccuracy is added on top.
+
+## Gunplay conformance (R1, #54 / #55)
+
+John (#55): "everything about the gunplay should be the exact same". Each line below gives the rule with its source,
+what the sim does, the test that pins it, and its status. Sources:
+- **S1**: CS2's weapon fields (`weapons.vdata`).
+- **S2**: CS2's convar dump.
+- **S9**: CS:GO's 2020 code, which reads those fields.
+
+CS2's code isn't public, so where CS2 hides a constant (no convar) the CS:GO value is the best available and is marked
+"CS:GO source". Status: **fixed** (wrong before #55, now matches the source), **matches**, or **finding** (a
+mismatch I couldn't settle or that belongs to another agent, with a proposed fix). Tests are in
+`tests/weapons-engine.test.ts`, `describe('gunplay conformance checklist')` and `describe('recoil tables and spray
+patterns')`, unless named otherwise.
+
+| # | What | Rule and number (source) | Sim | Test | Status |
+| --- | --- | --- | --- | --- | --- |
+| G0 | Recoil pattern | Table from `m_flRecoil*` + `m_nRecoilSeed` (S1) by `GenerateRecoilTable`; kick `(−cos a, −sin a) × m` (S9) | as Valve's (PR #50) | AK table entries 1–10, handedness, 500 u height | fixed in #50 (mirrored, suppression) |
+| G1 | Recoil index advances | `Recoil(mode); m_flRecoilIndex += 1` once per round fired, after the bullet; not on dry fire; no fire during a magazine reload (S9 `weapon_csbasegun.cpp`) | `fireShot` only when a round leaves | G1 | matches |
+| G2 | Recoil index decay | Only once `curtime > lastShot + 1.1 × cycle` (`WEAPON_RECOIL_DECAY_THRESHOLD`), then `index = lerp(e^(−dt·ln 10·2), 0, index)` per tick, with `weapon_recoil_decay_coefficient` 2: a tenth every 0.5 s (S9). `weapon_recoil_cooldown` 0.55 is "DEPRECATED" in S9 and unused. | `× e^(−ln 10 × recoilIndexDecay × dt)` after 1.1 cycles | G2 | **fixed**: was `e^(−2 dt)`, 2.3× too slow |
+| G3 | First bullet after a pause | Follows G2: the pattern restarts at bullet 1 when ⌊index⌋ = 0. After a full AK magazine that takes 0.86 s; after 0.5 s the next spray resumes at entry 5 (bullet 6's kick) | same | G3 | **fixed** (was 1.8 s) |
+| G4 | 2–3 round bursts | A 3-round AK burst, then a 0.25 s pause: the next burst starts at entry 1, its first bullet sits on the decayed punch (G2 + G8) | same | G4 | matches (after G2) |
+| G5 | Fire inaccuracy and recovery | `penalty += m_flInaccuracyFire` per shot; per tick `penalty = lerp(e^(−dt·ln 10 / T), floor, penalty)` when above the floor, else it jumps to the floor. T = `m_flRecoveryTimeStand/Crouch`, moving to `…Final` between `m_nRecoveryTransitionStart/EndBullet` of the **integer** index (`int nRecoilIndex`), unless the final time is −1; on a ladder T = stand (S9 `GetRecoveryTime`) | same | G5, "accuracy penalty" | **fixed**: the transition used the fractional index; ladder now uses stand |
+| G6 | Semi-automatic kicks | `seed = IsFullAuto() ? (int) m_flRecoilIndex : GetPredictionRandomSeed()`, entry `% 64` (S9 `Recoil`): pistols kick with a random entry of their table | random entry from the shot's RNG, drawn after the cone | G6 | **fixed** (pistols walked the table in order). `sprays` for pistols still lists the table in order. |
+| G7 | Spread vs inaccuracy | Two independent cones, inaccuracy (penalty + movement + air) and `m_flSpread`, summed (`fFinalInaccuracy = fInaccuracy + fSpread`, S9). `weapon_accuracy_nospread false` and `weapon_accuracy_shotgun_spread_patterns true` (S2) | two cones from the seeded RNG | G7, `weapons-spray` | matches the structure. Finding: CS:GO seeds each shot from the command's random seed `& 255` and draws inside code that isn't in the published source, so the sim's per-shot cone values are its own (same distribution); shotgun spread patterns are not modelled |
+| G8 | Aim / view punch | `HybridDecay(aim, 8, 18)` (× e^(−8 dt), then length −18 dt), velocity half-steps with `e^(−4.5 dt)`; view punch += kick × 0.055, decays with `view_punch_decay` 18 (S9; 18 verified in S2) | same | `weapons-spray` "camera, crosshair and punch" | matches |
+| G9 | Air, take-off, landing | S9 (2020): floor stand + `m_flInaccuracyJump` × `weapon_air_spread_scale`; air term `RemapVal(√\|vz\|, 0.25√J, √J, 0, m_flInaccuracyJumpInitial)`, clamped to [0, 2 × JumpInitial]; recovery in the air = crouch × 4; no take-off penalty (`OnJump` is empty); landing adds `m_flInaccuracyLand × fall speed` and an aim punch | floor stand + `JumpApex`; take-off adds `JumpInitial`; air term `airScale × m_flInaccuracyJump`; landing adds `Land × airSpreadScale` | `weapons-engine` "jump and land" | **finding**: CS2 has `m_flInaccuracyJumpApex`, which the 2020 code doesn't read, so CS2's air model changed and S9 doesn't settle it. Proposed: take S9's air term (JumpInitial, 2× cap) and landing (× fall speed) once a CS2 measurement of a jump shot exists |
+| G10 | Moving inaccuracy | `RemapValClamped(speed, max × 0.34, max × 0.95, 0, 1)`, then `^ MOVEMENT_CURVE01_EXPONENT` = **0.25** unless walking (shift: linear), × `m_flInaccuracyMove` (S9) | **fixed by W3**: `moveCurveExponent` 0.25, `moveWalkCurveExponent` 1 (Motion.walking = WALK held) | `weapons-engine` "inaccuracy model", `sim3d-ff-move` | matches. At half the band a run is 84 % of the move inaccuracy (walking: 50 %) |
+| G11 | Inaccuracy cap | `fAccuracy ≤ 1` (S9) | `maxInaccuracy` 1 | — | matches |
+| G12 | Fire rate | `m_flCycleTime` (S1; AK 0.1 s). Held fire: next attack = previous + cycle, served on the tick it falls in (64 tick: AK on ticks 0, 7, 13, 20, …) | same, fractional cadence | "AK-47 held for 1.0 s" | matches at 64 tick. Finding: CS2's sub-tick timestamps each shot inside the tick; the punch and decay in between are then sub-tick too. The sim fires on tick boundaries (≤ 1/64 s early or late per shot) |
+| G13 | Scoped weapons | Per-mode inaccuracy and spread (scoped = alt mode, S1); `m_nZoomLevels`, `m_nZoomFOV1/2`, `m_bUnzoomsAfterShot` (S1) | same, from the table | `weapons-engine` scope tests | matches. `m_flInaccuracyAltSoundThreshold` only affects sound: not modelled |
+| G14 | Tagging | `m_flFlinchVelocityModifierLarge/Small` (S1), `mp_tagging_scale 1` (S2); recovery rate and the hit punch are not in any source | table values; recovery 0.4 / s and punches unverified | `weapons-engine` tagging | matches the fields; recovery unverified |
+| G15 | Recoil scale and tracking | `weapon_recoil_scale` 2.0, `view_recoil_tracking` 0.45 (S9; no CS2 convar) | 1.884 (fitted to S5), 0.45 | `weapons-engine` envelopes; the in-app 0.4500 check (`tools/spray-wall3d.ts`) | scale fitted (see "Recoil"), tracking matches S9 |
 
 ## Spraying: what the 3D game must reproduce (`tests/weapons-spray.test.ts`)
 
@@ -218,46 +281,46 @@ recovery time.
 
 **1,000 seeded AK-47 magazines at a wall 1,024 u away, standing still, view fixed** (seeds 1000–1999). The mean
 impact of each bullet equals the pattern within 0.1° (tested: all 30), the scatter about it equals the cone of that
-bullet within 6 %, and no bullet leaves the cone `1,024 × (I + S)`. The mean cloud spans 11.09° × 6.99° (csstats.gg
-CS2: 11.06° × 7.14°). Pitch − = up, yaw + = left:
+bullet within 6 %, and no bullet leaves the cone `1,024 × (I + S)`. The mean cloud spans 11.09° × 6.98° (csstats.gg
+CS2: 11.06° × 7.14°). Pitch − = up, yaw + = the player's left (Source):
 
-| bullet | pattern pitch ° | pattern yaw ° | mean of 1,000 (pitch, yaw) | inaccuracy I | mean scatter at 1,024 u | max scatter |
+| bullet | pattern pitch ° | pattern yaw ° | on a wall at 500 u (right, up) | inaccuracy I | mean scatter at 1,024 u | max scatter |
 | ---: | ---: | ---: | --- | ---: | ---: | ---: |
-| 1 | 0.000 | 0.000 | 0.001, 0.001 | 0.00641 | 3.28 | 7.2 |
-| 2 | -0.373 | 0.193 | -0.369, 0.179 | 0.01035 | 5.20 | 11.2 |
-| 3 | -1.631 | -0.053 | -1.646, -0.055 | 0.01294 | 6.67 | 13.9 |
-| 4 | -3.552 | 0.129 | -3.549, 0.145 | 0.01421 | 7.62 | 15.2 |
-| 5 | -5.429 | 0.185 | -5.414, 0.188 | 0.01617 | 8.12 | 17.2 |
-| 6 | -7.247 | -0.534 | -7.240, -0.538 | 0.01787 | 9.10 | 18.9 |
-| 7 | -8.612 | -0.989 | -8.603, -1.003 | 0.01812 | 9.42 | 19.2 |
-| 8 | -9.450 | -1.678 | -9.441, -1.659 | 0.01914 | 9.99 | 20.2 |
-| 9 | -9.967 | -0.775 | -9.971, -0.775 | 0.01889 | 10.11 | 20.0 |
-| 10 | -9.591 | 1.471 | -9.596, 1.477 | 0.01965 | 9.98 | 20.7 |
-| 11 | -9.883 | 2.676 | -9.882, 2.688 | 0.02014 | 10.78 | 21.2 |
-| 12 | -10.217 | 1.995 | -10.221, 2.000 | 0.01950 | 9.95 | 20.6 |
-| 13 | -10.224 | 2.827 | -10.247, 2.829 | 0.02004 | 10.29 | 21.1 |
-| 14 | -9.677 | 4.161 | -9.688, 4.161 | 0.01944 | 10.17 | 20.5 |
-| 15 | -9.911 | 4.307 | -9.918, 4.310 | 0.02001 | 10.16 | 21.1 |
-| 16 | -10.319 | 2.422 | -10.272, 2.428 | 0.02038 | 9.86 | 21.5 |
-| 17 | -10.542 | 1.225 | -10.552, 1.214 | 0.01964 | 10.22 | 20.7 |
-| 18 | -10.846 | 0.481 | -10.837, 0.468 | 0.02014 | 10.28 | 21.2 |
-| 19 | -10.703 | -0.941 | -10.707, -0.937 | 0.01950 | 10.23 | 20.6 |
-| 20 | -10.270 | -2.683 | -10.272, -2.701 | 0.02004 | 10.14 | 21.1 |
-| 21 | -10.516 | -1.729 | -10.496, -1.730 | 0.02040 | 10.66 | 21.5 |
-| 22 | -10.521 | -1.977 | -10.508, -1.989 | 0.01966 | 10.11 | 20.7 |
-| 23 | -10.809 | -1.570 | -10.807, -1.581 | 0.02015 | 10.30 | 21.2 |
-| 24 | -10.928 | -1.099 | -10.938, -1.093 | 0.01950 | 10.33 | 20.6 |
-| 25 | -10.790 | -2.100 | -10.771, -2.091 | 0.02005 | 10.55 | 21.1 |
-| 26 | -11.081 | -2.460 | -11.098, -2.473 | 0.02040 | 10.19 | 21.5 |
-| 27 | -11.088 | -1.365 | -11.088, -1.344 | 0.01966 | 9.92 | 20.7 |
-| 28 | -10.943 | 0.343 | -10.977, 0.341 | 0.02015 | 10.44 | 21.2 |
-| 29 | -9.899 | 2.731 | -9.913, 2.726 | 0.01951 | 9.80 | 20.6 |
-| 30 | -9.912 | 3.488 | -9.920, 3.452 | 0.02005 | 10.54 | 21.1 |
+| 1 | 0.000 | 0.000 | -0.0, -0.0 | 0.00641 | 3.28 | 7.2 |
+| 2 | -0.373 | -0.193 | 1.7, 3.3 | 0.01035 | 5.20 | 11.2 |
+| 3 | -1.355 | 0.013 | -0.1, 11.8 | 0.01294 | 6.67 | 13.9 |
+| 4 | -2.881 | -0.134 | 1.2, 25.2 | 0.01421 | 7.62 | 15.2 |
+| 5 | -4.480 | -0.176 | 1.5, 39.2 | 0.01617 | 8.12 | 17.2 |
+| 6 | -6.163 | 0.471 | -4.1, 54.0 | 0.01787 | 9.10 | 18.9 |
+| 7 | -7.610 | 0.892 | -7.8, 66.8 | 0.01812 | 9.42 | 19.2 |
+| 8 | -8.617 | 1.572 | -13.7, 75.8 | 0.01914 | 9.99 | 20.2 |
+| 9 | -9.347 | 0.702 | -6.1, 82.3 | 0.01889 | 10.11 | 20.0 |
+| 10 | -9.136 | -1.497 | 13.1, 80.4 | 0.01965 | 9.98 | 20.7 |
+| 11 | -9.561 | -2.672 | 23.3, 84.2 | 0.02014 | 10.78 | 21.2 |
+| 12 | -10.006 | -1.985 | 17.3, 88.2 | 0.01950 | 9.95 | 20.6 |
+| 13 | -10.080 | -2.817 | 24.6, 88.9 | 0.02004 | 10.29 | 21.1 |
+| 14 | -9.587 | -4.152 | 36.3, 84.4 | 0.01944 | 10.17 | 20.5 |
+| 15 | -9.851 | -4.299 | 37.6, 86.8 | 0.02001 | 10.16 | 21.1 |
+| 16 | -10.279 | -2.416 | 21.1, 90.7 | 0.02038 | 9.86 | 21.5 |
+| 17 | -10.516 | -1.223 | 10.7, 92.8 | 0.01964 | 10.22 | 20.7 |
+| 18 | -10.828 | -0.480 | 4.2, 95.6 | 0.02014 | 10.28 | 21.2 |
+| 19 | -10.692 | 0.941 | -8.2, 94.4 | 0.01950 | 10.23 | 20.6 |
+| 20 | -10.263 | 2.683 | -23.4, 90.5 | 0.02004 | 10.14 | 21.1 |
+| 21 | -10.512 | 1.729 | -15.1, 92.8 | 0.02040 | 10.66 | 21.5 |
+| 22 | -10.518 | 1.977 | -17.3, 92.8 | 0.01966 | 10.11 | 20.7 |
+| 23 | -10.807 | 1.570 | -13.7, 95.4 | 0.02015 | 10.30 | 21.2 |
+| 24 | -10.927 | 1.099 | -9.6, 96.5 | 0.01950 | 10.33 | 20.6 |
+| 25 | -10.789 | 2.100 | -18.3, 95.3 | 0.02005 | 10.55 | 21.1 |
+| 26 | -11.081 | 2.460 | -21.5, 97.9 | 0.02040 | 10.19 | 21.5 |
+| 27 | -11.088 | 1.365 | -11.9, 98.0 | 0.01966 | 9.92 | 20.7 |
+| 28 | -10.943 | -0.343 | 3.0, 96.7 | 0.02015 | 10.44 | 21.2 |
+| 29 | -9.899 | -2.731 | 23.9, 87.3 | 0.01951 | 9.80 | 20.6 |
+| 30 | -9.912 | -3.488 | 30.5, 87.4 | 0.02005 | 10.54 | 21.1 |
 
 **Recoil control.** A shooter that pulls the view against the mean pattern before each bullet (view = −pattern[i])
 puts every bullet's mean on the aim point (within 0.06°) and leaves only the cone: the first 10 bullets group with a
 **median of 7.2 u, 95 % within 17.3 u and all within 20.3 u** of the aim point at 1,024 u (1,000 sprays). Uncontrolled,
-the same 10 bullets lie at a median of 112 u and 95 % within 183 u. This is the expected CS2 grouping for a perfect
+the same 10 bullets lie at a median of 94 u and 95 % within 173 u. This is the expected CS2 grouping for a perfect
 pull-down; a human adds his own tracking error on top.
 
 **View vs bullet vs crosshair.** Bullets leave along view + aim punch × `recoilScale` (`crosshairAngles`; CS2's default
@@ -319,7 +382,7 @@ A puppet's drawn AK spray (15 bullets) leaves within 0.51° of its view compensa
 `Sim3DHost` (src/sim3d/host.ts) keeps sim2d's fire / ammo / reload machine (`stepWeapon`, so cadence, ammo and the
 recorded fire ticks are unchanged) and runs the mechanics next to it for every pawn: `trackArms` each tick (weapon
 sync, penalties and decay, scope, punch decay, tagging recovery) and `trackShot` on each shot (`fireShot`: the
-direction from view + punch × 2 + the cone, RNG `Rng(seed).fork('spread:<id>:<tick>')`). State in snapshots
+direction from view + aim punch × `recoilScale` (1.884) + the cone, RNG `Rng(seed).fork('spread:<id>:<tick>')`). State in snapshots
 (`arms`).
 
 | Who | Bullet | Speed |
@@ -327,6 +390,14 @@ direction from view + punch × 2 + the cone, RNG `Rng(seed).fork('spread:<id>:<t
 | The human (while controlled) and LIVE pawns | lands along the spread + recoil direction; may go through walls | `MoveOptions` (docs/movement.md): `runSpeed` = `maxSpeedOf` without tagging (the weapon's `m_flMaxSpeed` in its mode, AWP 100 scoped, × the attack factor while firing), `velocityModifier` = tagging; passed only where they differ from the table / 1 |
 | Puppets (REPLAY) | **outcome traced along the scripted view as before** (scripted damage is the truth; no recorded event changes); the drawn tracer follows the spread direction from the recoil-compensated view (B1: it goes at the scripted aim, not above it) | the table's speeds (their tracks) |
 
+- **W2, CS2's guns for mechanical pawns** (`src/sim3d/guns.ts`, V1's audit finding 5): the human (while controlled)
+  and LIVE pawns fire, reload and deploy with the weapon table's numbers, not the 2D table's: rpm = 60 / `cycleTime`,
+  `clip` / `reserve` (AWP 5 / 10, USP-S 12 / 24, Desert Eagle 7 / 21, Glock-18 20 / 60), `reloadTime`, `deployTime`,
+  `fullAuto`, damage and armor (`armorRatio` / 2) from the table, for every gun in it (M4A1-S, USP-S, the SMGs,
+  shotguns, …; `tableId` maps an item id to its table id in one place). A gun a mechanical pawn holds is cut to the
+  table's magazine and reserve (the kit's AWP 10 / 30 from the 2020 recording becomes 5 / 10). Puppets keep the 2D
+  table: their fire ticks are the tape's and a run nobody plays stays the 2D golden master byte for byte.
+  `tests/w2-guns.test.ts` draws, fires, cycles and reloads every table gun as the human.
 - **Tagging and hit punch**: `applyHit` on the victim of every bullet hit that lands (not on a blocked recorded pair).
 - **Scope**: ATTACK2 steps the zoom of scoped weapons; a reload or (AWP / SSG) a shot drops it until the bolt is back;
   `aimView` reports the level and its FOV from the table.
@@ -350,6 +421,7 @@ direction from view + punch × 2 + the cone, RNG `Rng(seed).fork('spread:<id>:<t
 | first shot crouched | 0.00481 | 5.5 u |
 | walking 111.8 u/s (shift) | 0.05807 | 60 u |
 | running 215 u/s | 0.18147 | 186 u |
+| slowing through 111.8 u/s (no shift: the run curve ^0.25) | 0.1354 | 145 u |
 | moving ≤ 73.1 u/s (34 % of 215: counter-strafed) | 0.00641 | 7.2 u (the movement term is instantaneous) |
 | take-off | ≈ 0.239 | 245 u |
 | near the apex | < 0.02 (air term ~0, take-off penalty decaying) | < 21 u |
@@ -371,7 +443,9 @@ All in the game's units (tangent of the cone half-angle; radius at 1,024 u = 1,0
 3. **Shot:** penalty += `fire` (AK 0.0078); take-off adds `jumpInitial` (AK 0.10094), landing adds `land`.
 4. **Inaccuracy at the shot** (`inaccuracy`): penalty + `movementScale × move` + (in the air) `airScale × jump ×
    airSpreadScale`, capped at `maxInaccuracy` 1.
-   - `movementScale` = clamp((speed − 0.34 max) / (0.95 max − 0.34 max), 0, 1)^`moveCurveExponent`, max = the weapon's
+   - `movementScale` = clamp((speed − 0.34 max) / (0.95 max − 0.34 max), 0, 1)^e, e = `moveCurveExponent` 0.25
+     (`MOVEMENT_CURVE01_EXPONENT`, S9 `weapon_csbase.cpp` `GetInaccuracy`) or, holding WALK, `moveWalkCurveExponent` 1
+     (CS's separate walk function, linear); max = the weapon's
      speed in the current mode (AK: 0 up to 73.1 u/s, full from 204.25 u/s).
    - `airScale` = clamp((√|vz| − 0.25 √J) / (√J − 0.25 √J), 0, 2), J = 301.99338 (S2): 1 at take-off, 0 near the apex.
 5. **Direction** (`drawSpread`, `shotDirection`): r1, θ1 (inaccuracy, shared by all pellets), then r2, θ2 per pellet,
@@ -440,17 +514,17 @@ passed beside that frame: it is a position error of the recording, not a wallban
 
 | key | value | source | status |
 | --- | ---: | --- | --- |
-| recoilScale | 1.884 | fit to S5 CS2 (CS:GO default 2, S4) | fitted |
-| recoilDecayExp / recoilDecayLin / recoilVelDecay | 8 / 18 / 4.5 | S4 | CS:GO, validated by S5 |
-| recoilVariance | 0.55 | S4 | CS:GO, validated by S5 |
-| recoilViewPunchExtra | 0.055 | S4 | CS:GO |
-| viewRecoilTracking | 0.45 | CS:GO `view_recoil_tracking` (not in CS2's dump) | unverified |
-| recoilSuppressionShots / Factor | 4 / 0.75 | M | unverified |
-| recoilYawSign | 1 | S6 (AK drifts left after bullet 10) | unverified |
+| recoilScale | 1.884 | fit to S5 CS2 (CS:GO `weapon_recoil_scale` 2.0, S9; CS2 has no such cvar, S2) | fitted |
+| recoilDecayExp / recoilDecayLin / recoilVelDecay | 8 / 18 / 4.5 | S9 (`weapon_recoil_decay2_exp/_lin`, `weapon_recoil_vel_decay`) | CS:GO source, validated by S5 |
+| recoilVariance | 0.55 | S9 `weapon_recoil_variance` | CS:GO source, validated by S5 |
+| recoilViewPunchExtra | 0.055 | S9 `weapon_recoil_view_punch_extra` | CS:GO source |
+| viewRecoilTracking | 0.45 | S9 `view_recoil_tracking` (not in CS2's dump) | CS:GO source |
+| recoilSuppressionShots / Factor | 4 / 0.75 | S9 `weapon_recoil_suppression_shots/_factor` | CS:GO source |
+| recoilYawSign | −1 | S9 `KickBack` (yaw velocity −sin a × m); S6 (AK swings right after bullet 10) | CS:GO source + community |
 | viewPunchDecay | 18 | S2 `view_punch_decay` | verified |
-| recoilIndexDecay / recoilIndexDelayCycles | 2 / 1.1 | M | unverified |
+| recoilIndexDecay / recoilIndexDelayCycles | 2 / 1.1 | S9 `weapon_recoil_decay_coefficient` (× ln 10 per second) / `WEAPON_RECOIL_DECAY_THRESHOLD` | CS:GO source (G2) |
 | burstShots | 3 | common knowledge | unverified |
-| moveStartFraction / moveFullFraction / moveCurveExponent | 0.34 / 0.95 / 1 | M (0.34 = CS duck speed modifier, same as `movement.crouchFactor`) | unverified |
+| moveStartFraction / moveFullFraction / moveCurveExponent / moveWalkCurveExponent | 0.34 / 0.95 / 0.25 / 1 | S9 `CWeaponCSBase::GetInaccuracy` (`CS_PLAYER_SPEED_DUCK_MODIFIER` 0.34, 0.95, `MOVEMENT_CURVE01_EXPONENT` 0.25, linear while walking) | CS:GO source (CS2 not public) |
 | airSpreadScale | 1 | S2 `weapon_air_spread_scale` | verified |
 | airLowSpeedFraction / airMaxPenalty | 0.25 / 2 | M | unverified |
 | jumpImpulse | 301.99338 | S2 `sv_jump_impulse` | verified |
@@ -464,6 +538,36 @@ passed beside that frame: it is a position error of the recording, not a wallban
 | penMaxPenetrations / penMaxDistance / penMaxThickness | 4 / 3000 / 90 | M | unverified |
 | penDamageLostFraction / penPowerConst / penPowerFactor / penModFactor / penThicknessDivisor | 0.16 / 3 / 1.25 / 3 / 24 | M | unverified |
 | penDefaultModifier / penMinDamage | 1 / 1 | M | unverified |
+
+## Knife (W1, `knife.ts`; `Sim3DHost.stepKnife`, `hitscan.ts traceMelee3`)
+
+CS2's `weapon_knife` entry in weapons.vdata (GameTracking-CS2 @ cce7bf1f, the file data/weapons.json is extracted
+from) is a bullet-weapon template the knife's code ignores: `m_nDamage 50`, `m_flCycleTime [0.15, 0.3]`,
+`m_flRange 4096`. What it does use: `m_flMaxSpeed [250, 250]` (the knife's run speed, maxSpeedOf; the human runs 250
+u/s with it and 215 with the AK-47, tests/w1-knife.test.ts), `m_flDeployDuration 1.0` and `m_flArmorRatio 1.7` (85 %
+of the damage reaches HP through armor). The melee rules are CS:GO's `CKnife::SwingOrStab`
+(game/shared/cstrike15/weapon_knife.cpp of the CS:GO source, mirrored in github.com/SwagSoftware/Kisak-Strike), which
+CS2 kept (counterstrikewiki.com/Knife: slash 40, stab 65, backstab 180 "instant kill", 250 u/s; its armored values
+34 / 55 / 76 are 40 / 65 / 90 × 0.85):
+
+| | Slash (mouse 1, PrimaryAttack) | Stab (mouse 2, SecondaryAttack) |
+| --- | --- | --- |
+| Reach | `KNIFE_RANGE_LONG` 48 u line, then the ±16 × ±16 × ±18 `head_hull` sweep (a box face up to 64 u) | `KNIFE_RANGE_SHORT` 32 u, then the hull (up to 48 u) |
+| Damage (front) | 40 if the slash timer was ready more than 0.4 s ago (`bFirstSwing`), else 25 | 65 |
+| Damage (back: dot > 0.475) | 90 | 180 |
+| Next attack | slash 0.4 s after a miss, 0.5 s after a hit; stab 0.5 s | both 1.0 s after a miss, 1.1 s after a hit |
+
+- The trace is MASK_SOLID: the world mesh and the pawns' collision boxes (32 × 32 × 72, 54 crouched), not hitboxes,
+  so the hitgroup is `generic` (×1, armored). Teammates are skipped as for bullets.
+- Mouse 1 is checked first (CWeaponCSBase::ItemPostFrame); held, it keeps slashing (40, then 25s). The deploy sets
+  both timers (DefaultDeploy: `m_flNextPrimaryAttack = curtime + duration`), so a slash right after drawing the knife
+  is not a first swing (25), as in CS.
+- Who: mechanical pawns only (the human while controlled, LIVE bots if their AI attacks with a knife; puppets keep
+  their recorded outcomes), so the no-human run is unchanged. Damage, kills (`weapon: 'knife'`), blocked recorded
+  duels and tagging go as a bullet's. State: per pawn the next slash / stab tick in snapshots (`melee`, only once
+  someone has swung). `Sim3DHost.swings()` reports each attack (slash / stab, victim or wall) for the viewmodel and
+  the sounds (`Weapon_Knife.Slash`, `.Hit` on the damage event, `.HitWall`).
+- Not modelled: CS2's sub-tick timing, the shield (+0.7 s), glass.
 
 ## Known gaps
 
@@ -479,7 +583,7 @@ passed beside that frame: it is a position error of the recording, not a wallban
 - **Reload times** are `m_flDisallowAttackAfterReloadStartDuration`; the moment CS2 refills the magazine may differ.
   Per-shell shotgun timing unknown.
 - **Revolver** hammer delay (primary fire) and silencer attach / detach times are not modelled (silencer toggles
-  instantly). Knife, Zeus and grenades are in the table but the state machine does not attack with them (the Zeus
-  fires as a gun with range 120).
+  instantly). Zeus and grenades are in the table but the state machine does not attack with them (the Zeus fires as a
+  gun with range 120). The knife attacks by its own rules (below), not by its table entry.
 - **M4A1-S and MP9** sprays disagree with S5 (probably parameter changes since August 2023).
 - Ladder state and the stack-boost rule (`weapon_accuracy_stack_boost_limit`) are inputs only (`onLadder`).

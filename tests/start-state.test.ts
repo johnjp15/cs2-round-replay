@@ -14,18 +14,19 @@ interface Expected {
   weapon: string;
 }
 
-// Round start facts (project movement doc), copied here on purpose.
+// Round start facts (project movement doc), copied here on purpose. W2: every pawn also gets a pistol, the recorded one
+// (donk's Glock-18, Sp4rtaN's Desert Eagle) or the team default (T Glock-18, CT USP-S), drawn weapons unchanged.
 const EXPECTED: Record<PlayerId, Expected> = {
-  barely: { hp: 100, gives: [['ak47', 30, 90], ['he', 0, 0], ['smoke', 0, 0], ['c4', 0, 0]], weapon: 'ak47' },
-  cart: { hp: 100, gives: [['ak47', 30, 90], ['smoke', 0, 0], ['smoke', 0, 0]], weapon: 'ak47' },
+  barely: { hp: 100, gives: [['ak47', 30, 90], ['glock', 20, 120], ['he', 0, 0], ['smoke', 0, 0], ['c4', 0, 0]], weapon: 'ak47' },
+  cart: { hp: 100, gives: [['ak47', 30, 90], ['glock', 20, 120], ['smoke', 0, 0], ['smoke', 0, 0]], weapon: 'ak47' },
   donk: { hp: 100, gives: [['awp', 10, 30], ['glock', 20, 120], ['flash', 0, 0], ['molotov', 0, 0]], weapon: 'awp' },
-  eradicate: { hp: 100, gives: [['ak47', 30, 90]], weapon: 'ak47' },
-  incredibad: { hp: 100, gives: [['m4a4', 30, 90]], weapon: 'm4a4' },
-  lokier: { hp: 100, gives: [['ssg08', 10, 90]], weapon: 'ssg08' },
-  snakelore: { hp: 100, gives: [['m4a4', 30, 90]], weapon: 'm4a4' },
-  snarlbot: { hp: 44, gives: [['ak47', 30, 90], ['smoke', 0, 0], ['flash', 0, 0]], weapon: 'ak47' },
+  eradicate: { hp: 100, gives: [['ak47', 30, 90], ['glock', 20, 120]], weapon: 'ak47' },
+  incredibad: { hp: 100, gives: [['m4a4', 30, 90], ['usps', 12, 24]], weapon: 'm4a4' },
+  lokier: { hp: 100, gives: [['ssg08', 10, 90], ['usps', 12, 24]], weapon: 'ssg08' },
+  snakelore: { hp: 100, gives: [['m4a4', 30, 90], ['usps', 12, 24]], weapon: 'm4a4' },
+  snarlbot: { hp: 44, gives: [['ak47', 30, 90], ['glock', 20, 120], ['smoke', 0, 0], ['flash', 0, 0]], weapon: 'ak47' },
   sp4rtan: { hp: 100, gives: [['deagle', 7, 35], ['defuser', 0, 0]], weapon: 'deagle' },
-  zwomp: { hp: 100, gives: [['m4a4', 30, 90]], weapon: 'm4a4' },
+  zwomp: { hp: 100, gives: [['m4a4', 30, 90], ['usps', 12, 24]], weapon: 'm4a4' },
 };
 
 function forPlayer(id: PlayerId): Action[] {
