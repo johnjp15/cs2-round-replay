@@ -587,6 +587,20 @@ export class Sim3DHost implements IHost {
     return JSON.parse(JSON.stringify(this.bomb)) as BombData;
   }
 
+  /**
+   * B2: what the planter's HUD shows for pawn `id`: the plant progress (0..1) while it plants, and `needZone` while
+   * it holds USE / ATTACK with the c4 drawn outside a bombsite (CS2: "You must be in a bomb zone to plant").
+   */
+  plantHud(id: PlayerId): { progress: number | null; needZone: boolean } {
+    const p = this.pawn(id);
+    const pl = this.bomb.plant;
+    if (p === null) return { progress: null, needZone: false };
+    if (pl !== null && pl.id === id) return { progress: Math.max(0, Math.min(1, (this.tickNo - pl.startTick) / (pl.endTick - pl.startTick))), needZone: false };
+    const bp = this.bombPawns().find((q) => q.id === id);
+    const needZone = bp !== undefined && p.alive && p.team === 'T' && p.weapon === 'c4' && this.bomb.state === 'carried' && bp.use && !bp.inSite;
+    return { progress: null, needZone };
+  }
+
   /** Deep copy of the round state (score, end, round clock). */
   roundState(): RoundState {
     return JSON.parse(JSON.stringify(this.round)) as RoundState;
@@ -1213,9 +1227,15 @@ export class Sim3DHost implements IHost {
   private bombPawns(): BombPawn[] {
     return this.pawns.map((p) => {
       const input = this.inputFor(p.id);
-      const use = input !== null && input.buttons.includes('USE');
+      const useHeld = input !== null && input.buttons.includes('USE');
       const hasC4 = p.inventory.some((q) => q.item === 'c4');
-      const inSite = p.alive && p.team === 'T' && use && p.weapon === 'c4' && this.nav.inBombsite(p.move.pos);
+      // B2: CS2 plants with the c4 drawn and USE or ATTACK held. The c4 must be out (deployed, 1.233 s) before the 3.2 s arm
+      // starts, for the human and LIVE pawns (a puppet's recorded plant is scripted and keeps its tape timing).
+      const mech = p.id === this.human ? input !== null : this.mechanical(p);
+      const planter = p.team === 'T' && p.weapon === 'c4';
+      const plantKey = useHeld || (planter && mech && input !== null && input.buttons.includes('ATTACK'));
+      const use = planter ? plantKey && (!mech || reached(this.tickNo, p.wpn.deployEndTick)) : useHeld;
+      const inSite = p.alive && planter && use && this.nav.inBombsite(p.move.pos);
       return { id: p.id, team: p.team, pos: copyVec(p.move.pos), alive: p.alive, weapon: p.weapon, use, hasC4, hasKit: p.inventory.some((q) => q.item === 'defuser'), inSite };
     });
   }

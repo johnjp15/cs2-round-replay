@@ -444,6 +444,20 @@ export function escapeSpot(nav: NavMesh, from: Vec3, bomb: Vec3, clear: number):
  * H3: the Mirage 2020 nav grid as the AI's MapNav: exactly the queries the AI made of it before (snapToNav,
  * nearestBombsitePoint, placeCentre of "T Spawn" / "CT Spawn", escapeSpot, places starting with "Bombsite").
  */
+/**
+ * B2: the 2020 nav's "Bombsite A/B" places also paint Apartments, the Market window and the ramp (B alone is 1,500 x 950
+ * units). The plant zone is those places inside the boxes of the planter spots (B3none/cs2-retakes CanBePlanter, see
+ * data/source/maps/de_mirage.json) grown 130 units: the same two rects tools/build-map.ts writes to mirage-cs2/map.json.
+ */
+export const LEGACY_PLANT_ZONES: readonly { readonly name: 'A' | 'B'; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number }[] = [
+  { name: 'A', x1: -684.97, y1: -2264.08, x2: -123.97, y2: -1906.16 },
+  { name: 'B', x1: -2328.97, y1: -40.97, x2: -1762.41, y2: 580.03 },
+];
+
+function inLegacyPlantZone(p: Vec3): boolean {
+  return LEGACY_PLANT_ZONES.some((z) => p.x >= z.x1 && p.x <= z.x2 && p.y >= z.y1 && p.y <= z.y2);
+}
+
 export function legacyMapNav(nav: NavMesh): MapNav {
   return {
     isWalkable: (p) => nav.isWalkable(p),
@@ -451,7 +465,7 @@ export function legacyMapNav(nav: NavMesh): MapNav {
     snap: (p) => snapToNav(nav, p),
     path: (a, b) => nav.path(a, b),
     segmentWalkable: (a, b) => nav.segmentWalkable(a, b),
-    inBombsite: (p) => (nav.placeName(p) ?? '').startsWith('Bombsite'),
+    inBombsite: (p) => (nav.placeName(p) ?? '').startsWith('Bombsite') && inLegacyPlantZone(p),
     bombsitePoint: (p) => nearestBombsitePoint(nav, p),
     spawnCentre: (team) => placeCentre(nav, team === 'T' ? 'T Spawn' : 'CT Spawn'),
     escapeSpot: (from, bomb, clear) => escapeSpot(nav, from, bomb, clear),
