@@ -39,7 +39,9 @@ def ffmpeg_bin():
 
 
 def frame_index(t):
-    return int(round(t * FPS))
+    # Half up, like JavaScript's Math.round in video-parity.ts (Python's round() is banker's: 14.375 s would be frame
+    # 862 here and 863 there, and the 3D similarity step found no frame).
+    return int(math.floor(t * FPS + 0.5))
 
 
 def extract_frames(video, indices, outdir):
