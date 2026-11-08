@@ -244,9 +244,9 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
 });
 
 describe('nobody leaves the tape: rejoin never runs', () => {
-  it('golden no-human round: no rejoin line, no path query, digest fe9750d5 (S1: smokes on the CS2 engine, the aimed Market smoke; K1: 9a994b97; W2 pistols: 9f07df0b; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
+  it('golden no-human round: no rejoin line, no path query, digest cf57c99a (T2: cart into Shop by the window, out by the Shop door; S1: fe9750d5, smokes on the CS2 engine; K1: 9a994b97; W2 pistols: 9f07df0b; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
     const g = runHarness(data, { ...NO_HUMAN, recordWalk: true });
-    expect(logDigest(g.log)).toBe('fe9750d5');
+    expect(logDigest(g.log)).toBe('cf57c99a');
     expect(g.paths).toEqual([]);
     expect(coreLogs(g.entries).some((l) => / (rejoin|REPLAY): /.test(l.text))).toBe(false);
   });

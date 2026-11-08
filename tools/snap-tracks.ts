@@ -83,6 +83,26 @@ const REPAIR_BEFORE = 3;
 const REPAIR_AFTER = 3;
 const UNCONNECTED_COST = 1000;
 /** detour: grid (units), how far it may stray from the gap, its length limits, the samples re-spread on each side, and the search budget. */
+/**
+ * T2 (backlog 46, #61): where the recording goes through an opening the 2020 map had and CS2's Mirage hasn't, checked on
+ * the video, the CS2 way a player takes instead (`wayRound`): A* without jumps, or the given `via` points (a jump's
+ * landing marked), with the samples of [from, to] spread evenly (by time) along it. cart goes into and out of Shop
+ * through a full-height doorway beside the Market window (his POV at 27.8-28.5 and 63.5-64.3 s: door frame, floor
+ * through it; the 2020 nav: a floor-level gap at x -2025...-1950 in Shop's north wall) where CS2 has the window over a
+ * sill (z -128, 38 up) and boxes. Without this the gap stays and the puppet snaps through the wall (ticks 1880, 4114).
+ */
+const WAYS_ROUND: readonly { readonly id: PlayerId; readonly from: number; readonly to: number; readonly via?: readonly (readonly [number, number, number, ('plain' | 'crouch')?])[] }[] = [
+  // In at 28.2-28.5 s through the same 2020 doorway (V2's fitted eye is in the opening at 28.5 s): on CS2 the Shop door
+  // is too far for the time, so he climbs the Market window as CS2 players do: a jump from the B side onto the sill
+  // (z -128, 38 up; the 3D movement clears it), and down into Shop. `via`: the way's points (the landing of a jump marked).
+  { id: 'cart', from: 28, to: 29.5, via: [[-1918, -232, -166], [-1918, -278, -128, 'plain'], [-1924, -318, -168], [-1945, -398, -168]] },
+  // Out at 63.5-64.3 s: up the west corridor and through the Shop door (in the doorway at 64.5 s), onto the recording's
+  // B-side spot for his spray at sp4rtan from 65.9 s (the breakdown: "from the Shop door").
+  { id: 'cart', from: 61.5, to: 65.9 },
+];
+const WAY_ROUND_MAX = 1200;
+const WAY_ROUND_NODES = 40000;
+
 const DETOUR_GRID = 8;
 const DETOUR_REACH = 160;
 const DETOUR_MAX_RATIO = 2.5;
@@ -827,6 +847,12 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
         detoured++;
       }
     }
+    for (const w of WAYS_ROUND.filter((x) => x.id === id)) {
+      const r = wayRound(g, snapper, tr.samples, snapped, w.from, w.to, m.stepSize, w.via ?? null);
+      if (r === null) throw new Error(`snap-tracks: no CS2 way round for ${id} ${w.from}-${w.to} s`);
+      snapped = r.out;
+      rerouted.push(`${id} ${r.note}`);
+    }
     const speeds = tr.samples.map((q) => runSpeedOf(weaponAt(weapons(id), q.tick), m));
     const isFrozen = (j: number): boolean => frozenTick(round, id, (tr.samples[j] as { tick: number }).tick);
     // Pass 4 (K1, `lead`): an inferred route faster than a run before the next seen sample starts earlier instead.
@@ -1182,6 +1208,86 @@ interface LagWindow {
   readonly maxLag: number;
   /** Closed at a frozen sample (the puppet snaps there). */
   readonly forced: boolean;
+}
+
+/** T2: `WAYS_ROUND`: the samples of [from, to] (seconds) spread evenly (by time) along CS2's walked way between them. */
+function wayRound(
+  g: MapGeometry,
+  snapper: Snapper,
+  rec: readonly { t: number; x: number; y: number }[],
+  snapped: readonly SnappedSample[],
+  from: number,
+  to: number,
+  step: number,
+  via: readonly (readonly [number, number, number, ('plain' | 'crouch')?])[] | null = null,
+): { out: SnappedSample[]; note: string } | null {
+  const i0 = rec.findIndex((q) => Math.abs(q.t - from) < 1e-6);
+  const i1 = rec.findIndex((q) => Math.abs(q.t - to) < 1e-6);
+  if (i0 < 0 || i1 <= i0 + 1) return null;
+  const a = snapped[i0] as SnappedSample;
+  const b = snapped[i1] as SnappedSample;
+  const path: PathPoint[] | null =
+    via === null ? snapper.astar(a, b, WAY_ROUND_MAX, WAY_ROUND_NODES, false) : [{ x: a.x, y: a.y, z: a.z }, ...via.map((v) => ({ x: v[0], y: v[1], z: v[2], ...(v[3] === undefined ? {} : { jump: v[3] }) })), { x: b.x, y: b.y, z: b.z }];
+  if (path === null) return null;
+  const cum = [0];
+  for (let k = 1; k < path.length; k++) cum.push((cum[k - 1] as number) + Math.hypot((path[k] as PathPoint).x - (path[k - 1] as PathPoint).x, (path[k] as PathPoint).y - (path[k - 1] as PathPoint).y));
+  const total = cum[cum.length - 1] as number;
+  const t0 = (rec[i0] as { t: number }).t;
+  const t1 = (rec[i1] as { t: number }).t;
+  const out = [...snapped];
+  let prevArc = 0;
+  for (let j = i0 + 1; j < i1; j++) {
+    const target = Math.max(prevArc, (total * ((rec[j] as { t: number }).t - t0)) / (t1 - t0));
+    // A jump on the way (as `reroute`): the sample before it takes off at the edge's start (marked), the next one lands
+    // at its end.
+    const prevS = out[j - 1] as SnappedSample;
+    if (prevS.jump !== undefined && j - 1 > i0) {
+      const kk = path.findIndex((q, k2) => k2 > 0 && q.jump !== undefined && Math.abs((cum[k2 - 1] as number) - prevArc) < 1e-6);
+      if (kk > 0) {
+        const land = path[kk] as PathPoint;
+        const old = withoutJump(snapped[j] as SnappedSample);
+        out[j] = { ...old, x: q32(land.x), y: q32(land.y), z: q32(land.z), kind: 'far', dxy: Math.hypot(land.x - (rec[j] as { x: number }).x, land.y - (rec[j] as { y: number }).y), connected: true };
+        prevArc = cum[kk] as number;
+        continue;
+      }
+    }
+    const jumpEdge = path.findIndex((q, k2) => k2 > 0 && q.jump !== undefined && (cum[k2] as number) > prevArc && (cum[k2 - 1] as number) < target + 1e-9);
+    if (jumpEdge > 0) {
+      const off = path[jumpEdge - 1] as PathPoint;
+      const q = { x: q32(off.x), y: q32(off.y), z: q32(off.z) };
+      if (!hullLineClear(g, prevS, q, step)) return null;
+      const old = withoutJump(snapped[j] as SnappedSample);
+      out[j] = { ...old, ...q, kind: 'far', dxy: Math.hypot(q.x - (rec[j] as { x: number }).x, q.y - (rec[j] as { y: number }).y), connected: true, jump: (path[jumpEdge] as PathPoint).jump as 'plain' | 'crouch' };
+      prevArc = cum[jumpEdge - 1] as number;
+      continue;
+    }
+    let k = 1;
+    while (k < path.length - 1 && (cum[k] as number) < target) k++;
+    const p0 = path[k - 1] as PathPoint;
+    const p1 = path[k] as PathPoint;
+    const seg = (cum[k] as number) - (cum[k - 1] as number);
+    const f = seg > 0 ? Math.min(1, Math.max(0, (target - (cum[k - 1] as number)) / seg)) : 0;
+    // The point at this share of the way, else (a corner between it and the previous sample) the way's corners back
+    // to the previous sample's arc: the first a hull walks to in a straight line.
+    const cands: { x: number; y: number; z: number; arc: number }[] = [{ x: p0.x + (p1.x - p0.x) * f, y: p0.y + (p1.y - p0.y) * f, z: f < 0.5 ? p0.z : p1.z, arc: target }];
+    for (let c = k - 1; c >= 1 && (cum[c] as number) > prevArc; c--) cands.push({ ...(path[c] as PathPoint), arc: cum[c] as number });
+    const prev = out[j - 1] as SnappedSample;
+    let chosen: SnappedSample | null = null;
+    for (const c of cands) {
+      const lv = snapper.levels(c.x, c.y, c.z, step)[0];
+      if (lv === undefined) continue;
+      const q = { x: q32(c.x), y: q32(c.y), z: q32(lv) };
+      if (!hullLineClear(g, prev, q, step)) continue;
+      const old = withoutJump(snapped[j] as SnappedSample);
+      chosen = { ...old, ...q, kind: 'far', dxy: Math.hypot(q.x - (rec[j] as { x: number }).x, q.y - (rec[j] as { y: number }).y), connected: true };
+      prevArc = c.arc;
+      break;
+    }
+    if (chosen === null) return null;
+    out[j] = chosen;
+  }
+  for (let j = i0 + 1; j <= i1; j++) if (!stepOk(g, out[j - 1] as SnappedSample, out[j] as SnappedSample, step)) return null;
+  return { out, note: `${from.toFixed(1)}-${to.toFixed(1)} s: way round on CS2 (${total.toFixed(0)} u, ${(total / (t1 - t0)).toFixed(0)} u/s)` };
 }
 
 /**
