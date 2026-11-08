@@ -1,6 +1,6 @@
 {
   "name": "peek-before-eradicate",
-  "description": "G7 (John's case): cart runs ahead of eradicate along eradicate's own way into the Apartments corridor and stops at about 10 s in Lokier's line from Truck, where the recording has Lokier headshot eradicate at 12.75 s (cart's own recording is still in Back Alley then, 7 s from the corridor). cart never fires. He is off script for Lokier, who is scoped on that corridor, so Lokier goes LIVE and shoots at him within a human reaction time; the scheduled window encounter is over. The survivors carry on and rejoin their recording where it still makes sense.",
+  "description": "G7 (John's case): cart runs ahead of eradicate along eradicate's own way into the Apartments corridor to where the recording has Lokier headshot eradicate at 12.75 s (about 10 s; cart's own recording is still in Back Alley then, 7 s from the corridor), and on west toward the window into Lokier's line from Truck (X1d: on the 2020 mesh that line reaches only x -1450 or so into the Apartments, so he is in it at 12.6 s; on CS2's, already at 10.7 s at eradicate's spot), where he stops. cart never fires. He is off script for Lokier, who is scoped on that corridor, so Lokier goes LIVE and shoots at him within a human reaction time; the scheduled window encounter is over. The survivors carry on and rejoin their recording where it still makes sense.",
   "human": "cart",
   "seed": 1,
   "until": "end",
@@ -56,6 +56,20 @@
       "pos": [
         -1123,
         700
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1340,
+        692
+      ]
+    },
+    {
+      "do": "walkTo",
+      "pos": [
+        -1480,
+        730
       ]
     },
     {

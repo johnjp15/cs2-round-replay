@@ -79,7 +79,9 @@ describe('Sim3DHost, nobody plays (H1)', () => {
     // arrives on time and barely stands in the arch opening).
     const lines = host3d(watching).combatLog();
     expect(lines.every((l) => l.text.startsWith('blocked ') || l.text.startsWith('script: scripted hit through geometry: '))).toBe(true);
-    expect(lines.filter((l) => l.text.startsWith('script: ')).map((l) => l.tick)).toEqual([32, 816, 1142, 1184, 1203, 3194, 3206]);
+    // X1d: 5 on the 2020 mesh (the default package): cart's 1203 headshot and sp4rtan's 3194 hit are in sight there
+    // (CS2: 32, 816, 1142, 1184, 1203, 3194, 3206; docs/maps.md "The round on it").
+    expect(lines.filter((l) => l.text.startsWith('script: ')).map((l) => l.tick)).toEqual([32, 816, 1142, 1184, 3206]);
   });
 });
 

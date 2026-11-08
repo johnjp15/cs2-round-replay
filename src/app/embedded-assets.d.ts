@@ -11,10 +11,10 @@ declare module 'virtual:cs2-embedded-assets' {
     readonly vision: string;
     /** data/mirage-radar.jpg as a `data:image/jpeg;base64,…` URI */
     readonly radar: string;
-    /** G3: data/geometry/mirage-geometry.bin and mirage-clips.bin, always gzip then base64 */
+    /** G3 / X1c: the default package's data/maps/mirage-2020/geometry.bin and clips.bin, always gzip then base64 */
     readonly geometry: string;
     readonly clips: string;
-    /** G3: data/geometry/mirage-tracks.json, as `round` */
+    /** G3 / X1c: data/maps/mirage-2020/tracks.json, as `round` */
     readonly tracks: string;
     /** G3: data/geometry/mirage-height.png as a `data:image/png;base64,…` URI */
     readonly height: string;
