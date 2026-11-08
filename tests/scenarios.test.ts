@@ -190,8 +190,9 @@ const GRACE = Math.round(tuning.replay.outliveGraceSec * 64);
 // its west end (CS2 walls in the 2020 drop under the Apartments window) and goes round the B-site box the recording
 // walks through, so G1's plant shift starts his USE 7 ticks late; everything after it is on the tape's ticks.
 // G8: 6 ticks late (1767): his LIVE leg now jumps onto the Balcony's sill at once instead of pushing into it.
+// P3: 31 ticks late (1792): the plant spot is the corridor's east mouth (-1882, 243), ~110 u further on his way.
 const TAPE_AFTER_LOKIER = [
-  ['bomb', 1767, 'planted'],
+  ['bomb', 1792, 'planted'],
   ['kill', 2829, 'barely>zwomp'],
   ['kill', 3222, 'sp4rtan>donk'],
   ['kill', 3766, 'sp4rtan>barely'],
@@ -498,8 +499,8 @@ describe('6. cart dies early', () => {
     const ticks = deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim]);
     for (const k of [[32, 'snarlbot', 'incredibad'], [794, 'snarlbot', 'snakelore'], [1142, 'sp4rtan', 'snarlbot']]) expect(ticks).toContainEqual(k);
     // G6: barely's plant is 7 ticks late (1768, the tape's 1761), as in never-peeks: he went LIVE for the outlived Lokier.
-    // G8: 6 ticks (1767), as in never-peeks.
-    expect(run.entries.some((e) => e.observe.tick === 1767 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
+    // G8: 6 ticks (1767), as in never-peeks. P3: 31 ticks (1792), the plant spot ~110 u further on his way.
+    expect(run.entries.some((e) => e.observe.tick === 1792 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
     expectUntouchedReplay(run);
   });
 });
