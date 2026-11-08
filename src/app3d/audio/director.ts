@@ -15,6 +15,12 @@
  *    burn loop while its fire lasts; weapon changes: the draw sound.
  *
  * Seeks and rewinds (the tick jumping) reset the state without sounding anything and stop the loops.
+ *
+ * A2: every cue carries its tick (the engine schedules it at that tick's audio time) and its source pawn (CS2's
+ * per-entity instance limits); cues silent by construction (the competitive round-start music, `snd_roundstart_volume
+ * 0`) aren't sent; the planted C4 beeps on CS2's accelerating cadence from the plant (`c4BeepTicks`), switching to
+ * `C4.PlantSound_10sec` for the last 10 s, instead of the host's fixed 1 s / 0.5 s beeps (which stay as the AI's
+ * "heard the bomb" event); every cue is counted by tick (`log`) for the checks.
  */
 import type { ObsEvent, Observe, PawnObs, PlayerId, Team, Vec3 } from '../../contracts/index';
 import type { Effect } from '../../app/effects';
@@ -35,6 +41,10 @@ export interface SoundSink {
 export interface CueOptions {
   /** The listener's own pawn made it: played in the head, at the curve's nearest point. */
   readonly self?: boolean;
+  /** The tick it belongs to (absent: play now). */
+  readonly tick?: number;
+  /** The pawn that made it (CS2's instance_limit is per entity). */
+  readonly source?: string;
   readonly origin?: boolean;
   /** Extra gain (music cvars). */
   readonly gain?: number;
@@ -82,6 +92,27 @@ export interface CueRecord {
   readonly id: string;
 }
 
+/**
+ * The ticks the planted C4 beeps on (plant at `plantTick`, explodes `timerSec` later) and whether each is in the last
+ * 10 s. Cadence: the next beep after max(0.15, 0.1 + 0.9 × left / timer) s, so 1 s apart at the plant down to 0.15 s
+ * at the end: CS:GO's planted-C4 think, which CS2 kept by ear (**assumed**: CS2's code isn't public). The last 10 s
+ * play `C4.PlantSound_10sec` (CS2's sound event; "New sound for final 10 seconds of bomb beeping", CS2 update of
+ * 2023-10-17).
+ */
+export function c4BeepTicks(plantTick: number, timerSec: number): { tick: number; last10: boolean }[] {
+  const out: { tick: number; last10: boolean }[] = [];
+  const end = plantTick + timerSec * TICKS_PER_SEC;
+  let t = plantTick / TICKS_PER_SEC;
+  for (;;) {
+    const left = end / TICKS_PER_SEC - t;
+    t += Math.max(0.15, 0.1 + 0.9 * Math.max(0, left) / timerSec);
+    const tick = Math.round(t * TICKS_PER_SEC);
+    if (tick >= end) break;
+    out.push({ tick, last10: end - tick <= 10 * TICKS_PER_SEC });
+  }
+  return out;
+}
+
 export class SoundDirector {
   private lastTick: number | null = null;
   private weapons = new Map<PlayerId, string>();
@@ -93,11 +124,17 @@ export class SoundDirector {
   played = 0;
   private tickNow = 0;
   private ricochet = 0;
+  /** The planted bomb's beeps (its plant tick and the schedule), or null. */
+  private beeps: { plant: number; list: { tick: number; last10: boolean }[]; next: number } | null = null;
+  /** Every cue by tick since the last reset, up to 20,000 (the checks count shots and steps in a window). */
+  readonly log: CueRecord[] = [];
 
   constructor(
     private readonly sink: SoundSink,
     /** Footstep surface under a position (Mirage's mesh has no materials: concrete everywhere until X1's 2020 map). */
     private readonly surfaceAt: (pos: Vec3) => Surface = () => 'concrete',
+    /** The bomb timer (data/tuning.json bomb.timerSec, CS2's mp_c4timer 40). */
+    private readonly bombTimerSec = 40,
   ) {}
 
   /** Forget everything (seek, rewind, restart): no sound, loops stopped. */
@@ -106,21 +143,28 @@ export class SoundDirector {
     this.weapons.clear();
     this.tracked.clear();
     this.pending = [];
+    this.beeps = null;
+    this.log.length = 0;
     for (const k of this.loops) this.sink.stopLoop(k);
     this.loops.clear();
     this.sink.stopAll();
   }
 
-  private cue(id: string, pos: Vec3 | null, opts: CueOptions = {}): void {
+  /** A cue of the current tick (`now`: the human's input, played at once). */
+  private cue(id: string, pos: Vec3 | null, opts: CueOptions = {}, now = false): void {
     if (SOUNDS[id] === undefined) return;
-    this.sink.play(id, pos, opts);
+    // Silent by construction (a cvar at 0, e.g. snd_roundstart_volume 0): nothing to play.
+    if (opts.gain !== undefined && opts.gain <= 0) return;
+    this.sink.play(id, pos, now ? opts : { ...opts, tick: this.tickNow });
     this.played++;
-    this.recent.push({ tick: this.tickNow, id });
+    const rec = { tick: this.tickNow, id };
+    this.recent.push(rec);
     if (this.recent.length > 64) this.recent.shift();
+    if (this.log.length < 20000) this.log.push(rec);
   }
 
   private pawnCue(id: string, p: PawnObs, listener: PlayerId | null): void {
-    this.cue(id, p.pos, { origin: true, self: p.id === listener });
+    this.cue(id, p.pos, { origin: true, self: p.id === listener, source: p.id });
   }
 
   ingest(inp: DirectorInput): void {
@@ -134,9 +178,14 @@ export class SoundDirector {
     const pawns = new Map<PlayerId, PawnObs>();
     for (const p of o.pawns) pawns.set(p.id, p);
     if (fresh) {
+      // The first tick after a start, seek or rewind: its own events are new (the ticks skipped over were never fed
+      // here, so nothing is replayed); the state (weapons, grenades in flight, the bomb's beeps) is taken as it is.
       for (const p of o.pawns) this.weapons.set(p.id, p.weapon);
       this.trackEffects(inp, false);
       if (tick <= 1) this.cue('round.start', null, { gain: AUDIO_TUNING.music.roundStart });
+      for (const e of o.events) this.event(e, pawns, inp);
+      this.bullets(inp, pawns);
+      this.bomb(o);
       return;
     }
     // Scheduled stages (reloads, bolts) that are due.
@@ -160,6 +209,28 @@ export class SoundDirector {
     for (const e of o.events) this.event(e, pawns, inp);
     this.bullets(inp, pawns);
     this.trackEffects(inp, true);
+    this.bomb(o);
+  }
+
+  /** The planted C4's beeps on CS2's cadence (also after a seek into a planted round). */
+  private bomb(o: Observe): void {
+    const b = o.round.bomb;
+    if (b.state !== 'planted' || b.plantTick === null || b.pos === null) {
+      this.beeps = null;
+      return;
+    }
+    if (this.beeps === null || this.beeps.plant !== b.plantTick) {
+      const list = c4BeepTicks(b.plantTick, this.bombTimerSec);
+      let next = 0;
+      while (next < list.length && (list[next] as { tick: number }).tick < o.tick) next++;
+      this.beeps = { plant: b.plantTick, list, next };
+    }
+    const bp = this.beeps;
+    while (bp.next < bp.list.length && (bp.list[bp.next] as { tick: number }).tick <= o.tick) {
+      const e = bp.list[bp.next] as { tick: number; last10: boolean };
+      bp.next++;
+      if (e.tick === o.tick) this.cue(e.last10 ? 'c4.beep.10s' : 'c4.beep', b.pos);
+    }
   }
 
   private event(e: ObsEvent, pawns: Map<PlayerId, PawnObs>, inp: DirectorInput): void {
@@ -188,7 +259,7 @@ export class SoundDirector {
             if (p !== undefined) this.pawnCue(`land.${this.surfaceAt(e.pos)}`, p, L);
             return;
           case 'bomb':
-            this.cue('c4.beep', e.pos);
+            // The host's beep (fixed 1 s / 0.5 s, the AI hears it): the sound is CS2's cadence in bomb().
             return;
           case 'reload': {
             const gun = p === undefined ? null : gunOf(p.weapon);
@@ -336,28 +407,28 @@ export class SoundDirector {
     const gun = gunOf(weapon);
     switch (kind) {
       case 'dry':
-        if (gun !== null) this.cue(GUN_SOUNDS[gun].pistol ? 'dry.pistol' : 'dry.rifle', null);
+        if (gun !== null) this.cue(GUN_SOUNDS[gun].pistol ? 'dry.pistol' : 'dry.rifle', null, {}, true);
         return;
       case 'knife':
-        this.cue('knife.swing', pos, { origin: true, self: true });
+        this.cue('knife.swing', pos, { origin: true, self: true }, true);
         return;
       case 'knifeWall':
         this.cue('knife.hitwall', pos, { origin: true, self: true });
         return;
       case 'zoomIn':
       case 'zoomOut':
-        if (gun !== null) this.cue(`zoom.${gun}.${kind === 'zoomIn' ? 'in' : 'out'}`, null);
+        if (gun !== null) this.cue(`zoom.${gun}.${kind === 'zoomIn' ? 'in' : 'out'}`, null, {}, true);
         return;
       case 'pin': {
         const g = grenadeOf(weapon);
-        if (g !== null) this.cue(`pin.${g}`, pos, { origin: true, self: true });
+        if (g !== null) this.cue(`pin.${g}`, pos, { origin: true, self: true }, true);
         return;
       }
       case 'plantStart':
-        this.cue('c4.initiate', pos, { origin: true, self: true });
+        this.cue('c4.initiate', pos, { origin: true, self: true }, true);
         return;
       case 'keypress':
-        this.cue('c4.keypress', pos, { origin: true, self: true });
+        this.cue('c4.keypress', pos, { origin: true, self: true }, true);
         return;
     }
   }

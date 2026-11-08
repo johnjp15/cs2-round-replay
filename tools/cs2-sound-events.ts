@@ -13,7 +13,12 @@
  *  - `volume`, `pitch`, the random ranges, `delay`;
  *  - `curve`: `distance_volume_mapping_curve` (points `[distance, volume, slopeIn, slopeOut, modeIn, modeOut]`);
  *  - `occlusion`: `occlusion_intensity`; `offset`: `position_offset` (units above the entity origin);
- *  - `mixgroup`, `local` (`is_ui_sound` or `position_relative_to_player`).
+ *  - `mixgroup`, `local` (`is_ui_sound` or `position_relative_to_player`);
+ *  - A2: `instanceLimit` (`instance_limit`: how many of this event one entity plays at once; 0 = no limit) and
+ *    `fadeSec` (where `fadetime_volume_mapping_curve` reaches 0: how fast a stolen instance fades out).
+ *
+ * A2: plus `mixers`: every mixgroup's `vol` in the `Default_Mix` of `game/csgo/pak01_dir/scripts/soundmixers.txt`
+ * (CS2's mixer: Weapons 0.6, Footsteps 0.8, BulletImpacts 0.3, …), and its `parent`.
  *
  * Valve's sound files are not touched: only event metadata (paths and numbers) from the public dump.
  */
@@ -38,6 +43,8 @@ export interface ManifestEvent {
   readonly mixgroup: string;
   readonly local: boolean;
   readonly children: readonly string[];
+  readonly instanceLimit: number;
+  readonly fadeSec: number;
   /** The .vsndevts file it is defined in (relative to soundevents/). */
   readonly defined: string;
 }
@@ -51,6 +58,8 @@ export interface Manifest {
   readonly missing: readonly string[];
   /** Files events name that pak01 doesn't contain (dead references in CS2's data); dropped from the events. */
   readonly absent: readonly string[];
+  /** A2: CS2's Default_Mix volume per mixgroup (soundmixers.txt), with the mixgroup's parent. */
+  readonly mixers: Readonly<Record<string, { readonly vol: number; readonly parent: string }>>;
 }
 
 function walk(dir: string): string[] {
@@ -93,6 +102,29 @@ export function resolved(all: Map<string, { def: Obj; file: string }>, name: str
   return { ...(base ?? {}), ...e.def };
 }
 
+/** Where a fade-time curve first reaches 0 (seconds), or 0 without one. */
+function fadeEnd(v: Kv3 | undefined): number {
+  if (!Array.isArray(v)) return 0;
+  for (const p of v) if (Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number' && p[1] <= 0) return p[0];
+  return 0;
+}
+
+/** CS2's mixer: `Default_Mix` volumes and the mixgroup tree of scripts/soundmixers.txt. */
+export function loadMixers(file: string): Record<string, { vol: number; parent: string }> {
+  const root = parseKv3(readFileSync(file, 'utf8')) as Obj;
+  const parents = new Map<string, string>();
+  for (const g of (root['MixGroups'] as Kv3[] | undefined) ?? []) {
+    if (g !== null && typeof g === 'object' && !Array.isArray(g) && typeof g['name'] === 'string') parents.set(g['name'], typeof g['parent'] === 'string' ? g['parent'] : '');
+  }
+  const mix = ((root['SoundMixers'] as Obj | undefined)?.['Default_Mix'] as Kv3[] | undefined) ?? [];
+  const out: Record<string, { vol: number; parent: string }> = {};
+  for (const e of mix) {
+    if (e === null || typeof e !== 'object' || Array.isArray(e) || typeof e['mixgroup'] !== 'string') continue;
+    out[e['mixgroup']] = { vol: num(e['vol'], 1), parent: parents.get(e['mixgroup']) ?? '' };
+  }
+  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)));
+}
+
 export function manifestEvent(def: Obj, file: string): ManifestEvent {
   const curve = Array.isArray(def['distance_volume_mapping_curve']) && def['use_distance_volume_mapping_curve'] !== false ? def['distance_volume_mapping_curve'] : [];
   const offset = Array.isArray(def['position_offset']) ? def['position_offset'] : [];
@@ -109,6 +141,8 @@ export function manifestEvent(def: Obj, file: string): ManifestEvent {
     mixgroup: typeof def['mixgroup'] === 'string' ? def['mixgroup'] : '',
     local: def['is_ui_sound'] === true || def['position_relative_to_player'] === true,
     children: def['enable_child_events'] === false ? [] : strs(def['soundevent_01']),
+    instanceLimit: num(def['instance_limit'], 0),
+    fadeSec: fadeEnd(def['fadetime_volume_mapping_curve']),
     defined: file,
   };
 }
@@ -151,13 +185,17 @@ export function buildManifest(checkout: string, names: readonly string[]): Manif
   }
   const sorted = Object.fromEntries(Object.entries(events).sort(([a], [b]) => (a < b ? -1 : 1)));
   const sortedFiles = Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : 1)));
-  return { source: { repo: 'SteamDatabase/GameTracking-CS2', commit, date }, events: sorted, files: sortedFiles, missing: missing.sort(), absent: [...absent].sort() };
+  const allMixers = loadMixers(join(checkout, 'game/csgo/pak01_dir/scripts/soundmixers.txt'));
+  const used = new Set(Object.values(events).map((e) => e.mixgroup));
+  for (const g of [...used]) for (let p = allMixers[g]?.parent; p !== undefined && p !== ''; p = allMixers[p]?.parent) used.add(p);
+  const mixers = Object.fromEntries(Object.entries(allMixers).filter(([g]) => used.has(g)));
+  return { source: { repo: 'SteamDatabase/GameTracking-CS2', commit, date }, events: sorted, files: sortedFiles, missing: missing.sort(), absent: [...absent].sort(), mixers };
 }
 
 const sig = (x: number): number => Number(x.toPrecision(4));
 
-/** The engine's subset of the manifest: per event files, volume, pitch, randoms, delay, curve, occlusion, z offset, children. */
-export function runtimeManifest(m: Manifest): { events: Record<string, unknown> } {
+/** The engine's subset of the manifest: per event files, volume, pitch, randoms, delay, curve, occlusion, z offset, children, mixgroup, instance limit; the mixer volumes. */
+export function runtimeManifest(m: Manifest): { events: Record<string, unknown>; mixers: Record<string, unknown> } {
   const events: Record<string, unknown> = {};
   for (const [name, e] of Object.entries(m.events)) {
     events[name] = {
@@ -171,9 +209,12 @@ export function runtimeManifest(m: Manifest): { events: Record<string, unknown> 
       occlusion: sig(e.occlusion),
       offset: [0, 0, sig(e.offset[2])],
       children: e.children,
+      mixgroup: e.mixgroup,
+      limit: e.instanceLimit,
+      fade: sig(e.fadeSec),
     };
   }
-  return { events };
+  return { events, mixers: m.mixers };
 }
 
 function main(): void {
