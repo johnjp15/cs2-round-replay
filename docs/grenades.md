@@ -6,7 +6,8 @@ holes, flash blindness, spreading fire, HE blast damage, the decoy's fake fire).
 It imports only `src/contracts` (ESLint zone `src/engine`) and touches the world only through the `GrenadeWorld`
 interface, which the hosts implement on their collision. The tests run it on the real CS2 de_mirage mesh
 (`src/sim2d/geometry.ts`, docs/geometry.md) through a test-only adapter. The 2D sim keeps its own simplified
-grenades (`src/sim2d/grenades.ts`, docs/combat.md); integration into the 3D host is H4's.
+grenades (`src/sim2d/grenades.ts`, docs/combat.md) for flashes, HE and molotovs; **smokes run on this engine in both
+hosts** (S1, below: "Smokes in the hosts"). The rest of the integration is H4's.
 
 Constants live in `data/tuning.json` → `grenades.cs2` (validated by `parseTuning`, `GrenadeCs2Tuning` in
 `src/contracts/tuning.ts`; additive: the 2D keys are unchanged).
@@ -245,6 +246,33 @@ the window open over x −1946…−1890 from the sill at z −126 (40 above the
 door is the full-height gap at x −2356…−2292. cart's B-site smoke is aimed at the floor 64 in front of the window and
 lands 26 from it; the test asserts that it blocks the clear line from a CT in Market (−1921, −330, −104) out through
 the window to (−1921, −100, −104) 3 s after the pop and not after 21 s, and the cloud fills the opening.
+
+## Smokes in the hosts (S1)
+
+`src/sim3d/smokes.ts` (`Cs2Smokes`, the `SmokeEngine` interface of `src/sim2d/grenades.ts`) runs every smoke grenade of
+Sim3DHost and of Sim2DHost with the CS2 mesh (the 2D app; `defaultHost` injects it, since `src/sim2d` may not import the
+engine) on this module: released on ATTACK's release from the eye with the view angles and the thrower's velocity
+(full strength), flying and bouncing on the world mesh without player clips (`SessionData.world`), detonating at the
+rest check, and blooming as the flood-filled cloud (growth 1.2 s, 18 s full, 2 s fade). `sees` uses `smokeBlocks` eye to
+eye (standing eyes); a cloud popping over a 2D-model fire puts it out, a molotov bursting in one is smothered, and a
+flash through one doesn't blind (`smokeBlocksFlash`). The 3D renderer draws the voxels (`activeEffects()[].cells`), the
+2D one a disc with the cloud's footprint area. Snapshots keep each cloud's inputs only (seq, thrower, centre, pop tick:
+the hosts make no bullet or HE holes) and rebuild it on restore, so checkpoints stay small.
+
+**Scripted throws with a measured landing** are released with solved angles: `tools/utility-aim.ts` (run by
+`tools/snap-tracks.ts`) puts the thrower at his snapped track at the release tick with the track's velocity capped at
+the grenade's run speed, solves `aimAtLanding` at full strength, and writes `{tick, thrower, pitch, yaw, landing,
+error}` into `data/geometry/mirage-tracks.json` `utility`; `applyTracks3d` sets `utility[].aim` and the Core
+(`ScriptPlan`) looks there during the pin-pull window instead of the track yaw and `throwPitchDeg`. cart's 25.8 s smoke:
+pitch −7.5°, yaw −77.2°, solved landing 15 u from the measured spot; in the hosts (his puppet's actual release) it pops
+at (−1911, −613, −166) at 29.1 s (tick 1864), 34 u from it. The other smokes have no landing and keep the default throw
+(track yaw, −10° pitch) on the engine.
+
+![cart's Market smoke: video | before (main) | after (S1), cart's fitted views at 29.5, 30.0, 31.0 s; then the B side at 35 s](img/s1-market-smoke.jpg)
+
+*Columns: the video, main (the 2D model's sphere popped in front of the window, 27.3 s), S1 (the engine's cloud deep in
+Shop). Rows 1–3: cart's camera as V2 fitted it; rows 4–5: from B site and from just outside the window at 35 s: the
+window is open, the cloud is inside.*
 
 **V0's measured landing** (`data/round.json` `utility[].landing`; only this throw has one): (−1885, −320, −166) ± 45,
 on the Shop floor just inside the window. #39 had (−2035, −305, −94) on the counter, about one window width west and

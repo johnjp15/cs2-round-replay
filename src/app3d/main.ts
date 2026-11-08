@@ -1092,6 +1092,7 @@ class App3D {
       nowMs: now,
       items: this.host(s).pawnState(viewId)?.inventory.map((q) => q.item) ?? null,
       teamDamage: { feed: this.teamDamage.feed(o.tick), hint: this.teamDamage.hint(human, o.tick) },
+      plant: firstPerson && human !== null ? this.host(s).plantHud(human) : undefined,
     });
     const r2 = performance.now();
     if (this.probing) this.probe.mark('hud', r2);

@@ -49,10 +49,12 @@ import {
  * whose landing the video never shows gets null. Sources and frames: docs/round-data.md "Grenade landings".
  */
 const MEASURED_LANDINGS: Readonly<Record<string, GrenadeLanding>> = {
-  // cart's B-site smoke: the trajectory line goes through the Market window (x -1946...-1890 on the CS2 mesh) and
-  // disappears behind its east jamb, descending (cart's POV 26.3-27.2 s); cart himself climbs through that window at
-  // 28.5 s; from inside Shop 29.6-30.2 s the cloud fills the window. It rests on the Shop floor just inside the window.
-  '25.8 cart smoke': { x: -1885, y: -320, z: -166, uncertainty: 45 },
+  // cart's B-site smoke (S1, backlog 45, re-measured): thrown from the B side through the Market window, it comes to
+  // rest deep inside Shop, beside the white freezer counter ~320 u south of the window, and blooms there (first puff
+  // 28.1 s). The point is where cart's trajectory-line end (his POV 29.5 and 30.0 s) and the freezer (44.5 s) meet on
+  // the CS2 mesh from V2's fitted cameras: three rays cross within 2 u at (-1882...-1901, -581...-585, -129). The window
+  // stays clear (cart climbs in through it at 28.2-28.5 s with no cloud in it). docs/round-data.md "Grenade landings".
+  '25.8 cart smoke': { x: -1890, y: -585, z: -166, uncertainty: 40 },
 };
 
 // ---------- source shapes (the web-apps page's embedded JSON) ----------

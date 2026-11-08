@@ -112,8 +112,10 @@ export interface UtilityEntry {
   readonly tick: number;
   readonly id: PlayerId;
   readonly kind: GrenadeId;
-  /** Where it was thrown from (the landing spot is not in the data). */
+  /** Where it was thrown from. */
   readonly throwPos: Vec3;
+  /** S1: the release view angles that land it on its measured spot (Utility.aim), or null: the default throw look. */
+  readonly aim: { readonly pitch: number; readonly yaw: number } | null;
 }
 
 export interface RadioEntry {
@@ -304,7 +306,7 @@ function buildEntries(round: RoundData): ScheduledEvent[] {
   damageAndKillEntries(round, out);
   bombEntries(round, out);
   inventoryEntries(round, out);
-  for (const u of round.utility) out.push({ type: 'utility', tick: u.tick, id: u.thrower, kind: u.kind, throwPos: u.throwPos });
+  for (const u of round.utility) out.push({ type: 'utility', tick: u.tick, id: u.thrower, kind: u.kind, throwPos: u.throwPos, aim: u.aim ?? null });
   for (const r of round.radio) out.push({ type: 'radio', tick: r.tick, id: r.who, text: r.text });
   for (const c of round.chat) out.push({ type: 'chat', tick: c.tick, id: c.who, text: c.text });
   return out;

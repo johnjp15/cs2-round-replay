@@ -23,6 +23,22 @@ export interface Tracks3dJump {
   readonly crouch: boolean;
 }
 
+/**
+ * S1: the view angles a scripted throw is released with so that the CS2 grenade engine (src/engine/grenades) lands it
+ * on the measured spot (`utility[].landing`), from the thrower's snapped position and velocity at the release; solved
+ * by `aimAtLanding` (tools/utility-aim.ts). `landing` is where that throw comes to rest in the solve, `error` its
+ * distance from the target (units). Full strength (ATTACK) only: the hosts don't throw underhand.
+ */
+export interface Tracks3dUtilityAim {
+  /** utility[] entry: its tick and thrower. */
+  readonly tick: number;
+  readonly thrower: PlayerId;
+  readonly pitch: number;
+  readonly yaw: number;
+  readonly landing: readonly number[];
+  readonly error: number;
+}
+
 export interface Tracks3d {
   readonly format: string;
   readonly note: string;
@@ -32,6 +48,8 @@ export interface Tracks3d {
   /** Per player, one [x, y, z] per sample of `round.tracks[id].samples`, in order. */
   readonly tracks: Readonly<Partial<Record<PlayerId, readonly (readonly number[])[]>>>;
   readonly jumps: readonly Tracks3dJump[];
+  /** S1: aims of the scripted throws with a measured landing (absent in older files). */
+  readonly utility?: readonly Tracks3dUtilityAim[];
 }
 
 export class Tracks3dError extends Error {
@@ -65,6 +83,17 @@ export function parseTracks3d(json: unknown): Tracks3d {
       throw new Tracks3dError(`jumps[${i}]: expected {id, t, tick, crouch}`);
     }
   });
+  const util = o['utility'];
+  if (util !== undefined) {
+    if (!Array.isArray(util)) throw new Tracks3dError('utility: expected an array');
+    util.forEach((u: unknown, i) => {
+      const r = (typeof u === 'object' && u !== null ? u : {}) as Record<string, unknown>;
+      const id = r['thrower'];
+      if (typeof id !== 'string' || !isPlayerId(id) || !Number.isInteger(r['tick']) || typeof r['pitch'] !== 'number' || typeof r['yaw'] !== 'number') {
+        throw new Tracks3dError(`utility[${i}]: expected {tick, thrower, pitch, yaw, landing, error}`);
+      }
+    });
+  }
   return o as unknown as Tracks3d;
 }
 
@@ -102,5 +131,14 @@ export function applyTracks3d(round: RoundData, t: Tracks3d): RoundData {
     if (raw === undefined || snapped === undefined || raw.t !== 0 || raw.x !== p.start.pos.x || raw.y !== p.start.pos.y || raw.z !== p.start.pos.z) return p;
     return { ...p, start: { ...p.start, pos: { x: snapped.x, y: snapped.y, z: snapped.z } } };
   });
-  return { ...round, players, tracks: out as RoundData['tracks'] };
+  // S1: the scripted throws' aims on this map.
+  const aims = t.utility ?? [];
+  for (const a of aims) {
+    if (!round.utility.some((u) => u.tick === a.tick && u.thrower === a.thrower)) throw new Tracks3dError(`utility ${a.thrower} @ ${a.tick}: no such throw`);
+  }
+  const utility = aims.length === 0 ? round.utility : round.utility.map((u) => {
+    const a = aims.find((x) => x.tick === u.tick && x.thrower === u.thrower);
+    return a === undefined ? u : { ...u, aim: { pitch: a.pitch, yaw: a.yaw } };
+  });
+  return { ...round, players, tracks: out as RoundData['tracks'], utility };
 }
