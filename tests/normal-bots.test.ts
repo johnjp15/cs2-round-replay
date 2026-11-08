@@ -229,8 +229,11 @@ describe('window-2s-early: tape-like play up to 2 s ahead of the recording', () 
     expect(early.length).toBeGreaterThan(0);
     const enc = encounterLogs(run);
     expect(enc.some((t) => / in sight at the spot at tick /.test(t))).toBe(true);
-    // D1 (John 13:10): his real headshot kills Lokier at 18.47 s, before the scripted 73 is due (18.50 s): it never lands.
-    expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'damage' && ev.attacker === 'lokier' && ev.victim === 'cart'))).toBe(false);
+    // D1 (John 13:10): his real headshot kills Lokier at 18.47 s. F1: Lokier, holding the window from 15.95 s (the
+    // encounter's lead-in), sees him at the spot at 16.84 s (-0.6 s), so his time-shifted 73 lands 1 s later (17.83 s),
+    // before that kill, as the scenario describes (before F1 he saw him too late for it to land).
+    const hits = run.entries.flatMap((e) => e.observe.events.filter((ev) => ev.type === 'damage' && ev.attacker === 'lokier' && ev.victim === 'cart').map((ev) => [e.observe.tick, ev.type === 'damage' ? ev.amount : 0]));
+    expect(hits).toEqual([[1142, 73]]);
     expect(enc.some((t) => / over at tick \d+, lokier is dead/.test(t))).toBe(true);
   });
 

@@ -82,8 +82,21 @@ export interface ReplayTuning {
   steerFallbackSec: number;
   /** B3 scripted events (docs/core.md "Scripted events"). A shooter aims at its target from this long (seconds) before the first shot of an engagement. */
   preAimSec: number;
-  /** Yaw and pitch turn limit while aiming (at a target, or at the bomb for a defuse), degrees per tick. */
+  /**
+   * Yaw and pitch turn limit while aiming (at a target, or at the bomb for a defuse), degrees per tick. F1: the peak of
+   * an eased flick (src/core/fight-aim.ts), not a constant turn speed.
+   */
   aimTurnRateDegPerTick: number;
+  /** F1: smooth time (seconds) of the critically damped ease that flicks a puppet's view onto a seen target. */
+  aimFlickSec: number;
+  /** F1: smooth time (seconds) of pre-aims, holds, the defuse look and the ease back to the puppet's own look. */
+  aimHoldSec: number;
+  /** F1: a shooter holds the angle its target will appear from this long (seconds) before the anticipated sight. */
+  aimLeadSec: number;
+  /** F1: after an engagement's last press the shooter keeps its view on the target this long (seconds). */
+  aimAfterSec: number;
+  /** F1: the largest residual (degrees, yaw and pitch) closed on the ATTACK tick itself so the shot leaves on target. */
+  aimShotSnapDeg: number;
   /** Ticks from an input (ATTACK, USE) in an Act to its effect in an Observe (the shot event): scripted inputs are sent this early. 2D sim: 1; CS2: probe P3. */
   inputLatencyTicks: number;
   /** Ticks from an action (damage, set_weapon, give) in an Act to its effect in an Observe: scripted actions are sent this early. 2D sim: 1. */
@@ -747,6 +760,11 @@ const REPLAY_KEYS = [
   'steerFallbackSec',
   'preAimSec',
   'aimTurnRateDegPerTick',
+  'aimFlickSec',
+  'aimHoldSec',
+  'aimLeadSec',
+  'aimAfterSec',
+  'aimShotSnapDeg',
   'inputLatencyTicks',
   'actionLatencyTicks',
   'sprayGapFactor',
@@ -1100,7 +1118,8 @@ export function parseTuning(json: unknown): Tuning {
  * and the retry > 0, and the speed factor in (0, 1] (a pawn can't be planned faster than it runs).
  */
 function checkReplay(r: ReplayTuning): ReplayTuning {
-  const nonNegative = ['rejoinCalmSec', 'rejoinMinLiveSec', 'rejoinMinTapeSec', 'rejoinLeadSec', 'rejoinLateSec'] as const;
+  for (const k of ['aimFlickSec', 'aimHoldSec', 'aimTurnRateDegPerTick'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
+  const nonNegative = ['aimLeadSec', 'aimAfterSec', 'aimShotSnapDeg', 'rejoinCalmSec', 'rejoinMinLiveSec', 'rejoinMinTapeSec', 'rejoinLeadSec', 'rejoinLateSec'] as const;
   for (const k of nonNegative) if (r[k] < 0) throw new TuningError(`replay.${k}: must be >= 0, got ${r[k]}`);
   for (const k of ['rejoinHorizonSec', 'rejoinRetrySec'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
   if (!(r.rejoinSpeedFactor > 0 && r.rejoinSpeedFactor <= 1)) throw new TuningError(`replay.rejoinSpeedFactor: must be in (0, 1], got ${r.rejoinSpeedFactor}`);
