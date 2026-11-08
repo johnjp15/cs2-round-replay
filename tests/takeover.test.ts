@@ -183,16 +183,18 @@ describe('a takeover at T (G4)', () => {
     // Lokier outlives an idle cart; barely, LIVE to kill him, rejoins and plants 7 ticks late (as in never-peeks).
     // T1: as in never-peeks, barely (LIVE again from sp4rtan's gunfire at cart) holds Catwalk now and kills Zwomp,
     // walking up it on his inferred route, for real at 2650 instead of the tape's 2829 (docs/core.md "Results: never-peeks").
-    const late = [1768, 2650, 3222, 3766, 4275];
+    // G8: plant 6 ticks late (1767: his LIVE leg jumps onto the Balcony's sill), and with G8's LIVE movement barely
+    // doesn't catch Zwomp before he is back on his tape: the tape's kill (2829).
+    const late = [1767, 2829, 3222, 3766, 4275];
     expect(got).toEqual({
       '0': { end: defuse, events: late },
       '5': { end: defuse, events: late },
       // Cart idle at the Apartments window: sp4rtan's recorded flank comes through the Apartments; he sees cart (off
       // course; G6: on the CS2 mesh only at 49.2–49.6 s, from the corridor), goes LIVE, kills donk (LIVE when hit) a
       // little before the tape's 50.34 s, then cart, and rejoins (before G6 he saw him through the mask at ~47.6 s).
-      '17.6': { end: defuse, events: [1768, 2829, 3190, 3766, 4275] },
-      '18': { end: defuse, events: [1768, 2829, 3193, 3766, 4275] },
-      '18.6': { end: defuse, events: [1768, 2829, 3214, 3766, 4275] },
+      '17.6': { end: defuse, events: [1767, 2829, 3190, 3766, 4275] },
+      '18': { end: defuse, events: [1767, 2829, 3193, 3766, 4275] },
+      '18.6': { end: defuse, events: [1767, 2829, 3214, 3766, 4275] },
       '30': { end: defuse, events: tape },
       '45': { end: defuse, events: tape },
       '60': { end: defuse, events: tape },

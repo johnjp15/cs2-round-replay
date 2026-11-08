@@ -150,8 +150,9 @@ describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
   it('lists the LIVE switches with trigger, time and reason', () => {
     expect(s.switches).toEqual([
       { id: 'sp4rtan', tick: 2855, trigger: 'sighting', reason: 'sees cart (the human), not in the recording' },
-      { id: 'donk', tick: 3414, trigger: 'outlived', reason: 'outlived recording (+3.0 s)' },
-      { id: 'barely', tick: 3958, trigger: 'outlived', reason: 'outlived recording (+3.0 s)' },
+      // G8: their killer (sp4rtan) is a puppet, so their fate is gone one tick after the recorded death (LIVE for good).
+      { id: 'donk', tick: 3223, trigger: 'fate', reason: 'alive after its recorded death (sp4rtan at tick 3222): fate gone, LIVE for good' },
+      { id: 'barely', tick: 3767, trigger: 'fate', reason: 'alive after its recorded death (sp4rtan at tick 3766): fate gone, LIVE for good' },
     ]);
   });
 

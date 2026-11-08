@@ -102,7 +102,8 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
   it('ends CT bomb_defused with 0.72 s on the bomb, like the tape (B4 alone: Ts won by elimination)', () => {
     expect(roundEnd(run)).toEqual({ tick: 4275, winner: 'CT', reason: 'bomb_defused' });
     // G3: 0.83 s on the bomb, not the tape's 0.72: the plant is 7 ticks late (below), the defuse on the tape's tick.
-    expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.timeLeftSec).toBeCloseTo(0.828125, 6);
+    // G8: 6 ticks late, 0.81 s.
+    expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.timeLeftSec).toBeCloseTo(0.8125, 6);
     expect(roundEnd(before)).toMatchObject({ winner: 'T', reason: 'elimination' });
   });
 
@@ -113,20 +114,22 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     };
     near(bombTick(run, 'planted'), 27.52, 1.0);
     // T1: barely, LIVE from 40.30 s (he hears sp4rtan kill cart), now holds Catwalk, not the underpass beneath it, and
-    // sees Zwomp walking up it on his inferred route: a real kill at 2650 (41.41 s), 2.8 s before the tape's.
-    near(kill(run, 'barely', 'zwomp'), 41.41, 0.1);
+    // saw Zwomp walking up it on his inferred route: a real kill at 2650 (41.41 s), 2.8 s before the tape's. G8: with
+    // G8's LIVE movement he doesn't catch Zwomp before he is back on his tape: the tape's kill, 44.20 s.
+    near(kill(run, 'barely', 'zwomp'), 44.2, 0.1);
     near(kill(run, 'sp4rtan', 'donk'), 50.35, 0.3);
     near(kill(run, 'sp4rtan', 'barely'), 58.85, 0.3);
     near(bombTick(run, 'defused'), 66.8, 0.5);
     // Measured: all of them on the golden master's (= the recording's) observe ticks but the plant. G3: on CS2 Mirage
     // barely, LIVE after Lokier, leaves the Balcony by its west end (the 2020 drop under the Apartments window is a
     // wall in CS2) and goes round the B-site box the recording walks through: G1's plant shift starts his USE 7 ticks
-    // after the recorded 1555, so the bomb is planted at 1768 (27.63 s, recorded 27.52 s).
+    // after the recorded 1555, so the bomb is planted at 1768 (27.63 s, recorded 27.52 s). G8: 1767 (his LIVE leg
+    // jumps onto the Balcony's sill at once instead of pushing into it); barely's kill of Zwomp is the tape's again.
     expect([bombTick(run, 'planted'), kill(run, 'barely', 'zwomp'), kill(run, 'sp4rtan', 'donk'), kill(run, 'sp4rtan', 'barely'), bombTick(run, 'defuse_start'), bombTick(run, 'defused')]).toEqual([
-      1768, 2650, 3222, 3766, 3955, 4275,
+      1767, 2829, 3222, 3766, 3955, 4275,
     ]);
-    const z = (run.entries[2650] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === 'barely' && ev.victim === 'zwomp');
-    expect(z?.type === 'damage' ? z.scripted : null, 'barely -> zwomp (LIVE)').toBe(false);
+    const z = (run.entries[2829] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === 'barely' && ev.victim === 'zwomp');
+    expect(z?.type === 'damage' ? z.scripted : null, 'barely -> zwomp (scripted, the tape)').toBe(true);
     // ... and the others are the scripted ones (B3), not LIVE fights.
     for (const [a, v, k] of [['sp4rtan', 'donk', 3222], ['sp4rtan', 'barely', 3766]] as const) {
       const d = (run.entries[k] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === a && ev.victim === v);
@@ -234,8 +237,8 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     }
   });
 
-  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; W2 pistols: b861137b; K1: 7ce7345e, sp4rtan\'s route on time)', () => {
-    expect(logDigest(before.log)).toBe('7ce7345e');
+  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; W2 pistols: b861137b; K1: 7ce7345e, sp4rtan\'s route on time; G8: 6d705c2e, survivors LIVE for good and G8\'s LIVE movement)', () => {
+    expect(logDigest(before.log)).toBe('6d705c2e');
     expect(rejoins(before.entries)).toEqual([]);
   });
 });

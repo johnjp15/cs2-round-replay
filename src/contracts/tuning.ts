@@ -655,6 +655,16 @@ export interface AiTuning {
   blastMarginUnits: number;
   /** A CT starts (or keeps going for) a defuse only if it can finish this long (s) before the explosion. */
   defuseMarginSec: number;
+  /** G8: yaw and pitch limit (degrees per tick) when not fighting: looking where it walks, at a hold angle. */
+  lookTurnRateDegPerTick: number;
+  /** G8: an automatic gun firing from a standstill at a target this far (units) or more crouches. */
+  crouchRangeUnits: number;
+  /** G8: hit by an enemy it doesn't see: it takes cover for this long (s). */
+  coverSec: number;
+  /** G8: cover is looked for within this distance (units). */
+  coverSearchUnits: number;
+  /** G8: a pawn holding a spot only walks back to it once more than this far (units) from it (no shuffling). */
+  holdSlackUnits: number;
 }
 
 /** Nav-mesh geometry tolerances (see docs/nav.md). */
@@ -1016,6 +1026,11 @@ const AI_KEYS = [
   'guardMaxUnits',
   'blastMarginUnits',
   'defuseMarginSec',
+  'lookTurnRateDegPerTick',
+  'crouchRangeUnits',
+  'coverSec',
+  'coverSearchUnits',
+  'holdSlackUnits',
 ] as const;
 const NAV_KEYS = ['stepHeight', 'edgeEpsilon', 'losMargin', 'dropHeight'] as const;
 

@@ -1,0 +1,15 @@
+{
+  "name": "eradicate-survives",
+  "description": "G8 (John 11:35): cart kills Lokier before he can take eradicate's head. cart follows his recording to 10.2 s, is at the Apartments window (teleported: this tests what eradicate does after, not cart's pathing) and sprays Lokier on Truck, killing him around 11 s. Lokier's recorded kill of eradicate (12.75 s) can't happen: eradicate's fate is gone, he goes LIVE for good (trigger fate) and plays the rest of the round as a normal T: on to B (the team's site), cover the plant, guard the bomb, fight the CTs he meets. Then cart plays his recording again.",
+  "human": "cart",
+  "seed": 1,
+  "until": "end",
+  "steps": [
+    { "do": "followRecording", "until": 10.2 },
+    { "do": "teleport", "pos": [-1764, 740], "yaw": 172 },
+    { "do": "aimAt", "id": "lokier" },
+    { "do": "fire", "untilDead": true, "maxSec": 2 },
+    { "do": "aimAt", "id": null },
+    { "do": "followRecording", "until": 70.6 }
+  ]
+}

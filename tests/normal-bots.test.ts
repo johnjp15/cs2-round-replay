@@ -277,9 +277,10 @@ describe('kill-lokier-early: cart fights Lokier from the window 4 s early; the s
     expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'damage' && ev.attacker === 'cart' && ev.victim === 'lokier' && !ev.scripted))).toBe(true);
   });
 
-  it.skipIf(!MESH_SIGHT)('Lokier’s recorded kill of eradicate is dropped (eradicate outlives his recording); the Ts LIVE before the plant rejoin; the plant is on the tape', () => {
+  it.skipIf(!MESH_SIGHT)('Lokier’s recorded kill of eradicate is dropped (G8: eradicate’s fate is gone, LIVE for good); the Ts LIVE before the plant rejoin; the plant is on the tape', () => {
     expect(logs).toContain('script: dropped damage lokier -> eradicate (lethal at tick 816): lokier is LIVE');
-    expect(liveSwitches(run.entries).find((s) => s.id === 'eradicate')?.trigger).toBe('outlived');
+    // G8: one tick after his recorded death (before G8: outlived, 3 s later, standing at the end of his track).
+    expect(liveSwitches(run.entries).find((s) => s.id === 'eradicate')).toMatchObject({ trigger: 'fate', tick: 817 });
     const back = rejoins(run.entries).map((x) => x.id);
     for (const id of liveSwitches(run.entries).filter((s) => s.tick < 1761).map((s) => s.id).filter((id) => id !== 'lokier' && id !== 'eradicate')) expect(back).toContain(id);
     const plant = run.entries.find((e) => e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted'));
