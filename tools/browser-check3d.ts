@@ -30,7 +30,8 @@
  *  6. H3 (normal build only): the Scenario / Map pickers list the scenarios; `?scenario=dust2-5v5` (free play on CS2's
  *     Dust II) loads, plays at 4× for a few seconds with the bots moving, E takes over the spectated pawn; screenshots
  *     app3d-freeplay-dust2-*.jpg;
- *  7. H6 (tools/browser-check3d-h6.ts): the death fade when cart dies, first person (`--only h6`: just that);
+ *  7. H6 (tools/browser-check3d-h6.ts): the death fade when cart dies, first person; the team-correct bomb HUD, the
+ *     plant alert, the win banner, the money and the kill feed after a seek (`--only h6`: just that);
  *  8. fails on page errors, console errors or requests to other origins.
  * Port: `--port <n>` or CHECK3D_PORT (default 4180).
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
@@ -93,7 +94,7 @@ interface Stats {
   humanShots: number;
   humanHits: number;
   triangles: number;
-  hud: { hp: string; clock: string; mode: string; killfeed: number };
+  hud: { hp: string; clock: string; mode: string; killfeed: number; clockClass: string };
   guard: { leaveGuard: boolean; keyboardLocked: boolean; fullscreen: boolean; duckKey: string };
 }
 
@@ -301,8 +302,8 @@ async function main(): Promise<void> {
     await page.waitForTimeout(300);
     shots.push(await shot(page, 'c-plant'));
     const sp = await stats(page);
-    // After the plant the clock is the bomb timer (40 → 0 s).
-    if (!(Number(sp.hud.clock) > 35 && Number(sp.hud.clock) <= 40)) problems.push(`bomb clock after the plant: ${sp.hud.clock}`);
+    // After the plant the C4 icon replaces the clock (H6: CS2 shows nobody a bomb countdown).
+    if (sp.hud.clock !== '' || !sp.hud.clockClass.includes('c4')) problems.push(`C4 icon after the plant: "${sp.hud.clock}" ${sp.hud.clockClass}`);
     // (d) Sp4rtaN behind donk in Apartments.
     await seek(page, 49.95);
     await page.evaluate(() => window.__cs2sim3d?.camera('follow', 'sp4rtan'));

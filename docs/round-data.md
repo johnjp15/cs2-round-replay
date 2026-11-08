@@ -9,7 +9,7 @@ npx tsx tools/extract-round.ts ../web-apps/cs2/mirage-round-replay/index.html   
 npx tsx tools/validate-round.ts                                                 # [data/round.json] [--csv <csv>]
 ```
 
-- **Inputs:** the web-apps replay page (its `<script id="data" type="application/json">` block and the one inline `data:image/jpeg` radar), the shots CSV (default `<page dir>/source/shots/mirage-round-sp4rtan-1v3-shots.csv`), and `data/tuning.json` (clip/reserve per weapon).
+- **Inputs:** (V2) `data/source/view-fit.json` when present (the fitted views; position refinements, none at present); the web-apps replay page (its `<script id="data" type="application/json">` block and the one inline `data:image/jpeg` radar), the shots CSV (default `<page dir>/source/shots/mirage-round-sp4rtan-1v3-shots.csv`), and `data/tuning.json` (clip/reserve per weapon).
 - **Outputs:** `data/round.json` (2-space JSON, fixed key order, trailing newline), `data/mirage-radar.jpg` (1024×1024 overview, the bytes from the page), and `data/source/mirage-round-sp4rtan-1v3-shots.csv` (a verbatim copy, so CI can check the shot count without web-apps).
 - **Determinism:** same inputs give byte-identical outputs. `tests/round-data.test.ts` rebuilds the round twice and compares it with the committed file whenever the web-apps clone is found next to the repo (or at `$ROUND_SOURCE_HTML`); without it that one test is skipped.
 - `meta.sources` records the SHA-256 of both inputs, so a stale `round.json` is easy to spot.
@@ -40,7 +40,7 @@ npx tsx tools/validate-round.ts                                                 
 | `roundEndT/Tick` | `meta.roundEnd` | 66.8, the defuse |
 | `hudRound` | `meta.hudRound` | "Round 12/30" |
 | `ticksPerSec` | constant | 64 |
-| `sources` | computed | input file names (relative to the workspace), SHA-256s, CSV row count |
+| `sources` | computed | input file names (relative to the workspace), SHA-256s, CSV row count; `viewFit` (V2) when `data/source/view-fit.json` was merged |
 
 ### `players[]` (sorted by id)
 
@@ -76,9 +76,10 @@ Kits at t = 0:
 
 | Field | Source / meaning |
 | --- | --- |
-| `samples[] {t, tick, x, y, z, confidence, uncertainty?, resampled?}` | page `tracks` rows `[t, x, y, z, flag(, uncertainty)]`, on an exact 0.1 s grid from t = 0 to the last source sample |
+| `samples[] {t, tick, x, y, z, confidence, uncertainty?, resampled?, refined?}` | page `tracks` rows `[t, x, y, z, flag(, uncertainty)]`, on an exact 0.1 s grid from t = 0 to the last source sample |
 | `offGridSamples[]` | source rows whose `t` is not a multiple of 0.1 (event anchors such as kills at 17.85 s), kept verbatim |
-| `yaw[] {t, tick, deg}` | page `yaw` rows `[t, id, deg]` for this player (20 Hz where present; Ts only, while they were on camera) |
+| `yaw[] {t, tick, deg}` | page `yaw` rows `[t, id, deg]` for this player (20 Hz where present; Ts only, while they were on camera): the radar's view cone |
+| `view[] {t, tick, yaw, pitch, source, confidence}` | **V2**, `data/source/view-fit.json` (`tools/fit-view-angles.ts`, `docs/viewfit.md`): the first-person view fitted to the video frame while the camera watches this player (10 Hz, 30–60 fps around key moments; empty for the others). `source: 'video'` with `confidence` `observed` (clear fit) or `estimated` (ambiguous), `'radar'` (the fit failed: smoke, flash, blur; `yaw` = the radar yaw, `pitch: null`), and `inferred` = a segment's first view held back up to 0.8 s across the camera switch. `yaw` degrees CCW from +x, `pitch` Source's (+ = down, ±89). |
 | `endT/endTick` | last source sample (death time, or 70.3 s for Sp4rtaN) |
 
 Track `flag`, worked out from the data and the round breakdown:
@@ -92,6 +93,11 @@ Track `flag`, worked out from the data and the round breakdown:
 The 6th column (CT tracks only) is the uncertainty radius in world units. It is written as `uncertainty` on every non-observed sample that has it (for example Sp4rtaN 320 before his first kill, then 200, 260, 140, 120; Zwomp 450 then 240). Observed samples carry 0 in the source and have no `uncertainty` field.
 
 Resampling: the source is 10 Hz but jumps half a step at some event anchors (snarlbot from 13.05 s, Lokier from 12.75 s, Sp4rtaN around 17.85, 19.6, 68.75 and 70.0 s, eradicate's last sample at 12.75 s). Grid samples that fall between source rows are linearly interpolated, rounded to whole units, marked `resampled: true`, and take the less certain confidence (and larger uncertainty) of their two neighbours. The original off-grid rows are in `offGridSamples`, so nothing from the source is lost.
+
+`refined: 'viewfit'` (V2) marks a sample moved from the radar reading to where the video's first-person frames put the
+player (`data/source/view-fit.json` `positions`, `tools/fit-view-angles.ts`, `docs/viewfit.md` "Engagement
+positions"). **None at present**: the window duel's fitted positions (cart and Lokier within the radar's ±40 u) wait
+for a map with the 2020 Apartments window (`tools/sight-snap.ts` `WINDOW_DUEL_AS_FITTED`).
 
 ### `shots[]` (one per CSV row, in CSV order)
 
@@ -136,7 +142,7 @@ Not copied: the page's `nav` and `places` (the nav mesh is task A3's `data/mirag
 - **CT HP and armor:** never shown; 100/100 with helmet is assumed. CT money is unknown (`startMoney: null`).
 - **CT routes:** outside sightings the CT tracks are `inferred` reconstructions with an `uncertainty` radius of 110–450 units. Treat them as plausible, not recorded.
 - **Grenade landings:** only the throw position and time are known; where each smoke, flash, HE and molotov landed is not in the data.
-- **Yaw:** only for Ts while on camera (eradicate, cart, donk, barely). There is no CT yaw, and most players have no yaw at t = 0.
+- **Yaw / view:** only for Ts while on camera (eradicate, cart, donk, barely). There is no CT yaw, and most players have no yaw at t = 0. V2's fitted view (`view[]`) adds the pitch and corrects the radar yaw (median 13–22° off in the spectator segments); 21 of 856 frames fall back to the radar yaw.
 - **Shots:** exact times only for shots seen on the ammo HUD of the spectated player, plus a few audio-confirmed first shots. Off-camera sprays are counts over a time window, and kill-feed-only kills don't say how many shots were fired.
 - **Resampled samples:** a few tens of grid samples per affected track are interpolated (see above), so they can differ by a few units from where the player really was.
 - **Level flips:** `z` is the 2020 nav floor under the radar dot, so where floors overlap it can be the wrong one. barely 35.1–44.7 s is on the underpass / Tunnel Stairs in `round.json` (dz −198 in, +154 out) but was on Catwalk; `round.json` keeps the source as is and `tools/snap-tracks.ts` pass 0 (`levelFlips`, `docs/geometry.md` "barely 33–48 s") corrects it in `data/geometry/mirage-tracks.json`, which is what the hosts use.

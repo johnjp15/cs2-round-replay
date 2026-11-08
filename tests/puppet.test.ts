@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAYER_IDS, type Observe, type PawnObs, type PlayerId, type TrackSample, type Tuning, type WalkQuery, type YawSample } from '../src/contracts/index';
+import { PLAYER_IDS, type Observe, type PawnObs, type PlayerId, type TrackSample, type Tuning, type ViewSample, type WalkQuery, type YawSample } from '../src/contracts/index';
 import {
   EventSchedule,
   PuppetController,
@@ -274,6 +274,51 @@ describe('PuppetTrack preprocessing', () => {
     expect(tr.recordedYawAt(1.5)).toBeNull();
     expect(tr.recordedYawAt(2)).toBe(0);
     expect(tr.recordedYawAt(0.5)).toBeNull();
+  });
+});
+
+describe('V2: recorded views (yaw and pitch fitted to the video)', () => {
+  const v = (t: number, yaw: number, pitch: number | null, source: 'video' | 'radar' = 'video'): ViewSample => ({ t, tick: Math.round(t * 64), yaw, pitch, source, confidence: 'observed' });
+
+  it('interpolates the fitted view (yaw across ±180, pitch linearly) and falls back to the radar yaw', () => {
+    const views = [v(1, 170, -60), v(1.1, -170, -80), v(1.2, -160, null, 'radar'), v(1.3, -150, 10), v(1.5, -140, 20)];
+    const yaw: YawSample[] = [
+      { t: 1.2, tick: 77, deg: -161 },
+      { t: 1.25, tick: 80, deg: -159 },
+    ];
+    const tr = new PuppetTrack('cart', line(30, 0, 0, 0, 0), line(30, 0, 0, 0, 0).map(() => AK), yaw, tuning.replay, views);
+    expect(tr.recordedViewAt(1)).toEqual({ yaw: 170, pitch: -60 });
+    expect(tr.recordedViewAt(1.05)).toEqual({ yaw: 180, pitch: -70 });
+    // A radar sample (the fit failed) and its neighbours: the radar yaw, no pitch.
+    expect(tr.recordedViewAt(1.2)).toEqual({ yaw: -161, pitch: null });
+    expect(tr.recordedViewAt(1.225)).toEqual({ yaw: -160, pitch: null });
+    // A gap longer than RECORDED_VIEW_MAX_GAP_SEC, no radar yaw: unknown.
+    expect(tr.recordedViewAt(1.4)).toBeNull();
+    expect(tr.recordedViewAt(0.5)).toBeNull();
+  });
+
+  it('the controller follows the fitted pitch at most 12° per tick, then levels off; scoped rifles hold their angle', () => {
+    const s = line(40, 0, 0, 100, 0); // walking east at 100 u/s
+    const views = [v(1, 90, -70), v(1.1, 90, -70), v(1.2, 90, -70)];
+    const tr = new PuppetTrack('donk', s, s.map(() => 200), [], tuning.replay, views, s.map(() => true));
+    const c = new PuppetController(tr, tuning, OPEN);
+    c.reset(0);
+    let yaw = 0;
+    let pitch = 0;
+    const out: { yaw: number; pitch: number }[] = [];
+    for (let k = 0; k <= 160; k++) {
+      const p = tr.targetAt(k);
+      const pw = { ...pawn('donk', p.x, p.y, yaw), pitch };
+      const step = c.input(pw, observe(k, [pw], null), k);
+      expect(Math.abs(step.input.pitch - pitch)).toBeLessThanOrEqual(12 + 1e-9);
+      yaw = step.input.yaw;
+      pitch = step.input.pitch;
+      out.push({ yaw, pitch });
+    }
+    expect(out[40]).toEqual({ yaw: 0, pitch: 0 }); // before the views: a scoped rifle walking holds its angle (0)
+    expect(out[76]).toEqual({ yaw: 90, pitch: -70 }); // 1.19 s: the fitted view, reached within 8 ticks of 1 s
+    expect(out[100]?.pitch).toBe(0); // 1.56 s: levelled off again
+    expect(out[100]?.yaw).toBe(90); // and the scoped rifle keeps the last angle
   });
 });
 

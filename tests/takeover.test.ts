@@ -139,20 +139,18 @@ describe('a takeover at T (G4)', () => {
     };
     // 5 s: waiting (Lokier hasn't seen cart at the window yet). G6: on the CS2 mesh Lokier first sees the puppet at the
     // spot at tick 1138 (17.78 s, through the window, on the duel track; 1126 before). Taken over at 17.6 s (tick 1126)
-    // cart stays where the puppet was, off his track. F1: Lokier now pre-aims the window from 16.0 s, so he sees him
-    // there at tick 1146 (+0.5 s, on course: the hit is due on the recorded tick), but his recorded peek takes him out of
-    // sight of that spot before it (1183): no hit, he goes LIVE holding, and barely (LIVE on seeing him) kills him at 1303
-    // (before F1: seen at 1202, +1.3 s, the hit 1 s later at 1266). From 18.0 s he was seen on course at 1138, so the hit
-    // lands on its recorded tick (G5).
+    // cart stays where the puppet was, off his track, and Lokier's view finds him there at tick 1202 (+1.3 s): the hit
+    // 1 s later (1266). From 18.0 s he was seen on course, so the hit lands on its recorded tick (G5). V2: the puppet
+    // Lokier (SSG 08, slower than a walk) holds his angle instead of spinning to his jiggle's heading, so he first
+    // sees cart at 1163 (18.17 s), after the 18.0 s takeover; still on course, the hit is on 1184.
     expect(logsAt(run(5), 320)).toContain('encounter lokier -> cart: active from the takeover at tick 320, waiting for lokier to see cart at the spot');
     expect(logsAt(run(17.6), 1126)).toEqual([
       'takeover: cart is the human from tick 1126 (100 hp, ak47); 11 damage blocks lifted',
       'encounter lokier -> cart: active from the takeover at tick 1126, waiting for lokier to see cart at the spot',
     ]);
-    expect(logsAt(run(17.6), 1146)).toContain('encounter lokier -> cart: cart in sight at the spot at tick 1146 (+0.5 s against the recording), scripted hit due at tick 1184 (on course: the recorded tick)');
-    expect(logsAt(run(17.6), 1183).some((l) => l.startsWith('lokier LIVE: encounter lokier -> cart at tick 1183: cart not in sight'))).toBe(true);
-    expect(hitOnCart(run(17.6))).toEqual([]);
-    expect(logsAt(run(18), 1152)).toContain('encounter lokier -> cart: cart in sight at the spot since tick 1138 (+0.3 s against the recording), before the takeover at tick 1152; scripted hit due at tick 1184 (on course: the recorded tick)');
+    expect(logsAt(run(17.6), 1202)).toContain('encounter lokier -> cart: cart in sight at the spot at tick 1202 (+1.3 s against the recording), scripted hit due at tick 1266');
+    expect(hitOnCart(run(17.6))).toEqual([{ tick: 1266, amount: 73, scripted: true }]);
+    expect(logsAt(run(18), 1163)).toContain('encounter lokier -> cart: cart in sight at the spot at tick 1163 (+0.7 s against the recording), scripted hit due at tick 1184 (on course: the recorded tick)');
     expect(hitOnCart(run(18))).toEqual([{ tick: 1184, amount: 73, scripted: true }]);
     // B3's recorded hit (1184) is skipped once he is the human; it is the encounter's.
     for (const t of [0, 5, 17.6, 18]) expect(coreLogs(run(t).entries).some((l) => l.text.startsWith('script: no scripted damage lokier -> cart (73 hp at tick 1184)'))).toBe(true);
@@ -161,8 +159,8 @@ describe('a takeover at T (G4)', () => {
     expect(hitOnCart(run(18.6))).toEqual([{ tick: 1184, amount: 73, scripted: true }]);
     expect(line(run(18.6), 1190).observe.pawns.find((p) => p.id === 'cart')?.hp).toBe(27);
     expect(coreLogs(run(18.6).entries).some((l) => l.text.startsWith('script: no scripted damage cart -> lokier (lethal at tick 1203)'))).toBe(true);
-    // Lokier outlives his recording (no human kill) in every idle run from before 18.80 s (17.6 s: LIVE earlier, above).
-    for (const t of [0, 5, 18, 18.6]) expect(coreLogs(run(t).entries).some((l) => l.tick === 1395 && l.text.startsWith('lokier LIVE: outlived recording (+3.0 s)'))).toBe(true);
+    // Lokier outlives his recording (no human kill) in every idle run from before 18.80 s.
+    for (const t of [0, 5, 17.6, 18, 18.6]) expect(coreLogs(run(t).entries).some((l) => l.tick === 1395 && l.text.startsWith('lokier LIVE: outlived recording (+3.0 s)'))).toBe(true);
     // After his death (18.80 s): nothing to activate.
     for (const t of [30, 45, 60, 68]) expect(logsAt(run(t), tickOf(t))).toContain(`encounter lokier -> cart: none after the takeover at tick ${tickOf(t)}, lokier is dead`);
   }, 120_000);
@@ -196,12 +194,9 @@ describe('a takeover at T (G4)', () => {
       // Cart idle at the Apartments window: sp4rtan's recorded flank comes through the Apartments; he sees cart (off
       // course; G6: on the CS2 mesh only at 49.2–49.6 s, from the corridor), goes LIVE, kills donk (LIVE when hit) a
       // little before the tape's 50.34 s, then cart, and rejoins (before G6 he saw him through the mask at ~47.6 s).
-      // F1 (17.6): Lokier goes LIVE at 18.48 s without hitting cart (above); barely kills him sooner (20.36 s) and
-      // plants on the tape's tick.
-      '17.6': { end: defuse, events: [1761, 2829, 3190, 3766, 4275] },
+      '17.6': { end: defuse, events: [1767, 2829, 3190, 3766, 4275] },
       '18': { end: defuse, events: [1767, 2829, 3193, 3766, 4275] },
-      // F1 (18.6): sp4rtan's lead-in for donk changes when he sees cart and goes LIVE; LIVE, he kills donk 7 ticks sooner.
-      '18.6': { end: defuse, events: [1767, 2829, 3207, 3766, 4275] },
+      '18.6': { end: defuse, events: [1767, 2829, 3214, 3766, 4275] },
       '30': { end: defuse, events: tape },
       '45': { end: defuse, events: tape },
       '60': { end: defuse, events: tape },

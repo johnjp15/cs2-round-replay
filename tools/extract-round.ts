@@ -7,7 +7,7 @@
 // Output is deterministic: same inputs give byte-identical files. See docs/round-data.md.
 
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -31,6 +31,8 @@ import {
   type Shot,
   type ShotKind,
   type Sighting,
+  type ViewSample,
+  type ViewSource,
   type Team,
   type TimelinePoint,
   type Track,
@@ -300,6 +302,7 @@ function buildTrack(rows: number[][], yaw: YawSample[]): Track {
     samples,
     offGridSamples: src.filter((s) => !onGrid(s.t)),
     yaw,
+    view: [],
     endT: last.t,
     endTick: last.tick,
   };
@@ -474,6 +477,46 @@ export interface ExtractInputs {
   tuningWeapons: Record<string, WeaponStats>;
   htmlName: string;
   csvName: string;
+  /** V2: the text of data/source/view-fit.json (tools/fit-view-angles.ts), or null to leave the views empty. */
+  viewFit?: string | null;
+}
+
+/** V2: data/source/view-fit.json, written by tools/fit-view-angles.ts (docs/viewfit.md). */
+export const VIEW_FIT_FORMAT = 'cs2-round-replay/view-fit@1';
+export const VIEW_FIT_PATH = 'data/source/view-fit.json';
+
+export interface ViewFitFile {
+  readonly format: string;
+  /** Per player, by time: the fitted (or radar fallback) view of every fitted frame. */
+  readonly views: Record<string, readonly { t: number; yaw: number; pitch: number | null; source: ViewSource; confidence: Confidence }[]>;
+  /** Track samples moved to where the video frames put the player. `from` must match the source sample. */
+  readonly positions: readonly { player: string; t: number; from: Vec3; to: Vec3 }[];
+}
+
+/** Apply a view fit to the tracks (in place on fresh objects): views, and the refined positions. */
+function applyViewFit(tracks: Record<PlayerId, Track>, fit: ViewFitFile): Record<PlayerId, Track> {
+  if (fit.format !== VIEW_FIT_FORMAT) throw new Error(`view fit: format ${fit.format}, expected ${VIEW_FIT_FORMAT}`);
+  const out = { ...tracks };
+  for (const id of Object.keys(out) as PlayerId[]) {
+    const tr = out[id];
+    const views = fit.views[id] ?? [];
+    const view: ViewSample[] = views.map((v) => ({ t: v.t, tick: toTick(v.t), yaw: v.yaw, pitch: v.pitch, source: v.source, confidence: v.confidence }));
+    for (let i = 1; i < view.length; i++) if ((view[i] as ViewSample).t <= (view[i - 1] as ViewSample).t) throw new Error(`view fit: ${id} views not increasing`);
+    const moves = fit.positions.filter((m) => m.player === id);
+    const samples = moves.length === 0 ? tr.samples : tr.samples.map((s) => {
+      const m = moves.find((q) => Math.abs(q.t - s.t) < 1e-6);
+      if (m === undefined) return s;
+      if (m.from.x !== s.x || m.from.y !== s.y || m.from.z !== s.z) {
+        throw new Error(`view fit: ${id} at ${s.t}: from (${m.from.x}, ${m.from.y}, ${m.from.z}) is not the source sample (${s.x}, ${s.y}, ${s.z}); re-run tools/fit-view-angles.ts`);
+      }
+      return { ...s, x: m.to.x, y: m.to.y, z: m.to.z, refined: 'viewfit' as const };
+    });
+    for (const m of moves) {
+      if (!tr.samples.some((s) => Math.abs(s.t - m.t) < 1e-6)) throw new Error(`view fit: ${id} has no grid sample at ${m.t}`);
+    }
+    out[id] = { samples, offGridSamples: tr.offGridSamples, yaw: tr.yaw, view, endT: tr.endT, endTick: tr.endTick };
+  }
+  return out;
 }
 
 export interface ExtractOutputs {
@@ -508,7 +551,9 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
   }
   for (const list of yawBy.values()) list.sort((a, b) => a.t - b.t);
 
-  const tracks = sortedRecord(byId(src.tracks).map(([id, rows]): [PlayerId, Track] => [id, buildTrack(rows, yawBy.get(id) ?? [])]));
+  const builtTracks = sortedRecord(byId(src.tracks).map(([id, rows]): [PlayerId, Track] => [id, buildTrack(rows, yawBy.get(id) ?? [])]));
+  const viewFit = inp.viewFit === undefined || inp.viewFit === null ? null : (JSON.parse(inp.viewFit) as ViewFitFile);
+  const tracks = viewFit === null ? builtTracks : applyViewFit(builtTracks, viewFit);
 
   const players = src.players
     .map((p): Player => {
@@ -554,6 +599,12 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
     })
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 
+  // V2: an event position of a player whose sample at that time was refined from the video (`refined: 'viewfit'`)
+  // moves with it (x, y; z stays the page's), so events and tracks agree.
+  const refinedAt = (id: PlayerId, t: number, p: Vec3): Vec3 => {
+    const s = tracks[id]?.samples.find((q) => Math.abs(q.t - t) < 1e-6 && q.refined === 'viewfit');
+    return s === undefined ? p : { x: s.x, y: s.y, z: p.z };
+  };
   const kills = src.kills.map((k): Kill => {
     const killer = pid(k.killer);
     return {
@@ -565,8 +616,8 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
       hs: k.hs,
       assist: pidOrNull(k.assist),
       postRound: k.postround === true,
-      kpos: vec3(k.kpos),
-      vpos: vec3(k.vpos),
+      kpos: refinedAt(killer, k.t, vec3(k.kpos)),
+      vpos: refinedAt(pid(k.victim), k.t, vec3(k.vpos)),
       kplace: k.kplace,
       vplace: k.vplace,
     };
@@ -586,8 +637,8 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
       armor: csvRow?.armorDamage ?? null,
       weapon: weapon(d.weapon, attacker),
       note: d.note,
-      apos: vec3(d.apos),
-      vpos: vec3(d.vpos),
+      apos: refinedAt(attacker, d.t, vec3(d.apos)),
+      vpos: refinedAt(victim, d.t, vec3(d.vpos)),
       source: 'damage',
     };
   });
@@ -691,6 +742,7 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
       sources: {
         html: { file: inp.htmlName, sha256: sha256(inp.html) },
         shotsCsv: { file: inp.csvName, sha256: sha256(inp.csv), rows: shots.length },
+        ...(inp.viewFit === undefined || inp.viewFit === null ? {} : { viewFit: { file: VIEW_FIT_PATH, sha256: sha256(inp.viewFit) } }),
       },
     },
     players,
@@ -733,9 +785,11 @@ function main(argv: string[]): void {
   };
   const html = readFileSync(htmlPath, 'utf8');
   const csv = readFileSync(csvPath, 'utf8');
+  const viewFitPath = join(here, '..', VIEW_FIT_PATH);
   const out = buildRound({
     html,
     csv,
+    viewFit: existsSync(viewFitPath) ? readFileSync(viewFitPath, 'utf8') : null,
     tuningWeapons: tuning.weapons,
     htmlName: 'web-apps/cs2/mirage-round-replay/index.html',
     csvName: `web-apps/cs2/mirage-round-replay/source/shots/${basename(csvPath)}`,

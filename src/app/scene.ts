@@ -7,7 +7,8 @@
  *
  * - the previous and current observe, for interpolation (poses snap across teleports);
  * - each pawn's status from the last Act (mode, trigger, since) and the last 20 Core `log` actions;
- * - the kill feed (from `death` events: the last 5, each for 5 s of round time);
+ * - the kill feed (from `death` events: the last 5, each for CS2's 5 s plus its 1 s fade-out, 1.5× as long for the
+ *   local player's own kills and death) and how each pawn died (the death fade);
  * - shot tracers (from `shot` events, ending on the pawn the shot damaged, else at the first wall);
  * - grenade effects (smokes, fires, flying grenades) and flash / HE pops;
  * - the bomb (from `bomb` events) and the round end (from `round_end`).
@@ -15,7 +16,7 @@
  * Event times: an observe with tick N carries the events of host tick N − 1 → N, so they are stamped
  * N − 1, the tick the render time is in right after the step.
  */
-import type { Act, BombEvent, LogLevel, Observe, PawnObs, PawnStatus, PlayerId, RoundEndReason, Team, Vec3, WeaponId } from '../contracts/index';
+import type { Act, BombEvent, LogLevel, Observe, PawnObs, PawnStatus, PlayerId, RoundEndReason, SessionLog, Team, Vec3, WeaponId } from '../contracts/index';
 import type { Effect, Pop, Tracer } from './effects';
 import { POP_TICKS, TRACER_TICKS } from './effects';
 import type { Point2 } from './radar';
@@ -23,8 +24,17 @@ import type { Point2 } from './radar';
 /** A pawn that moves more than this in one tick (units) was teleported: draw it there, don't slide. */
 export const SNAP_UNITS_PER_TICK = 48;
 export const KILL_FEED_MAX = 5;
-/** 5 s of round time. */
-export const KILL_FEED_TICKS = 320;
+/**
+ * H6: CS2's death notices (`panorama/styles/hud/huddeathnotice.css` in GameTracking-CS2): `DeathNoticeLifetime: 5.0`
+ * s on screen, then `DeathNoticeFadeOutTime: 1.0s` fading out, so each shows 6 s (384 ticks) in all; a notice the local
+ * player is in lasts `DeathNoticeLocalPlayerLifetimeMod: 1.5` × the lifetime (7.5 s + the 1 s fade). CS:GO 2020's feed
+ * looks the same in the video (~6 s; the recorder's own death longer).
+ */
+export const KILL_FEED_LIFE_TICKS = 320;
+export const KILL_FEED_FADE_TICKS = 64;
+/** A notice's whole time on screen, its fade included: 6 s. */
+export const KILL_FEED_TICKS = KILL_FEED_LIFE_TICKS + KILL_FEED_FADE_TICKS;
+export const KILL_FEED_LOCAL_MOD = 1.5;
 export const LOG_MAX = 20;
 /** How far a tracer that hits nothing is drawn (world units), if no wall stops it first. */
 export const TRACER_RANGE_UNITS = 1800;
@@ -82,37 +92,74 @@ export interface KillEntry {
   readonly headshot: boolean;
 }
 
-/** CS-style kill feed: the newest `max` kills, each shown for `lifeTicks` of round time. */
+/**
+ * CS2's kill feed: the newest `max` kills, each shown for `lifeTicks` of round time (its last `fadeTicks` fading out),
+ * a kill the local player is in (killer or victim) for KILL_FEED_LOCAL_MOD × the time before the fade.
+ */
 export class KillFeed {
   readonly max: number;
   readonly lifeTicks: number;
+  readonly fadeTicks: number;
   private entries: KillEntry[] = [];
 
-  constructor(max = KILL_FEED_MAX, lifeTicks = KILL_FEED_TICKS) {
+  constructor(max = KILL_FEED_MAX, lifeTicks = KILL_FEED_TICKS, fadeTicks = Math.min(KILL_FEED_FADE_TICKS, lifeTicks)) {
     this.max = max;
     this.lifeTicks = lifeTicks;
+    this.fadeTicks = fadeTicks;
+  }
+
+  /** How long `e` stays on screen (ticks, fade included) for the `local` player (null: nobody's own). */
+  lifeOf(e: KillEntry, local: PlayerId | null = null): number {
+    const mine = local !== null && (e.killer === local || e.victim === local);
+    return mine ? Math.round((this.lifeTicks - this.fadeTicks) * KILL_FEED_LOCAL_MOD) + this.fadeTicks : this.lifeTicks;
   }
 
   push(e: KillEntry): void {
     this.entries.push(e);
-    // Anything older than the newest entry's life can never show again.
-    const cutoff = e.tick - this.lifeTicks;
-    this.entries = this.entries.filter((q) => q.tick > cutoff).slice(-this.max);
+    // Anything older than the longest life (a local player's notice) before the newest entry can never show again.
+    const cutoff = e.tick - (Math.round((this.lifeTicks - this.fadeTicks) * KILL_FEED_LOCAL_MOD) + this.fadeTicks);
+    this.entries = this.entries.filter((q) => q.tick > cutoff).slice(-this.max * 2);
   }
 
-  /** Entries visible at `tick`, oldest first (newest at the bottom, as in CS). */
-  visible(tick: number): KillEntry[] {
-    return this.entries.filter((e) => e.tick <= tick && tick - e.tick < this.lifeTicks).slice(-this.max);
+  /** Entries visible at `tick` for the `local` player, oldest first (newest at the bottom, as in CS). */
+  visible(tick: number, local: PlayerId | null = null): KillEntry[] {
+    return this.entries.filter((e) => e.tick <= tick && tick - e.tick < this.lifeOf(e, local)).slice(-this.max);
   }
 
-  /** 0..1 of an entry's life left at `tick` (for fading the last half second). */
+  /** 0..1 of an entry's life left at `tick` (the plain lifetime). */
   lifeLeft(e: KillEntry, tick: number): number {
     return Math.min(1, Math.max(0, 1 - (tick - e.tick) / this.lifeTicks));
+  }
+
+  /** The entry's opacity at `tick`: 1, then down to 0 over the fade-out (CS2's 1 s ease-out; linear here). */
+  opacity(e: KillEntry, tick: number, local: PlayerId | null = null): number {
+    const left = this.lifeOf(e, local) - (tick - e.tick);
+    return this.fadeTicks <= 0 ? (left > 0 ? 1 : 0) : Math.min(1, Math.max(0, left / this.fadeTicks));
   }
 
   clear(): void {
     this.entries = [];
   }
+}
+
+/**
+ * H6: the observes of `log` (oldest first) up to `uptoTick` that carry a death, bomb or round_end event: what
+ * Scene.restore needs after a seek. Only those lines are parsed (a substring test first: ~30 of a round's ~4,400).
+ */
+export function eventHistory(log: SessionLog, uptoTick = Infinity): Observe[] {
+  const out: Observe[] = [];
+  for (let i = 0; i < log.length; i++) {
+    const line = log.line(i);
+    if (line === undefined || !(line.includes('"type":"death"') || line.includes('"type":"bomb"') || line.includes('"type":"round_end"'))) continue;
+    try {
+      const o = (JSON.parse(line) as { observe: Observe }).observe;
+      if (o.tick > uptoTick) break;
+      out.push(o);
+    } catch {
+      // A malformed line: skip it.
+    }
+  }
+  return out;
 }
 
 // ---- bomb --------------------------------------------------------------------------------------
@@ -262,6 +309,19 @@ export class Scene {
     this.pops = this.pops.filter((p) => tick - p.tick < POP_TICKS[p.kind]);
   }
 
+  /**
+   * H6: after a seek or rewind (the Scene rebuilt at the landing tick), bring back what the round's history decides:
+   * the kill feed, who died when and to whom, the bomb's state (plant, defuse start) and the round end, from the
+   * observes the session logged up to now (`history`: oldest first; only those with death / bomb / round_end events
+   * matter). Tracers, pops and the logs stay empty (transients).
+   */
+  restore(history: readonly Observe[]): void {
+    for (const o of history) {
+      if (o.tick > this.cur.tick) break;
+      this.readEvents(o, o.tick - 1, false);
+    }
+  }
+
   /** Render time in (fractional) ticks: `alpha` of the way from the previous observe to the current one. */
   renderTick(alpha: number): number {
     if (this.prev === null) return this.cur.tick;
@@ -288,7 +348,7 @@ export class Scene {
     return b !== undefined && b.phase === e.phase ? b.tick : null;
   }
 
-  private readEvents(o: Observe, tick: number): void {
+  private readEvents(o: Observe, tick: number, tracers = true): void {
     const team = (id: PlayerId | null): Team | null => (id === null ? null : (o.pawns.find((p) => p.id === id)?.team ?? null));
     for (const e of o.events) {
       switch (e.type) {
@@ -302,7 +362,7 @@ export class Scene {
           break;
         }
         case 'shot':
-          this.addTracer(o, e.shooter, e.weapon, tick);
+          if (tracers) this.addTracer(o, e.shooter, e.weapon, tick);
           break;
         case 'bomb':
           this.bomb = nextBombState(this.bomb, e, tick);

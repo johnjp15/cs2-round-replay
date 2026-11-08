@@ -14,9 +14,8 @@
  *   `aimTurnRateDegPerTick` per tick: a flick onto a seen target with smooth time `aimFlickSec`, holds, pre-aims and the
  *   ease back with `aimHoldSec`. Before a shot the smooth time shrinks with the ticks left (≥ 1 tick, ≤ half of them),
  *   so the view arrives on the target on the ATTACK tick; a residual of at most `aimShotSnapDeg` is closed on that tick.
- * - **V2b slot.** A shooter with a fitted video view (`Track.view`, src/core/puppet.ts "follow fitted view") keeps it
- *   in the lead-in and after phases: the video is the truth outside the shot windows. Detected by `RoundModel.viewTrack`
- *   when the model has it.
+ * - **V2.** A shooter with a fitted video view (`Track.view`, followed by the puppet: src/core/puppet.ts) keeps it in
+ *   the lead-in and after phases: the video is the truth outside the shot windows (`fittedViewAt`).
  *
  * The motion state (velocity per pawn) is plain data in the scripted-events state (`ScriptState.aim`), snapshotted with
  * it. Yaw and pitch are rounded to 0.001° (aim.ts), velocities to 6 decimals (docs/port-notes.md "Puppets").
@@ -38,7 +37,7 @@ const ACCEL_TICKS = 3;
 const SETTLED_DEG = 0.25;
 /** A sighting of the pair counts for an engagement when it overlaps [window start − this, window end] (seconds). */
 const SIGHTING_SLACK_SEC = 3;
-/** V2b: a fitted view sample counts as "known" within this of `t` (seconds; its grid is 10 Hz). */
+/** V2: a fitted view sample counts as "known" within this of `t` (seconds; its grid is 10 Hz). */
 const VIEW_GAP_SEC = 0.1;
 
 /** A pawn's view motion while this layer moves its look (`ScriptState.aim`). */
@@ -126,12 +125,15 @@ export function buildLeads(model: RoundModel, engagements: readonly LeadEngageme
   return out;
 }
 
-/** V2b: true when `id` has a fitted video view at `t` (`RoundModel.viewTrack`, when the model has one). */
+/**
+ * V2: true when `id` has a fitted video view at `t`: a `source: 'video'` sample with a pitch within VIEW_GAP_SEC
+ * (`RoundModel.viewTrack`; the puppet follows those, src/core/puppet.ts `recordedViewAt`).
+ */
 export function fittedViewAt(model: RoundModel, id: PlayerId, t: number): boolean {
-  const vt = (model as unknown as { viewTrack?: (id: PlayerId) => readonly { readonly t: number; readonly source?: string }[] }).viewTrack;
-  if (typeof vt !== 'function') return false;
-  const v = vt.call(model, id);
-  for (const s of v) if (Math.abs(s.t - t) <= VIEW_GAP_SEC + 1e-9 && (s.source === undefined || s.source === 'video')) return true;
+  for (const s of model.viewTrack(id)) {
+    if (s.t > t + VIEW_GAP_SEC + 1e-9) break;
+    if (s.t >= t - VIEW_GAP_SEC - 1e-9 && s.source === 'video' && s.pitch !== null) return true;
+  }
   return false;
 }
 

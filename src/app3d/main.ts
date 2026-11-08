@@ -30,7 +30,8 @@ import tuningJson from '../../data/tuning.json';
 import { parseMapId, type Observe, type PawnObs, type PlayerId, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { FixedLoop, TICK_MS } from '../app/loop';
-import { Scene, interpolationAlpha, lerpAngle, type Pose } from '../app/scene';
+import { Scene, eventHistory, interpolationAlpha, lerpAngle, type Pose } from '../app/scene';
+import { Economy } from './economy';
 import { Session, parseSessionData, type SessionData } from '../app/session';
 import { SummaryCache } from '../app/run-entries';
 import { weaponName } from '../app/hud-model';
@@ -105,7 +106,7 @@ export interface App3DStats {
   readonly humanShots: number;
   readonly humanHits: number;
   readonly costMs: { readonly sim: number; readonly draw: number; readonly render: number; readonly hud: number };
-  readonly hud: { readonly hp: string; readonly clock: string; readonly mode: string; readonly killfeed: number };
+  readonly hud: { readonly hp: string; readonly clock: string; readonly mode: string; readonly killfeed: number; readonly clockClass: string; readonly defuse: boolean; readonly alert: boolean; readonly banner: string; readonly money: string };
 }
 
 declare global {
@@ -288,6 +289,8 @@ class App3D {
   /** U1: kills this round per player (the spectator panel) and when each player last fired (their viewmodel). */
   private kills = new Map<PlayerId, number>();
   private readonly lastShotMs = new Map<PlayerId, number>();
+  /** H6: every player's money and award flashes this round (economy.ts). */
+  private readonly economy: Economy;
   private followed: PlayerId = 'cart';
   /** The human's view (mouse look), or the spectator's orbit / free-fly view. */
   private look: Look = { yaw: 0, pitch: 0 };
@@ -341,6 +344,9 @@ class App3D {
     // X1: a map package with its own render mesh (?map=mirage-2020) draws that; else the collision mesh coloured from the radar.
     const tiles = render === null ? buildWorldTiles(world, new RadarSampler(art, h3.radar), h3.radar, rgba).tiles : buildRenderTiles(decodeRenderMesh(render));
     this.session = this.newSession(human);
+    // H6: the round's starting money where the recording knows it (free play: the award flashes only).
+    const start = new Map((data?.round.players ?? []).map((p) => [p.id, p.startMoney] as const));
+    this.economy = new Economy(this.session.model.players.map((p) => ({ id: p.id, team: p.team, startMoney: start.get(p.id) ?? null })));
     this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), { resolution: this.resScale, desynchronized: this.lowLatency });
     this.hud = new Hud3D(radar, h3.radar);
     this.a1 = new A1Mount(world, this.tuning, document.getElementById('bar'));
@@ -512,6 +518,7 @@ class App3D {
     this.radar.reset(s.observe());
     this.kills = new Map();
     this.lastShotMs.clear();
+    this.economy.reset();
     const cart = sc.pawn(this.followed);
     if (cart !== null) this.orbit = { yaw: 0, pitch: 12 };
     if (s.human !== null && cart !== null) this.look = { yaw: cart.yaw, pitch: cart.pitch };
@@ -541,6 +548,7 @@ class App3D {
     this.radar.ingest(o);
     this.teamDamage.ingest(o);
     this.countKills(o);
+    this.economy.ingest(o);
     for (const e of o.events) {
       if (e.type === 'damage' && e.attacker !== null && e.attacker === s.human && !e.scripted) {
         this.humanHits++;
@@ -674,13 +682,15 @@ class App3D {
     this.radar.reset(this.session.observe());
     this.lastShotMs.clear();
     this.kills = new Map();
-    for (const line of this.session.log().lines()) {
-      if (!line.includes('"type":"death"')) continue;
-      try {
-        this.countKills((JSON.parse(line) as { observe: Observe }).observe);
-      } catch {
-        // A malformed line: skip it.
-      }
+    this.economy.reset();
+    this.wasFirstPerson = false;
+    // H6: the kill feed, the deaths, the bomb and the round end (Scene.restore), the kills and the money, rebuilt from
+    // the session log's observes up to now (only the ~30 lines with a death, bomb or round_end event are parsed).
+    const history = eventHistory(this.session.log(), this.scene.cur.tick);
+    this.scene.restore(history);
+    for (const o of history) {
+      this.countKills(o);
+      this.economy.ingest(o);
     }
   }
 
@@ -1107,6 +1117,8 @@ class App3D {
       clock: s.clock,
       viewer: viewId,
       human,
+      viewerTeam: vo?.team ?? null,
+      money: { cash: this.economy.money(viewId), flashes: this.economy.flashes(viewId, o.tick) },
       at: { x: eye.x, y: eye.y, yaw },
       mode: this.phase === 'ready' && human === null ? 'Watching · press Start, or E to play cart' : mode,
       modeKind: firstPerson ? 'you' : human !== null ? 'dead' : 'watching',
@@ -1398,7 +1410,17 @@ class App3D {
       humanShots: this.humanShots,
       humanHits: this.humanHits,
       costMs: { ...this.cost },
-      hud: { hp: text('hp'), clock: text('clock'), mode: text('mode'), killfeed: document.getElementById('killfeed')?.childElementCount ?? 0 },
+      hud: {
+        hp: text('hp'),
+        clock: text('clock'),
+        mode: text('mode'),
+        killfeed: document.getElementById('killfeed')?.childElementCount ?? 0,
+        clockClass: document.getElementById('clock')?.getAttribute('class') ?? '',
+        defuse: document.getElementById('defuse')?.hidden === false,
+        alert: document.getElementById('alert')?.hidden === false,
+        banner: document.getElementById('banner')?.hidden === false ? text('banner') : '',
+        money: document.getElementById('money')?.hidden === false ? text('money') : '',
+      },
     };
   }
 }
