@@ -39858,10 +39858,10 @@
         "z": -160
       },
       "landing": {
-        "x": -1885,
-        "y": -320,
+        "x": -1890,
+        "y": -585,
         "z": -166,
-        "uncertainty": 45
+        "uncertainty": 40
       },
       "radio": "Smoke Out!"
     },

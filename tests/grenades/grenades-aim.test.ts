@@ -19,16 +19,18 @@ describe('aimAtLanding', () => {
     expect(r.detonation?.pos).toEqual(a.landing);
     expect(JSON.stringify(aimAtLanding(base, target, world, cfg))).toBe(JSON.stringify(a));
   });
-  it("cart's B-site smoke: onto the Market window, and onto V0's measured landing", () => {
+  it("cart's B-site smoke: onto the Market window, and onto the measured landing deep in Shop (S1)", () => {
     const world = new MirageWorld();
     const u = recordedUtility()[6];
     if (u === undefined || u.landing === null) throw new Error('no landing');
     const stand = freeStand(u.throwPos, world);
     const base = { type: 'smoke' as const, thrower: 'cart', team: 'T' as const, eye: { x: stand.x, y: stand.y, z: stand.z + t.eyeHeight }, velocity: { x: 0, y: 0, z: 0 } };
     expect(aimAtLanding(base, MARKET_WINDOW_FRONT, world, cfg).error).toBeLessThan(30);
-    // V0's measured spot (re-measured in V0b: the Shop floor just inside the window) is reachable within its uncertainty.
-    const v0 = aimAtLanding(base, u.landing, world, cfg);
-    expect(v0.landing).not.toBeNull();
-    expect(v0.error).toBeLessThan(u.landing.uncertainty);
+    // S1's measured spot (deep inside Shop, by the freezer counter ~320 u south of the window): reachable from cart's
+    // running release (his puppet's velocity at the throw, ~243 u/s holding the smoke) at full strength.
+    const s1 = aimAtLanding({ ...base, velocity: { x: 176, y: -168, z: 0 } }, u.landing, world, cfg, { strengths: [1] });
+    expect(s1.landing).not.toBeNull();
+    expect(s1.error).toBeLessThan(u.landing.uncertainty);
+    expect(s1.landing?.y ?? 0).toBeLessThan(-500);
   });
 });
