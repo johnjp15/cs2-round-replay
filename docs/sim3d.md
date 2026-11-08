@@ -20,7 +20,8 @@ factory (`SessionConfig.host`, default `defaultHost` = Sim2DHost; `SessionHost` 
 | Puppets, scripted damage, snaps, teleports | unchanged (the same snapped tracks, input plans and snaps) | the Core |
 
 Its public surface is Sim2DHost's plus `shots()` (the bullets of the last tick: eye, impact, victim, hitgroup,
-hitbox; the renderer's tracers and hit marker) and `world()` (the mesh sight). The constructor takes the movement
+hitbox; W3: `impacts`, every surface touched with its normal, wallbang exits included, and `tracer`, CS2's 1 in
+TracerFrequency; the renderer's tracers, impacts and hit marker, docs/app3d.md "Tracers and impacts") and `world()` (the mesh sight). The constructor takes the movement
 mesh and the world mesh (`Sim3DWorld`); `sim3dHostFactory(worldMesh(geometryBin))` makes the Session's factory.
 Snapshots are Sim2DHost's version 5 plus `engine: 'sim3d'`.
 

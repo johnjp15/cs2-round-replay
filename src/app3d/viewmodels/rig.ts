@@ -11,7 +11,7 @@
  * weapon changes; on death it lies on the floor beside the body (the dropped weapon). Geometry shared per weapon,
  * meshes pooled per pawn: nothing allocated per frame.
  */
-import { AdditiveBlending, BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, PlaneGeometry, type Object3D } from 'three';
+import { AdditiveBlending, BufferGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, PlaneGeometry, type Object3D, type Vector3 } from 'three';
 import type { Team } from '../../contracts/index';
 import { mergeParts, type Part } from './parts';
 import { WEAPON_MODELS, modelOf, type WeaponModel } from './models';
@@ -262,6 +262,14 @@ export class ViewmodelRig {
     b.flash.visible = p.flash;
     if (p.flash) b.flash.rotation.z = (a.sinceShot * 9000) % Math.PI;
     this.last = { weapon: a.weapon, phase: p.phase, progress: p.progress, visible: p.visible };
+  }
+
+  /** W3: the held weapon's muzzle (the flash's anchor) in the viewmodel camera's space, or null when nothing is shown. */
+  muzzle(out: Vector3): Vector3 | null {
+    const b = this.current;
+    if (b === null || !this.root.visible) return null;
+    b.flash.updateWorldMatrix(true, false);
+    return b.flash.getWorldPosition(out);
   }
 }
 
