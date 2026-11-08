@@ -125,6 +125,11 @@ export async function shots3d(root: string, schedule: readonly { t: number; tick
       await p.goto(origin + '/?human=none&seed=1');
       await p.waitForFunction(() => window.__cs2sim3d?.test !== undefined && (window.__cs2sim3d.stats().triangles ?? 0) > 0, null, { timeout: 180_000 });
       await p.evaluate(() => window.__cs2sim3d?.test.freeze(true));
+      // L1 (#57): the control bar overlays the bottom of the full-window view; hide it (its own button, like `) so the
+      // shot shows only the game and its HUD, as the video does.
+      await p.evaluate(() => {
+        if (!document.getElementById('app')?.classList.contains('bar-hidden')) document.getElementById('bar-hide')?.click();
+      });
       // The page's control bar takes part of the height: grow the window until the view itself is 16:9 like the
       // video (else the horizontal FOV is wider than CS:GO's 106.26 deg).
       const box = await p.locator('#view').boundingBox();
