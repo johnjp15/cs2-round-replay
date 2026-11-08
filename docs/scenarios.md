@@ -11,7 +11,7 @@ through the recorded round and keep their `--scenario` flag. This kind lives in 
 
 | scenario | map | what |
 | --- | --- | --- |
-| `mirage-sp4rtan-1v3` (default) | `mirage-cs2` | the recorded round (`data/round.json`): watch it, or take control of cart with E |
+| `mirage-sp4rtan-1v3` (default) | `mirage-2020` (X1d; `?map=mirage-cs2` for CS2's) | the recorded round (`data/round.json`): watch it, or take control of cart with E |
 | `mirage-5v5` | `mirage-cs2` | a full-buy 5v5 from the spawns, all bots live; the Ts go for a seeded site |
 | `dust2-5v5` | `de_dust2` | the same on CS2's Dust II, on CS2's own nav (`docs/maps.md`) |
 

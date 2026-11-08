@@ -247,7 +247,8 @@ history.
   one commit. One PR stays open and is updated for each push to main. A push that doesn't change the built page
   opens nothing.
 - **Every deploy rewrites every page.** Each page is re-encrypted with a fresh IV, so all of
-  `johnjp15.github.io/cs2/` changes, about 1.1 MB per deploy commit.
+  `johnjp15.github.io/cs2/` changes, about 1.1 MB per deploy commit before the 3D page; X1d: about 11.7 MB with it
+  (the 3D page embeds the 2020 map's render mesh: 9.5 MB encrypted, docs/maps.md "The default").
 - **Password changes stay local.** Run `CS2_NEW_PASSWORD=1 cs2/tools/deploy.sh` on the Mac, commit
   `cs2/tools/lock.json` to web-apps, then update the `CS2_PASSWORD` secret. The workflow fails rather than publish
   under a new salt or verifier. A mistyped secret is refused by `encrypt.cjs`.
