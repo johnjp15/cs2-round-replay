@@ -780,6 +780,17 @@ export interface SnapProducts {
  * must also be allowed by the nav (`Pieces`); the 2020 package has the map's own player clips, so every level a
  * hull fits at is allowed.
  */
+/**
+ * X1d: recorded spots inside a package's solids whose nearest stand is blind, moved by hand to where the track goes on
+ * to. Lokier's radar spot to 13.2 s, (−2387, 815) on Truck, is inside the 2020 barrel's player clip (brush 291); its
+ * nearest stand, (−2419, 825) behind the van, sees neither the Apartments window nor the corridor, and his track then
+ * jumps 97 u east at 13.3 s (a snap). He holds his 13.3 s spot (−2322, 806) instead, about where CS2's mesh has him
+ * ((−2325, 811)): the window and the corridor in sight, as G7's early peeks (peek-before-eradicate, John 11:35) need.
+ */
+const STAND_FIXES: Partial<Record<MapId, readonly { readonly id: PlayerId; readonly beforeT: number; readonly x: number; readonly y: number }[]>> = {
+  'mirage-2020': [{ id: 'lokier', beforeT: 13.25, x: -2322, y: 806 }],
+};
+
 export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
   const paths = mapPackagePaths(map);
   const roundBytes = read('data/round.json');
@@ -821,7 +832,10 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
     // on the floor they left.
     const fl = levelFlips(snapper, tr0.samples);
     const onFlip = (k: number): LevelFlip | undefined => fl.find((f) => k >= f.from && k < f.to);
-    const tr = fl.length === 0 ? tr0 : { ...tr0, samples: tr0.samples.map((q, k) => ({ ...q, z: onFlip(k)?.z ?? q.z })) };
+    const tr1 = fl.length === 0 ? tr0 : { ...tr0, samples: tr0.samples.map((q, k) => ({ ...q, z: onFlip(k)?.z ?? q.z })) };
+    // X1d: a recorded spot a package's solids hide stands where the track goes on to (STAND_FIXES).
+    const fix = STAND_FIXES[map]?.find((f) => f.id === id);
+    const tr = fix === undefined ? tr1 : { ...tr1, samples: tr1.samples.map((q) => (q.t < fix.beforeT ? { ...q, x: fix.x, y: fix.y } : q)) };
     for (const f of fl) {
       const s0 = tr0.samples[f.from] as { t: number };
       const s1 = tr0.samples[f.to - 1] as { t: number };

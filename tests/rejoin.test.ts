@@ -102,8 +102,8 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
   it('ends CT bomb_defused with 0.72 s on the bomb, like the tape (B4 alone: Ts won by elimination)', () => {
     expect(roundEnd(run)).toEqual({ tick: 4275, winner: 'CT', reason: 'bomb_defused' });
     // G3: 0.83 s on the bomb, not the tape's 0.72: the plant is 7 ticks late (below), the defuse on the tape's tick.
-    // G8: 6 ticks late, 0.81 s. P3: 31 ticks late (the plant spot ~110 u further on his way), 1.20 s.
-    expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.timeLeftSec).toBeCloseTo(1.203125, 6);
+    // G8: 6 ticks late, 0.81 s. P3: 31 ticks late (the plant spot ~110 u further on his way), 1.20 s. X1d: 34 on 2020, 1.25 s.
+    expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.timeLeftSec).toBeCloseTo(1.25, 6);
     expect(roundEnd(before)).toMatchObject({ winner: 'T', reason: 'elimination' });
   });
 
@@ -115,8 +115,9 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     near(bombTick(run, 'planted'), 27.52, 1.0);
     // T1: barely, LIVE from 40.30 s (he hears sp4rtan kill cart), now holds Catwalk, not the underpass beneath it, and
     // saw Zwomp walking up it on his inferred route: a real kill at 2650 (41.41 s), 2.8 s before the tape's. G8: with
-    // G8's LIVE movement he doesn't catch Zwomp before he is back on his tape: the tape's kill, 44.20 s.
-    near(kill(run, 'barely', 'zwomp'), 44.2, 0.1);
+    // G8's LIVE movement he doesn't catch Zwomp before he is back on his tape: the tape's kill, 44.20 s. X1d: on the 2020
+    // mesh sp4rtan sees cart 1.1 s later (41.20 s), barely is LIVE from 41.47 s with Zwomp up Catwalk: a real kill, 41.91 s.
+    near(kill(run, 'barely', 'zwomp'), 41.91, 0.1);
     near(kill(run, 'sp4rtan', 'donk'), 50.35, 0.3);
     near(kill(run, 'sp4rtan', 'barely'), 58.85, 0.3);
     near(bombTick(run, 'defused'), 66.8, 0.5);
@@ -126,11 +127,12 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     // after the recorded 1555, so the bomb is planted at 1768 (27.63 s, recorded 27.52 s). G8: 1767 (his LIVE leg
     // jumps onto the Balcony's sill at once instead of pushing into it); barely's kill of Zwomp is the tape's again.
     // P3: 1792, the plant spot at the corridor's east mouth (-1882, 243), ~110 u further on his way from the Balcony.
+    // X1d: on 2020 1795 (he rejoins 213 u from his track, 205 on CS2) and barely's real kill of Zwomp at 2682 (above).
     expect([bombTick(run, 'planted'), kill(run, 'barely', 'zwomp'), kill(run, 'sp4rtan', 'donk'), kill(run, 'sp4rtan', 'barely'), bombTick(run, 'defuse_start'), bombTick(run, 'defused')]).toEqual([
-      1792, 2829, 3222, 3766, 3955, 4275,
+      1795, 2682, 3222, 3766, 3955, 4275,
     ]);
-    const z = (run.entries[2829] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === 'barely' && ev.victim === 'zwomp');
-    expect(z?.type === 'damage' ? z.scripted : null, 'barely -> zwomp (scripted, the tape)').toBe(true);
+    const z = (run.entries[2682] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === 'barely' && ev.victim === 'zwomp');
+    expect(z?.type === 'damage' ? z.scripted : null, 'barely -> zwomp (X1d: real, LIVE)').toBe(false);
     // ... and the others are the scripted ones (B3), not LIVE fights.
     for (const [a, v, k] of [['sp4rtan', 'donk', 3222], ['sp4rtan', 'barely', 3766]] as const) {
       const d = (run.entries[k] as LogEntry).observe.events.find((ev) => ev.type === 'damage' && ev.attacker === a && ev.victim === v);
@@ -154,8 +156,8 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
   it('sp4rtan, who kills cart on his flank, rejoins and does the recorded donk spray, barely headshot and kit defuse', () => {
     const sw = liveSwitches(run.entries).filter((s) => s.id === 'sp4rtan');
     // G6: 2564 again (G3: 2566): the same positions and yaw, but on the CS2 mesh the line to cart is clear from 2563 and
-    // cart is in his FOV from 2564; G3's radar mask and level check opened it two ticks later.
-    expect(sw).toEqual([{ id: 'sp4rtan', tick: 2564, trigger: 'sighting' }]);
+    // cart is in his FOV from 2564; G3's radar mask and level check opened it two ticks later. X1d: 2637 on the 2020 mesh.
+    expect(sw).toEqual([{ id: 'sp4rtan', tick: 2637, trigger: 'sighting' }]);
     expect(kill(run, 'sp4rtan', 'cart')).not.toBeNull();
     const back = rejoins(run.entries).filter((b) => b.id === 'sp4rtan');
     expect(back).toHaveLength(1);
@@ -238,16 +240,16 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     }
   });
 
-  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; W2 pistols: b861137b; K1: 7ce7345e, sp4rtan\'s route on time; G8: 6d705c2e, survivors LIVE for good and G8\'s LIVE movement; S1: 64ad6d38, smokes on the CS2 engine); V2: fc6f7bda, the fitted views; F1: 7a4ab5fe, eased fight aim and pre-aim; V4: 0ad76dc0, the HUD data from the video (armor, the AK draw); P3: ae7af1f6, the measured plant and defuse spots', () => {
-    expect(logDigest(before.log)).toBe('ae7af1f6');
+  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; W2 pistols: b861137b; K1: 7ce7345e, sp4rtan\'s route on time; G8: 6d705c2e, survivors LIVE for good and G8\'s LIVE movement; S1: 64ad6d38, smokes on the CS2 engine); V2: fc6f7bda, the fitted views; F1: 7a4ab5fe, eased fight aim and pre-aim; V4: 0ad76dc0, the HUD data from the video (armor, the AK draw); P3: ae7af1f6, the measured plant and defuse spots; X1d: a60ad2e1, the default package is mirage-2020', () => {
+    expect(logDigest(before.log)).toBe('a60ad2e1');
     expect(rejoins(before.entries)).toEqual([]);
   });
 });
 
 describe('nobody leaves the tape: rejoin never runs', () => {
-  it('golden no-human round: no rejoin line, no path query, digest 46a352d7 (P3: the measured plant and defuse spots, every event tick unchanged; V4: a0976e1c, eradicate\'s 89 armor, donk\'s armor hits, cart\'s AK at 61.40 s, every event tick unchanged; F1: 4b0286da, eased fight aim and pre-aim, every event tick unchanged; V2: f4129248, the fitted views; T2: cf57c99a, cart into Shop by the window, out by the Shop door; S1: fe9750d5, smokes on the CS2 engine; K1: 9a994b97; W2 pistols: 9f07df0b; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
+  it('golden no-human round: no rejoin line, no path query, digest 138b0c70 (X1d: on mirage-2020, the default package, every event tick unchanged; P3: 46a352d7, the measured plant and defuse spots, every event tick unchanged; V4: a0976e1c, eradicate\'s 89 armor, donk\'s armor hits, cart\'s AK at 61.40 s, every event tick unchanged; F1: 4b0286da, eased fight aim and pre-aim, every event tick unchanged; V2: f4129248, the fitted views; T2: cf57c99a, cart into Shop by the window, out by the Shop door; S1: fe9750d5, smokes on the CS2 engine; K1: 9a994b97; W2 pistols: 9f07df0b; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
     const g = runHarness(data, { ...NO_HUMAN, recordWalk: true });
-    expect(logDigest(g.log)).toBe('46a352d7');
+    expect(logDigest(g.log)).toBe('138b0c70');
     expect(g.paths).toEqual([]);
     expect(coreLogs(g.entries).some((l) => / (rejoin|REPLAY): /.test(l.text))).toBe(false);
   });

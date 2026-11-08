@@ -191,8 +191,9 @@ const GRACE = Math.round(tuning.replay.outliveGraceSec * 64);
 // walks through, so G1's plant shift starts his USE 7 ticks late; everything after it is on the tape's ticks.
 // G8: 6 ticks late (1767): his LIVE leg now jumps onto the Balcony's sill at once instead of pushing into it.
 // P3: 31 ticks late (1792): the plant spot is the corridor's east mouth (-1882, 243), ~110 u further on his way.
+// X1d: 34 ticks late (1795) on the 2020 mesh: he rejoins 213 u from his track (205 on CS2), so the USE starts 3 ticks later.
 const TAPE_AFTER_LOKIER = [
-  ['bomb', 1792, 'planted'],
+  ['bomb', 1795, 'planted'],
   ['kill', 2829, 'barely>zwomp'],
   ['kill', 3222, 'sp4rtan>donk'],
   ['kill', 3766, 'sp4rtan>barely'],
@@ -373,7 +374,9 @@ describe('3. cart never peeks', () => {
     // he saw Zwomp walking up Catwalk on his inferred route and killed him for real at 2650 (41.41 s, tape 2829). G8:
     // calm, he turns at a running player's pace (ai.lookTurnRateDegPerTick) and doesn't catch Zwomp before he is back
     // on his tape: the kill is the tape's again. Everything else is the tape. tests/rejoin.test.ts has the details.
-    expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER);
+    // X1d: on the 2020 mesh sp4rtan sees cart 1.1 s later (41.20 s), so barely, LIVE from 41.47 s, has Zwomp in sight on
+    // Catwalk and kills him for real at 2682 (41.91 s), as in T1; everything else is the tape.
+    expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER.map((x) => (x[2] === 'barely>zwomp' ? ['kill', 2682, 'barely>zwomp'] : x)));
   });
 });
 
@@ -499,8 +502,8 @@ describe('6. cart dies early', () => {
     const ticks = deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim]);
     for (const k of [[32, 'snarlbot', 'incredibad'], [794, 'snarlbot', 'snakelore'], [1142, 'sp4rtan', 'snarlbot']]) expect(ticks).toContainEqual(k);
     // G6: barely's plant is 7 ticks late (1768, the tape's 1761), as in never-peeks: he went LIVE for the outlived Lokier.
-    // G8: 6 ticks (1767), as in never-peeks. P3: 31 ticks (1792), the plant spot ~110 u further on his way.
-    expect(run.entries.some((e) => e.observe.tick === 1792 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
+    // G8: 6 ticks (1767), as in never-peeks. P3: 31 ticks (1792), the plant spot ~110 u further on his way. X1d: 1795 on 2020.
+    expect(run.entries.some((e) => e.observe.tick === 1795 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
     expectUntouchedReplay(run);
   });
 });
@@ -595,7 +598,8 @@ describe('9. cart goes A instead of B and never fires (G1)', () => {
     expect(switches(run).find((s) => s.id === 'lokier')).toMatchObject({ tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });
     expect(deaths(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ attacker: 'barely' });
     // G3: barely is back first (tick 1483, as on main), sp4rtan after his fight in A main (later on CS2 Mirage).
-    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['barely', 'sp4rtan']);
+    // X1d: cart is in A main now (teleported, 12 s), so sp4rtan meets him at 19.1 s and is back first (1342; barely 1481).
+    expect(rejoins(run.entries).map((b) => b.id)).toEqual(['sp4rtan', 'barely']);
     expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER);
     expectRoundEndByRules(run);
     expectUntouchedReplay(run);
@@ -617,7 +621,8 @@ describe('10. cart misses Lokier at the window and hides in Shop (G1)', () => {
       // G6: from 1138 (1126 before): Lokier first sees him at the window on the CS2 mesh then. D1: the log wording.
       // V2: 1163, Lokier (scoped rifle, slower than a walk) holds his angle instead of spinning to his heading.
       // F1: 1138 again, he holds the window from 1.5 s before the recorded sighting (the encounter's lead-in).
-      'duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on lokier are real (the tape: kill (ak47, head) at tick 1203)',
+      // X1d: 1135 on the 2020 mesh, where Lokier sees him at the window 3 ticks sooner.
+      'duel cart -> lokier: in the recorded duel from tick 1135 (+0.0 s against the recording, to tick 1215); his shots on lokier are real (the tape: kill (ak47, head) at tick 1203)',
       'duel cart -> lokier: over at tick 1217, the recorded duel is over; 0 hits on lokier in it',
     ]);
     expect(switches(run).find((s) => s.id === 'lokier')).toMatchObject({ tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });

@@ -55,14 +55,17 @@ const KILLS: [number, PlayerId, PlayerId, string, boolean][] = [
 // snapped tracks of data/geometry/mirage-tracks.json): 9 instead of main's 6 (cart 922, donk 923, sp4rtan 1165 and
 // 1248, cart 1350, barely 2879). docs/core.md "Snaps on CS2 Mirage" has each one's cause. T1: barely's 2299 and 2880
 // are gone (his 35.1–44.7 s level flip onto the underpass is put back on Catwalk: snap-tracks' `levelFlips`).
+// X1d: on the default package (mirage-2020, the BSP the round was played on) 8; the mirage-cs2 list was snarlbot 633,
+// cart 920, sp4rtan 1171 / 1229 / 1245, donk 1344, cart 1392 (docs/maps.md "The round on it").
 const SNAPS: [PlayerId, number][] = [
-  ['snarlbot', 633], // new: T ramp, the 2020 z (−176) is a floor CS2 has 80 u lower there; the track rejoins the recording's floor in one step
+  ['snarlbot', 333], // new on 2020: his 5.1 s recording gap at T spawn ends at a player-clip edge (CS2's 633, the T-ramp floor, is gone: the 2020 floor is there)
   ['cart', 920], // main's cart 922: the recording's own discontinuity (909–922)
-  ['sp4rtan', 1171], // main's sp4rtan 1165: the recording's spike (inferred CT positions, 1146–1165)
+  ['donk', 921], // new on 2020: donk lags his 13.4–14.4 s samples on the 2020 mesh (docs/maps.md)
+  ['sp4rtan', 1169], // main's sp4rtan 1165 (CS2 1171): the recording's spike (inferred CT positions, 1146–1165)
   ['sp4rtan', 1229], // main's sp4rtan 1248: the same inferred 700 u/s stretch, split in two by the snapping
   ['sp4rtan', 1245],
-  ['donk', 1344], // new (main's donk 923 is gone): Apartments, CS2 has a raised (+32) floor where the 2020 one is flat; the track climbs it in one step (a jump would do)
-  ['cart', 1392], // main's cart 1350: the recording's discontinuity (1344–1350), snapped later (G6: a tick earlier, 1393 before: he comes off the window duel's track, docs/vision.md "Recorded duels")
+  ['donk', 1344], // Apartments: the track climbs the floor step in one go (a jump would do), as on CS2
+  ['cart', 1395], // main's cart 1350 (CS2 1392): the recording's discontinuity (1344–1350), off the window duel's track
   // T2 (backlog 46, #61): main's cart 1880 and 4114 (the way into and out of Shop through a 2020 doorway CS2 hasn't,
   // one-tick jumps along the Market window line) are gone: snap-tracks' WAYS_ROUND climbs him in through the window at
   // 28.4 s (a jump onto the sill) and walks him out by the Shop door at 64.5 s.
@@ -118,7 +121,7 @@ describe('golden master: movement (B2)', () => {
     }
   });
 
-  it('teleports only at B2’s documented teleport points: the seven snaps (G3, T1, T2), each inside a teleport window and logged once', () => {
+  it('teleports only at B2’s documented teleport points: the eight snaps (G3, T1, T2, X1d), each inside a teleport window and logged once', () => {
     expect(run.snaps.map((s) => [s.id, s.tick])).toEqual(SNAPS);
     expect(run.snaps.length).toBe(run.core.snapCount);
     for (const s of run.snaps) {

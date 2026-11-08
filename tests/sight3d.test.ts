@@ -181,7 +181,8 @@ describe('CS2 Mirage: what sees what', () => {
   });
 
   it('every recorded duel is in sight at every sample at the snapped positions (tools/sight-snap.ts, pass 5)', () => {
-    const data = loadHarnessData();
+    // X1d: CS2's mesh with its own snapped tracks (the default package is mirage-2020 now).
+    const data = loadHarnessData(undefined, 'mirage-cs2');
     const duels = recordedDuels(data.recorded ?? data.round);
     expect(duels.map((d) => `${d.a}-${d.b}`)).toEqual(['eradicate-lokier', 'cart-lokier', 'donk-sp4rtan', 'barely-sp4rtan', 'cart-sp4rtan']);
     for (const d of duels) {
