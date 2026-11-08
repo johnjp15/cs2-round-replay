@@ -49,12 +49,18 @@ describe('ReplayCore', () => {
     expect(first?.act.actions).toEqual(setup('sp4rtan'));
     expect(log.at(1)?.act.actions).toEqual([]);
 
-    // ScriptedHost's human is sp4rtan: nine inputs, all neutral.
+    // ScriptedHost's human is sp4rtan: nine inputs, all neutral, except that snarlbot (F1) already pre-aims the angle
+    // incredibad appears from (his kill at 0.50 s): no stick or buttons, the view eased from where it was.
     const inputs = log.at(5)?.act.inputs ?? [];
     expect(inputs.map((i) => i.id)).toEqual(PLAYER_IDS.filter((id) => id !== 'sp4rtan'));
     const obs = log.at(5)?.observe;
     for (const input of inputs) {
       const pawn = obs?.pawns.find((p) => p.id === input.id);
+      if (input.id === 'snarlbot') {
+        expect(input).toMatchObject({ forward: 0, side: 0, buttons: [] });
+        expect(Math.abs(((((input.yaw - (pawn?.yaw ?? NaN)) % 360) + 540) % 360) - 180)).toBeLessThanOrEqual(tuning.replay.aimTurnRateDegPerTick);
+        continue;
+      }
       expect(input).toEqual({ id: input.id, forward: 0, side: 0, yaw: pawn?.yaw, pitch: pawn?.pitch, buttons: [] });
     }
   });
