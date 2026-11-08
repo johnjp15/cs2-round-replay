@@ -90,14 +90,17 @@ describe("the recorded round's 8 throws (plausible aim)", () => {
     expect(smokeBlocks(s, inMarket, onSite, pop + 64 * 3, t)).toBe(true);
     expect(smokeBlocks(s, inMarket, onSite, pop + 64 * 21, t)).toBe(false);
   });
-  it('only cart\'s B-site smoke has a measured landing (V0); the replay misses it by the window-to-counter offset', () => {
+  it('only cart\'s B-site smoke has a measured landing (S1: deep in Shop); the window-front aim stops ~360 u short of it', () => {
     const u = recordedUtility();
     expect(u.map((x) => x.landing !== null)).toEqual([false, false, false, false, false, false, true, false]);
     const l = u[6]?.landing;
     const aim = RECORDED_AIM[6];
     if (l === null || l === undefined || u[6] === undefined || aim === undefined) throw new Error('no landing');
     const r = runRecorded(u[6], aim, world, t);
-    // 165 units: the measured counter spot is ~90 west of the mesh's window opening, behind solid wall (docs).
-    expect(Math.hypot(r.pos.x - l.x, r.pos.y - l.y, r.pos.z - l.z)).toBeLessThan(200);
+    // The plausible aim (backlog 21's window front) is not what the video shows: the smoke flies on through the window
+    // and rests ~320 u inside Shop (docs/round-data.md). The hosts throw it with the solved aim (mirage-tracks.json).
+    const miss = Math.hypot(r.pos.x - l.x, r.pos.y - l.y, r.pos.z - l.z);
+    expect(miss).toBeGreaterThan(250);
+    expect(miss).toBeLessThan(450);
   });
 });
