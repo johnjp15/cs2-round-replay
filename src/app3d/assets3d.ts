@@ -41,7 +41,7 @@ export interface FreePlayAssets3d {
 export async function loadFreePlayAssets3d(map: MapId): Promise<FreePlayAssets3d> {
   const p = mapPackagePaths(map);
   if (p.info === null || p.nav === null) throw new Error(`map package "${map}" has no nav.json / map.json`);
-  const w = map === 'mirage-cs2' ? { geometry: geometryUrl, clips: clipsUrl } : packageWorldUrls(map);
+  const w = map === DEFAULT_MAP ? { geometry: geometryUrl, clips: clipsUrl } : packageWorldUrls(map);
   const [info, nav, geometry, clips, radar] = await Promise.all([
     fetchJson(packageUrl(p.info, map)),
     fetchJson(packageUrl(p.nav, map)),
@@ -84,7 +84,7 @@ export async function loadImage(url: string): Promise<HTMLImageElement> {
 
 /** X1: `map` picks the 3D world's package (`?map=`, docs/maps.md). */
 export async function loadAssets3d(map: MapId = DEFAULT_MAP): Promise<PageAssets3d> {
-  const w = map === 'mirage-cs2' ? { geometry: geometryUrl, clips: clipsUrl, tracks: tracksUrl } : packageWorldUrls(map);
+  const w = map === DEFAULT_MAP ? { geometry: geometryUrl, clips: clipsUrl, tracks: tracksUrl } : packageWorldUrls(map);
   const renderPath = mapPackagePaths(map).render;
   const [round, nav, vision, geometry, clips, tracks, radar, render] = await Promise.all([
     fetchJson(roundUrl),

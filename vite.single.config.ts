@@ -52,17 +52,16 @@ function embedAssets(): Plugin {
     },
     load(id) {
       if (id !== RESOLVED_VIRTUAL) return null;
-      for (const f of ['round.json', 'mirage-nav.json', 'mirage-vismask.json', 'mirage-radar.jpg', 'maps/mirage-2020/geometry.bin', 'maps/mirage-2020/clips.bin', 'maps/mirage-2020/tracks.json', 'geometry/mirage-height.png']) this.addWatchFile(data(f));
+      for (const f of ['round.json', 'mirage-nav.json', 'mirage-vismask.json', 'mirage-radar.jpg', 'geometry/mirage-geometry.bin', 'geometry/mirage-clips.bin', 'geometry/mirage-tracks.json', 'geometry/mirage-height.png']) this.addWatchFile(data(f));
       const assets = {
         encoding: RAW ? 'text' : 'gzip-base64',
         round: json('round.json'),
         nav: json('mirage-nav.json'),
         vision: json('mirage-vismask.json'),
         radar: `data:image/jpeg;base64,${readFileSync(data('mirage-radar.jpg')).toString('base64')}`,
-        // X1c: the default map package (mirage-2020): collision, clips, tracks (the height layer stays CS2's).
-        geometry: binary('maps/mirage-2020/geometry.bin'),
-        clips: binary('maps/mirage-2020/clips.bin'),
-        tracks: json('maps/mirage-2020/tracks.json'),
+        geometry: binary('geometry/mirage-geometry.bin'),
+        clips: binary('geometry/mirage-clips.bin'),
+        tracks: json('geometry/mirage-tracks.json'),
         height: `data:image/png;base64,${readFileSync(data('geometry/mirage-height.png')).toString('base64')}`,
       };
       return `export default ${JSON.stringify(assets)};`;

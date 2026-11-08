@@ -29,8 +29,7 @@ function kb(n: number): string {
 function embedAssets3d(): Plugin {
   const data = (name: string): string => resolve(ROOT, 'data', name);
   const gz = (name: string): string => gzipSync(readFileSync(data(name)), { level: 9 }).toString('base64');
-  // X1c: the default map package (mirage-2020, docs/maps.md): its collision, clips, tracks and render mesh.
-  const files = ['round.json', 'mirage-nav.json', 'mirage-vismask.json', 'maps/mirage-2020/geometry.bin', 'maps/mirage-2020/clips.bin', 'maps/mirage-2020/tracks.json', 'maps/mirage-2020/render.bin', 'source/cs2/de_mirage.png'];
+  const files = ['round.json', 'mirage-nav.json', 'mirage-vismask.json', 'geometry/mirage-geometry.bin', 'geometry/mirage-clips.bin', 'geometry/mirage-tracks.json', 'source/cs2/de_mirage.png'];
   return {
     name: 'cs2:embed-assets-3d',
     enforce: 'pre',
@@ -46,10 +45,9 @@ function embedAssets3d(): Plugin {
         round: gz('round.json'),
         nav: gz('mirage-nav.json'),
         vision: gz('mirage-vismask.json'),
-        geometry: gz('maps/mirage-2020/geometry.bin'),
-        clips: gz('maps/mirage-2020/clips.bin'),
-        tracks: gz('maps/mirage-2020/tracks.json'),
-        render: gz('maps/mirage-2020/render.bin'),
+        geometry: gz('geometry/mirage-geometry.bin'),
+        clips: gz('geometry/mirage-clips.bin'),
+        tracks: gz('geometry/mirage-tracks.json'),
         radar: `data:image/png;base64,${readFileSync(data('source/cs2/de_mirage.png')).toString('base64')}`,
       };
       return `export default ${JSON.stringify(assets)};`;
