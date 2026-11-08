@@ -16,6 +16,7 @@ import {
   type Team,
   type TrackSample,
   type Vec3,
+  type ViewSample,
   type YawSample,
 } from '../contracts/index';
 import { tOf } from './clock';
@@ -98,6 +99,8 @@ export class RoundModel {
   private readonly samples: readonly (readonly TrackSample[])[];
   /** Recorded yaw samples (camera POVs only), parallel to `players`. */
   private readonly yaws: readonly (readonly YawSample[])[];
+  /** V2: fitted first-person views (watched segments only), parallel to `players`. */
+  private readonly views: readonly (readonly ViewSample[])[];
   /** id -> index into players/samples. Lookup only; never iterated. */
   private readonly index: ReadonlyMap<PlayerId, number>;
 
@@ -105,6 +108,7 @@ export class RoundModel {
     const players: ModelPlayer[] = [];
     const samples: (readonly TrackSample[])[] = [];
     const yaws: (readonly YawSample[])[] = [];
+    const views: (readonly ViewSample[])[] = [];
     const index = new Map<PlayerId, number>();
     for (const id of PLAYER_IDS) {
       const p = round.players.find((q) => q.id === id);
@@ -131,6 +135,7 @@ export class RoundModel {
       });
       samples.push(track.samples);
       yaws.push(track.yaw);
+      views.push(track.view);
     }
     this.meta = round.meta;
     this.bomb = round.bomb;
@@ -139,6 +144,7 @@ export class RoundModel {
     this.sightings = readSightings(round);
     this.samples = samples;
     this.yaws = yaws;
+    this.views = views;
     this.index = index;
   }
 
@@ -157,6 +163,14 @@ export class RoundModel {
    */
   yawTrack(id: PlayerId): readonly YawSample[] {
     return this.yaws[this.indexOf(id)] as readonly YawSample[];
+  }
+
+  /**
+   * V2: the player's fitted first-person view samples (yaw and pitch from the video frames, docs/viewfit.md), by
+   * time; empty for players the camera never watches.
+   */
+  viewTrack(id: PlayerId): readonly ViewSample[] {
+    return this.views[this.indexOf(id)] as readonly ViewSample[];
   }
 
   /**

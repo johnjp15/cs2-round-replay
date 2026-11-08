@@ -16,9 +16,10 @@
  *     is 1×; the mouse turns the view by exactly counts × 1.25 × 0.022° (pointer-lock deltas through the page's
  *     automation hook, since a headless page can't lock the pointer); aims at Lokier's head, clicks mouse 1 and checks
  *     the shot was fired (the HUD's ammo drops, a tracer); screenshot (f) first person; then (H2b) sprays ~0.8 s: the
- *     camera kicks up and the crosshair rises to where the bullets go (screenshot (g)), and both recover after release;
- *     with the "Recoil tracking" setting at 0 the camera stays still while the crosshair climbs, at 1 the camera takes
- *     all the recoil and the crosshair stays centred;
+ *     camera kicks up while the crosshair stays at the centre (W1: CS2's cl_crosshair_recoil 0; screenshot (g)), and
+ *     the camera recovers after release; with "Crosshair follows recoil" on (W1) and the "Recoil tracking" setting at
+ *     0 the camera stays still while the crosshair climbs to the bullets, at 1 the camera takes all the recoil and the
+ *     crosshair stays centred;
  *  4. U1, spectating: at the start the T radar shows no CT (nobody spotted), "show everyone" shows all ten; first
  *     person through Sp4rtaN's eyes shows his HP / armor / ammo / weapon, the crosshair, the spectator panel
  *     ("SPECTATING sp4rtan", 1st person) and "Watching"; mouse 1 / Space / mouse 2 switch player, V cycles 1st → 3rd
@@ -29,7 +30,9 @@
  *  6. H3 (normal build only): the Scenario / Map pickers list the scenarios; `?scenario=dust2-5v5` (free play on CS2's
  *     Dust II) loads, plays at 4× for a few seconds with the bots moving, E takes over the spectated pawn; screenshots
  *     app3d-freeplay-dust2-*.jpg;
- *  7. fails on page errors, console errors or requests to other origins.
+ *  7. H6 (tools/browser-check3d-h6.ts): the death fade when cart dies, first person; the team-correct bomb HUD, the
+ *     plant alert, the win banner, the money and the kill feed after a seek (`--only h6`: just that);
+ *  8. fails on page errors, console errors or requests to other origins.
  * Port: `--port <n>` or CHECK3D_PORT (default 4180).
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
  */
@@ -40,6 +43,7 @@ import { fileURLToPath } from 'node:url';
 import { cpus, loadavg } from 'node:os';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { a1Checks } from './browser-check3d-a1';
+import { h6Checks } from './browser-check3d-h6';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const PORT = Number(process.argv.includes('--port') ? process.argv[process.argv.indexOf('--port') + 1] : (process.env['CHECK3D_PORT'] ?? '4180'));
@@ -51,6 +55,8 @@ function arg(name: string, fallback: string): string {
 }
 
 const SINGLE = process.argv.includes('--single');
+/** `--only h6`: just the H6 death-fade check. */
+const ONLY_H6 = arg('--only', '') === 'h6';
 const OUT = resolve(ROOT, arg('--out', 'docs/img'));
 const SECONDS = Number(arg('--seconds', '4'));
 const [FPS_W, FPS_H] = arg('--fps-size', '640x400').split('x').map(Number) as [number, number];
@@ -88,7 +94,7 @@ interface Stats {
   humanShots: number;
   humanHits: number;
   triangles: number;
-  hud: { hp: string; clock: string; mode: string; killfeed: number };
+  hud: { hp: string; clock: string; mode: string; killfeed: number; clockClass: string };
   guard: { leaveGuard: boolean; keyboardLocked: boolean; fullscreen: boolean; duckKey: string };
 }
 
@@ -266,6 +272,11 @@ async function main(): Promise<void> {
   const problems: string[] = [];
   const report: Record<string, unknown> = { page: SINGLE ? 'dist-single-3d/index.html' : 'dist-3d/', bytes: statSync(join(DIR, 'index.html')).size };
   try {
+    full: {
+    if (ONLY_H6) {
+      await h6Checks(browser, { open: (w, h) => open(browser, w, h, problems), out: OUT }, problems, report);
+      break full;
+    }
     // 1. Five moments, watching.
     const page = await open(browser, 1280, 720, problems);
     report['renderer'] = await page.evaluate(() => {
@@ -291,8 +302,8 @@ async function main(): Promise<void> {
     await page.waitForTimeout(300);
     shots.push(await shot(page, 'c-plant'));
     const sp = await stats(page);
-    // After the plant the clock is the bomb timer (40 → 0 s).
-    if (!(Number(sp.hud.clock) > 35 && Number(sp.hud.clock) <= 40)) problems.push(`bomb clock after the plant: ${sp.hud.clock}`);
+    // After the plant the C4 icon replaces the clock (H6: CS2 shows nobody a bomb countdown).
+    if (sp.hud.clock !== '' || !sp.hud.clockClass.includes('c4')) problems.push(`C4 icon after the plant: "${sp.hud.clock}" ${sp.hud.clockClass}`);
     // (d) Sp4rtaN behind donk in Apartments.
     await seek(page, 49.95);
     await page.evaluate(() => window.__cs2sim3d?.camera('follow', 'sp4rtan'));
@@ -389,8 +400,8 @@ async function main(): Promise<void> {
     report['fire'] = { shots: t1.humanShots, hits: t1.humanHits, clip: [clipBefore, clipAfter], hp: t1.hud.hp, killfeed: feed };
     if (t1.humanShots < 1 || clipAfter === clipBefore) problems.push(`firing: ${JSON.stringify(report['fire'])}`);
     shots.push(await shot(p, 'f-first-person'));
-    // 3b. H2b: recoil on the camera and the crosshair. Spray ~0.8 s at the floor in front of cart (the bullets kick
-    // the camera up by 45 % of the punch and move the crosshair to where they go), then release: both recover.
+    // 3b. H2b: recoil on the camera. Spray ~0.8 s at the floor in front of cart (the bullets kick the camera up by 45 %
+    // of the punch; W1: the crosshair stays at the centre, CS2's cl_crosshair_recoil 0), then release: it recovers.
     const camPitch = async (): Promise<number> => (await p.evaluate(() => window.__cs2sim3d?.test.state().camera.pitch ?? null)) ?? 0;
     const crossXf = async (): Promise<string> => p.evaluate(() => document.getElementById('crosshair')?.style.transform ?? '');
     await p.waitForTimeout(1500);
@@ -413,12 +424,22 @@ async function main(): Promise<void> {
     // Source pitch: − = up. The camera kicks up at least 1.5° (45 % of ≥ 3.5° of punch after ~8 bullets) and the
     // crosshair rises above the centre; 1.5 s later both are back (within 0.2° and 2 px).
     if (!(pitchSpray < pitch0 - 1.5)) problems.push(`recoil: camera did not kick (${JSON.stringify(report['recoil'])})`);
-    if (!(crossY(xfSpray) < -5)) problems.push(`recoil: crosshair did not rise (${JSON.stringify(report['recoil'])})`);
+    if (xfSpray !== '') problems.push(`recoil: the crosshair left the centre with "Crosshair follows recoil" off (${JSON.stringify(report['recoil'])})`);
     if (!(Math.abs(pitchAfter - lookAfter) < 0.2 && Math.abs(crossY(xfAfter)) < 2)) problems.push(`recoil: did not recover (${JSON.stringify(report['recoil'])})`);
     // 3c. H2b: the "Recoil tracking" setting (view_recoil_tracking) sets the camera's share of the recoil: spray for
     // 0.5 s at 0 (camera still but for the screen shake, < 0.6°; the crosshair takes it all) and at 1 (the camera takes
     // it all; the crosshair stays within a few px of the centre: the screen shake, which the bullets don't follow).
     const tracking: Record<string, { camera: number; crosshairY: number }> = {};
+    // W1: the crosshair marks the bullets only with "Crosshair follows recoil" (cl_crosshair_recoil 1).
+    const followRecoil = async (on: boolean): Promise<void> =>
+      p.evaluate((v) => {
+        const b = document.getElementById('set-xhair-recoil');
+        if (b instanceof HTMLInputElement && b.checked !== v) {
+          b.checked = v;
+          b.dispatchEvent(new Event('change'));
+        }
+      }, on);
+    await followRecoil(true);
     for (const k of ['0', '1']) {
       await p.evaluate((v) => {
         const f = document.getElementById('set-tracking');
@@ -442,6 +463,7 @@ async function main(): Promise<void> {
     if (!(Math.abs(tracking['0']?.camera ?? 9) < 0.6 && (tracking['0']?.crosshairY ?? 0) < -10)) problems.push(`recoil tracking 0: ${JSON.stringify(report['recoilTracking'])}`);
     if (!((tracking['1']?.camera ?? 0) < -2 && Math.abs(tracking['1']?.crosshairY ?? 99) < 8)) problems.push(`recoil tracking 1: ${JSON.stringify(report['recoilTracking'])}`);
     if (stored !== 1) problems.push(`recoil tracking not persisted: ${JSON.stringify(report['recoilTracking'])}`);
+    await followRecoil(false);
     await p.evaluate(() => {
       const f = document.getElementById('set-tracking');
       if (f instanceof HTMLInputElement) {
@@ -456,6 +478,9 @@ async function main(): Promise<void> {
     // 5. A1: sound and the viewmodels.
     await a1Checks(browser, { open: (w, h) => open(browser, w, h, problems), seek, out: OUT, root: ROOT }, problems, report);
     if (!SINGLE) report['freePlay'] = await freePlayChecks(browser, problems);
+    // 7. H6 (#85): the death fade.
+    await h6Checks(browser, { open: (w, h) => open(browser, w, h, problems), out: OUT }, problems, report);
+    }
   } finally {
     await browser.close();
     server.close();

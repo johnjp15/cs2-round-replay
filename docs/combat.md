@@ -25,8 +25,13 @@ pure; the host owns the state. Movement is in `docs/movement.md`.
 | deagle | 53 | 267 | **3.9** | 0.932 | 0.85 | 7 | 35 | 2.17 | 1 *(assumed)* | no |
 | m4a4 | 33 | 666.667 | 4 | 0.70 | 0.97 | 30 | 90 | 3.07 | 1 *(assumed)* | yes |
 | glock | 30 | 400 | 4 | 0.47 | **0.85** | 20 | 120 | 2.17 | 1 *(assumed)* | **no** |
+| usps | 35 | 352.941 | 4 | 0.505 | 0.91 | 12 | 24 | 2.2 | 1 | no |
 
 Sources (read 2026-11-05):
+
+- **USP-S** (W2, 2026-11-07): CS2 `weapon_usp_silencer` in `data/weapons.json` (weapons.vdata via GameTracking-CS2):
+  35 damage, cycle 0.17 s (= 352.941 RPM), armor ratio 1.01 (armorPen = ratio / 2 = 0.505), range modifier 0.91, ×4
+  head, 12 + 2 magazines (24), reload 2.2 s, deploy 1 s, 240 u/s. The default CT pistol (docs/core.md "Start state").
 
 - **AK-47:** [csdb.gg AK-47](https://csdb.gg/weapon/ak-47): 36 damage, 600 RPM, 77.5 % armor penetration, range
   modifier 0.98, ×4 head, 30/90, reload 2.5 s. The page says its stats come from CS2 game data files. Cross-checked
@@ -184,6 +189,39 @@ Per weapon, against 100/100 with a helmet (HP / armor removed):
 | m4a4 | 92 / 20 | 23 / 5 | 28 / 7 | 24 / 0 | 21 / 5 | 31 |
 | glock | 56 / 32 | 14 / 8 | 17 / 10 | 22 / 0 | 10 / 6 | 21 |
 
+## Friendly fire (W3, #52; the 3D host)
+
+CS2 competitive plays with friendly fire on and team damage reduced. `game/csgo/cfg/gamemode_competitive.cfg`
+(GameTracking-CS2, master on 2026-11-07) sets `mp_friendlyfire 1`, `ff_damage_reduction_bullets 0.33`,
+`ff_damage_reduction_grenade 0.85`, `ff_damage_reduction_grenade_self 1` and `ff_damage_reduction_other 0.4`. The
+convar defaults in `DumpSource2/convars.txt` (0.1 / 0.25 / 1 / 0.25, `mp_friendlyfire false`) are what casual and
+the engine start with; the competitive cfg overrides them. Tuning keys `damage.mpFriendlyfire` and
+`damage.ffDamageReduction{Bullets,Grenade,GrenadeSelf,Other}` hold the competitive values.
+`damage.friendlyFire` (false) stays the 2D host's switch, so the 2D golden master is untouched.
+
+Which ratio applies follows CS's `CCSPlayer::OnTakeDamage` (CS:GO source, `cs_player.cpp`):
+
+- A teammate's bullet damage is × 0.33.
+- An HE grenade (`DMG_BLAST` from an HE projectile) is × 0.85 on a teammate and × 1 on the thrower.
+- Anything else on a teammate is × 0.4. That covers the knife and fire (molotov / incendiary).
+- The ratio multiplies the damage before the hitgroup and armor are applied.
+
+The host's `teamDamageRatio` returns these ratios. They are applied in the bullet path (open air and wallbangs),
+in W1's knife and in grenade outcomes.
+
+Only the human and LIVE pawns can hurt teammates: their bullets trace with friendly fire on. A puppet's bullets keep
+passing through teammates, and its grenades' team damage is dropped, because the recording decides a puppet's
+outcomes. So the no-human run is unchanged.
+
+The HUD (src/app3d/team-damage.ts) shows two of CS's notices:
+
+- the kill feed line "<attacker> attacked a teammate" (`#Cstrike_TitlesTXT_Game_teammate_attack`), at most every
+  `CS_WarnFriendlyDamageInterval` 3 s per attacker;
+- the hint "Try not to injure your teammates" (`#..._Hint_try_not_to_injure_teammates`) for the human for 3 s.
+
+As in CS, neither shows for fire damage. Team-kill penalties are out of scope. Tests: `tests/sim3d-ff-move.test.ts`
+(the human's AK on a teammate at 400 u: 11 HP vs an enemy's 35 unarmored, 9 vs 27 armored).
+
 ## Damage actions and blocking
 
 - **`block_damage {attacker, victim}`** blocks the engine's own damage for that ordered pair (bullets and the
@@ -194,8 +232,9 @@ Per weapon, against 100/100 with a helmet (HP / armor removed):
 - **`blocked_hit {attacker, victim, weapon, hitgroup}`** (G5): a *bullet of the human's pawn* that a block stopped is
   reported in the observe, right after its `shot` and `sound`: whom it would have hit and the band the hitscan picked
   (the same trace as an unblocked bullet; walls, cover and the pitch bands decide as usual). A miss reports nothing,
-  and neither do the puppets' blocked bullets or anyone's grenades. The Core uses it to resolve the human's shots in
-  his recorded duels like the tape (`docs/core.md` "Recorded duels of the human").
+  and neither do the puppets' blocked bullets or anyone's grenades. G5's Core used it to resolve the human's shots in
+  his recorded duels like the tape; since D1 (2026-11-07) those shots are real and the Core blocks none of his pairs
+  (`docs/core.md` "Recorded duels of the human").
 - **`damage {attacker, victim, amount, armor, hitgroup, weapon, lethal}`** (scripted) is queued by `apply()` and
   applied in the next `tick()`, after shots and grenades, in Core order. It removes `amount` HP and `armor` armor,
   each capped at what the victim has, and emits `damage` with `scripted: true` and the amounts actually removed.

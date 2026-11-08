@@ -27,6 +27,7 @@ import {
   type Vec3,
   type WalkQuery,
   type WeaponId,
+  type ViewSample,
   type YawSample,
 } from '../contracts/index';
 import { TICK_RATE, tOf } from './clock';
@@ -41,6 +42,14 @@ const YAW_SCALE = 1000;
  * not a calibration value.
  */
 export const RECORDED_YAW_MAX_GAP_SEC = 0.1;
+/**
+ * V2: a fitted view (yaw and pitch from the video, `Track.view`) is "known" between two view samples at most this far
+ * apart. The fit is on the 10 Hz grid (60 fps around key moments), so this allows no missing sample; the fit's
+ * failures are `source: 'radar'` samples, which fall back to the radar yaw. A data property, not a calibration value.
+ */
+export const RECORDED_VIEW_MAX_GAP_SEC = 0.1;
+/** Source clamps view pitch to ±89° (game rule; the same as aim.ts MAX_PITCH_DEG). */
+const PITCH_LIMIT_DEG = 89;
 /** Tolerance for comparing sample times that are decimal fractions (0.1 s grid). */
 const T_EPS = 1e-9;
 const DEG = Math.PI / 180;
@@ -267,6 +276,10 @@ export class PuppetTrack {
   readonly teleportPoints: readonly TeleportPoint[];
   /** Recorded yaw samples (may be empty). */
   readonly yaw: readonly YawSample[];
+  /** V2: fitted first-person views (may be empty). */
+  readonly view: readonly ViewSample[];
+  /** V2: per raw sample, true when the recorded weapon there is a scoped rifle (AWP, SSG 08). */
+  readonly scopedWeapon: readonly boolean[];
   /** Tick of the first and last sample. */
   readonly startTick: number;
   readonly endTick: number;
@@ -284,7 +297,15 @@ export class PuppetTrack {
   /**
    * @param runSpeeds run speed (units/s) of the recorded weapon at each sample, parallel to `raw`.
    */
-  constructor(id: PlayerId, raw: readonly TrackSample[], runSpeeds: readonly number[], yaw: readonly YawSample[], tuning: ReplayTuning) {
+  constructor(
+    id: PlayerId,
+    raw: readonly TrackSample[],
+    runSpeeds: readonly number[],
+    yaw: readonly YawSample[],
+    tuning: ReplayTuning,
+    view: readonly ViewSample[] = [],
+    scopedWeapon: readonly boolean[] = [],
+  ) {
     if (raw.length === 0) throw new Error(`PuppetTrack ${id}: empty track`);
     if (runSpeeds.length !== raw.length) throw new Error(`PuppetTrack ${id}: ${runSpeeds.length} run speeds for ${raw.length} samples`);
     for (let i = 1; i < raw.length; i++) {
@@ -293,6 +314,8 @@ export class PuppetTrack {
     this.id = id;
     this.raw = raw;
     this.yaw = yaw;
+    this.view = view;
+    this.scopedWeapon = scopedWeapon;
     this.startTick = (raw[0] as TrackSample).tick;
     this.endTick = (raw[raw.length - 1] as TrackSample).tick;
 
@@ -377,7 +400,8 @@ export class PuppetTrack {
     const samples = model.track(id);
     const weapons = recordedWeapons(model, schedule, id);
     const speeds = samples.map((s) => runSpeedOf(weaponAt(weapons, s.tick), tuning.movement));
-    return new PuppetTrack(id, samples, speeds, model.yawTrack(id), tuning.replay);
+    const scoped = samples.map((s) => isScopedRifle(weaponAt(weapons, s.tick)));
+    return new PuppetTrack(id, samples, speeds, model.yawTrack(id), tuning.replay, model.viewTrack(id), scoped);
   }
 
   /** Reference position at video time `t`, linear between samples, clamped to the first / last sample. */
@@ -418,6 +442,43 @@ export class PuppetTrack {
     if (b === undefined || b.t - a.t > RECORDED_YAW_MAX_GAP_SEC + T_EPS) return null;
     const f = (t - a.t) / (b.t - a.t);
     return roundYaw(a.deg + yawDelta(a.deg, b.deg) * f);
+  }
+
+  /**
+   * V2: the recorded view at `t`: the fitted video view (`Track.view`, shortest-arc yaw and linear pitch between two
+   * `source: 'video'` samples at most RECORDED_VIEW_MAX_GAP_SEC apart), else the radar yaw (`recordedYawAt`) with
+   * `pitch: null`, else null (not watched at t).
+   */
+  recordedViewAt(t: number): { readonly yaw: number; readonly pitch: number | null } | null {
+    const v = this.view;
+    if (v.length > 0 && t >= (v[0] as ViewSample).t - T_EPS && t <= (v[v.length - 1] as ViewSample).t + T_EPS) {
+      let lo = 0;
+      let hi = v.length - 1;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi + 1) / 2);
+        if ((v[mid] as ViewSample).t <= t + T_EPS) lo = mid;
+        else hi = mid - 1;
+      }
+      const a = v[lo] as ViewSample;
+      if (Math.abs(a.t - t) <= T_EPS) {
+        if (a.source === 'video' && a.pitch !== null) return { yaw: roundYaw(a.yaw), pitch: roundPitchDeg(a.pitch) };
+      } else {
+        const b = v[lo + 1];
+        if (b !== undefined && b.t - a.t <= RECORDED_VIEW_MAX_GAP_SEC + T_EPS && a.source === 'video' && b.source === 'video' && a.pitch !== null && b.pitch !== null) {
+          const f = (t - a.t) / (b.t - a.t);
+          return { yaw: roundYaw(a.yaw + yawDelta(a.yaw, b.yaw) * f), pitch: roundPitchDeg(a.pitch + (b.pitch - a.pitch) * f) };
+        }
+      }
+    }
+    const y = this.recordedYawAt(t);
+    return y === null ? null : { yaw: y, pitch: null };
+  }
+
+  /** V2: true when the recorded weapon at `t` (the sample at or before it) is a scoped rifle. */
+  scopedAt(t: number): boolean {
+    if (this.scopedWeapon.length === 0) return false;
+    const i = Math.max(0, Math.min(this.raw.length - 1, sampleIndexAtOrBefore(this.raw, t)));
+    return this.scopedWeapon[i] === true;
   }
 
   /** The planned WALK / DUCK at `tick`, or null (none, or outside the track). */
@@ -583,7 +644,11 @@ export interface PuppetStep {
  *    speed = |ahead − ref| / lookahead.
  * 4. Yaw: the recorded yaw when known, else the heading of motion (bearing from before
  *    to ahead) while moving (recorded speed ≥ `standSpeedThreshold`), else held; turned
- *    toward that at most `maxTurnRateDegPerTick` per tick. Pitch 0 (B3 aims).
+ *    toward that at most `maxTurnRateDegPerTick` per tick. V2: "recorded" is the view fitted
+ *    to the video (`PuppetTrack.recordedViewAt`), else the radar yaw; a scoped rifle slower
+ *    than a walk holds its angle instead of turning to its heading. Pitch: the fitted
+ *    pitch (held while watched without one, level otherwise), turned from the observed
+ *    pitch at the same limit. B3's aim overrides both during engagements.
  * 5. Buttons: the track's plan (`PuppetTrack.plannedButton`), none while more than
  *    `driftNudgeUnits` behind.
  * 6. Steer at `ahead` if the line to it is walkable, else at the latest reference point
@@ -671,10 +736,18 @@ export class PuppetController {
     const before = tr.positionAt(t - r.lookaheadSec);
     const recordedSpeed = dist2(ref, ahead) / r.lookaheadSec;
 
-    let target = tr.recordedYawAt(t);
-    if (target === null && recordedSpeed >= r.standSpeedThreshold && dist2(before, ahead) > 0) target = bearing(before, ahead);
+    // V2: the recorded view (video fit, else radar yaw) when watched; else the heading of motion while moving, except
+    // that a scoped rifle (AWP, SSG 08) moving slower than a walk holds its angle; else held.
+    const recorded = tr.recordedViewAt(t);
+    let target = recorded === null ? null : recorded.yaw;
+    const holdsAngle = tr.scopedAt(t) && recordedSpeed < r.walkSpeedThreshold;
+    if (target === null && !holdsAngle && recordedSpeed >= r.standSpeedThreshold && dist2(before, ahead) > 0) target = bearing(before, ahead);
     const yaw = target === null ? s.yaw : turnToward(s.yaw, target, r.maxTurnRateDegPerTick);
     s.yaw = yaw;
+    // Pitch: the fitted pitch when known; held while watched without one (the fit failed: smoke, flash); level
+    // otherwise. Turned from the observed pitch at the same rate limit as the yaw.
+    const pitchTarget = recorded === null ? 0 : recorded.pitch;
+    const pitch = pitchTarget === null ? roundPitchDeg(p.pitch) : turnPitch(p.pitch, pitchTarget, r.maxTurnRateDegPerTick);
 
     // The track's button plan, unless lagging (then run: never WALK / DUCK while behind).
     const planned = tr.plannedButton(tick);
@@ -728,7 +801,7 @@ export class PuppetController {
     const cap = maxSpeedOf(p.weapon, buttons, this.movement);
     const scale = cap > 0 ? Math.min(1, dist2(pos, easeTo) / (cap * r.lookaheadSec)) : 0;
     const stick = stickToward(steer.x - pos.x, steer.y - pos.y, yaw, scale);
-    return { input: { id: p.id, forward: stick.forward, side: stick.side, yaw, pitch: 0, buttons }, actions };
+    return { input: { id: p.id, forward: stick.forward, side: stick.side, yaw, pitch, buttons }, actions };
   }
 
   /**
@@ -756,6 +829,36 @@ export class PuppetController {
     }
     return ahead;
   }
+}
+
+/** Pitch clamped to ±89° and rounded to 0.001° (as aim.ts `roundPitch`; the Core can't import it in a cycle). */
+export function roundPitchDeg(deg: number): number {
+  const c = deg > PITCH_LIMIT_DEG ? PITCH_LIMIT_DEG : deg < -PITCH_LIMIT_DEG ? -PITCH_LIMIT_DEG : deg;
+  const r = Math.round(c * YAW_SCALE) / YAW_SCALE;
+  return r === 0 ? 0 : r;
+}
+
+/** Turn a pitch toward `to` by at most `maxStep` degrees; rounded. */
+function turnPitch(from: number, to: number, maxStep: number): number {
+  const d = to - from;
+  return roundPitchDeg(from + (d > maxStep ? maxStep : d < -maxStep ? -maxStep : d));
+}
+
+/** AWP and SSG 08: the rifles a player scopes in with (B2's weapon ids). */
+function isScopedRifle(w: WeaponId | null): boolean {
+  return w === 'awp' || w === 'ssg08';
+}
+
+/** Index of the last sample with t <= `t` (0 before the first). */
+function sampleIndexAtOrBefore(raw: readonly TrackSample[], t: number): number {
+  let lo = 0;
+  let hi = raw.length - 1;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi + 1) / 2);
+    if ((raw[mid] as TrackSample).t <= t + T_EPS) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
 }
 
 function initialPuppetState(id: PlayerId, yaw: number | null): PuppetState {

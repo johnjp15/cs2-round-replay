@@ -35,6 +35,10 @@
         "file": "web-apps/cs2/mirage-round-replay/source/shots/mirage-round-sp4rtan-1v3-shots.csv",
         "sha256": "dfab03d0887d62c871172b6e2655aba10c93c396bbf9b97a8a71d2568e8e9bbb",
         "rows": 42
+      },
+      "viewFit": {
+        "file": "data/source/view-fit.json",
+        "sha256": "0a5b22cabe72d99552f8b0a2b43fc930f0313871982e5ee959a562dfcdddba2f"
       }
     }
   },
@@ -6006,6 +6010,720 @@
           "t": 58.8,
           "tick": 3763,
           "deg": 177.6
+        }
+      ],
+      "view": [
+        {
+          "t": 32.3,
+          "tick": 2067,
+          "yaw": -61.327,
+          "pitch": 15.229,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 32.4,
+          "tick": 2074,
+          "yaw": -76.035,
+          "pitch": 1.708,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 32.5,
+          "tick": 2080,
+          "yaw": -91.446,
+          "pitch": 1.458,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 32.6,
+          "tick": 2086,
+          "yaw": -101.096,
+          "pitch": 2.234,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 32.7,
+          "tick": 2093,
+          "yaw": -106.501,
+          "pitch": 2.187,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 32.8,
+          "tick": 2099,
+          "yaw": -108.886,
+          "pitch": 2.438,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 32.9,
+          "tick": 2106,
+          "yaw": -109.734,
+          "pitch": 1.105,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 33,
+          "tick": 2112,
+          "yaw": -114.233,
+          "pitch": 1.877,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 33.1,
+          "tick": 2118,
+          "yaw": -110.098,
+          "pitch": 1.727,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 33.2,
+          "tick": 2125,
+          "yaw": -109.107,
+          "pitch": 1.015,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 33.3,
+          "tick": 2131,
+          "yaw": -105.358,
+          "pitch": 1.988,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.1,
+          "tick": 3142,
+          "yaw": 61.694,
+          "pitch": -8.162,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.2,
+          "tick": 3149,
+          "yaw": 51.855,
+          "pitch": -8.402,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.3,
+          "tick": 3155,
+          "yaw": 48.761,
+          "pitch": -9.881,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 50.3,
+          "tick": 3219,
+          "yaw": 100.85,
+          "pitch": -10.585,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 50.4,
+          "tick": 3226,
+          "yaw": 100.85,
+          "pitch": -10.585,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 50.5,
+          "tick": 3232,
+          "yaw": 100.85,
+          "pitch": -10.585,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 50.6,
+          "tick": 3238,
+          "yaw": 100.85,
+          "pitch": -10.585,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 50.7,
+          "tick": 3245,
+          "yaw": 100.85,
+          "pitch": -10.585,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 50.8,
+          "tick": 3251,
+          "yaw": 100.85,
+          "pitch": -10.585,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 50.9,
+          "tick": 3258,
+          "yaw": 100.85,
+          "pitch": -10.585,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 51,
+          "tick": 3264,
+          "yaw": 100.85,
+          "pitch": -10.585,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 51.1,
+          "tick": 3270,
+          "yaw": 100.85,
+          "pitch": -10.585,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 51.2,
+          "tick": 3277,
+          "yaw": 104.765,
+          "pitch": -10.777,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 51.3,
+          "tick": 3283,
+          "yaw": 104.86,
+          "pitch": -12.087,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 51.4,
+          "tick": 3290,
+          "yaw": 108.847,
+          "pitch": -11.696,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 51.5,
+          "tick": 3296,
+          "yaw": 108.218,
+          "pitch": -11.828,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 51.6,
+          "tick": 3302,
+          "yaw": 108.029,
+          "pitch": -11.491,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 51.7,
+          "tick": 3309,
+          "yaw": 108.012,
+          "pitch": -13.044,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 51.8,
+          "tick": 3315,
+          "yaw": 108.012,
+          "pitch": -13.044,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 51.9,
+          "tick": 3322,
+          "yaw": 106.026,
+          "pitch": -13.959,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52,
+          "tick": 3328,
+          "yaw": 105.735,
+          "pitch": -13.729,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52.1,
+          "tick": 3334,
+          "yaw": 105.944,
+          "pitch": -13.451,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52.2,
+          "tick": 3341,
+          "yaw": 105.171,
+          "pitch": -13.672,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52.3,
+          "tick": 3347,
+          "yaw": 103.739,
+          "pitch": -14.819,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52.4,
+          "tick": 3354,
+          "yaw": 103.621,
+          "pitch": -14.684,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52.5,
+          "tick": 3360,
+          "yaw": 104.04,
+          "pitch": -14.124,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52.6,
+          "tick": 3366,
+          "yaw": 104.04,
+          "pitch": -14.124,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52.7,
+          "tick": 3373,
+          "yaw": 104.083,
+          "pitch": -14.108,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52.8,
+          "tick": 3379,
+          "yaw": 103.574,
+          "pitch": -14.102,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 52.9,
+          "tick": 3386,
+          "yaw": 103.574,
+          "pitch": -14.102,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 53,
+          "tick": 3392,
+          "yaw": 103.836,
+          "pitch": -13.907,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 53.1,
+          "tick": 3398,
+          "yaw": 103.836,
+          "pitch": -13.907,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 53.2,
+          "tick": 3405,
+          "yaw": 103.836,
+          "pitch": -13.907,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 53.3,
+          "tick": 3411,
+          "yaw": 103.836,
+          "pitch": -13.907,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 53.4,
+          "tick": 3418,
+          "yaw": 104,
+          "pitch": -13.581,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 53.5,
+          "tick": 3424,
+          "yaw": 103.971,
+          "pitch": -14.2,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 53.6,
+          "tick": 3430,
+          "yaw": 104.634,
+          "pitch": -13.656,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 53.7,
+          "tick": 3437,
+          "yaw": 92.255,
+          "pitch": -11.742,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 53.8,
+          "tick": 3443,
+          "yaw": 111.3,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 53.9,
+          "tick": 3450,
+          "yaw": 72.738,
+          "pitch": -20.802,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 54,
+          "tick": 3456,
+          "yaw": 68.389,
+          "pitch": -22.788,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 54.1,
+          "tick": 3462,
+          "yaw": 113.8,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 55.3,
+          "tick": 3539,
+          "yaw": 96.229,
+          "pitch": -7.582,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 55.4,
+          "tick": 3546,
+          "yaw": 95.185,
+          "pitch": -10.594,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 55.5,
+          "tick": 3552,
+          "yaw": 115.922,
+          "pitch": -11.699,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 55.6,
+          "tick": 3558,
+          "yaw": 118.048,
+          "pitch": -12.891,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 55.7,
+          "tick": 3565,
+          "yaw": 128.129,
+          "pitch": -10.495,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 55.8,
+          "tick": 3571,
+          "yaw": 129.159,
+          "pitch": -9.057,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 55.9,
+          "tick": 3578,
+          "yaw": 127.867,
+          "pitch": -9.038,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 56,
+          "tick": 3584,
+          "yaw": 129.102,
+          "pitch": -9.491,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 56.1,
+          "tick": 3590,
+          "yaw": 131.108,
+          "pitch": -9.601,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 56.2,
+          "tick": 3597,
+          "yaw": 130.57,
+          "pitch": -9.091,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 56.3,
+          "tick": 3603,
+          "yaw": 139.787,
+          "pitch": -7.976,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 56.4,
+          "tick": 3610,
+          "yaw": 149.365,
+          "pitch": -10.049,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 56.5,
+          "tick": 3616,
+          "yaw": 141.642,
+          "pitch": -7.98,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 56.6,
+          "tick": 3622,
+          "yaw": 141.275,
+          "pitch": -7.55,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 56.7,
+          "tick": 3629,
+          "yaw": 144.222,
+          "pitch": -7.055,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 56.8,
+          "tick": 3635,
+          "yaw": 145.749,
+          "pitch": -7.035,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 56.9,
+          "tick": 3642,
+          "yaw": 150.214,
+          "pitch": -5.696,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 57,
+          "tick": 3648,
+          "yaw": 153.652,
+          "pitch": -6.171,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 57.1,
+          "tick": 3654,
+          "yaw": 150.864,
+          "pitch": -5.433,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 57.2,
+          "tick": 3661,
+          "yaw": 148.244,
+          "pitch": -6.523,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 57.3,
+          "tick": 3667,
+          "yaw": 148.825,
+          "pitch": -6.271,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 57.4,
+          "tick": 3674,
+          "yaw": 155.656,
+          "pitch": -5.307,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 57.5,
+          "tick": 3680,
+          "yaw": 155.912,
+          "pitch": -5.173,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 57.6,
+          "tick": 3686,
+          "yaw": 152.012,
+          "pitch": -4.857,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 57.7,
+          "tick": 3693,
+          "yaw": 163.783,
+          "pitch": 13.865,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 57.8,
+          "tick": 3699,
+          "yaw": 167.069,
+          "pitch": 13.67,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 57.9,
+          "tick": 3706,
+          "yaw": 170.449,
+          "pitch": 17.318,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 58,
+          "tick": 3712,
+          "yaw": 161.896,
+          "pitch": -0.037,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 58.1,
+          "tick": 3718,
+          "yaw": 172.114,
+          "pitch": 0.579,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 58.2,
+          "tick": 3725,
+          "yaw": 174.863,
+          "pitch": 1.721,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 58.3,
+          "tick": 3731,
+          "yaw": 174.381,
+          "pitch": 2.902,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 58.4,
+          "tick": 3738,
+          "yaw": 176.196,
+          "pitch": 4.02,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 58.5,
+          "tick": 3744,
+          "yaw": 178.528,
+          "pitch": 4.731,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 58.6,
+          "tick": 3750,
+          "yaw": -178.247,
+          "pitch": 5.598,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 58.7,
+          "tick": 3757,
+          "yaw": -179.455,
+          "pitch": 5.608,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 58.8,
+          "tick": 3763,
+          "yaw": -171.642,
+          "pitch": -10.933,
+          "source": "video",
+          "confidence": "observed"
         }
       ],
       "endT": 58.8,
@@ -15587,6 +16305,4808 @@
           "deg": 81.3
         }
       ],
+      "view": [
+        {
+          "t": 13.8,
+          "tick": 883,
+          "yaw": 103.9,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 13.9,
+          "tick": 890,
+          "yaw": 103.9,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 14,
+          "tick": 896,
+          "yaw": 151.65,
+          "pitch": 0.844,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 14.1,
+          "tick": 902,
+          "yaw": 156.416,
+          "pitch": 0.139,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 14.2,
+          "tick": 909,
+          "yaw": 156.614,
+          "pitch": 1.471,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 14.3,
+          "tick": 915,
+          "yaw": 158.094,
+          "pitch": 1.331,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 14.4,
+          "tick": 922,
+          "yaw": 158.31,
+          "pitch": 0.702,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 14.5,
+          "tick": 928,
+          "yaw": 176.689,
+          "pitch": -0.812,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 14.6,
+          "tick": 934,
+          "yaw": 173.149,
+          "pitch": 1.625,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 14.7,
+          "tick": 941,
+          "yaw": 175.841,
+          "pitch": 0.057,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 14.8,
+          "tick": 947,
+          "yaw": 176.974,
+          "pitch": 1.388,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 14.9,
+          "tick": 954,
+          "yaw": 179.743,
+          "pitch": -0.162,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 15,
+          "tick": 960,
+          "yaw": 179.656,
+          "pitch": -0.674,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 15.1,
+          "tick": 966,
+          "yaw": 178.004,
+          "pitch": 0.72,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 15.2,
+          "tick": 973,
+          "yaw": 178.224,
+          "pitch": 0.833,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 15.3,
+          "tick": 979,
+          "yaw": 175.857,
+          "pitch": 1.157,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 15.4,
+          "tick": 986,
+          "yaw": 171.048,
+          "pitch": 0.076,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 15.5,
+          "tick": 992,
+          "yaw": 173.675,
+          "pitch": 0.59,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 15.6,
+          "tick": 998,
+          "yaw": 174.878,
+          "pitch": 0.591,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 15.7,
+          "tick": 1005,
+          "yaw": 175.068,
+          "pitch": 0.473,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 15.8,
+          "tick": 1011,
+          "yaw": 175.82,
+          "pitch": 0.289,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 15.9,
+          "tick": 1018,
+          "yaw": 175.768,
+          "pitch": -2.044,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 16,
+          "tick": 1024,
+          "yaw": 175.085,
+          "pitch": -0.032,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 16.1,
+          "tick": 1030,
+          "yaw": 175.402,
+          "pitch": 0.782,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 16.2,
+          "tick": 1037,
+          "yaw": 174.83,
+          "pitch": -1.063,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 16.3,
+          "tick": 1043,
+          "yaw": 174.412,
+          "pitch": 0.593,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 16.4,
+          "tick": 1050,
+          "yaw": 176.304,
+          "pitch": -13.322,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 16.5,
+          "tick": 1056,
+          "yaw": 175.719,
+          "pitch": -2.886,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 16.6,
+          "tick": 1062,
+          "yaw": 174.126,
+          "pitch": 2.255,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 16.7,
+          "tick": 1069,
+          "yaw": 175.425,
+          "pitch": 3.038,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 16.8,
+          "tick": 1075,
+          "yaw": 176.804,
+          "pitch": 3.429,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 16.9,
+          "tick": 1082,
+          "yaw": 177.429,
+          "pitch": 3.194,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17,
+          "tick": 1088,
+          "yaw": 176.788,
+          "pitch": 4.655,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17.1,
+          "tick": 1094,
+          "yaw": 175.917,
+          "pitch": 4.155,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17.2,
+          "tick": 1101,
+          "yaw": 177.377,
+          "pitch": 3.851,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17.3,
+          "tick": 1107,
+          "yaw": 178.541,
+          "pitch": 4.91,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17.4,
+          "tick": 1114,
+          "yaw": 173.396,
+          "pitch": 4.626,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17.5,
+          "tick": 1120,
+          "yaw": 173.359,
+          "pitch": 5.323,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17.6,
+          "tick": 1126,
+          "yaw": -160.032,
+          "pitch": 8.598,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17.7,
+          "tick": 1133,
+          "yaw": -134.72,
+          "pitch": 10.092,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17.8,
+          "tick": 1139,
+          "yaw": -133.013,
+          "pitch": 9.786,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 17.9,
+          "tick": 1146,
+          "yaw": -94.588,
+          "pitch": 12.45,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18,
+          "tick": 1152,
+          "yaw": -78.119,
+          "pitch": 12.318,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.1,
+          "tick": 1158,
+          "yaw": -87.697,
+          "pitch": 13.894,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.2,
+          "tick": 1165,
+          "yaw": -89.231,
+          "pitch": 11.498,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.3,
+          "tick": 1171,
+          "yaw": -121.066,
+          "pitch": 17.07,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.333,
+          "tick": 1173,
+          "yaw": -123.487,
+          "pitch": 16.131,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.367,
+          "tick": 1175,
+          "yaw": -116.357,
+          "pitch": 18.385,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.4,
+          "tick": 1178,
+          "yaw": -115.253,
+          "pitch": 17.276,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.433,
+          "tick": 1180,
+          "yaw": -114.798,
+          "pitch": 16.465,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.45,
+          "tick": 1181,
+          "yaw": -114.473,
+          "pitch": 16.165,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.467,
+          "tick": 1182,
+          "yaw": -117.13,
+          "pitch": 17.09,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.483,
+          "tick": 1183,
+          "yaw": -113.924,
+          "pitch": 16.297,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.5,
+          "tick": 1184,
+          "yaw": -112.462,
+          "pitch": 15.539,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.517,
+          "tick": 1185,
+          "yaw": -112.569,
+          "pitch": 15.947,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.533,
+          "tick": 1186,
+          "yaw": -115.34,
+          "pitch": 15.915,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.55,
+          "tick": 1187,
+          "yaw": -116.175,
+          "pitch": 15.171,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.567,
+          "tick": 1188,
+          "yaw": -117.349,
+          "pitch": 15.784,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.583,
+          "tick": 1189,
+          "yaw": -118.227,
+          "pitch": 14.855,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.6,
+          "tick": 1190,
+          "yaw": -118.188,
+          "pitch": 14.766,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.617,
+          "tick": 1191,
+          "yaw": -122.573,
+          "pitch": 12.718,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.633,
+          "tick": 1193,
+          "yaw": -136.501,
+          "pitch": 14.504,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.65,
+          "tick": 1194,
+          "yaw": -136.889,
+          "pitch": 13.723,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.667,
+          "tick": 1195,
+          "yaw": -137.817,
+          "pitch": 14.25,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.683,
+          "tick": 1196,
+          "yaw": -139.283,
+          "pitch": 13.137,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.7,
+          "tick": 1197,
+          "yaw": -139.649,
+          "pitch": 13.482,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.717,
+          "tick": 1198,
+          "yaw": -139.335,
+          "pitch": 13.43,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.733,
+          "tick": 1199,
+          "yaw": -136.743,
+          "pitch": 14.509,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.75,
+          "tick": 1200,
+          "yaw": -136.743,
+          "pitch": 14.509,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.767,
+          "tick": 1201,
+          "yaw": -136.725,
+          "pitch": 14.279,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.783,
+          "tick": 1202,
+          "yaw": -136.725,
+          "pitch": 14.279,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.8,
+          "tick": 1203,
+          "yaw": -136.65,
+          "pitch": 14.575,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.817,
+          "tick": 1204,
+          "yaw": -136.495,
+          "pitch": 14.269,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.833,
+          "tick": 1205,
+          "yaw": -136.695,
+          "pitch": 13.904,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.85,
+          "tick": 1206,
+          "yaw": -136.096,
+          "pitch": 14.401,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.867,
+          "tick": 1207,
+          "yaw": -136.224,
+          "pitch": 14.282,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.883,
+          "tick": 1209,
+          "yaw": -135.964,
+          "pitch": 14.396,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.9,
+          "tick": 1210,
+          "yaw": -136.122,
+          "pitch": 14.515,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.917,
+          "tick": 1211,
+          "yaw": -136.122,
+          "pitch": 14.515,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.933,
+          "tick": 1212,
+          "yaw": -136.032,
+          "pitch": 14.59,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.95,
+          "tick": 1213,
+          "yaw": -136.032,
+          "pitch": 14.59,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 18.967,
+          "tick": 1214,
+          "yaw": -125.372,
+          "pitch": 11.574,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 18.983,
+          "tick": 1215,
+          "yaw": -125.275,
+          "pitch": 12.863,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19,
+          "tick": 1216,
+          "yaw": -124.6,
+          "pitch": 13.185,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.017,
+          "tick": 1217,
+          "yaw": -124.6,
+          "pitch": 13.185,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.033,
+          "tick": 1218,
+          "yaw": -129.328,
+          "pitch": 13.317,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.05,
+          "tick": 1219,
+          "yaw": -129.166,
+          "pitch": 13.133,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.067,
+          "tick": 1220,
+          "yaw": -129.972,
+          "pitch": 12.837,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.083,
+          "tick": 1221,
+          "yaw": -132.936,
+          "pitch": 15.309,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.1,
+          "tick": 1222,
+          "yaw": -132.42,
+          "pitch": 16.052,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.2,
+          "tick": 1229,
+          "yaw": -150.959,
+          "pitch": 8.953,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.3,
+          "tick": 1235,
+          "yaw": -153.783,
+          "pitch": 7.676,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.4,
+          "tick": 1242,
+          "yaw": -123.4,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 19.5,
+          "tick": 1248,
+          "yaw": -91.1,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 19.6,
+          "tick": 1254,
+          "yaw": -119.061,
+          "pitch": 12.165,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 19.7,
+          "tick": 1261,
+          "yaw": -123.032,
+          "pitch": 14.856,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 19.8,
+          "tick": 1267,
+          "yaw": -129.591,
+          "pitch": 33.128,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 19.9,
+          "tick": 1274,
+          "yaw": -138.153,
+          "pitch": 21.418,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 20,
+          "tick": 1280,
+          "yaw": -145.609,
+          "pitch": 13.488,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 20.1,
+          "tick": 1286,
+          "yaw": -152.039,
+          "pitch": 12.284,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 20.2,
+          "tick": 1293,
+          "yaw": -153.516,
+          "pitch": 13.309,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 20.3,
+          "tick": 1299,
+          "yaw": -96.006,
+          "pitch": 13.079,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 20.4,
+          "tick": 1306,
+          "yaw": -87.436,
+          "pitch": 13.755,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 20.5,
+          "tick": 1312,
+          "yaw": -82.963,
+          "pitch": 12.888,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 20.6,
+          "tick": 1318,
+          "yaw": -66.189,
+          "pitch": 13.118,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 20.7,
+          "tick": 1325,
+          "yaw": -52.212,
+          "pitch": 13.612,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 20.8,
+          "tick": 1331,
+          "yaw": -58.525,
+          "pitch": 12.806,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 20.9,
+          "tick": 1338,
+          "yaw": -71.3,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 21,
+          "tick": 1344,
+          "yaw": -83.337,
+          "pitch": 21.141,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 21.1,
+          "tick": 1350,
+          "yaw": -100.914,
+          "pitch": 10.845,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 21.2,
+          "tick": 1357,
+          "yaw": -116.121,
+          "pitch": 12.045,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 21.3,
+          "tick": 1363,
+          "yaw": -30.9,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 21.4,
+          "tick": 1370,
+          "yaw": -90.295,
+          "pitch": -9.191,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 21.5,
+          "tick": 1376,
+          "yaw": -34.3,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 21.6,
+          "tick": 1382,
+          "yaw": -90.828,
+          "pitch": -6.017,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 21.7,
+          "tick": 1389,
+          "yaw": -84.788,
+          "pitch": 3.447,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 21.8,
+          "tick": 1395,
+          "yaw": -81.576,
+          "pitch": 1.836,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 21.9,
+          "tick": 1402,
+          "yaw": -84.736,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 22,
+          "tick": 1408,
+          "yaw": -80.828,
+          "pitch": 1.515,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 22.1,
+          "tick": 1414,
+          "yaw": -50.988,
+          "pitch": 2.984,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 22.2,
+          "tick": 1421,
+          "yaw": -41.503,
+          "pitch": 2.697,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 22.3,
+          "tick": 1427,
+          "yaw": -35.85,
+          "pitch": 3.465,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 22.4,
+          "tick": 1434,
+          "yaw": -25.4,
+          "pitch": 2.281,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 22.5,
+          "tick": 1440,
+          "yaw": -22.753,
+          "pitch": 2.564,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 22.6,
+          "tick": 1446,
+          "yaw": -19.086,
+          "pitch": 2.081,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 22.7,
+          "tick": 1453,
+          "yaw": -17.082,
+          "pitch": 2.038,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 22.8,
+          "tick": 1459,
+          "yaw": -75.418,
+          "pitch": 8.678,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 22.9,
+          "tick": 1466,
+          "yaw": -84.414,
+          "pitch": 3.879,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 23,
+          "tick": 1472,
+          "yaw": -86.415,
+          "pitch": 2.714,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 23.1,
+          "tick": 1478,
+          "yaw": -78.795,
+          "pitch": 1.673,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 23.2,
+          "tick": 1485,
+          "yaw": -77.06,
+          "pitch": 1.429,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 23.3,
+          "tick": 1491,
+          "yaw": -73.247,
+          "pitch": 1.328,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 23.4,
+          "tick": 1498,
+          "yaw": -71.081,
+          "pitch": 0.535,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 23.5,
+          "tick": 1504,
+          "yaw": -69.199,
+          "pitch": 0.653,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 23.6,
+          "tick": 1510,
+          "yaw": -66.601,
+          "pitch": 1.119,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 23.7,
+          "tick": 1517,
+          "yaw": -65.348,
+          "pitch": 0.417,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 23.8,
+          "tick": 1523,
+          "yaw": -62.259,
+          "pitch": 0.545,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 23.9,
+          "tick": 1530,
+          "yaw": -61.136,
+          "pitch": -0.06,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24,
+          "tick": 1536,
+          "yaw": -60.702,
+          "pitch": 0.52,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24.1,
+          "tick": 1542,
+          "yaw": -60.91,
+          "pitch": 1.108,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24.2,
+          "tick": 1549,
+          "yaw": -62.945,
+          "pitch": 0.517,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24.3,
+          "tick": 1555,
+          "yaw": -65.206,
+          "pitch": 1.318,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24.4,
+          "tick": 1562,
+          "yaw": -65.502,
+          "pitch": 1.557,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24.5,
+          "tick": 1568,
+          "yaw": -65.853,
+          "pitch": 1.045,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24.6,
+          "tick": 1574,
+          "yaw": -65.999,
+          "pitch": 2.016,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24.7,
+          "tick": 1581,
+          "yaw": -67.346,
+          "pitch": 1.688,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24.8,
+          "tick": 1587,
+          "yaw": -66.736,
+          "pitch": 1.804,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 24.9,
+          "tick": 1594,
+          "yaw": -68.145,
+          "pitch": 1.803,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25,
+          "tick": 1600,
+          "yaw": -66.533,
+          "pitch": 1.621,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25.1,
+          "tick": 1606,
+          "yaw": -67.057,
+          "pitch": 1.082,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25.2,
+          "tick": 1613,
+          "yaw": -66.969,
+          "pitch": 0.859,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25.3,
+          "tick": 1619,
+          "yaw": -67.583,
+          "pitch": 0.856,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25.4,
+          "tick": 1626,
+          "yaw": -67.258,
+          "pitch": 1.336,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25.5,
+          "tick": 1632,
+          "yaw": -68.206,
+          "pitch": 1.191,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25.6,
+          "tick": 1638,
+          "yaw": -70.716,
+          "pitch": 1.094,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25.7,
+          "tick": 1645,
+          "yaw": -71.148,
+          "pitch": 3.416,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25.8,
+          "tick": 1651,
+          "yaw": -86.613,
+          "pitch": 3.679,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 25.9,
+          "tick": 1658,
+          "yaw": -88.52,
+          "pitch": 2.81,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 26,
+          "tick": 1664,
+          "yaw": -91.552,
+          "pitch": 2.24,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 26.1,
+          "tick": 1670,
+          "yaw": -90.069,
+          "pitch": 1.645,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 26.2,
+          "tick": 1677,
+          "yaw": -93.099,
+          "pitch": 2.218,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 26.3,
+          "tick": 1683,
+          "yaw": -88.514,
+          "pitch": -0.765,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 26.4,
+          "tick": 1690,
+          "yaw": -93.997,
+          "pitch": 0.094,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 26.5,
+          "tick": 1696,
+          "yaw": -132.523,
+          "pitch": 0.756,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 26.6,
+          "tick": 1702,
+          "yaw": -140.785,
+          "pitch": 0.459,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 26.7,
+          "tick": 1709,
+          "yaw": -133.125,
+          "pitch": -0.737,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 26.8,
+          "tick": 1715,
+          "yaw": -145.044,
+          "pitch": -1.789,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 26.9,
+          "tick": 1722,
+          "yaw": -143.27,
+          "pitch": -1.232,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 27,
+          "tick": 1728,
+          "yaw": -141.254,
+          "pitch": -0.129,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 27.1,
+          "tick": 1734,
+          "yaw": -141.952,
+          "pitch": 0.059,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 27.2,
+          "tick": 1741,
+          "yaw": -143.367,
+          "pitch": -1.532,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 27.3,
+          "tick": 1747,
+          "yaw": -137.334,
+          "pitch": 2.198,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 27.4,
+          "tick": 1754,
+          "yaw": -138.059,
+          "pitch": 1.827,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 27.5,
+          "tick": 1760,
+          "yaw": -142.929,
+          "pitch": 2.135,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 27.6,
+          "tick": 1766,
+          "yaw": -152.373,
+          "pitch": 3.77,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 27.7,
+          "tick": 1773,
+          "yaw": -168.875,
+          "pitch": 6.208,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 27.8,
+          "tick": 1779,
+          "yaw": -167.559,
+          "pitch": 10.185,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 27.9,
+          "tick": 1786,
+          "yaw": -164.88,
+          "pitch": 11.091,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 28,
+          "tick": 1792,
+          "yaw": -148.388,
+          "pitch": 13.084,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 28.1,
+          "tick": 1798,
+          "yaw": -141.157,
+          "pitch": 11.658,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 28.2,
+          "tick": 1805,
+          "yaw": -144.278,
+          "pitch": 9.495,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 28.3,
+          "tick": 1811,
+          "yaw": -75.2,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 28.4,
+          "tick": 1818,
+          "yaw": -89.1,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 28.5,
+          "tick": 1824,
+          "yaw": -130.539,
+          "pitch": 1.464,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 28.6,
+          "tick": 1830,
+          "yaw": -139.264,
+          "pitch": 2.752,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 28.7,
+          "tick": 1837,
+          "yaw": -142.97,
+          "pitch": 0.97,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 28.8,
+          "tick": 1843,
+          "yaw": -146.878,
+          "pitch": 0.405,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 28.9,
+          "tick": 1850,
+          "yaw": -147.746,
+          "pitch": 0.228,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 29,
+          "tick": 1856,
+          "yaw": -137.466,
+          "pitch": 1.691,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 29.1,
+          "tick": 1862,
+          "yaw": -91.341,
+          "pitch": 3.426,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 29.2,
+          "tick": 1869,
+          "yaw": -79.353,
+          "pitch": 3,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 29.3,
+          "tick": 1875,
+          "yaw": -74.444,
+          "pitch": 2.16,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 29.4,
+          "tick": 1882,
+          "yaw": -68.483,
+          "pitch": 1.614,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 29.5,
+          "tick": 1888,
+          "yaw": -65.518,
+          "pitch": 2.463,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 29.6,
+          "tick": 1894,
+          "yaw": -66.517,
+          "pitch": 2.049,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 29.7,
+          "tick": 1901,
+          "yaw": -64.378,
+          "pitch": 2.135,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 29.8,
+          "tick": 1907,
+          "yaw": -59.899,
+          "pitch": 2.19,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 29.9,
+          "tick": 1914,
+          "yaw": -53.378,
+          "pitch": 2.373,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 30,
+          "tick": 1920,
+          "yaw": -51.904,
+          "pitch": 1.794,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 30.1,
+          "tick": 1926,
+          "yaw": -52.287,
+          "pitch": 1.694,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 30.2,
+          "tick": 1933,
+          "yaw": -39.223,
+          "pitch": 3.749,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 30.3,
+          "tick": 1939,
+          "yaw": -29.107,
+          "pitch": 2.48,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 30.4,
+          "tick": 1946,
+          "yaw": -41.419,
+          "pitch": 0.383,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 30.5,
+          "tick": 1952,
+          "yaw": -43.354,
+          "pitch": 0.387,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 30.6,
+          "tick": 1958,
+          "yaw": -42.869,
+          "pitch": 0.725,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 30.7,
+          "tick": 1965,
+          "yaw": -43.018,
+          "pitch": 1.063,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 30.8,
+          "tick": 1971,
+          "yaw": -36.995,
+          "pitch": 0.996,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 30.9,
+          "tick": 1978,
+          "yaw": -98.084,
+          "pitch": 3.984,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 31,
+          "tick": 1984,
+          "yaw": -111.231,
+          "pitch": 4.303,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 31.1,
+          "tick": 1990,
+          "yaw": -128.908,
+          "pitch": 1.584,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 31.2,
+          "tick": 1997,
+          "yaw": -80.5,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 31.3,
+          "tick": 2003,
+          "yaw": -120.925,
+          "pitch": -0.71,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 31.4,
+          "tick": 2010,
+          "yaw": -125.159,
+          "pitch": -8.356,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 31.5,
+          "tick": 2016,
+          "yaw": -131.982,
+          "pitch": -2.344,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 31.6,
+          "tick": 2022,
+          "yaw": -136.425,
+          "pitch": -0.191,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 31.7,
+          "tick": 2029,
+          "yaw": -144.686,
+          "pitch": -0.168,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 31.8,
+          "tick": 2035,
+          "yaw": -144.686,
+          "pitch": -0.168,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 31.9,
+          "tick": 2042,
+          "yaw": -145.87,
+          "pitch": -0.246,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 32,
+          "tick": 2048,
+          "yaw": -147.549,
+          "pitch": 0.929,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 32.1,
+          "tick": 2054,
+          "yaw": -146.423,
+          "pitch": 1.003,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.7,
+          "tick": 2349,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 36.8,
+          "tick": 2355,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 36.9,
+          "tick": 2362,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 37,
+          "tick": 2368,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 37.1,
+          "tick": 2374,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 37.2,
+          "tick": 2381,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 37.3,
+          "tick": 2387,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 37.4,
+          "tick": 2394,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 37.5,
+          "tick": 2400,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 37.6,
+          "tick": 2406,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 37.7,
+          "tick": 2413,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 37.8,
+          "tick": 2419,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 37.9,
+          "tick": 2426,
+          "yaw": 53.182,
+          "pitch": 0.436,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38,
+          "tick": 2432,
+          "yaw": 52.031,
+          "pitch": -0.01,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38.1,
+          "tick": 2438,
+          "yaw": 52.082,
+          "pitch": -0.414,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38.2,
+          "tick": 2445,
+          "yaw": 52.6,
+          "pitch": -0.289,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38.3,
+          "tick": 2451,
+          "yaw": 55.401,
+          "pitch": 0.227,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38.4,
+          "tick": 2458,
+          "yaw": 55.888,
+          "pitch": 0.489,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38.5,
+          "tick": 2464,
+          "yaw": 55.888,
+          "pitch": 0.489,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38.6,
+          "tick": 2470,
+          "yaw": 55.888,
+          "pitch": 0.489,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38.7,
+          "tick": 2477,
+          "yaw": 55.888,
+          "pitch": 0.489,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38.8,
+          "tick": 2483,
+          "yaw": 55.888,
+          "pitch": 0.489,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 38.9,
+          "tick": 2490,
+          "yaw": 55.888,
+          "pitch": 0.489,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39,
+          "tick": 2496,
+          "yaw": 56.908,
+          "pitch": 0.918,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39.1,
+          "tick": 2502,
+          "yaw": 56.968,
+          "pitch": 0.863,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39.2,
+          "tick": 2509,
+          "yaw": 57.056,
+          "pitch": 0.596,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39.3,
+          "tick": 2515,
+          "yaw": 57.088,
+          "pitch": 1.136,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39.4,
+          "tick": 2522,
+          "yaw": 56.702,
+          "pitch": 0.697,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39.5,
+          "tick": 2528,
+          "yaw": 56.44,
+          "pitch": 0.934,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39.6,
+          "tick": 2534,
+          "yaw": 56.598,
+          "pitch": 0.888,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39.7,
+          "tick": 2541,
+          "yaw": 56.916,
+          "pitch": 0.73,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39.8,
+          "tick": 2547,
+          "yaw": 56.916,
+          "pitch": 0.73,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 39.9,
+          "tick": 2554,
+          "yaw": 56.916,
+          "pitch": 0.73,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40,
+          "tick": 2560,
+          "yaw": 56.916,
+          "pitch": 0.73,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40.1,
+          "tick": 2566,
+          "yaw": 56.916,
+          "pitch": 0.73,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40.2,
+          "tick": 2573,
+          "yaw": 56.916,
+          "pitch": 0.73,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40.3,
+          "tick": 2579,
+          "yaw": 56.916,
+          "pitch": 0.73,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40.4,
+          "tick": 2586,
+          "yaw": 56.916,
+          "pitch": 0.73,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40.5,
+          "tick": 2592,
+          "yaw": 56.916,
+          "pitch": 0.73,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40.6,
+          "tick": 2598,
+          "yaw": 53.241,
+          "pitch": 1.319,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40.7,
+          "tick": 2605,
+          "yaw": 38.502,
+          "pitch": 0.747,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40.8,
+          "tick": 2611,
+          "yaw": 40.85,
+          "pitch": 1.253,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 40.9,
+          "tick": 2618,
+          "yaw": 26.702,
+          "pitch": -0.49,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 41,
+          "tick": 2624,
+          "yaw": 24.456,
+          "pitch": -1.437,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 41.1,
+          "tick": 2630,
+          "yaw": 23.639,
+          "pitch": -1.021,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 41.2,
+          "tick": 2637,
+          "yaw": 19.731,
+          "pitch": -0.992,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 41.3,
+          "tick": 2643,
+          "yaw": 14.319,
+          "pitch": -0.746,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 41.4,
+          "tick": 2650,
+          "yaw": 14.96,
+          "pitch": -0.896,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 41.5,
+          "tick": 2656,
+          "yaw": 13.437,
+          "pitch": -2.019,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 41.6,
+          "tick": 2662,
+          "yaw": 16.848,
+          "pitch": -0.768,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 41.7,
+          "tick": 2669,
+          "yaw": 11.019,
+          "pitch": -1.084,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 41.8,
+          "tick": 2675,
+          "yaw": 12.154,
+          "pitch": -0.787,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 41.9,
+          "tick": 2682,
+          "yaw": 20.188,
+          "pitch": 0.422,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 42,
+          "tick": 2688,
+          "yaw": 18.514,
+          "pitch": -1.01,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 42.1,
+          "tick": 2694,
+          "yaw": 16.305,
+          "pitch": -0.641,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 42.2,
+          "tick": 2701,
+          "yaw": 20.374,
+          "pitch": -0.971,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 42.3,
+          "tick": 2707,
+          "yaw": 24.637,
+          "pitch": -0.711,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 42.4,
+          "tick": 2714,
+          "yaw": 45.124,
+          "pitch": 1.38,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 42.5,
+          "tick": 2720,
+          "yaw": 46.772,
+          "pitch": 2.393,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 42.6,
+          "tick": 2726,
+          "yaw": 46.772,
+          "pitch": 2.393,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 42.7,
+          "tick": 2733,
+          "yaw": 45.578,
+          "pitch": 2.256,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 42.8,
+          "tick": 2739,
+          "yaw": 38.186,
+          "pitch": 1.623,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 42.9,
+          "tick": 2746,
+          "yaw": 23.341,
+          "pitch": -1.148,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43,
+          "tick": 2752,
+          "yaw": 22.822,
+          "pitch": -0.261,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43.1,
+          "tick": 2758,
+          "yaw": 22.775,
+          "pitch": -1.282,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43.2,
+          "tick": 2765,
+          "yaw": 23.77,
+          "pitch": -1.233,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43.3,
+          "tick": 2771,
+          "yaw": 23.77,
+          "pitch": -1.233,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43.4,
+          "tick": 2778,
+          "yaw": 23.77,
+          "pitch": -1.233,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43.5,
+          "tick": 2784,
+          "yaw": 44.208,
+          "pitch": 2.227,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43.6,
+          "tick": 2790,
+          "yaw": 54.691,
+          "pitch": 2.255,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43.7,
+          "tick": 2797,
+          "yaw": 54.855,
+          "pitch": 2.146,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43.8,
+          "tick": 2803,
+          "yaw": 51.229,
+          "pitch": 2.183,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 43.9,
+          "tick": 2810,
+          "yaw": 25.649,
+          "pitch": 0.04,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44,
+          "tick": 2816,
+          "yaw": 25.443,
+          "pitch": -0.984,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44.1,
+          "tick": 2822,
+          "yaw": 26.631,
+          "pitch": 1.042,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44.2,
+          "tick": 2829,
+          "yaw": 17.58,
+          "pitch": 0.208,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44.3,
+          "tick": 2835,
+          "yaw": 15.431,
+          "pitch": -0.407,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44.4,
+          "tick": 2842,
+          "yaw": 12.14,
+          "pitch": -0.999,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44.5,
+          "tick": 2848,
+          "yaw": 11.539,
+          "pitch": -0.14,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44.6,
+          "tick": 2854,
+          "yaw": 10.156,
+          "pitch": -0.572,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44.7,
+          "tick": 2861,
+          "yaw": 9.435,
+          "pitch": -0.251,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44.8,
+          "tick": 2867,
+          "yaw": 9.188,
+          "pitch": 0.33,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 44.9,
+          "tick": 2874,
+          "yaw": 7.778,
+          "pitch": -0.259,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45,
+          "tick": 2880,
+          "yaw": 6.703,
+          "pitch": 0.062,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45.1,
+          "tick": 2886,
+          "yaw": 4.772,
+          "pitch": -0.072,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45.2,
+          "tick": 2893,
+          "yaw": 2.372,
+          "pitch": -0.081,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45.3,
+          "tick": 2899,
+          "yaw": -0.276,
+          "pitch": -0.302,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45.4,
+          "tick": 2906,
+          "yaw": -3.918,
+          "pitch": -0.372,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45.5,
+          "tick": 2912,
+          "yaw": -8.372,
+          "pitch": -0.647,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45.6,
+          "tick": 2918,
+          "yaw": -12.07,
+          "pitch": -0.264,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45.7,
+          "tick": 2925,
+          "yaw": -15.876,
+          "pitch": -0.957,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45.8,
+          "tick": 2931,
+          "yaw": -17.485,
+          "pitch": -0.342,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 45.9,
+          "tick": 2938,
+          "yaw": -19.285,
+          "pitch": -0.301,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46,
+          "tick": 2944,
+          "yaw": -19.719,
+          "pitch": -0.138,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46.1,
+          "tick": 2950,
+          "yaw": -20.066,
+          "pitch": -0.029,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46.2,
+          "tick": 2957,
+          "yaw": -20.961,
+          "pitch": 0.345,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46.3,
+          "tick": 2963,
+          "yaw": -19.053,
+          "pitch": -0.215,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46.4,
+          "tick": 2970,
+          "yaw": -33.427,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46.5,
+          "tick": 2976,
+          "yaw": -34.412,
+          "pitch": 0.711,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46.6,
+          "tick": 2982,
+          "yaw": -36.559,
+          "pitch": 0.37,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46.7,
+          "tick": 2989,
+          "yaw": -31.999,
+          "pitch": 0.948,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46.8,
+          "tick": 2995,
+          "yaw": -27.531,
+          "pitch": 0.848,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 46.9,
+          "tick": 3002,
+          "yaw": -21.298,
+          "pitch": 1.239,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 47,
+          "tick": 3008,
+          "yaw": -35.889,
+          "pitch": 0.127,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 47.1,
+          "tick": 3014,
+          "yaw": -37.597,
+          "pitch": 1.08,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 47.2,
+          "tick": 3021,
+          "yaw": -52.655,
+          "pitch": 2.177,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 47.3,
+          "tick": 3027,
+          "yaw": -57.289,
+          "pitch": -0.722,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 47.4,
+          "tick": 3034,
+          "yaw": -62.026,
+          "pitch": -1.06,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 47.5,
+          "tick": 3040,
+          "yaw": -23.117,
+          "pitch": 2.689,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 47.6,
+          "tick": 3046,
+          "yaw": -27.288,
+          "pitch": -0.737,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 47.7,
+          "tick": 3053,
+          "yaw": -33.815,
+          "pitch": -4.181,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 47.8,
+          "tick": 3059,
+          "yaw": -26.246,
+          "pitch": -3.526,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 47.9,
+          "tick": 3066,
+          "yaw": -28.653,
+          "pitch": -4.141,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 48,
+          "tick": 3072,
+          "yaw": -26.684,
+          "pitch": -2.876,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 48.1,
+          "tick": 3078,
+          "yaw": -26.231,
+          "pitch": -3.689,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 48.2,
+          "tick": 3085,
+          "yaw": -24.418,
+          "pitch": -3.63,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 48.3,
+          "tick": 3091,
+          "yaw": -13.949,
+          "pitch": -1.336,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 48.4,
+          "tick": 3098,
+          "yaw": -20.776,
+          "pitch": -2.102,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 48.5,
+          "tick": 3104,
+          "yaw": -21.831,
+          "pitch": -1.971,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 48.6,
+          "tick": 3110,
+          "yaw": -19.353,
+          "pitch": -1.93,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 48.7,
+          "tick": 3117,
+          "yaw": -20.942,
+          "pitch": -2.613,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 48.8,
+          "tick": 3123,
+          "yaw": -19.879,
+          "pitch": -2.665,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 48.9,
+          "tick": 3130,
+          "yaw": 82,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 53.5,
+          "tick": 3424,
+          "yaw": 155.691,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 53.6,
+          "tick": 3430,
+          "yaw": 155.691,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 53.7,
+          "tick": 3437,
+          "yaw": 155.691,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 53.8,
+          "tick": 3443,
+          "yaw": 155.691,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 53.9,
+          "tick": 3450,
+          "yaw": 155.691,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 54,
+          "tick": 3456,
+          "yaw": 155.691,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 54.1,
+          "tick": 3462,
+          "yaw": 155.691,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 54.2,
+          "tick": 3469,
+          "yaw": 155.691,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 54.3,
+          "tick": 3475,
+          "yaw": 155.691,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 54.4,
+          "tick": 3482,
+          "yaw": 155.402,
+          "pitch": 3.441,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 54.5,
+          "tick": 3488,
+          "yaw": 155.599,
+          "pitch": 3.521,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 54.6,
+          "tick": 3494,
+          "yaw": 155.721,
+          "pitch": 3.756,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 54.7,
+          "tick": 3501,
+          "yaw": 156.005,
+          "pitch": 3.856,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 54.8,
+          "tick": 3507,
+          "yaw": 160.344,
+          "pitch": 4.137,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 54.9,
+          "tick": 3514,
+          "yaw": -163.206,
+          "pitch": 3.655,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 55,
+          "tick": 3520,
+          "yaw": -150.552,
+          "pitch": -2.458,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 55.1,
+          "tick": 3526,
+          "yaw": -138.533,
+          "pitch": 3.16,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 58.7,
+          "tick": 3757,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 58.8,
+          "tick": 3763,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 58.9,
+          "tick": 3770,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 59,
+          "tick": 3776,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 59.1,
+          "tick": 3782,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 59.2,
+          "tick": 3789,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 59.3,
+          "tick": 3795,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 59.4,
+          "tick": 3802,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 59.433,
+          "tick": 3804,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 59.467,
+          "tick": 3806,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 59.5,
+          "tick": 3808,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.533,
+          "tick": 3810,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.567,
+          "tick": 3812,
+          "yaw": -83.43,
+          "pitch": -75.832,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.6,
+          "tick": 3814,
+          "yaw": -83.653,
+          "pitch": -78.32,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 59.633,
+          "tick": 3817,
+          "yaw": -83.669,
+          "pitch": -78.002,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.667,
+          "tick": 3819,
+          "yaw": -83.112,
+          "pitch": -77.945,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 59.7,
+          "tick": 3821,
+          "yaw": -80.035,
+          "pitch": -73.282,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.733,
+          "tick": 3823,
+          "yaw": -77.917,
+          "pitch": -73.154,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.767,
+          "tick": 3825,
+          "yaw": -71.338,
+          "pitch": -62.84,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.8,
+          "tick": 3827,
+          "yaw": -72.3,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.833,
+          "tick": 3829,
+          "yaw": -57.183,
+          "pitch": -50.815,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 59.867,
+          "tick": 3831,
+          "yaw": -62.9,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.9,
+          "tick": 3834,
+          "yaw": -57.362,
+          "pitch": -33.764,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 59.933,
+          "tick": 3836,
+          "yaw": -27.844,
+          "pitch": -33.34,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 59.967,
+          "tick": 3838,
+          "yaw": -21.597,
+          "pitch": -28.311,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60,
+          "tick": 3840,
+          "yaw": -8.395,
+          "pitch": -24.005,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.033,
+          "tick": 3842,
+          "yaw": 14.642,
+          "pitch": -6.862,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.067,
+          "tick": 3844,
+          "yaw": 15.752,
+          "pitch": -5.576,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.1,
+          "tick": 3846,
+          "yaw": 16.223,
+          "pitch": -5.451,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.133,
+          "tick": 3849,
+          "yaw": 16.177,
+          "pitch": -6.173,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.167,
+          "tick": 3851,
+          "yaw": 15.667,
+          "pitch": -6.09,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 60.2,
+          "tick": 3853,
+          "yaw": 16.255,
+          "pitch": -5.839,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 60.3,
+          "tick": 3859,
+          "yaw": -44.784,
+          "pitch": 1.667,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 60.4,
+          "tick": 3866,
+          "yaw": -56.764,
+          "pitch": 2.936,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.5,
+          "tick": 3872,
+          "yaw": -58.987,
+          "pitch": 2.161,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.6,
+          "tick": 3878,
+          "yaw": -58.099,
+          "pitch": 3.958,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.7,
+          "tick": 3885,
+          "yaw": -59.272,
+          "pitch": 3.152,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.8,
+          "tick": 3891,
+          "yaw": -55.107,
+          "pitch": 6.94,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 60.9,
+          "tick": 3898,
+          "yaw": -56.851,
+          "pitch": 3.858,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 61,
+          "tick": 3904,
+          "yaw": -68.627,
+          "pitch": 2.741,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 61.1,
+          "tick": 3910,
+          "yaw": 6.469,
+          "pitch": -0.528,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 61.2,
+          "tick": 3917,
+          "yaw": 4.032,
+          "pitch": -0.155,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 61.3,
+          "tick": 3923,
+          "yaw": 4.468,
+          "pitch": 0.162,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 61.4,
+          "tick": 3930,
+          "yaw": 9.216,
+          "pitch": 0.858,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 61.5,
+          "tick": 3936,
+          "yaw": 14.307,
+          "pitch": 0.644,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 61.6,
+          "tick": 3942,
+          "yaw": -3.633,
+          "pitch": 9.912,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 61.7,
+          "tick": 3949,
+          "yaw": -0.325,
+          "pitch": -3.211,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 61.8,
+          "tick": 3955,
+          "yaw": 12.413,
+          "pitch": 2.812,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 61.9,
+          "tick": 3962,
+          "yaw": 31.742,
+          "pitch": 2.085,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62,
+          "tick": 3968,
+          "yaw": 41.247,
+          "pitch": 2.534,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62.1,
+          "tick": 3974,
+          "yaw": 59.918,
+          "pitch": 0.569,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62.2,
+          "tick": 3981,
+          "yaw": 59.712,
+          "pitch": 1.59,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62.3,
+          "tick": 3987,
+          "yaw": 60.526,
+          "pitch": 1.312,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62.4,
+          "tick": 3994,
+          "yaw": 67.071,
+          "pitch": 2.292,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62.5,
+          "tick": 4000,
+          "yaw": 72.851,
+          "pitch": 1.367,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62.6,
+          "tick": 4006,
+          "yaw": 77.871,
+          "pitch": 4.848,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62.7,
+          "tick": 4013,
+          "yaw": 80.38,
+          "pitch": 4.135,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62.8,
+          "tick": 4019,
+          "yaw": 70.986,
+          "pitch": 2.119,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 62.9,
+          "tick": 4026,
+          "yaw": 75.226,
+          "pitch": 1.894,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 63,
+          "tick": 4032,
+          "yaw": 75.979,
+          "pitch": 1.341,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 63.1,
+          "tick": 4038,
+          "yaw": 77.095,
+          "pitch": 1.195,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 63.2,
+          "tick": 4045,
+          "yaw": 79.809,
+          "pitch": 1.323,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 63.3,
+          "tick": 4051,
+          "yaw": 79.411,
+          "pitch": 1.389,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 63.4,
+          "tick": 4058,
+          "yaw": 80.053,
+          "pitch": 1.172,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 63.5,
+          "tick": 4064,
+          "yaw": 69.669,
+          "pitch": -0.84,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 63.6,
+          "tick": 4070,
+          "yaw": 69.886,
+          "pitch": -0.55,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 63.7,
+          "tick": 4077,
+          "yaw": 75.621,
+          "pitch": 1.094,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 63.8,
+          "tick": 4083,
+          "yaw": 75.445,
+          "pitch": -1.183,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 63.9,
+          "tick": 4090,
+          "yaw": 99.649,
+          "pitch": 2.017,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 64,
+          "tick": 4096,
+          "yaw": 98.212,
+          "pitch": 3.472,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 64.1,
+          "tick": 4102,
+          "yaw": 88.121,
+          "pitch": 7.516,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 64.2,
+          "tick": 4109,
+          "yaw": 89.149,
+          "pitch": 9.777,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 64.3,
+          "tick": 4115,
+          "yaw": 98.74,
+          "pitch": 9.613,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 64.4,
+          "tick": 4122,
+          "yaw": 106.602,
+          "pitch": 10.62,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 64.5,
+          "tick": 4128,
+          "yaw": 106.464,
+          "pitch": 8.899,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 64.6,
+          "tick": 4134,
+          "yaw": 103.317,
+          "pitch": 6.911,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 64.7,
+          "tick": 4141,
+          "yaw": 104.165,
+          "pitch": 2.749,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 64.8,
+          "tick": 4147,
+          "yaw": 101.567,
+          "pitch": 1.877,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 64.9,
+          "tick": 4154,
+          "yaw": 99.329,
+          "pitch": 1.88,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65,
+          "tick": 4160,
+          "yaw": 96.904,
+          "pitch": 2.334,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.1,
+          "tick": 4166,
+          "yaw": 94.102,
+          "pitch": 2.521,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.2,
+          "tick": 4173,
+          "yaw": 89.706,
+          "pitch": 0.658,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.3,
+          "tick": 4179,
+          "yaw": 84.365,
+          "pitch": 1.623,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.4,
+          "tick": 4186,
+          "yaw": 82.275,
+          "pitch": 1.348,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.5,
+          "tick": 4192,
+          "yaw": 77.129,
+          "pitch": 2.517,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.6,
+          "tick": 4198,
+          "yaw": 76.859,
+          "pitch": 0.379,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.7,
+          "tick": 4205,
+          "yaw": 74.359,
+          "pitch": 0.379,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.8,
+          "tick": 4211,
+          "yaw": 72.225,
+          "pitch": 2.372,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.817,
+          "tick": 4212,
+          "yaw": 71.843,
+          "pitch": 0.204,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.833,
+          "tick": 4213,
+          "yaw": 70.626,
+          "pitch": -0.357,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.85,
+          "tick": 4214,
+          "yaw": 70.494,
+          "pitch": 2.169,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.867,
+          "tick": 4215,
+          "yaw": 69.826,
+          "pitch": 0.721,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.883,
+          "tick": 4217,
+          "yaw": 68.823,
+          "pitch": 0.092,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.9,
+          "tick": 4218,
+          "yaw": 68.907,
+          "pitch": -0.107,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.917,
+          "tick": 4219,
+          "yaw": 67.952,
+          "pitch": 0.517,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.933,
+          "tick": 4220,
+          "yaw": 67.853,
+          "pitch": 0.47,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.95,
+          "tick": 4221,
+          "yaw": 66.086,
+          "pitch": 0.812,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.967,
+          "tick": 4222,
+          "yaw": 66.249,
+          "pitch": 1.705,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 65.983,
+          "tick": 4223,
+          "yaw": 65.176,
+          "pitch": 1.853,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66,
+          "tick": 4224,
+          "yaw": 62.608,
+          "pitch": 2.21,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.017,
+          "tick": 4225,
+          "yaw": 62.573,
+          "pitch": 1.68,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.033,
+          "tick": 4226,
+          "yaw": 64.654,
+          "pitch": 0.274,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.05,
+          "tick": 4227,
+          "yaw": 63.187,
+          "pitch": 0.957,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.067,
+          "tick": 4228,
+          "yaw": 63.509,
+          "pitch": 1.077,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.083,
+          "tick": 4229,
+          "yaw": 63.9,
+          "pitch": 0.269,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.1,
+          "tick": 4230,
+          "yaw": 63.269,
+          "pitch": 0.133,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.117,
+          "tick": 4231,
+          "yaw": 61.548,
+          "pitch": 0.603,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.133,
+          "tick": 4233,
+          "yaw": 61.569,
+          "pitch": 1.137,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.15,
+          "tick": 4234,
+          "yaw": 61.442,
+          "pitch": 0.766,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.167,
+          "tick": 4235,
+          "yaw": 61.079,
+          "pitch": 0.57,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.183,
+          "tick": 4236,
+          "yaw": 58.596,
+          "pitch": 3.366,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.2,
+          "tick": 4237,
+          "yaw": 59.277,
+          "pitch": 0.586,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.217,
+          "tick": 4238,
+          "yaw": 59.283,
+          "pitch": 0.238,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.233,
+          "tick": 4239,
+          "yaw": 58.078,
+          "pitch": 0.928,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.25,
+          "tick": 4240,
+          "yaw": 57.894,
+          "pitch": 0.381,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.267,
+          "tick": 4241,
+          "yaw": 57.657,
+          "pitch": 1.093,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.283,
+          "tick": 4242,
+          "yaw": 57.067,
+          "pitch": 1.104,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.3,
+          "tick": 4243,
+          "yaw": 57.208,
+          "pitch": -0.154,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.317,
+          "tick": 4244,
+          "yaw": 57.141,
+          "pitch": 0.079,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.333,
+          "tick": 4245,
+          "yaw": 57.141,
+          "pitch": 0.079,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.35,
+          "tick": 4246,
+          "yaw": 57.449,
+          "pitch": 0.041,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.367,
+          "tick": 4247,
+          "yaw": 57.444,
+          "pitch": -0.218,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.383,
+          "tick": 4249,
+          "yaw": 57.026,
+          "pitch": 0.061,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.4,
+          "tick": 4250,
+          "yaw": 57.257,
+          "pitch": -0.209,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.417,
+          "tick": 4251,
+          "yaw": 57.257,
+          "pitch": 0.209,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.433,
+          "tick": 4252,
+          "yaw": 57.278,
+          "pitch": -0.105,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.45,
+          "tick": 4253,
+          "yaw": 57.743,
+          "pitch": 0.337,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.467,
+          "tick": 4254,
+          "yaw": 57.001,
+          "pitch": 0.426,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.483,
+          "tick": 4255,
+          "yaw": 57.244,
+          "pitch": 1.493,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.5,
+          "tick": 4256,
+          "yaw": 56.955,
+          "pitch": -0.451,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.517,
+          "tick": 4257,
+          "yaw": 56.802,
+          "pitch": -0.225,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.533,
+          "tick": 4258,
+          "yaw": 55.688,
+          "pitch": 1.104,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.55,
+          "tick": 4259,
+          "yaw": 56.092,
+          "pitch": 1.082,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.567,
+          "tick": 4260,
+          "yaw": 56.092,
+          "pitch": 1.082,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.583,
+          "tick": 4261,
+          "yaw": 56.736,
+          "pitch": 1.354,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.6,
+          "tick": 4262,
+          "yaw": 55.5,
+          "pitch": 1.045,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.617,
+          "tick": 4263,
+          "yaw": 55.285,
+          "pitch": 1.875,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.633,
+          "tick": 4265,
+          "yaw": 55.343,
+          "pitch": 2.351,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.65,
+          "tick": 4266,
+          "yaw": 53.764,
+          "pitch": 2.249,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.667,
+          "tick": 4267,
+          "yaw": 55.626,
+          "pitch": 2.384,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.683,
+          "tick": 4268,
+          "yaw": 55.1,
+          "pitch": 2.853,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.7,
+          "tick": 4269,
+          "yaw": 54.17,
+          "pitch": 1.809,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.717,
+          "tick": 4270,
+          "yaw": 54.019,
+          "pitch": 2.972,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.733,
+          "tick": 4271,
+          "yaw": 53.594,
+          "pitch": 3.503,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.75,
+          "tick": 4272,
+          "yaw": 53.739,
+          "pitch": 2.89,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.767,
+          "tick": 4273,
+          "yaw": 53.448,
+          "pitch": 3.86,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.783,
+          "tick": 4274,
+          "yaw": 52.511,
+          "pitch": 3.392,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.8,
+          "tick": 4275,
+          "yaw": 51.402,
+          "pitch": 3.389,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.817,
+          "tick": 4276,
+          "yaw": 51.847,
+          "pitch": 3.694,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.833,
+          "tick": 4277,
+          "yaw": 50.665,
+          "pitch": 3.966,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.85,
+          "tick": 4278,
+          "yaw": 50.915,
+          "pitch": 4.592,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.867,
+          "tick": 4279,
+          "yaw": 50.279,
+          "pitch": 5.202,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.883,
+          "tick": 4281,
+          "yaw": 49.787,
+          "pitch": 5.075,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.9,
+          "tick": 4282,
+          "yaw": 49.257,
+          "pitch": 4.779,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.917,
+          "tick": 4283,
+          "yaw": 49.236,
+          "pitch": 4.349,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.933,
+          "tick": 4284,
+          "yaw": 49.294,
+          "pitch": 4.971,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.95,
+          "tick": 4285,
+          "yaw": 48.585,
+          "pitch": 5.845,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.967,
+          "tick": 4286,
+          "yaw": 49.033,
+          "pitch": 5.713,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 66.983,
+          "tick": 4287,
+          "yaw": 49.515,
+          "pitch": 7.082,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67,
+          "tick": 4288,
+          "yaw": 47.927,
+          "pitch": 5.703,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.05,
+          "tick": 4291,
+          "yaw": 49.153,
+          "pitch": 6.195,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.1,
+          "tick": 4294,
+          "yaw": 51.485,
+          "pitch": 5.647,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.15,
+          "tick": 4298,
+          "yaw": 53.83,
+          "pitch": 5.736,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.2,
+          "tick": 4301,
+          "yaw": 51.174,
+          "pitch": 5.942,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.25,
+          "tick": 4304,
+          "yaw": 56.201,
+          "pitch": 4.74,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.3,
+          "tick": 4307,
+          "yaw": 59.488,
+          "pitch": 5.625,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.35,
+          "tick": 4310,
+          "yaw": 60.259,
+          "pitch": 5.628,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.4,
+          "tick": 4314,
+          "yaw": 60.318,
+          "pitch": 5.335,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.45,
+          "tick": 4317,
+          "yaw": 60.812,
+          "pitch": 5.851,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.5,
+          "tick": 4320,
+          "yaw": 60.613,
+          "pitch": 5.879,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.55,
+          "tick": 4323,
+          "yaw": 58.435,
+          "pitch": 4.72,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.6,
+          "tick": 4326,
+          "yaw": 58.53,
+          "pitch": 5.231,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.65,
+          "tick": 4330,
+          "yaw": 59.256,
+          "pitch": 4.954,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.7,
+          "tick": 4333,
+          "yaw": 59.104,
+          "pitch": 5.786,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.75,
+          "tick": 4336,
+          "yaw": 59.15,
+          "pitch": 4.462,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.8,
+          "tick": 4339,
+          "yaw": 57.036,
+          "pitch": 5.747,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 67.85,
+          "tick": 4342,
+          "yaw": 49.879,
+          "pitch": 4.5,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.9,
+          "tick": 4346,
+          "yaw": 50.062,
+          "pitch": 4.97,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 67.95,
+          "tick": 4349,
+          "yaw": 74.3,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68,
+          "tick": 4352,
+          "yaw": 74.7,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.05,
+          "tick": 4355,
+          "yaw": 47.415,
+          "pitch": 4.366,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.1,
+          "tick": 4358,
+          "yaw": 34.782,
+          "pitch": 2.64,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.15,
+          "tick": 4362,
+          "yaw": 34.855,
+          "pitch": 3.31,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.2,
+          "tick": 4365,
+          "yaw": 31.866,
+          "pitch": 3.16,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.25,
+          "tick": 4368,
+          "yaw": 35.755,
+          "pitch": 3.647,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.3,
+          "tick": 4371,
+          "yaw": 30.116,
+          "pitch": 3.268,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.35,
+          "tick": 4374,
+          "yaw": 24.544,
+          "pitch": 1.626,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.4,
+          "tick": 4378,
+          "yaw": 15.416,
+          "pitch": 1.975,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.45,
+          "tick": 4381,
+          "yaw": 15.499,
+          "pitch": 2.087,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.5,
+          "tick": 4384,
+          "yaw": 12.661,
+          "pitch": 2.349,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.55,
+          "tick": 4387,
+          "yaw": 19.354,
+          "pitch": 1.62,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.583,
+          "tick": 4389,
+          "yaw": 21.071,
+          "pitch": 1.566,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.6,
+          "tick": 4390,
+          "yaw": 20.608,
+          "pitch": 1.181,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.617,
+          "tick": 4391,
+          "yaw": 20.714,
+          "pitch": 1.928,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.633,
+          "tick": 4393,
+          "yaw": 20.213,
+          "pitch": 2.123,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.65,
+          "tick": 4394,
+          "yaw": 22.367,
+          "pitch": 3.114,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.667,
+          "tick": 4395,
+          "yaw": 22.354,
+          "pitch": 2.475,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.683,
+          "tick": 4396,
+          "yaw": 14.818,
+          "pitch": 1.175,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.7,
+          "tick": 4397,
+          "yaw": 17.181,
+          "pitch": 1.329,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.717,
+          "tick": 4398,
+          "yaw": 19.307,
+          "pitch": 2.134,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.733,
+          "tick": 4399,
+          "yaw": 96.074,
+          "pitch": 18.956,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.75,
+          "tick": 4400,
+          "yaw": 102.185,
+          "pitch": 11.249,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.767,
+          "tick": 4401,
+          "yaw": 101.762,
+          "pitch": 10.966,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.783,
+          "tick": 4402,
+          "yaw": 102.913,
+          "pitch": 11.348,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.8,
+          "tick": 4403,
+          "yaw": 100.405,
+          "pitch": 11.363,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.817,
+          "tick": 4404,
+          "yaw": 100.015,
+          "pitch": 11.645,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.833,
+          "tick": 4405,
+          "yaw": 100.256,
+          "pitch": 11.181,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.85,
+          "tick": 4406,
+          "yaw": 102.553,
+          "pitch": 10.412,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.867,
+          "tick": 4407,
+          "yaw": 99.95,
+          "pitch": 10.206,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.883,
+          "tick": 4409,
+          "yaw": 98.824,
+          "pitch": 10.259,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.9,
+          "tick": 4410,
+          "yaw": 98.749,
+          "pitch": 8.684,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.917,
+          "tick": 4411,
+          "yaw": 97.43,
+          "pitch": 9.51,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.933,
+          "tick": 4412,
+          "yaw": 98.191,
+          "pitch": 10.75,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.95,
+          "tick": 4413,
+          "yaw": 97.404,
+          "pitch": 10.928,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 68.967,
+          "tick": 4414,
+          "yaw": 98.301,
+          "pitch": 10.806,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 68.983,
+          "tick": 4415,
+          "yaw": 92.936,
+          "pitch": 7.852,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 69,
+          "tick": 4416,
+          "yaw": 93.971,
+          "pitch": 8.03,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 69.017,
+          "tick": 4417,
+          "yaw": 93.349,
+          "pitch": 7.818,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.033,
+          "tick": 4418,
+          "yaw": 94.291,
+          "pitch": 9.05,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.05,
+          "tick": 4419,
+          "yaw": 92.208,
+          "pitch": 7.896,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 69.067,
+          "tick": 4420,
+          "yaw": 92.208,
+          "pitch": 7.896,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.083,
+          "tick": 4421,
+          "yaw": 92.208,
+          "pitch": 7.896,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 69.1,
+          "tick": 4422,
+          "yaw": 92.755,
+          "pitch": 8.11,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 69.117,
+          "tick": 4423,
+          "yaw": 93.56,
+          "pitch": 8.471,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.133,
+          "tick": 4425,
+          "yaw": 93.349,
+          "pitch": 8.31,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.15,
+          "tick": 4426,
+          "yaw": 93.349,
+          "pitch": 8.31,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.167,
+          "tick": 4427,
+          "yaw": 95.849,
+          "pitch": 8.31,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.183,
+          "tick": 4428,
+          "yaw": 96.18,
+          "pitch": 7.791,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 69.2,
+          "tick": 4429,
+          "yaw": 98.046,
+          "pitch": 7.913,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 69.217,
+          "tick": 4430,
+          "yaw": 99.868,
+          "pitch": 8.159,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 69.233,
+          "tick": 4431,
+          "yaw": 99.844,
+          "pitch": 8.084,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.25,
+          "tick": 4432,
+          "yaw": 101.105,
+          "pitch": 7.756,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.267,
+          "tick": 4433,
+          "yaw": 100.198,
+          "pitch": 7.427,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.283,
+          "tick": 4434,
+          "yaw": 100.977,
+          "pitch": 8.994,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.3,
+          "tick": 4435,
+          "yaw": 100.977,
+          "pitch": 8.994,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.317,
+          "tick": 4436,
+          "yaw": 81.6,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.333,
+          "tick": 4437,
+          "yaw": 93.379,
+          "pitch": 12.188,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.35,
+          "tick": 4438,
+          "yaw": 94.681,
+          "pitch": 11.926,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.367,
+          "tick": 4439,
+          "yaw": 98.685,
+          "pitch": 12.505,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 69.4,
+          "tick": 4442,
+          "yaw": 85.628,
+          "pitch": 10.506,
+          "source": "video",
+          "confidence": "estimated"
+        }
+      ],
       "endT": 69.4,
       "endTick": 4442
     },
@@ -20153,6 +25673,640 @@
           "deg": 11.1
         }
       ],
+      "view": [
+        {
+          "t": 13.3,
+          "tick": 851,
+          "yaw": 165.5,
+          "pitch": 4.612,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 13.4,
+          "tick": 858,
+          "yaw": -175.432,
+          "pitch": 6.504,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 13.5,
+          "tick": 864,
+          "yaw": -175.298,
+          "pitch": 4.537,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 32.7,
+          "tick": 2093,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 32.8,
+          "tick": 2099,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 32.9,
+          "tick": 2106,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 33,
+          "tick": 2112,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 33.1,
+          "tick": 2118,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 33.2,
+          "tick": 2125,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 33.3,
+          "tick": 2131,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 33.4,
+          "tick": 2138,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "inferred"
+        },
+        {
+          "t": 33.5,
+          "tick": 2144,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 33.6,
+          "tick": 2150,
+          "yaw": -12.973,
+          "pitch": 1.47,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 33.7,
+          "tick": 2157,
+          "yaw": -12.876,
+          "pitch": 1.486,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 33.8,
+          "tick": 2163,
+          "yaw": -14.272,
+          "pitch": 1.586,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 33.9,
+          "tick": 2170,
+          "yaw": -14.17,
+          "pitch": 0.33,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34,
+          "tick": 2176,
+          "yaw": -14.441,
+          "pitch": 0.072,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34.1,
+          "tick": 2182,
+          "yaw": -14.443,
+          "pitch": 0.668,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34.2,
+          "tick": 2189,
+          "yaw": -14.501,
+          "pitch": 0.074,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34.3,
+          "tick": 2195,
+          "yaw": -14.313,
+          "pitch": 0.717,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34.4,
+          "tick": 2202,
+          "yaw": -14.599,
+          "pitch": 0.245,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34.5,
+          "tick": 2208,
+          "yaw": -15.314,
+          "pitch": 2.1,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34.6,
+          "tick": 2214,
+          "yaw": -16.6,
+          "pitch": 1.868,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34.7,
+          "tick": 2221,
+          "yaw": -17.162,
+          "pitch": 1.381,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34.8,
+          "tick": 2227,
+          "yaw": -15.439,
+          "pitch": 1.787,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 34.9,
+          "tick": 2234,
+          "yaw": -16.68,
+          "pitch": 0.158,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35,
+          "tick": 2240,
+          "yaw": -16.103,
+          "pitch": 1.85,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35.1,
+          "tick": 2246,
+          "yaw": -16.432,
+          "pitch": 1.586,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35.2,
+          "tick": 2253,
+          "yaw": -16.594,
+          "pitch": 3.562,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35.3,
+          "tick": 2259,
+          "yaw": -17.043,
+          "pitch": 4.228,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35.4,
+          "tick": 2266,
+          "yaw": -16.718,
+          "pitch": 6.779,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35.5,
+          "tick": 2272,
+          "yaw": -14.99,
+          "pitch": 3.746,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35.6,
+          "tick": 2278,
+          "yaw": -16.825,
+          "pitch": 7.123,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35.7,
+          "tick": 2285,
+          "yaw": -16.914,
+          "pitch": 4.355,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35.8,
+          "tick": 2291,
+          "yaw": -15.618,
+          "pitch": 4.564,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 35.9,
+          "tick": 2298,
+          "yaw": -15.457,
+          "pitch": 4.169,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36,
+          "tick": 2304,
+          "yaw": -14.129,
+          "pitch": 3.457,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.1,
+          "tick": 2310,
+          "yaw": -15.662,
+          "pitch": 0.023,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.2,
+          "tick": 2317,
+          "yaw": -15.485,
+          "pitch": 0.958,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.3,
+          "tick": 2323,
+          "yaw": -16.441,
+          "pitch": 0.223,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.4,
+          "tick": 2330,
+          "yaw": -16.359,
+          "pitch": 2.129,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.5,
+          "tick": 2336,
+          "yaw": -15.292,
+          "pitch": 2.124,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.6,
+          "tick": 2342,
+          "yaw": -15.073,
+          "pitch": 2.059,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.7,
+          "tick": 2349,
+          "yaw": -13.922,
+          "pitch": 0.442,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.8,
+          "tick": 2355,
+          "yaw": -14.203,
+          "pitch": 0.702,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 36.9,
+          "tick": 2362,
+          "yaw": -14.203,
+          "pitch": 0.702,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 37,
+          "tick": 2368,
+          "yaw": -14.203,
+          "pitch": 0.702,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 37.1,
+          "tick": 2374,
+          "yaw": -14.637,
+          "pitch": 0.736,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 37.2,
+          "tick": 2381,
+          "yaw": -17.757,
+          "pitch": 0.725,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 37.3,
+          "tick": 2387,
+          "yaw": -32.615,
+          "pitch": 1.928,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.5,
+          "tick": 3168,
+          "yaw": -3.532,
+          "pitch": 3.179,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.6,
+          "tick": 3174,
+          "yaw": -5.105,
+          "pitch": 1.335,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 49.7,
+          "tick": 3181,
+          "yaw": -14.016,
+          "pitch": 3.227,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 49.75,
+          "tick": 3184,
+          "yaw": -17.78,
+          "pitch": 2.621,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 49.767,
+          "tick": 3185,
+          "yaw": -14.969,
+          "pitch": 1.889,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.783,
+          "tick": 3186,
+          "yaw": -15.177,
+          "pitch": 1.811,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 49.8,
+          "tick": 3187,
+          "yaw": -15.03,
+          "pitch": 1.79,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 49.817,
+          "tick": 3188,
+          "yaw": -14.685,
+          "pitch": 1.008,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.833,
+          "tick": 3189,
+          "yaw": -29.7,
+          "pitch": 0.517,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 49.85,
+          "tick": 3190,
+          "yaw": -28.256,
+          "pitch": 1.077,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 49.867,
+          "tick": 3191,
+          "yaw": -41.283,
+          "pitch": 1.217,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 49.883,
+          "tick": 3193,
+          "yaw": -41.283,
+          "pitch": 1.217,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 49.9,
+          "tick": 3194,
+          "yaw": -41.749,
+          "pitch": 1.148,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.917,
+          "tick": 3195,
+          "yaw": -41.749,
+          "pitch": 1.148,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.933,
+          "tick": 3196,
+          "yaw": -13.105,
+          "pitch": -0.317,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.95,
+          "tick": 3197,
+          "yaw": -13.547,
+          "pitch": 0.726,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.967,
+          "tick": 3198,
+          "yaw": -8.548,
+          "pitch": 0.283,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 49.983,
+          "tick": 3199,
+          "yaw": -5.24,
+          "pitch": 1.057,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 50,
+          "tick": 3200,
+          "yaw": -2.988,
+          "pitch": 1.314,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 50.017,
+          "tick": 3201,
+          "yaw": -2.86,
+          "pitch": 1.601,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 50.033,
+          "tick": 3202,
+          "yaw": -0.115,
+          "pitch": 1.794,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 50.067,
+          "tick": 3204,
+          "yaw": 0.009,
+          "pitch": 3.349,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 50.1,
+          "tick": 3206,
+          "yaw": -0.804,
+          "pitch": 4.276,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 50.133,
+          "tick": 3209,
+          "yaw": -9.554,
+          "pitch": 4.31,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 50.167,
+          "tick": 3211,
+          "yaw": -14.996,
+          "pitch": 6.497,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 50.2,
+          "tick": 3213,
+          "yaw": -14.25,
+          "pitch": 7.064,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 50.233,
+          "tick": 3215,
+          "yaw": -19.167,
+          "pitch": 7.731,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 50.267,
+          "tick": 3217,
+          "yaw": -24.802,
+          "pitch": 8.966,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 50.3,
+          "tick": 3219,
+          "yaw": -30.165,
+          "pitch": 8.2,
+          "source": "video",
+          "confidence": "observed"
+        }
+      ],
       "endT": 50.3,
       "endTick": 3219
     },
@@ -22476,6 +28630,1024 @@
           "deg": -179.1
         }
       ],
+      "view": [
+        {
+          "t": 0.1,
+          "tick": 6,
+          "yaw": 167.931,
+          "pitch": -0.882,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 0.2,
+          "tick": 13,
+          "yaw": 168.561,
+          "pitch": -0.829,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 0.3,
+          "tick": 19,
+          "yaw": 168.849,
+          "pitch": -1.545,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 0.4,
+          "tick": 26,
+          "yaw": 168.466,
+          "pitch": -1.6,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 0.5,
+          "tick": 32,
+          "yaw": 169.323,
+          "pitch": -0.475,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 0.6,
+          "tick": 38,
+          "yaw": 168.173,
+          "pitch": -0.001,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 0.7,
+          "tick": 45,
+          "yaw": 162.152,
+          "pitch": -1.054,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 0.8,
+          "tick": 51,
+          "yaw": 164.615,
+          "pitch": 1.29,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 0.9,
+          "tick": 58,
+          "yaw": 166.312,
+          "pitch": 1.57,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1,
+          "tick": 64,
+          "yaw": 164.693,
+          "pitch": 0.446,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1.1,
+          "tick": 70,
+          "yaw": 142.968,
+          "pitch": -3.657,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1.2,
+          "tick": 77,
+          "yaw": 145.93,
+          "pitch": -1.522,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1.3,
+          "tick": 83,
+          "yaw": 149.365,
+          "pitch": -2.796,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1.4,
+          "tick": 90,
+          "yaw": 154.32,
+          "pitch": -0.875,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1.5,
+          "tick": 96,
+          "yaw": 153.963,
+          "pitch": -0.339,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1.6,
+          "tick": 102,
+          "yaw": 153.762,
+          "pitch": 0.629,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1.7,
+          "tick": 109,
+          "yaw": 154.578,
+          "pitch": -0.616,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1.8,
+          "tick": 115,
+          "yaw": 154.868,
+          "pitch": -1.293,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 1.9,
+          "tick": 122,
+          "yaw": 155.136,
+          "pitch": -1.219,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2,
+          "tick": 128,
+          "yaw": 162.735,
+          "pitch": -4.814,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2.1,
+          "tick": 134,
+          "yaw": 155.396,
+          "pitch": 0.509,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2.2,
+          "tick": 141,
+          "yaw": 149.511,
+          "pitch": 0.343,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2.3,
+          "tick": 147,
+          "yaw": 147.265,
+          "pitch": -1.375,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2.4,
+          "tick": 154,
+          "yaw": 147.265,
+          "pitch": -1.375,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2.5,
+          "tick": 160,
+          "yaw": 146.889,
+          "pitch": -3.125,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2.6,
+          "tick": 166,
+          "yaw": 145.833,
+          "pitch": -2.075,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2.7,
+          "tick": 173,
+          "yaw": 144.691,
+          "pitch": 0.132,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2.8,
+          "tick": 179,
+          "yaw": 142.92,
+          "pitch": -6.224,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 2.9,
+          "tick": 186,
+          "yaw": 143.757,
+          "pitch": -8.185,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 3,
+          "tick": 192,
+          "yaw": 144.401,
+          "pitch": -7.75,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 3.1,
+          "tick": 198,
+          "yaw": 145.144,
+          "pitch": -6.36,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 3.2,
+          "tick": 205,
+          "yaw": 145.468,
+          "pitch": -6.312,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 3.3,
+          "tick": 211,
+          "yaw": 145.438,
+          "pitch": -5.596,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 3.4,
+          "tick": 218,
+          "yaw": 146.835,
+          "pitch": -4.596,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 3.5,
+          "tick": 224,
+          "yaw": 148.044,
+          "pitch": -4.265,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 3.6,
+          "tick": 230,
+          "yaw": 151.241,
+          "pitch": -5.367,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 3.7,
+          "tick": 237,
+          "yaw": 150.274,
+          "pitch": -0.326,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 3.8,
+          "tick": 243,
+          "yaw": 175.9,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        },
+        {
+          "t": 3.9,
+          "tick": 250,
+          "yaw": 153.524,
+          "pitch": -1.446,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 4,
+          "tick": 256,
+          "yaw": 151.907,
+          "pitch": -4.264,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 4.1,
+          "tick": 262,
+          "yaw": 143.123,
+          "pitch": -7.613,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 4.2,
+          "tick": 269,
+          "yaw": 142.46,
+          "pitch": -8.901,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 4.3,
+          "tick": 275,
+          "yaw": 140.824,
+          "pitch": -7.989,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 4.4,
+          "tick": 282,
+          "yaw": 139.598,
+          "pitch": -1.382,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 4.5,
+          "tick": 288,
+          "yaw": 161.173,
+          "pitch": -0.824,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 4.6,
+          "tick": 294,
+          "yaw": 173.958,
+          "pitch": -0.621,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 4.7,
+          "tick": 301,
+          "yaw": 178.254,
+          "pitch": 0.088,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 4.8,
+          "tick": 307,
+          "yaw": 178.898,
+          "pitch": 0.983,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 4.9,
+          "tick": 314,
+          "yaw": 178.973,
+          "pitch": 0.288,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5,
+          "tick": 320,
+          "yaw": 179.679,
+          "pitch": 1.335,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5.1,
+          "tick": 326,
+          "yaw": 179.656,
+          "pitch": 0.534,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5.2,
+          "tick": 333,
+          "yaw": 177.689,
+          "pitch": -0.289,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5.3,
+          "tick": 339,
+          "yaw": 178.419,
+          "pitch": 1.633,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5.4,
+          "tick": 346,
+          "yaw": 177.222,
+          "pitch": 2.967,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5.5,
+          "tick": 352,
+          "yaw": 177.814,
+          "pitch": 1.247,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5.6,
+          "tick": 358,
+          "yaw": 179.9,
+          "pitch": 3.018,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5.7,
+          "tick": 365,
+          "yaw": 179.763,
+          "pitch": 2.921,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5.8,
+          "tick": 371,
+          "yaw": 179.555,
+          "pitch": 1.09,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 5.9,
+          "tick": 378,
+          "yaw": -179.975,
+          "pitch": 1.049,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6,
+          "tick": 384,
+          "yaw": 179.954,
+          "pitch": -0.266,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6.1,
+          "tick": 390,
+          "yaw": -178.073,
+          "pitch": 2.087,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6.2,
+          "tick": 397,
+          "yaw": 178.659,
+          "pitch": 0.611,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6.3,
+          "tick": 403,
+          "yaw": 178.205,
+          "pitch": 0.975,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6.4,
+          "tick": 410,
+          "yaw": -179.81,
+          "pitch": 1.671,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6.5,
+          "tick": 416,
+          "yaw": 179.246,
+          "pitch": 3.501,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6.6,
+          "tick": 422,
+          "yaw": -179.712,
+          "pitch": 1.327,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6.7,
+          "tick": 429,
+          "yaw": -179.176,
+          "pitch": 2.578,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6.8,
+          "tick": 435,
+          "yaw": -177.809,
+          "pitch": 1.69,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 6.9,
+          "tick": 442,
+          "yaw": -178.19,
+          "pitch": 1.919,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7,
+          "tick": 448,
+          "yaw": 178.826,
+          "pitch": 1.352,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7.1,
+          "tick": 454,
+          "yaw": -179.705,
+          "pitch": 1.248,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7.2,
+          "tick": 461,
+          "yaw": -179.705,
+          "pitch": 1.252,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7.3,
+          "tick": 467,
+          "yaw": -179.705,
+          "pitch": 1.248,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7.4,
+          "tick": 474,
+          "yaw": -177.25,
+          "pitch": 0.223,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7.5,
+          "tick": 480,
+          "yaw": 179.402,
+          "pitch": 1.272,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7.6,
+          "tick": 486,
+          "yaw": -178.881,
+          "pitch": 1.374,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7.7,
+          "tick": 493,
+          "yaw": -179.762,
+          "pitch": 0.925,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7.8,
+          "tick": 499,
+          "yaw": -178.789,
+          "pitch": 0.271,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 7.9,
+          "tick": 506,
+          "yaw": -178.48,
+          "pitch": 1.052,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8,
+          "tick": 512,
+          "yaw": -178.715,
+          "pitch": 1.332,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8.1,
+          "tick": 518,
+          "yaw": -178.715,
+          "pitch": 1.168,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8.2,
+          "tick": 525,
+          "yaw": 179.128,
+          "pitch": 0.45,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8.3,
+          "tick": 531,
+          "yaw": 179.34,
+          "pitch": 1.263,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8.4,
+          "tick": 538,
+          "yaw": -179.395,
+          "pitch": 1.016,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8.5,
+          "tick": 544,
+          "yaw": -179.126,
+          "pitch": 1.719,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8.6,
+          "tick": 550,
+          "yaw": -178.737,
+          "pitch": 0.607,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8.7,
+          "tick": 557,
+          "yaw": -179.44,
+          "pitch": 1.234,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8.8,
+          "tick": 563,
+          "yaw": -179.653,
+          "pitch": 1.175,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 8.9,
+          "tick": 570,
+          "yaw": -179.857,
+          "pitch": 1.331,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9,
+          "tick": 576,
+          "yaw": -179.764,
+          "pitch": 1.746,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9.1,
+          "tick": 582,
+          "yaw": 178.691,
+          "pitch": 0.999,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9.2,
+          "tick": 589,
+          "yaw": 178.617,
+          "pitch": 0.633,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9.3,
+          "tick": 595,
+          "yaw": 179.512,
+          "pitch": 1.788,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9.4,
+          "tick": 602,
+          "yaw": -179.83,
+          "pitch": 0.892,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9.5,
+          "tick": 608,
+          "yaw": -179.83,
+          "pitch": 1.608,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9.6,
+          "tick": 614,
+          "yaw": 178.296,
+          "pitch": 1.144,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9.7,
+          "tick": 621,
+          "yaw": 169.919,
+          "pitch": 2.991,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9.8,
+          "tick": 627,
+          "yaw": 168.648,
+          "pitch": 1.933,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 9.9,
+          "tick": 634,
+          "yaw": 164.261,
+          "pitch": 2.236,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 10,
+          "tick": 640,
+          "yaw": 171.83,
+          "pitch": -2.835,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 10.1,
+          "tick": 646,
+          "yaw": 160.993,
+          "pitch": 0.837,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 10.2,
+          "tick": 653,
+          "yaw": 156.494,
+          "pitch": -1.104,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 10.3,
+          "tick": 659,
+          "yaw": 160.827,
+          "pitch": 1.409,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 10.4,
+          "tick": 666,
+          "yaw": 158.815,
+          "pitch": -2.259,
+          "source": "video",
+          "confidence": "estimated"
+        },
+        {
+          "t": 10.5,
+          "tick": 672,
+          "yaw": 159.424,
+          "pitch": -3.046,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 10.6,
+          "tick": 678,
+          "yaw": 154.781,
+          "pitch": -2.344,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 10.7,
+          "tick": 685,
+          "yaw": 152.382,
+          "pitch": 0.406,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 10.8,
+          "tick": 691,
+          "yaw": 152.843,
+          "pitch": -0.339,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 10.9,
+          "tick": 698,
+          "yaw": 133.963,
+          "pitch": -0.705,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11,
+          "tick": 704,
+          "yaw": 100.754,
+          "pitch": 1.183,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11.1,
+          "tick": 710,
+          "yaw": 93.162,
+          "pitch": 1.012,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11.2,
+          "tick": 717,
+          "yaw": 97.834,
+          "pitch": 1.283,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11.3,
+          "tick": 723,
+          "yaw": 152.014,
+          "pitch": -2.715,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11.4,
+          "tick": 730,
+          "yaw": 165.428,
+          "pitch": -3.433,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11.5,
+          "tick": 736,
+          "yaw": 164.794,
+          "pitch": -4.052,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11.6,
+          "tick": 742,
+          "yaw": 164.116,
+          "pitch": -3.114,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11.7,
+          "tick": 749,
+          "yaw": 166.067,
+          "pitch": -4.064,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11.8,
+          "tick": 755,
+          "yaw": 167.946,
+          "pitch": -2.355,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 11.9,
+          "tick": 762,
+          "yaw": 170.982,
+          "pitch": -2.292,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 12,
+          "tick": 768,
+          "yaw": 171.793,
+          "pitch": -1.366,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 12.1,
+          "tick": 774,
+          "yaw": 173.088,
+          "pitch": -1.131,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 12.2,
+          "tick": 781,
+          "yaw": 175.652,
+          "pitch": -4.896,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 12.3,
+          "tick": 787,
+          "yaw": 178.573,
+          "pitch": -8.506,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 12.4,
+          "tick": 794,
+          "yaw": -179.512,
+          "pitch": -1.513,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 12.5,
+          "tick": 800,
+          "yaw": -178.575,
+          "pitch": -1.102,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 12.6,
+          "tick": 806,
+          "yaw": -176.932,
+          "pitch": -0.85,
+          "source": "video",
+          "confidence": "observed"
+        },
+        {
+          "t": 12.7,
+          "tick": 813,
+          "yaw": -179.1,
+          "pitch": null,
+          "source": "radar",
+          "confidence": "estimated"
+        }
+      ],
       "endT": 12.75,
       "endTick": 816
     },
@@ -22538,6 +29710,7 @@
       ],
       "offGridSamples": [],
       "yaw": [],
+      "view": [],
       "endT": 0.5,
       "endTick": 32
     },
@@ -24754,6 +31927,7 @@
         }
       ],
       "yaw": [],
+      "view": [],
       "endT": 18.8,
       "endTick": 1203
     },
@@ -25882,6 +33056,7 @@
       ],
       "offGridSamples": [],
       "yaw": [],
+      "view": [],
       "endT": 12.4,
       "endTick": 794
     },
@@ -27763,6 +34938,7 @@
         }
       ],
       "yaw": [],
+      "view": [],
       "endT": 17.85,
       "endTick": 1142
     },
@@ -34316,6 +41492,7 @@
         }
       ],
       "yaw": [],
+      "view": [],
       "endT": 70.3,
       "endTick": 4499
     },
@@ -38307,6 +45484,7 @@
       ],
       "offGridSamples": [],
       "yaw": [],
+      "view": [],
       "endT": 44.2,
       "endTick": 2829
     }
@@ -39858,10 +47036,10 @@
         "z": -160
       },
       "landing": {
-        "x": -1885,
-        "y": -320,
+        "x": -1890,
+        "y": -585,
         "z": -166,
-        "uncertainty": 45
+        "uncertainty": 40
       },
       "radio": "Smoke Out!"
     },

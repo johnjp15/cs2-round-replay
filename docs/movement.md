@@ -293,7 +293,7 @@ damage); fall damage at 222 / 223 units, large and fatal falls; the landing slow
 
 ## Not modelled yet (differences from CS2)
 
-Tagging and scoped speeds in the hosts (movement takes them since M1: `MoveOptions`); crouch transition time (crouch is instant); surface friction of materials;
+Tagging and scoped speeds in the hosts (movement takes them since M1: `MoveOptions`); crouch transition time (the hull and the sim's eye duck at once; since M2 the 3D camera eases at CS2's duck speed, "M2" below); surface friction of materials;
 sub-tick input in the host (movement has `stepMove3dSubtick`); ladders (Mirage's two: the nav has no ladder links and the 3D world treats them as walls); surfing and
 bunny-hop speed gain beyond what the air acceleration gives; jump inaccuracy. Whether WALK and DUCK stack in CS2 is to be checked. The player
 hull is implicit against the world (nav areas are player-centre space); between pawns it is a 16-unit circle
@@ -495,8 +495,83 @@ snapshot's pending input), which is beyond a contained change. Plan for H4 (the 
 4. CS2's 2025-09-17 "improved timestep-independence of subtick movement acceleration" (W2 l. 169) changed the
    acceleration of split ticks in a way that is not public; the plain Source split used here is the pre-change rule.
 
+### V1 fix (2026-11-07)
+
+| Finding | Change in `src/sim2d/movement.ts` | Effect |
+| --- | --- | --- |
+| V1-8 (docs/audit/v1-e2e-2026-11-07.md) | `stepMove3d`'s air acceleration takes the wish without DUCK: Source's `HandleDuckingSpeedCrop` crops the move by the duck factor only with a ground entity (`( player->GetFlags() & FL_DUCKING ) && ( player->GetGroundEntity() != NULL )`, Source SDK 2013 gamemovement.cpp) | a ducked air strafe adds 30 u/s per tick at 90° (was 15.9); knife run-up LJ with DUCK from air tick 30: TAS 248.5 → 251.6 u; the golden master is unchanged |
+
 ### Still open after M1
 
 M1-6 duck transition (rate not public; needs a `duckAmount` in `MoveState`, the hull switching at full duck, the speed
 crop interpolated: measure with the CS2 probe first), M1-8 landing-penalty function, M1-9 `sv_step_move_vel_min`,
 M1-10 eye heights (damage block), M1-11 WALK + DUCK, M1-15 ladders (plan above), and the host wiring of M1-4 / M1-5 / M1-7.
+
+## M2: jumps and bunny hops against CS2 (2026-11-07, #83)
+
+John (17:44): "Fix the bunnyhopping. It seems like the gravity values are not the same as CS2." Measured headless in the
+3D host (`Sim3DHost`, 64 tick, a knife on flat ground; `tests/m2-jumps.test.ts` pins every number) and in a model of the
+3D app's frame loop (FixedLoop's pending time → interpolation alpha → eye = drawn feet + eye offset, at 240 fps).
+
+### What was measured
+
+| | CS2 (source) | Before M2 | After M2 |
+| --- | --- | --- | --- |
+| Standing jump apex | v²/2g = **57.000** (C1 `sv_jump_impulse 301.99338`, "sqrt(2*gravity*height)"; `sv_jump_precision_enable true`) | 56.9975 on the 24th tick | unchanged |
+| Time to apex | v/g = 0.3775 s | 24 ticks = 0.375 s (the sampled apex) | unchanged |
+| Air time, flat ground | 2v/g = **0.755 s** | 48 ticks = 0.750 s (the 2-unit ground check lands it 1.5 units up) | unchanged |
+| Gravity integration | S1 `StartGravity` / `FinishGravity` (half a tick before and after the move), CS2's precise take-off | every air tick on v·t − g·t²/2 to 1e-5 (after one tick 4.621; explicit Euler would give 4.523 and an apex of 54.6) | unchanged |
+| Crouch jump | 66-unit boxes just reachable (W2) = 57 + the 9-unit in-air tuck (W1 "jump then crouch" +9) | 65.9975; DUCK held from the ground 56.9975 | unchanged |
+| Stamina on a hop | 2026 code (`sv_legacy_jump false`): "Jumping and landing no longer affect stamina", the landing penalty "a simple function of landing time" scaled by the landing vertical velocity "similar to sv_legacy_jump stamina" (R1); `sv_staminajumpcost 0.08` / `sv_staminalandcost 0.05` are "sv_legacy_jump only" (C1) | no jump cost; 0.05 × 285.5 = 14.28 % on a flat landing, recovering at 60 % / s (`sv_staminarecoveryrate`) | unchanged (M1-8: the 2026 function is not public) |
+| 5 hops, W only, perfect (first ground tick) | "Any jump press within sv_bhop_time_window centered on the landing time will be treated as a successful bunnyhop" (R1) | take-off 250, 250, 250, 250, 250 | unchanged |
+| 5 hops, one tick late | friction for the ground time and the landing penalty (R1, S1) | 250 → 220.5 → 197.1 → 178.4 → 163.5 | unchanged |
+| **The human presses JUMP when he sees the landing** | a perfect hop: CS2 draws the local player predicted (below), and the window is centred on the landing | **one tick late every hop** (250 → 220.5 → 197.1 → 178.4 → 163.5): his camera reached the floor a full tick after the landing tick ran, just as the perfect window closed (at 240 fps the first frame on the floor came 1 ms after it) | **a perfect hop** (250 kept): the camera is on the floor when the landing tick has run |
+| Duck time (camera) | K1 `m_flDuckSpeed` 6.0234375 after a fresh duck (8 rested): **0.166 s** if it is duck amount per second | 0.4 s down / 0.2 s up (Source 1's HL2 `TIME_TO_DUCK` / `TIME_TO_UNDUCK`) | 0.166 s both ways (11 ticks) |
+| Eye through an in-air duck | the hull shrinks from below as the duck progresses, so the eye moves smoothly | **up 8.9 units within 4 frames** (the sim tucks the feet 9 at once), then down to −9 over 0.4 s (2.4 units per frame at 240 fps) | never above the plain jump's eye, down 9 smoothly (< 1 unit per frame) |
+| Duck time (the sim's hull, sight and bullet eye) | gradual | instant | instant (M1-6, below) |
+
+### Findings
+
+- **The gravity is CS2's.** The sim's arc is the continuous parabola of `sv_gravity 800` / `sv_jump_impulse 301.99338`
+  (apex 57.0, 0.755 s), not the explicit Euler a "wrong gravity" would suggest; CS:GO's lower 64-tick jump (W1: blocks of
+  54 standing, 56 crouched) came from Source's take-off half tick, which CS2's precise jumps removed. Nothing changed.
+- **The bug was the camera, a tick late for the human.** The 3D app drew every pawn, the human's own camera included,
+  between the last two ticks: the frame after tick N shows N − 1 at alpha 0. A landing on tick N therefore appeared
+  only when tick N + 1 ran, but a perfect hop needs JUMP in tick N + 1's input (the first ground tick, before
+  friction): the window had closed when the landing showed. Pressing on the landing (what a CS2 player does) was
+  always one tick late, −12 % per hop with W alone, and a press just before it is held through the landing (no jump,
+  `sv_autobunnyhopping 0`). The arc looked right, so it read as wrong gravity. Source and CS2 don't do this: the client
+  predicts the local player (runs the movement on its own input at once) and interpolates only the other entities in the
+  past ([Valve Developer Community, "Source Multiplayer Networking"](https://developer.valvesoftware.com/wiki/Source_Multiplayer_Networking),
+  "Input prediction" / "Entity interpolation"). **Fix:** `Sim3DHost.predictHumanMove()` returns the human's state after
+  the next tick (the same `nextMove` code `moveAll` runs: `stepMove3d` with his stored input and movement options, the
+  bomb lock, the pawn collision; read-only), and `src/app3d/main.ts` draws his first-person camera from the current tick
+  toward it. Everything else is still drawn between the last two ticks. Not predicted: what the tick does after the move
+  (damage, items) and pawns that move earlier in the same tick; a key change inside a tick moves the camera by its
+  effect at once (as CS2's prediction). Paused, exact (test) renders and spectating are unchanged.
+- **The camera's duck** used HL2's 0.4 s / 0.2 s and popped up on an in-air duck (the plain eased offset over feet the
+  sim lifts 9 units at once). **Fix:** `view-cs2.ts` `DUCK_SPEED` (K1, 0.166 s) and `ViewEye`, which cancels the feet's
+  jump within its tick and lets the correction run out with the duck's spline. Below 64 fps two ticks in one frame can
+  hide a stance change from it (that frame jumps as before).
+- **Landing and the take-off clamp are CS2's** (M1-2, M1-16): a perfect hop jumps before friction, a held JUMP doesn't
+  re-jump, take-off is cropped to 1.1 × the item speed (275 knife). V1's 1.22× path speed / 1.35× landing are
+  tool-assisted air strafes (the perpendicular wish every tick) under stock `sv_airaccelerate 12` and the 30 wish cap;
+  no public measurement of stock-CS2 hop speeds was found, and with the 1.1× clamp every hop leaves at ≤ 275, so they
+  stay as they are.
+- **Not changed: the sim's crouch timing (#70, M1-6).** A gradual duck in the sim (a duck amount in `MoveState`, the hull
+  switching at full duck, the eye and the speed crop following, the partial in-air tuck) needs the rate formula, which
+  is not public (K1 gives the speed value, not how the amount uses it or how spamming lowers it), and it moves the
+  puppets' hulls and eyes (they crouch below `replay.crouchSpeedThreshold` and crouch-jump), so the golden master's
+  sight and kills, and the observe contract (`crouching` is a boolean). The camera now eases at CS2's speed while the
+  hull and the bullets' eye switch on the press tick.
+- **Sub-tick take-off** (CS2 jumps at the press time inside the tick) is still per tick: `stepMove3dSubtick` exists, the
+  host wiring needs the input contract (M1-7). It is worth at most one tick (15.6 ms) of take-off timing.
+
+Sources added: N1 = [Valve Developer Community, "Source Multiplayer Networking"](https://developer.valvesoftware.com/wiki/Source_Multiplayer_Networking)
+(input prediction of the local player, interpolation of others; a copy: [gist](https://gist.github.com/CoolOppo/fe0586836de3fb2f90f9));
+R1's 2026-01-21 / 01-22 notes as quoted by [turbosmurfs.gg](https://turbosmurfs.gg/article/cs2-bhop-commands) and
+[sportsdunia](https://www.sportsdunia.com/gaming/counter-strike-2-patch-notes-january-22) ("Any jump press within
+sv_bhop_time_window centered on the landing time will be treated as a successful bunnyhop"); C1's descriptions of
+`sv_bhop_time_window` ("sv_legacy_jump disabled only: The time window (in seconds) around landing where a jump press is
+considered a bhop attempt") and `sv_jump_spam_penalty_time`.
+

@@ -102,9 +102,17 @@ function snapTicks(run: HarnessRun): Map<PlayerId, number[]> {
  * never snaps in the human's sight (B2), and on CS2 Mirage the golden master snaps where the recording runs into CS2's
  * walls (docs/core.md "Snaps").
  */
-function replayDeviation(run: HarnessRun): Map<PlayerId, number> {
-  const out = new Map<PlayerId, number>();
+/**
+ * The largest distance of each REPLAY pawn from its golden-master position while both runs have it REPLAY and alive,
+ * up to its first body block, LIVE switch or missed golden snap: `strict` until the scenario first changes its look
+ * (act yaw or pitch), `loose` after. F1: a different look (a dropped fight's pre-aim) rotates the stick, whose 6-decimal
+ * rounding can flip a stair step later (barely on the tunnel stairs at 42.8 s when cart has killed Zwomp).
+ */
+function replayDeviation(run: HarnessRun): { strict: Map<PlayerId, number>; loose: Map<PlayerId, number> } {
+  const strict = new Map<PlayerId, number>();
+  const loose = new Map<PlayerId, number>();
   const firstBlock = new Map<PlayerId, number>();
+  const lookFrom = new Map<PlayerId, number>();
   for (const b of run.bodyBlocks) if (!firstBlock.has(b.id)) firstBlock.set(b.id, b.tick);
   for (const s of liveSwitches(run.entries)) if ((firstBlock.get(s.id) ?? Infinity) > s.tick) firstBlock.set(s.id, s.tick);
   const mine = snapTicks(run);
@@ -117,17 +125,24 @@ function replayDeviation(run: HarnessRun): Map<PlayerId, number> {
     const g = golden.entries[k] as LogEntry;
     for (const id of PLAYER_IDS) {
       if ((firstBlock.get(id) ?? Infinity) <= k) continue;
+      const ie = e.act.inputs.find((q) => q.id === id);
+      const ig = g.act.inputs.find((q) => q.id === id);
+      if (!lookFrom.has(id) && ie !== undefined && ig !== undefined && (ie.yaw !== ig.yaw || ie.pitch !== ig.pitch)) lookFrom.set(id, k);
       const p = pawnAt(e, id);
       const q = pawnAt(g, id);
       if (statusAt(e, id)?.mode !== 'REPLAY' || statusAt(g, id)?.mode !== 'REPLAY' || !p.alive || !q.alive) continue;
+      const out = (lookFrom.get(id) ?? Infinity) <= k ? loose : strict;
       out.set(id, Math.max(out.get(id) ?? 0, dist(p.pos, q.pos)));
     }
   }
-  return out;
+  return { strict, loose };
 }
 
 function expectUntouchedReplay(run: HarnessRun): void {
-  for (const [id, d] of replayDeviation(run)) expect(d, `${id} off the golden master while REPLAY`).toBeLessThan(0.01);
+  const d = replayDeviation(run);
+  for (const [id, x] of d.strict) expect(x, `${id} off the golden master while REPLAY`).toBeLessThan(0.01);
+  // One stair step (tuning.movement.stepSize 18) at most once the look differs.
+  for (const [id, x] of d.loose) expect(x, `${id} off the golden master while REPLAY, after its look changed`).toBeLessThan(tuning.movement.stepSize);
 }
 
 /** The single round_end, checked against the game rules (who is alive, the bomb). */
@@ -174,8 +189,9 @@ const GRACE = Math.round(tuning.replay.outliveGraceSec * 64);
 // G3: the plant 7 ticks after the tape's 1761. On CS2 Mirage barely, LIVE after killing Lokier, leaves the Balcony by
 // its west end (CS2 walls in the 2020 drop under the Apartments window) and goes round the B-site box the recording
 // walks through, so G1's plant shift starts his USE 7 ticks late; everything after it is on the tape's ticks.
+// G8: 6 ticks late (1767): his LIVE leg now jumps onto the Balcony's sill at once instead of pushing into it.
 const TAPE_AFTER_LOKIER = [
-  ['bomb', 1768, 'planted'],
+  ['bomb', 1767, 'planted'],
   ['kill', 2829, 'barely>zwomp'],
   ['kill', 3222, 'sp4rtan>donk'],
   ['kill', 3766, 'sp4rtan>barely'],
@@ -218,7 +234,7 @@ describe('1. no-op guard', () => {
     expect(golden.entries.some((e) => e.act.status.some((s) => s.mode === 'HUMAN' || s.trigger !== null))).toBe(false);
   });
 
-  it('cart follows his recording: nobody goes LIVE, and the round is the tape (G5: every kill on its recorded tick)', () => {
+  it('cart follows his recording: nobody goes LIVE, and the round is the tape (D1: but his real headshot kills Lokier 0.19 s early)', () => {
     const run = playScript(data, readFileSync(`${ROOT}/${FOLLOW_SCRIPT}`, 'utf8'));
     played.push({ name: 'cart-follows-recording', run });
     const sw = switches(run);
@@ -232,15 +248,15 @@ describe('1. no-op guard', () => {
     const end = expectRoundEndByRules(run);
     expect(end).toEqual({ tick: 4275, winner: 'CT', reason: 'bomb_defused' });
     expect((run.entries[run.entries.length - 1] as LogEntry).observe.round.score).toEqual({ ct: 12, t: 15 });
-    // G5: Lokier sees cart at the window on course, so his hit lands on the recorded tick (18.50 s, 73 / 7); cart is in
-    // the recorded duel, his bullets on Lokier are blocked and his spray lands the recorded kill on 18.80 s (before G5
-    // his first real AK headshot killed Lokier at 18.50 s, before the hit, and the round had 2 kills changed). Every
-    // kill is the golden master's, the post-round one on cart included (tests/duels.test.ts has the details).
+    // G5: Lokier sees cart at the window on course, so his hit lands on the recorded tick (18.50 s, 73 / 7). D1 (John
+    // 13:10): cart's bullets in the recorded duel are real, so his first would-hit AK bullet kills Lokier at 18.61 s
+    // (G5 held the kill to the tape's 18.80 s), after the hit. Every other kill is the golden master's, on its tick, the
+    // post-round one on cart included (tests/duels.test.ts has the details).
     const seen = seenTick(run);
     expect(seen).not.toBeNull();
-    const key = (r: HarnessRun): string[] => deaths(r.entries).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim} ${d.weapon ?? '-'}${d.headshot ? ' HS' : ''}`);
+    const key = (r: HarnessRun): string[] => deaths(r.entries).filter((d) => d.victim !== 'lokier').map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim} ${d.weapon ?? '-'}${d.headshot ? ' HS' : ''}`);
     expect(key(run)).toEqual(key(golden));
-    expect(deaths(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ tick: LOKIER_DEATH, attacker: 'cart', headshot: true });
+    expect(deaths(run.entries).find((d) => d.victim === 'lokier')).toMatchObject({ tick: 1191, attacker: 'cart', headshot: true });
     expect(damages(run.entries).filter((d) => d.attacker === 'lokier' && d.victim === 'cart')).toEqual([expect.objectContaining({ tick: 1184, amount: 73, armor: 7, scripted: true })]);
     // Lokier saw cart earlier too (10.9 s, down the corridor from Truck), with cart on course: no divergence.
     expect(run.entries.some((e) => e.observe.tick < 800 && pawnAt(e, 'lokier').sees.includes('cart'))).toBe(true);
@@ -322,13 +338,14 @@ describe('2. cart kills Lokier about 3 s late', () => {
 describe('3. cart never peeks', () => {
   const { run } = play('never-peeks');
 
-  it('Lokier outlives his recording at 18.8 + 3 s and goes LIVE holding B; the Ts walking onto the site see him and go LIVE', () => {
+  it('Lokier outlives his recording at 18.8 + 3 s and goes LIVE for good holding B (G8: retake); the Ts walking onto the site see him and go LIVE', () => {
     const sw = switches(run);
     expect(sw[0]).toMatchObject({ id: 'lokier', tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });
-    expect(sw[0]?.text).toBe('lokier LIVE: outlived recording (+3.0 s); goal hold, 0 waypoints');
+    // G8: his fate (cart's kill) is gone: LIVE for good, as a CT survivor: retake (hold where his track ends, on B).
+    expect(sw[0]?.text).toBe('lokier LIVE: outlived recording (+3.0 s); goal retake, 0 waypoints');
     const mode = (run.entries[LOKIER_DEATH + GRACE] as LogEntry).act.actions.find((a) => a.type === 'set_mode');
     const last = run.model.track('lokier').at(-1) as { x: number; y: number; z: number };
-    expect(mode).toEqual({ type: 'set_mode', id: 'lokier', mode: 'LIVE', goal: { route: [], role: 'hold', hold: { x: last.x, y: last.y, z: last.z } } });
+    expect(mode).toEqual({ type: 'set_mode', id: 'lokier', mode: 'LIVE', goal: { route: [], role: 'retake', hold: { x: last.x, y: last.y, z: last.z } } });
     // Every pawn that goes LIVE while Lokier lives does so because of him: a T that sees him (or hears him fire).
     const lokierDeath = deaths(run.entries).find((d) => d.victim === 'lokier')?.tick as number;
     const during = sw.filter((s) => s.tick > LOKIER_DEATH + GRACE && s.tick <= lokierDeath);
@@ -351,10 +368,11 @@ describe('3. cart never peeks', () => {
 
   it('G1: barely (after Lokier) and sp4rtan (after cart) rejoin, so the rest is the tape: CT defuse (B4 alone: T elimination at 59.61 s)', () => {
     expect([...new Set(rejoins(run.entries).map((b) => b.id))]).toEqual(['barely', 'sp4rtan']);
-    // T1: barely holds Catwalk now (not the underpass beneath it), so when sp4rtan's gunfire makes him LIVE (40.30 s)
-    // he sees Zwomp walking up Catwalk on his inferred route and kills him for real at 2650 (41.41 s, tape 2829).
-    // Everything else is the tape. tests/rejoin.test.ts has the details.
-    expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER.map((e) => (e[2] === 'barely>zwomp' ? ['kill', 2650, 'barely>zwomp'] : e)));
+    // T1: barely holds Catwalk now (not the underpass beneath it), so when sp4rtan's gunfire made him LIVE (40.30 s)
+    // he saw Zwomp walking up Catwalk on his inferred route and killed him for real at 2650 (41.41 s, tape 2829). G8:
+    // calm, he turns at a running player's pace (ai.lookTurnRateDegPerTick) and doesn't catch Zwomp before he is back
+    // on his tape: the kill is the tape's again. Everything else is the tape. tests/rejoin.test.ts has the details.
+    expect(tapeAfterLokier(run)).toEqual(TAPE_AFTER_LOKIER);
   });
 });
 
@@ -400,20 +418,23 @@ describe('4. cart pushes Mid and kills Zwomp around 30 s', () => {
 describe('5. cart catches sp4rtan on his flank around 45 s', () => {
   const { run } = play('flank-sp4rtan');
 
-  it('sp4rtan dies; donk and barely outlive their recordings and go LIVE guarding the bomb; T elimination, 11 – 16', () => {
+  it('sp4rtan dies; donk and barely survive their recorded deaths and go LIVE for good (G8: fate, execute: guard the bomb); T elimination, 11 – 16', () => {
     const sp = deaths(run.entries).find((d) => d.victim === 'sp4rtan');
     expect(sp).toMatchObject({ attacker: 'cart' });
     expect(Math.abs((sp?.tick ?? 0) / 64 - 45)).toBeLessThan(1);
     // G1: unchanged (digest 1f63a158): sp4rtan dies, donk and barely have no tape left (outlived), so nobody rejoins.
     expect(rejoins(run.entries)).toEqual([]);
     const sw = switches(run).filter((s) => s.id !== 'sp4rtan');
+    // G8: their killer (sp4rtan) is a puppet, so their fate is gone one tick after the recorded death (before G8:
+    // outlived, 3 s later, standing at the end of their tracks meanwhile); the survivor's role is execute (the bomb is
+    // planted: guard it).
     expect(sw.map((s) => [s.id, s.tick, s.trigger])).toEqual([
-      ['donk', 3222 + GRACE, 'outlived'],
-      ['barely', 3766 + GRACE, 'outlived'],
+      ['donk', 3222 + 1, 'fate'],
+      ['barely', 3766 + 1, 'fate'],
     ]);
     for (const s of sw) {
       const set = (run.entries[s.tick] as LogEntry).act.actions.find((a) => a.type === 'set_mode' && a.id === s.id);
-      expect(set?.type === 'set_mode' ? set.goal?.role : null).toBe('guard_bomb');
+      expect(set?.type === 'set_mode' ? set.goal?.role : null).toBe('execute');
     }
     const end = expectRoundEndByRules(run);
     expect(end).toEqual({ tick: sp?.tick, winner: 'T', reason: 'elimination' });
@@ -432,7 +453,7 @@ describe('5. cart catches sp4rtan on his flank around 45 s', () => {
       expect(p.alive, id).toBe(true);
     }
     expect(deaths(run.entries).filter((d) => d.victim === 'donk' || d.victim === 'barely')).toEqual([]);
-    // donk (LIVE from 53.3 s) is out of the radius; barely (from 61.8 s) runs and takes only the edge of it.
+    // donk (LIVE from 50.36 s; 53.3 s before G8) is out of the radius; barely (from 58.86 s; 61.8 s before G8) too.
     const donk = pawnAt(blast, 'donk');
     expect(Math.hypot(donk.pos.x - bomb.x, donk.pos.y - bomb.y, donk.pos.z - bomb.z)).toBeGreaterThanOrEqual(tuning.bomb.radius);
   });
@@ -477,7 +498,8 @@ describe('6. cart dies early', () => {
     const ticks = deaths(run.entries).map((d) => [d.tick, d.attacker, d.victim]);
     for (const k of [[32, 'snarlbot', 'incredibad'], [794, 'snarlbot', 'snakelore'], [1142, 'sp4rtan', 'snarlbot']]) expect(ticks).toContainEqual(k);
     // G6: barely's plant is 7 ticks late (1768, the tape's 1761), as in never-peeks: he went LIVE for the outlived Lokier.
-    expect(run.entries.some((e) => e.observe.tick === 1768 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
+    // G8: 6 ticks (1767), as in never-peeks.
+    expect(run.entries.some((e) => e.observe.tick === 1767 && e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted' && ev.id === 'barely'))).toBe(true);
     expectUntouchedReplay(run);
   });
 });
@@ -512,11 +534,17 @@ describe('7. body block', () => {
     const e = run.entries[k] as LogEntry;
     expect(dist(pawnAt(e, 'cart').pos, pawnAt(e, 'sp4rtan').pos)).toBeLessThanOrEqual(tuning.replay.closeRangeUnits);
     expect(run.core.divergence.index.saw('sp4rtan', 'cart', k)).toBe(true);
-    // G1: once cart is dead and it is calm, sp4rtan rejoins before his scripted defuse and starts it on the tape's tick.
+    // G1: once cart is dead and it is calm, sp4rtan rejoins. G8: his LIVE fight with cart no longer hits barely, and
+    // he is LIVE on the tick of his scripted kill of barely (58.84 s), so it is dropped: barely survives his recorded
+    // death and plays on for good (fate, execute: guard the bomb). Before G8 the LIVE spray killed barely at 58.58 s and
+    // sp4rtan defused on the tape's tick; now the round is a real 1v1 (outcome printed), ending by the rules.
     const back = rejoins(run.entries).filter((b) => b.id === 'sp4rtan');
     expect(back.length).toBeGreaterThan(0);
     expect((back[0] as { tick: number }).tick).toBeGreaterThan(deaths(run.entries).find((d) => d.victim === 'cart')?.tick ?? Infinity);
-    expect(run.entries.find((e) => e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'defuse_start'))?.observe.tick).toBe(3955);
+    const barely = switches(run).filter((s) => s.id === 'barely');
+    if (deaths(run.entries).every((d) => d.victim !== 'barely' || d.tick > 3766)) expect(barely.at(-1)).toMatchObject({ tick: 3767, trigger: 'fate' });
+    const end = expectRoundEndByRules(run);
+    console.log(`[block-sp4rtan] round_end ${end.tick}: ${end.winner} ${end.reason}; kills ${deaths(run.entries).filter((d) => d.tick > 3600).map((d) => `${d.tick} ${d.attacker ?? 'world'}>${d.victim}`).join(', ')}`);
     expectUntouchedReplay(run);
   });
 });
@@ -582,12 +610,14 @@ describe('10. cart misses Lokier at the window and hides in Shop (G1)', () => {
     expect(hit).toEqual([expect.objectContaining({ tick: 1184, amount: 73, armor: 7, scripted: true })]);
     expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'shot' && ev.shooter === 'cart'))).toBe(true);
     expect(damages(run.entries).some((d) => d.attacker === 'cart')).toBe(false);
-    // G5: he is in the recorded duel, but none of his shots would hit Lokier, so nothing is forced: Lokier lives.
+    // He is in the recorded duel, but none of his (real, D1) shots hits Lokier: Lokier lives.
     expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'blocked_hit'))).toBe(false);
     expect(coreLogs(run.entries).filter((l) => l.text.startsWith('duel cart -> lokier')).map((l) => l.text)).toEqual([
-      // G6: from 1138 (1126 before): Lokier first sees him at the window on the CS2 mesh then.
-      'duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on lokier land as recorded: kill (ak47, head) at tick 1203',
-      'duel cart -> lokier: over at tick 1217, the recorded duel is over; 0 would-hit shots blocked',
+      // G6: from 1138 (1126 before): Lokier first sees him at the window on the CS2 mesh then. D1: the log wording.
+      // V2: 1163, Lokier (scoped rifle, slower than a walk) holds his angle instead of spinning to his heading.
+      // F1: 1138 again, he holds the window from 1.5 s before the recorded sighting (the encounter's lead-in).
+      'duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on lokier are real (the tape: kill (ak47, head) at tick 1203)',
+      'duel cart -> lokier: over at tick 1217, the recorded duel is over; 0 hits on lokier in it',
     ]);
     expect(switches(run).find((s) => s.id === 'lokier')).toMatchObject({ tick: LOKIER_DEATH + GRACE, trigger: 'outlived' });
   });

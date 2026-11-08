@@ -8,8 +8,10 @@
  * - Players: capsules in team colours (T yellow-orange, CT blue; the human white-rimmed), a dark visor at eye height
  *   facing the view direction, crouched shorter; dead ones lie flat and grey. Name tags (canvas sprites, constant
  *   size) over the human's teammates (all of them while watching).
- * - Effects: tracers (the 3D bullets of the last ticks, host.shots()), muzzle flash on the viewmodel, smokes (grey
- *   spheres), fires (orange discs), grenades in flight, the bomb (red box, blinking while planted).
+ * - Effects: W3's bullet tracers and impacts (src/app3d/effects/shot-fx.ts: CS2-style tracers for 1 in N bullets
+ *   from the muzzle, bullet holes, dust, sparks and blood from the host's shot results), muzzle flash on the
+ *   viewmodel, smokes (grey spheres), fires (orange discs), grenades in flight, the bomb (red box, blinking while
+ *   planted), W2: dropped guns (the viewmodel geometry at world scale, on its side).
  * - First person: the camera at the eye with the view angles; the weapon's viewmodel (A1, src/app3d/viewmodels)
  *   drawn in a second pass (it never clips into walls); the other players' weapons in their hands. Frames: src/app3d/coords.ts (Source x, y, z → Three x, z, −y).
  */
@@ -25,8 +27,8 @@ import {
   Fog,
   Group,
   LinearFilter,
-  LineBasicMaterial,
-  LineSegments,
+  InstancedMesh,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   NoColorSpace,
@@ -39,21 +41,19 @@ import {
   WebGLRenderer,
   LinearSRGBColorSpace,
   Vector2,
+  Vector3,
   ColorManagement,
   DataTexture,
 } from 'three';
 import type { PlayerId, Team, Vec3, WeaponId } from '../contracts/index';
 import type { Effect } from '../app/effects';
 import type { WorldTile } from './world-mesh';
-import { ViewmodelRig, WorldWeapons } from './viewmodels/rig';
+import { ViewmodelRig, WorldItemMeshes, WorldWeapons, type DrawItem } from './viewmodels/rig';
 import type { VmAnim } from './viewmodels/pose';
+import { ShotEffects, type ShotFx } from './effects/shot-fx';
 
 export const TEAM_COLOR: { readonly [K in Team]: number } = { T: 0xe8a33a, CT: 0x4f86d9 };
 const SKY = 0xb9cad6;
-const MAX_TRACERS = 96;
-const TRACER_T = [1, 0.86, 0.45] as const;
-const TRACER_CT = [0.7, 0.85, 1] as const;
-const TRACER_SKY = [0.73, 0.79, 0.84] as const;
 
 /** One pawn as drawn this frame (interpolated). */
 export interface DrawPawn {
@@ -73,14 +73,6 @@ export interface DrawPawn {
   readonly weapon?: WeaponId;
 }
 
-export interface DrawTracer {
-  readonly from: Vec3;
-  readonly to: Vec3;
-  readonly team: Team;
-  /** 0 (new) .. 1 (gone). */
-  readonly age: number;
-}
-
 export interface DrawFrame {
   readonly pawns: readonly DrawPawn[];
   /** Camera position (Source) and angles. */
@@ -90,9 +82,14 @@ export interface DrawFrame {
   /** Vertical FOVs (degrees) of the world camera and the viewmodel camera (view-cs2.ts verticalFov). */
   readonly fovDeg: number;
   readonly viewmodelFovDeg: number;
-  readonly tracers: readonly DrawTracer[];
+  /** W3: round time of this frame (ms, render tick × 15.625) for the tracers and impacts (`addShot`). */
+  readonly fxMs: number;
+  /** W3: whose shots start at the viewmodel's muzzle (the first-person view's pawn), or null. */
+  readonly fpShooter: PlayerId | null;
   readonly effects: readonly Effect[];
   readonly bomb: { readonly pos: Vec3; readonly planted: boolean } | null;
+  /** W2: guns lying in the world (Sim3DHost.worldItems()); absent: none. */
+  readonly items?: readonly DrawItem[];
   /** First-person viewmodel: the held weapon and the time since the last shot (s), or null (spectating). */
   readonly viewmodel: { readonly weapon: WeaponId; readonly sinceShot: number; readonly anim?: VmAnim | null; readonly team?: Team } | null;
   readonly nowMs: number;
@@ -149,16 +146,21 @@ export class Renderer3D {
   private readonly vmScene = new Scene();
   private readonly vmCamera = new PerspectiveCamera(60, 1, 0.01, 10);
   private readonly pawns = new Map<PlayerId, PawnView>();
-  private readonly tracerGeom = new BufferGeometry();
-  private readonly tracerPos = new Float32Array(MAX_TRACERS * 6);
-  private readonly tracerCol = new Float32Array(MAX_TRACERS * 6);
+  /** W3: tracers and impacts. */
+  readonly shotFx: ShotEffects;
+  private readonly muzzleVm = new Vector3();
   private readonly smokes: Mesh[] = [];
+  /** S1: the volumetric smokes' voxels (one instanced puff per voxel), grown as needed. */
+  private smokeCells: InstancedMesh | null = null;
+  private readonly cellMatrix = new Matrix4();
   private readonly fires: Mesh[] = [];
   private readonly nades: Mesh[] = [];
   private readonly bomb: Mesh;
   /** A1: the procedural viewmodels (src/app3d/viewmodels) and the world models on the players. */
   readonly viewmodels = new ViewmodelRig();
   private readonly worldWeapons = new WorldWeapons();
+  /** W2: dropped guns on the ground. */
+  readonly worldItems = new WorldItemMeshes();
   private readonly canvas: HTMLCanvasElement;
   private readonly size = new Vector2();
   /** Triangles drawn in the last frame (stats). */
@@ -166,7 +168,6 @@ export class Renderer3D {
   /** Whether the context is really `desynchronized` (the browser may not support it). */
   readonly desynchronized: boolean;
   private readonly humanTint = new Color();
-  private tracersDrawn = -1;
 
   constructor(canvas: HTMLCanvasElement, tiles: readonly WorldTile[], floorArt: { readonly width: number; readonly height: number; readonly data: Uint8ClampedArray }, roster: readonly { id: PlayerId; team: Team }[], options: RendererOptions = {}) {
     this.canvas = canvas;
@@ -241,16 +242,13 @@ export class Renderer3D {
       this.scene.add(group);
       this.pawns.set(r.id, { group, body, visor, tag, bodyMat });
     }
-    // Tracers.
-    this.tracerGeom.setAttribute('position', new BufferAttribute(this.tracerPos, 3));
-    this.tracerGeom.setAttribute('color', new BufferAttribute(this.tracerCol, 3));
-    const tracers = new LineSegments(this.tracerGeom, new LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, fog: false }));
-    tracers.frustumCulled = false;
-    this.scene.add(tracers);
+    // W3: tracers and impacts.
+    this.shotFx = new ShotEffects(this.scene);
     // Grenade effects (pools, grown on demand).
     this.bomb = new Mesh(new BoxGeometry(12, 6, 8), new MeshBasicMaterial({ color: 0xd8322c }));
     this.bomb.visible = false;
     this.scene.add(this.bomb);
+    this.scene.add(this.worldItems.root);
     // Viewmodel (A1): the held weapon with hands, drawn after the world with its own depth.
     this.vmScene.add(this.viewmodels.root);
   }
@@ -284,8 +282,25 @@ export class Renderer3D {
       this.camera.updateProjectionMatrix();
     }
     this.drawPawns(f);
-    this.drawTracers(f.tracers);
+    // The viewmodel is posed first: the first-person tracers start at its muzzle.
+    if (this.vmCamera.fov !== f.viewmodelFovDeg) {
+      this.vmCamera.fov = f.viewmodelFovDeg;
+      this.vmCamera.updateProjectionMatrix();
+    }
+    const vm = f.viewmodel;
+    this.viewmodels.update(vm === null ? null : (vm.anim ?? { weapon: vm.weapon, sinceShot: vm.sinceShot, cycle: 0.1, reload: null, deploy: null, swing: null, plant: null, primed: false, thrown: null, speed: 0, time: 0 }), vm?.team ?? 'CT');
+    const buf = this.renderer.getDrawingBufferSize(this.size);
+    this.shotFx.update({
+      nowMs: f.fxMs,
+      fpShooter: f.fpShooter,
+      vmMuzzle: vm === null ? null : this.viewmodels.muzzle(this.muzzleVm),
+      vmCamera: this.vmCamera,
+      camera: this.camera,
+      bufferW: buf.x,
+      bufferH: buf.y,
+    });
     this.drawEffects(f.effects, f.nowMs);
+    this.worldItems.update(f.items ?? []);
     if (f.bomb === null) this.bomb.visible = false;
     else {
       this.bomb.visible = true;
@@ -295,12 +310,6 @@ export class Renderer3D {
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
     this.drawnTriangles = this.renderer.info.render.triangles;
-    if (this.vmCamera.fov !== f.viewmodelFovDeg) {
-      this.vmCamera.fov = f.viewmodelFovDeg;
-      this.vmCamera.updateProjectionMatrix();
-    }
-    const vm = f.viewmodel;
-    this.viewmodels.update(vm === null ? null : (vm.anim ?? { weapon: vm.weapon, sinceShot: vm.sinceShot, cycle: 0.1, reload: null, deploy: null, swing: null, plant: null, primed: false, thrown: null, speed: 0, time: 0 }), vm?.team ?? 'CT');
     if (vm !== null && this.viewmodels.root.visible) {
       this.renderer.clearDepth();
       this.renderer.render(this.vmScene, this.vmCamera);
@@ -347,29 +356,9 @@ export class Renderer3D {
     }
   }
 
-  private drawTracers(ts: readonly DrawTracer[]): void {
-    const n = Math.min(MAX_TRACERS, ts.length);
-    const P = this.tracerPos;
-    const C = this.tracerCol;
-    for (let i = 0; i < n; i++) {
-      const t = ts[i] as DrawTracer;
-      const o = i * 6;
-      P[o] = t.from.x;
-      P[o + 1] = t.from.z;
-      P[o + 2] = -t.from.y;
-      P[o + 3] = t.to.x;
-      P[o + 4] = t.to.z;
-      P[o + 5] = -t.to.y;
-      const k = 1 - t.age;
-      const c = t.team === 'T' ? TRACER_T : TRACER_CT;
-      for (let q = 0; q < 3; q++) C[o + q] = C[o + 3 + q] = (TRACER_SKY[q] as number) + ((c[q] as number) - (TRACER_SKY[q] as number)) * k;
-    }
-    // Upload only when something is (or was) drawn: an idle frame touches no buffers.
-    if (n === 0 && this.tracersDrawn === 0) return;
-    this.tracersDrawn = n;
-    this.tracerGeom.setDrawRange(0, n * 2);
-    (this.tracerGeom.getAttribute('position') as BufferAttribute).needsUpdate = true;
-    (this.tracerGeom.getAttribute('color') as BufferAttribute).needsUpdate = true;
+  /** W3: a bullet the host fired (tracer and impacts; main.ts, once per shot). */
+  addShot(s: ShotFx): void {
+    this.shotFx.add(s);
   }
 
   private pool(list: Mesh[], make: () => Mesh, n: number): void {
@@ -386,18 +375,22 @@ export class Renderer3D {
     let ns = 0;
     let nf = 0;
     let nn = 0;
+    let nc = 0;
     for (const e of effects) {
-      if (e.phase === 'smoke') ns++;
+      if (e.phase === 'smoke' && e.cells !== undefined) nc += e.cells.length;
+      else if (e.phase === 'smoke') ns++;
       else if (e.phase === 'fire') nf++;
       else if (e.phase === 'flying') nn++;
     }
     this.pool(this.smokes, () => new Mesh(new SphereGeometry(1, 16, 10), new MeshBasicMaterial({ color: 0xc9cfd4, transparent: true, opacity: 0.93 })), ns);
     this.pool(this.fires, () => new Mesh(new CylinderGeometry(1, 1, 6, 20), new MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.85 })), nf);
     this.pool(this.nades, () => new Mesh(new SphereGeometry(3, 8, 6), new MeshBasicMaterial({ color: 0x3a4a2a })), nn);
+    this.drawSmokeCells(effects, nc);
     let is = 0;
     let fi = 0;
     let ni = 0;
     for (const e of effects) {
+      if (e.phase === 'smoke' && e.cells !== undefined) continue;
       if (e.phase === 'smoke') {
         const m = this.smokes[is++] as Mesh;
         m.position.set(e.pos.x, e.pos.z + e.radius * 0.45, -e.pos.y);
@@ -412,5 +405,42 @@ export class Renderer3D {
         (this.nades[ni++] as Mesh).position.set(e.pos.x, e.pos.z, -e.pos.y);
       }
     }
+  }
+
+  /**
+   * S1: a volumetric smoke (the CS2 engine's flood-filled voxels, docs/grenades.md) as one grey puff per voxel, sized
+   * by its density: puffs swell in as the cloud grows (cost distance over 1.2 s) and shrink away in the 2 s fade, so the
+   * cloud fills the room it popped in and stops at walls, as the engine's sight test does.
+   */
+  private drawSmokeCells(effects: readonly Effect[], n: number): void {
+    if (n === 0) {
+      if (this.smokeCells !== null) this.smokeCells.count = 0;
+      return;
+    }
+    if (this.smokeCells === null || this.smokeCells.instanceMatrix.count < n) {
+      if (this.smokeCells !== null) {
+        this.scene.remove(this.smokeCells);
+        this.smokeCells.dispose();
+      }
+      const cap = Math.max(1024, 1 << Math.ceil(Math.log2(n)));
+      this.smokeCells = new InstancedMesh(new SphereGeometry(1, 8, 6), new MeshBasicMaterial({ color: 0xc9cfd4, transparent: true, opacity: 0.92 }), cap);
+      this.smokeCells.frustumCulled = false;
+      this.scene.add(this.smokeCells);
+    }
+    const im = this.smokeCells;
+    const m = this.cellMatrix;
+    let k = 0;
+    for (const e of effects) {
+      if (e.phase !== 'smoke' || e.cells === undefined) continue;
+      const half = (e.cellSize ?? 20) * 0.78;
+      for (const c of e.cells) {
+        const r = half * (0.35 + 0.65 * Math.min(1, Math.max(0, c.d)));
+        m.makeScale(r, r, r);
+        m.setPosition(c.x, c.z, -c.y);
+        im.setMatrixAt(k++, m);
+      }
+    }
+    im.count = k;
+    im.instanceMatrix.needsUpdate = true;
   }
 }

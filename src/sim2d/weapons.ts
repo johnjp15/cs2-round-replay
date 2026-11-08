@@ -14,8 +14,8 @@ export const GRENADE_KINDS = ['flash', 'he', 'molotov', 'smoke'] as const;
 export type GrenadeKind = (typeof GRENADE_KINDS)[number];
 
 /** Guns by slot, used to pick what to hold after the last grenade is thrown (game rule, not calibration). */
-const PRIMARY_GUNS: readonly WeaponId[] = ['ak47', 'awp', 'm4a4', 'ssg08'];
-const SECONDARY_GUNS: readonly WeaponId[] = ['deagle', 'glock'];
+const PRIMARY_GUNS: readonly WeaponId[] = ['ak47', 'awp', 'm4a4', 'm4a1s', 'ssg08'];
+const SECONDARY_GUNS: readonly WeaponId[] = ['deagle', 'glock', 'usps', 'p2000'];
 
 export function isGrenade(item: string): item is GrenadeKind {
   return (GRENADE_KINDS as readonly string[]).includes(item);

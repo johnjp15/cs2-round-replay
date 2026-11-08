@@ -4,9 +4,13 @@ import type { Effect } from '../src/app/effects';
 import { liveRound } from './fakes';
 import { TRACER_TICKS } from '../src/app/effects';
 import { TICK_MS } from '../src/app/loop';
+import { SessionLog } from '../src/contracts/index';
 import {
+  KILL_FEED_FADE_TICKS,
+  KILL_FEED_LIFE_TICKS,
   KILL_FEED_TICKS,
   KillFeed,
+  eventHistory,
   LOG_MAX,
   NO_BOMB,
   SNAP_UNITS_PER_TICK,
@@ -115,7 +119,26 @@ describe('kill feed', () => {
     headshot: false,
   });
 
-  it('shows each kill for 5 s of round time', () => {
+  it("shows each kill for CS2's 6 s (5 s lifetime + 1 s fade-out), 1.5× the lifetime for the local player's own", () => {
+    expect(KILL_FEED_LIFE_TICKS).toBe(320);
+    expect(KILL_FEED_FADE_TICKS).toBe(64);
+    expect(KILL_FEED_TICKS).toBe(384);
+    const f = new KillFeed();
+    const k = kill(100);
+    f.push(k);
+    expect(f.visible(100 + 383)).toHaveLength(1);
+    expect(f.visible(100 + 384)).toHaveLength(0);
+    // Full opacity for 5 s, then fading out over the last second.
+    expect(f.opacity(k, 100 + 319)).toBe(1);
+    expect(f.opacity(k, 100 + 352)).toBe(0.5);
+    // cart's own kill, cart being the local player: 7.5 s + the 1 s fade.
+    expect(f.lifeOf(k, 'cart')).toBe(480 + 64);
+    expect(f.visible(100 + 500, 'cart')).toHaveLength(1);
+    expect(f.visible(100 + 500, 'donk')).toHaveLength(0);
+    expect(f.visible(100 + 544, 'cart')).toHaveLength(0);
+  });
+
+  it('shows each kill for its whole life', () => {
     const f = new KillFeed();
     f.push(kill(100));
     expect(f.visible(100)).toHaveLength(1);
@@ -139,6 +162,51 @@ describe('kill feed', () => {
     expect(f.visible(100).map((e) => e.tick)).toEqual([0]);
     f.clear();
     expect(f.visible(200)).toEqual([]);
+  });
+});
+
+describe('kill feed after a seek (H6)', () => {
+  const D1: ObsEvent = { type: 'death', victim: 'lokier', attacker: 'cart', weapon: 'ak47', headshot: true };
+  const D2: ObsEvent = { type: 'death', victim: 'cart', attacker: null, weapon: null, headshot: false };
+  /** A round: lokier dies on tick 100, cart on tick 300 (the observes after those ticks carry the events). */
+  const frames = (): Observe[] => {
+    const out: Observe[] = [];
+    for (let t = 0; t <= 400; t++) {
+      const ev = t === 101 ? [D1] : t === 301 ? [D2] : [];
+      out.push(obs(t, [CART(0, 0, 0, t > 301 ? { alive: false, hp: 0 } : {}), LOKIER(500, 0, t > 101 ? { alive: false, hp: 0 } : {})], ev));
+    }
+    return out;
+  };
+
+  it('rebuilds the feed, the deaths and who killed whom from the session log, as live play had them', () => {
+    const fr = frames();
+    const live = new Scene(fr[0] as Observe, act());
+    const log = new SessionLog();
+    for (const o of fr) log.append(o, act());
+    for (const o of fr.slice(1, 351)) live.ingest(o, act());
+    // The seek lands on tick 350: a fresh Scene there (what advanceSeek / testSeek build) is empty until restored.
+    const seeked = new Scene(fr[350] as Observe, act());
+    expect(seeked.killFeed.visible(350)).toEqual([]);
+    const history = eventHistory(log, 350);
+    expect(history.map((o) => o.tick)).toEqual([101, 301]);
+    seeked.restore(history);
+    expect(seeked.killFeed.visible(350)).toEqual(live.killFeed.visible(350));
+    expect(seeked.killFeed.visible(350).map((k) => k.victim)).toEqual(['lokier', 'cart']);
+    expect(seeked.deaths.get('lokier')).toBe(100);
+    expect(seeked.deaths.get('cart')).toBe(300);
+    expect(seeked.deathInfo.get('lokier')?.killer).toBe('cart');
+    // lokier's notice ages out 6 s after his death (tick 100 + 384), as it would have live; cart's stays.
+    expect(seeked.killFeed.visible(484).map((k) => k.victim)).toEqual(['cart']);
+  });
+
+  it('only restores the history up to the landing tick (a rewind)', () => {
+    const fr = frames();
+    const log = new SessionLog();
+    for (const o of fr) log.append(o, act());
+    const back = new Scene(fr[200] as Observe, act());
+    back.restore(eventHistory(log, 200));
+    expect(back.killFeed.visible(200).map((k) => k.victim)).toEqual(['lokier']);
+    expect(back.deaths.has('cart')).toBe(false);
   });
 });
 

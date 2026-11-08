@@ -6,7 +6,8 @@
  * - damage.ts: falloff, hitgroups, armor (the sim2d math, data-driven);
  * - penetration.ts: wall penetration through host-provided solids;
  * - arms.ts: the per-player state machine (fire rate, reloads, zoom, bursts, tagging) and `fireShot`;
- * - aim.ts: recoil control for bots and puppets (the view that puts a bullet on the target despite the punch).
+ * - aim.ts: recoil control for bots and puppets (the view that puts a bullet on the target despite the punch);
+ * - knife.ts: the knife's slash / stab rules (CS:GO's CKnife::SwingOrStab numbers, which CS2 kept).
  */
 export * from './table';
 export * from './valve-random';
@@ -16,3 +17,4 @@ export * from './damage';
 export * from './penetration';
 export * from './arms';
 export * from './aim';
+export * from './knife';

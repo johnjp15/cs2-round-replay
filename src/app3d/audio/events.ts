@@ -35,8 +35,22 @@ export interface Synth {
   readonly dur: number;
   readonly f: number;
   readonly bright?: number;
-  /** Peak gain of the rendered placeholder (0..1). */
+  /** A1's peak gain; A2 normalises by `level` instead (kept so old recipes still type-check). */
   readonly gain?: number;
+  /** A2: loudness of the placeholder, the loudest 50 ms RMS in dBFS (synth.ts has a default per kind). **Assumed.** */
+  readonly level?: number;
+  /** gun: suppressed (no crack, a "pfft"). */
+  readonly muffled?: boolean;
+  /** gun: body band centre (Hz). */
+  readonly body?: number;
+  /** gun: reverb tail amount (0..1, default 0.5). */
+  readonly tail?: number;
+  /** click: tap times (seconds); default one tap at 0. */
+  readonly taps?: readonly number[];
+  /** click: a sliding noise between the first and the last tap (a magazine sliding out, a bolt travelling). */
+  readonly slide?: boolean;
+  /** click: random debris taps after the first (bullet impacts). */
+  readonly debris?: number;
 }
 
 export interface SoundDef {
@@ -48,6 +62,8 @@ export interface SoundDef {
   readonly synth: Synth;
   /** Loops until stopped (molotov burn). */
   readonly loop?: boolean;
+  /** A2: how many placeholder variants the engine renders and picks from at random (CS2 events list several files). Default 1. */
+  readonly variants?: number;
   /**
    * Seconds of each CS2 file kept by tools/pack-sounds.ts (the page budget); default 2. Fire sounds keep their tail
    * (`...SingleDistant` is the far layer), music only its first seconds.
@@ -83,21 +99,21 @@ export const GUN_SOUNDS: { readonly [G in Gun]: GunSounds } = {
     draw: 'Weapon_AK47.Draw',
     stages: { clipout: 'Weapon_AK47.Clipout', clipin: 'Weapon_AK47.Clipin', bolt: 'Weapon_AK47.BoltPull' },
     pistol: false,
-    synth: { kind: 'gun', dur: 0.42, f: 95, bright: 0.75 },
+    synth: { kind: 'gun', dur: 0.45, f: 95, bright: 0.7, tail: 0.55, level: -9 },
   },
   m4a4: {
     fire: 'Weapon_M4A4.Single',
     draw: 'Weapon_M4A1.Draw',
     stages: { clipout: 'Weapon_M4A1.Clipout', clipin: 'Weapon_M4A1.Clipin', bolt: 'Weapon_M4A1.BoltBack', bolt2: 'Weapon_M4A1.BoltForward' },
     pistol: false,
-    synth: { kind: 'gun', dur: 0.38, f: 110, bright: 0.65 },
+    synth: { kind: 'gun', dur: 0.4, f: 110, bright: 0.65, tail: 0.5, level: -9.5 },
   },
   m4a1s: {
     fire: 'Weapon_M4A1.Silenced',
     draw: 'Weapon_M4A1.Draw',
     stages: { clipout: 'Weapon_M4A1.Clipout', clipin: 'Weapon_M4A1.Clipin', bolt: 'Weapon_M4A1.BoltBack', bolt2: 'Weapon_M4A1.BoltForward' },
     pistol: false,
-    synth: { kind: 'gun', dur: 0.2, f: 160, bright: 0.15, gain: 0.5 },
+    synth: { kind: 'gun', dur: 0.25, f: 140, bright: 0.2, muffled: true, level: -18 },
   },
   awp: {
     fire: 'Weapon_AWP.Single',
@@ -106,7 +122,7 @@ export const GUN_SOUNDS: { readonly [G in Gun]: GunSounds } = {
     boltAfterShot: ['Weapon_AWP.BoltBack', 'Weapon_AWP.BoltForward'],
     zoom: ['Weapon_AWP.Zoom', 'Weapon_AWP.ZoomOut'],
     pistol: false,
-    synth: { kind: 'gun', dur: 0.9, f: 60, bright: 0.9 },
+    synth: { kind: 'gun', dur: 1.2, f: 55, bright: 0.85, tail: 0.8, level: -7 },
   },
   ssg08: {
     fire: 'Weapon_SSG08.Single',
@@ -115,35 +131,35 @@ export const GUN_SOUNDS: { readonly [G in Gun]: GunSounds } = {
     boltAfterShot: ['Weapon_SSG08.BoltBack', 'Weapon_SSG08.BoltForward'],
     zoom: ['Weapon_SSG08.Zoom', 'Weapon_SSG08.ZoomOut'],
     pistol: false,
-    synth: { kind: 'gun', dur: 0.6, f: 80, bright: 0.85 },
+    synth: { kind: 'gun', dur: 0.7, f: 75, bright: 0.9, tail: 0.7, level: -9 },
   },
   deagle: {
     fire: 'Weapon_DEagle.Single',
     draw: 'Weapon_DEagle.Draw',
     stages: { clipout: 'Weapon_DEagle.Clipout', clipin: 'Weapon_DEagle.Clipin', bolt: 'Weapon_DEagle.Slideback', bolt2: 'Weapon_DEagle.Slideforward' },
     pistol: true,
-    synth: { kind: 'gun', dur: 0.55, f: 75, bright: 0.8 },
+    synth: { kind: 'gun', dur: 0.55, f: 80, bright: 0.8, tail: 0.6, level: -8 },
   },
   glock: {
     fire: 'Weapon_Glock.Single',
     draw: 'Weapon_Glock.Draw',
     stages: { clipout: 'Weapon_Glock.Clipout', clipin: 'Weapon_Glock.Clipin', bolt: 'Weapon_Glock.Slideback', bolt2: 'Weapon_Glock.Sliderelease' },
     pistol: true,
-    synth: { kind: 'gun', dur: 0.25, f: 170, bright: 0.5 },
+    synth: { kind: 'gun', dur: 0.28, f: 150, bright: 0.6, tail: 0.35, level: -11 },
   },
   usps: {
     fire: 'Weapon_USP.SilencedShot',
     draw: 'Weapon_USP.Draw',
     stages: { clipout: 'Weapon_USP.Clipout', clipin: 'Weapon_USP.Clipin', bolt: 'Weapon_USP.Slideback', bolt2: 'Weapon_USP.Sliderelease' },
     pistol: true,
-    synth: { kind: 'gun', dur: 0.16, f: 200, bright: 0.1, gain: 0.45 },
+    synth: { kind: 'gun', dur: 0.2, f: 170, bright: 0.2, muffled: true, level: -19 },
   },
   p2000: {
     fire: 'Weapon_hkp2000.Single',
     draw: 'Weapon_hkp2000.Draw',
     stages: { clipout: 'Weapon_hkp2000.Clipout', clipin: 'Weapon_hkp2000.Clipin', bolt: 'Weapon_hkp2000.Slideback', bolt2: 'Weapon_hkp2000.Sliderelease' },
     pistol: true,
-    synth: { kind: 'gun', dur: 0.26, f: 160, bright: 0.55 },
+    synth: { kind: 'gun', dur: 0.3, f: 140, bright: 0.65, tail: 0.35, level: -11 },
   },
 };
 
@@ -171,91 +187,112 @@ const SURFACE_CS2: { readonly [S in Surface]: string } = { concrete: 'Concrete',
 
 const GRENADE_CS2: { readonly [G in Grenade]: string } = { he: 'HEGrenade', flash: 'Flashbang', smoke: 'SmokeGrenade', molotov: 'Molotov', incgrenade: 'IncGrenade', decoy: 'Decoy' };
 
+/** A2: per gun, a factor on its foley pitches (so the AK's mag doesn't sound like the Glock's). **Assumed.** */
+const GUN_FOLEY: { readonly [G in Gun]: number } = { ak47: 0.85, m4a4: 1, m4a1s: 1.06, awp: 0.78, ssg08: 0.9, deagle: 1.15, glock: 1.32, usps: 1.24, p2000: 1.18 };
+const GRENADE_FOLEY: { readonly [G in Grenade]: number } = { he: 1, flash: 1.12, smoke: 0.9, molotov: 0.8, incgrenade: 1.05, decoy: 1.22 };
+/** A2: tap patterns of the reload stages (seconds) and their base pitch. */
+const STAGE_SYNTH: { readonly [S in ReloadStage]: { readonly f: number; readonly dur: number; readonly taps: readonly number[]; readonly slide?: boolean } } = {
+  clipout: { f: 1300, dur: 0.13, taps: [0, 0.055], slide: true },
+  clipin: { f: 1700, dur: 0.1, taps: [0, 0.016] },
+  bolt: { f: 2500, dur: 0.16, taps: [0, 0.09], slide: true },
+  bolt2: { f: 2900, dur: 0.08, taps: [0, 0.014] },
+};
+
 function buildTable(): Record<string, SoundDef> {
   const t: Record<string, SoundDef> = {};
-  const click = (f: number, dur = 0.08, gain = 0.6): Synth => ({ kind: 'click', dur, f, gain });
+  const click = (f: number, dur: number, taps: readonly number[], extra: Partial<Synth> = {}): Synth => ({ kind: 'click', dur, f, taps, ...extra });
   for (const g of GUNS) {
     const s = GUN_SOUNDS[g];
-    t[`fire.${g}`] = { cs2: [s.fire], bus: 'weapons', space: 'world', synth: s.synth, keepSec: 1.6 };
-    t[`draw.${g}`] = { cs2: [s.draw], bus: 'foley', space: 'world', synth: click(2400, 0.12, 0.4) };
+    const k = GUN_FOLEY[g];
+    t[`fire.${g}`] = { cs2: [s.fire], bus: 'weapons', space: 'world', synth: s.synth, keepSec: 1.6, variants: 3 };
+    t[`draw.${g}`] = { cs2: [s.draw], bus: 'foley', space: 'world', synth: click(2200 * k, 0.16, [0.03, 0.1], { slide: true, level: -24 }) };
     for (const st of RELOAD_STAGE_IDS) {
       const ev = s.stages[st];
-      if (ev !== undefined) t[`reload.${g}.${st}`] = { cs2: [ev], bus: 'foley', space: 'world', synth: click(st === 'clipout' ? 1300 : st === 'clipin' ? 1800 : 2600, 0.1, 0.55) };
+      const r = STAGE_SYNTH[st];
+      // The second tap's delay scales with the gun too (a pistol slide snaps faster than a rifle bolt).
+      if (ev !== undefined) t[`reload.${g}.${st}`] = { cs2: [ev], bus: 'foley', space: 'world', synth: click(r.f * k, r.dur, r.taps.map((x) => x / k), r.slide === true ? { slide: true } : {}) };
     }
     if (s.boltAfterShot !== undefined) {
-      t[`cycle.${g}.back`] = { cs2: [s.boltAfterShot[0]], bus: 'foley', space: 'world', synth: click(2200, 0.09, 0.45) };
-      t[`cycle.${g}.forward`] = { cs2: [s.boltAfterShot[1]], bus: 'foley', space: 'world', synth: click(2900, 0.08, 0.45) };
+      t[`cycle.${g}.back`] = { cs2: [s.boltAfterShot[0]], bus: 'foley', space: 'world', synth: click(2200 * k, 0.09, [0, 0.035], { slide: true }) };
+      t[`cycle.${g}.forward`] = { cs2: [s.boltAfterShot[1]], bus: 'foley', space: 'world', synth: click(2900 * k, 0.07, [0, 0.012]) };
     }
     if (s.zoom !== undefined) {
-      t[`zoom.${g}.in`] = { cs2: [s.zoom[0]], bus: 'foley', space: 'local', synth: click(3500, 0.05, 0.3) };
-      t[`zoom.${g}.out`] = { cs2: [s.zoom[1]], bus: 'foley', space: 'local', synth: click(3000, 0.05, 0.3) };
+      t[`zoom.${g}.in`] = { cs2: [s.zoom[0]], bus: 'foley', space: 'local', synth: click(3500 * k, 0.05, [0, 0.009], { level: -28 }) };
+      t[`zoom.${g}.out`] = { cs2: [s.zoom[1]], bus: 'foley', space: 'local', synth: click(3000 * k, 0.06, [0, 0.018], { level: -28 }) };
     }
   }
-  t['dry.rifle'] = { cs2: ['Default.ClipEmpty_Rifle'], bus: 'foley', space: 'local', synth: click(3200, 0.05, 0.5) };
-  t['dry.pistol'] = { cs2: ['Default.ClipEmpty_Pistol'], bus: 'foley', space: 'local', synth: click(3800, 0.04, 0.5) };
+  t['dry.rifle'] = { cs2: ['Default.ClipEmpty_Rifle'], bus: 'foley', space: 'local', synth: click(3200, 0.05, [0], { level: -20 }) };
+  t['dry.pistol'] = { cs2: ['Default.ClipEmpty_Pistol'], bus: 'foley', space: 'local', synth: click(3900, 0.04, [0], { level: -20 }) };
   // Knife, C4.
-  t['draw.knife'] = { cs2: ['Weapon_Knife.Deploy'], bus: 'foley', space: 'world', synth: { kind: 'whoosh', dur: 0.25, f: 3000, gain: 0.35 } };
-  t['knife.swing'] = { cs2: ['Weapon_Knife.Slash'], bus: 'foley', space: 'world', synth: { kind: 'whoosh', dur: 0.22, f: 1800, gain: 0.5 } };
-  t['knife.hit'] = { cs2: ['Weapon_Knife.Hit'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.2, f: 140, gain: 0.7 } };
-  t['knife.hitwall'] = { cs2: ['Weapon_Knife.HitWall'], bus: 'impacts', space: 'world', synth: click(1500, 0.12, 0.6) };
-  t['draw.c4'] = { cs2: ['c4.draw'], bus: 'foley', space: 'world', synth: click(1600, 0.15, 0.4) };
+  t['draw.knife'] = { cs2: ['Weapon_Knife.Deploy'], bus: 'foley', space: 'world', synth: { kind: 'whoosh', dur: 0.25, f: 3000, level: -26 } };
+  t['knife.swing'] = { cs2: ['Weapon_Knife.Slash'], bus: 'foley', space: 'world', synth: { kind: 'whoosh', dur: 0.22, f: 1800, level: -20 } };
+  t['knife.hit'] = { cs2: ['Weapon_Knife.Hit'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.2, f: 140, bright: 0.4, level: -16 } };
+  t['knife.hitwall'] = { cs2: ['Weapon_Knife.HitWall'], bus: 'impacts', space: 'world', synth: click(1500, 0.12, [0], { debris: 3, level: -20 }) };
+  t['draw.c4'] = { cs2: ['c4.draw'], bus: 'foley', space: 'world', synth: click(1600, 0.16, [0, 0.06, 0.11], { level: -24 }) };
   // Grenades: draw, pin, throw, bounce; then the pops.
+  const throwF: { readonly [G in Grenade]: number } = { he: 1200, flash: 1600, smoke: 950, molotov: 800, incgrenade: 2600, decoy: 1350 };
+  const bounceF: { readonly [G in Grenade]: number } = { he: 1700, flash: 2500, smoke: 1150, molotov: 3100, incgrenade: 1400, decoy: 2300 };
   for (const g of GRENADES) {
     const n = GRENADE_CS2[g];
-    t[`draw.${g}`] = { cs2: [`${n}.Draw`], bus: 'foley', space: 'world', synth: click(2000, 0.1, 0.35) };
-    if (g !== 'molotov') t[`pin.${g}`] = { cs2: [`${n}.PullPin_Grenade`], bus: 'foley', space: 'world', synth: click(4200, 0.09, 0.45) };
-    t[`throw.${g}`] = { cs2: [`${n}.Throw`], bus: 'grenades', space: 'world', synth: { kind: 'whoosh', dur: 0.3, f: 1200, gain: 0.5 } };
-    if (g !== 'decoy') t[`bounce.${g}`] = { cs2: [`${n}.Bounce`], bus: 'grenades', space: 'world', synth: click(g === 'molotov' ? 900 : 1700, 0.09, 0.6) };
+    const k = GRENADE_FOLEY[g];
+    t[`draw.${g}`] = { cs2: [`${n}.Draw`], bus: 'foley', space: 'world', synth: click(2000 * k, 0.13, [0.02, 0.08], { slide: true, level: -24 }) };
+    if (g !== 'molotov') t[`pin.${g}`] = { cs2: [`${n}.PullPin_Grenade`], bus: 'foley', space: 'world', synth: click(4200 * k, 0.1, [0, 0.04], { level: -22 }) };
+    t[`throw.${g}`] = { cs2: [`${n}.Throw`], bus: 'grenades', space: 'world', synth: { kind: 'whoosh', dur: 0.3, f: throwF[g], level: -24 } };
+    if (g !== 'decoy') t[`bounce.${g}`] = { cs2: [`${n}.Bounce`], bus: 'grenades', space: 'world', synth: click(bounceF[g], 0.1, [0], { debris: g === 'smoke' ? 2 : 0, level: -20 }), variants: 2 };
   }
-  t['pin.molotov'] = { cs2: ['Molotov.PreThrow'], bus: 'foley', space: 'world', synth: { kind: 'crackle', dur: 0.3, f: 2500, gain: 0.3 } };
-  t['pop.smoke'] = { cs2: ['BaseSmokeEffect.Sound'], bus: 'grenades', space: 'world', synth: { kind: 'hiss', dur: 2.2, f: 2200, gain: 0.55 }, keepSec: 2.5 };
-  t['pop.flash'] = { cs2: ['Flashbang.Explode'], bus: 'grenades', space: 'world', synth: { kind: 'boom', dur: 0.6, f: 180, bright: 1, gain: 0.85 } };
-  t['pop.he'] = { cs2: ['BaseGrenade.Explode'], bus: 'grenades', space: 'world', synth: { kind: 'boom', dur: 1.4, f: 55, bright: 0.6, gain: 1 }, keepSec: 2.5 };
-  t['pop.molotov'] = { cs2: ['Inferno.Fire.Ignite'], bus: 'grenades', space: 'world', synth: { kind: 'boom', dur: 0.7, f: 90, bright: 0.3, gain: 0.7 } };
-  t['burn.molotov'] = { cs2: ['Inferno.Loop'], bus: 'grenades', space: 'world', synth: { kind: 'crackle', dur: 2, f: 3000, gain: 0.45 }, loop: true, keepSec: 3 };
-  t['out.molotov'] = { cs2: ['Molotov.Extinguish'], bus: 'grenades', space: 'world', synth: { kind: 'hiss', dur: 0.8, f: 4000, gain: 0.4 } };
+  t['pin.molotov'] = { cs2: ['Molotov.PreThrow'], bus: 'foley', space: 'world', synth: { kind: 'hiss', dur: 0.35, f: 2500, level: -26 } };
+  t['pop.smoke'] = { cs2: ['BaseSmokeEffect.Sound'], bus: 'grenades', space: 'world', synth: { kind: 'hiss', dur: 2.2, f: 2200, level: -18 }, keepSec: 2.5 };
+  t['pop.flash'] = { cs2: ['Flashbang.Explode'], bus: 'grenades', space: 'world', synth: { kind: 'boom', dur: 0.7, f: 180, bright: 1, level: -7 } };
+  t['pop.he'] = { cs2: ['BaseGrenade.Explode'], bus: 'grenades', space: 'world', synth: { kind: 'boom', dur: 1.6, f: 55, bright: 0.6, level: -6 }, keepSec: 2.5 };
+  t['pop.molotov'] = { cs2: ['Inferno.Fire.Ignite'], bus: 'grenades', space: 'world', synth: { kind: 'boom', dur: 0.8, f: 90, bright: 0.3, level: -12 } };
+  t['burn.molotov'] = { cs2: ['Inferno.Loop'], bus: 'grenades', space: 'world', synth: { kind: 'crackle', dur: 2, f: 3000, level: -24 }, loop: true, keepSec: 3 };
+  t['out.molotov'] = { cs2: ['Molotov.Extinguish'], bus: 'grenades', space: 'world', synth: { kind: 'hiss', dur: 0.8, f: 4000, level: -20 } };
   // Players: footsteps by team and surface, landings, jump.
+  // A2: the surface is the cut-off and the grit (metal ≥ 2 kHz also rings); CT boots a little brighter. **Assumed.**
+  const surf: { readonly [S in Surface]: { readonly f: number; readonly grit: number } } = { concrete: { f: 1400, grit: 0.5 }, tile: { f: 1800, grit: 0.75 }, wood: { f: 700, grit: 0.2 }, sand: { f: 1000, grit: 1 }, metal: { f: 2400, grit: 0.4 } };
   for (const team of ['T', 'CT'] as const) {
-    for (const s of SURFACES) t[`step.${team}.${s}`] = { cs2: [`${team}_${SURFACE_CS2[s]}.StepLeft`], bus: 'footsteps', space: 'world', synth: { kind: 'step', dur: 0.12, f: s === 'metal' ? 2400 : s === 'wood' ? 900 : 1400, gain: 0.7 } };
+    for (const s of SURFACES) t[`step.${team}.${s}`] = { cs2: [`${team}_${SURFACE_CS2[s]}.StepLeft`], bus: 'footsteps', space: 'world', synth: { kind: 'step', dur: 0.11, f: surf[s].f * (team === 'CT' ? 1.08 : 1), bright: surf[s].grit, level: -24 }, variants: 4 };
   }
-  for (const s of SURFACES) t[`land.${s}`] = { cs2: [`Land_${SURFACE_CS2[s]}.StepLeft`], bus: 'footsteps', space: 'world', synth: { kind: 'step', dur: 0.2, f: 900, gain: 0.85 } };
-  t['jump'] = { cs2: ['Default.WalkJump'], bus: 'footsteps', space: 'world', synth: { kind: 'step', dur: 0.1, f: 1800, gain: 0.35 } };
+  for (const s of SURFACES) t[`land.${s}`] = { cs2: [`Land_${SURFACE_CS2[s]}.StepLeft`], bus: 'footsteps', space: 'world', synth: { kind: 'step', dur: 0.22, f: surf[s].f * 0.65, bright: surf[s].grit, level: -20 }, variants: 2 };
+  t['jump'] = { cs2: ['Default.WalkJump'], bus: 'footsteps', space: 'world', synth: { kind: 'step', dur: 0.1, f: 1800, bright: 0.3, level: -30 } };
   // Hits, kills, deaths. Onlooker = heard at the victim; feedback = the attacker hears it in the head; victim = the listener was hit.
-  t['hit.flesh'] = { cs2: ['Flesh.BulletImpact'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.14, f: 120, gain: 0.7 } };
-  t['hit.armor'] = { cs2: ['Player.DamageKevlar'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.12, f: 220, bright: 0.5, gain: 0.7 } };
-  t['hit.head'] = { cs2: ['Player.DamageHeadShot.Onlooker'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.18, f: 170, bright: 0.6, gain: 0.85 } };
-  t['hit.head.helmet'] = { cs2: ['Player.DamageHeadShotArmor.Onlooker'], bus: 'impacts', space: 'world', synth: { kind: 'dink', dur: 0.35, f: 2600, gain: 0.8 } };
-  t['feedback.head'] = { cs2: ['Player.DamageHeadShot.AttackerFeedback'], bus: 'impacts', space: 'local', synth: { kind: 'thump', dur: 0.15, f: 180, bright: 0.5, gain: 0.6 } };
-  t['feedback.head.helmet'] = { cs2: ['Player.DamageHeadShotArmor.AttackerFeedback'], bus: 'impacts', space: 'local', synth: { kind: 'dink', dur: 0.3, f: 2800, gain: 0.7 } };
-  t['victim.body'] = { cs2: ['Player.DamageBody.VictimFlesh'], bus: 'impacts', space: 'local', synth: { kind: 'thump', dur: 0.16, f: 100, gain: 0.8 } };
-  t['victim.head'] = { cs2: ['Player.DamageHeadShot.Victim'], bus: 'impacts', space: 'local', synth: { kind: 'thump', dur: 0.2, f: 150, bright: 0.6, gain: 0.9 } };
-  t['victim.head.helmet'] = { cs2: ['Player.DamageHeadShotArmor.Victim'], bus: 'impacts', space: 'local', synth: { kind: 'dink', dur: 0.4, f: 2400, gain: 0.9 } };
-  t['kill.feedback'] = { cs2: ['Player.DeathBody.AttackerFeedback'], bus: 'ui', space: 'local', synth: { kind: 'thump', dur: 0.25, f: 90, bright: 0.3, gain: 0.7 } };
-  t['kill.feedback.head'] = { cs2: ['Player.DeathHeadShot.AttackerFeedback'], bus: 'ui', space: 'local', synth: { kind: 'dink', dur: 0.4, f: 2000, gain: 0.7 } };
-  t['death'] = { cs2: ['Player.DeathBody.Onlooker'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.3, f: 80, gain: 0.8 } };
-  t['death.head'] = { cs2: ['Player.DeathHeadShot.Onlooker'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.3, f: 110, bright: 0.5, gain: 0.85 } };
-  t['death.self'] = { cs2: ['Player.DeathBody.Victim'], bus: 'impacts', space: 'local', synth: { kind: 'thump', dur: 0.5, f: 60, gain: 0.9 } };
+  t['hit.flesh'] = { cs2: ['Flesh.BulletImpact'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.14, f: 120, bright: 0.2, level: -17 }, variants: 2 };
+  t['hit.armor'] = { cs2: ['Player.DamageKevlar'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.12, f: 220, bright: 0.7, level: -17 }, variants: 2 };
+  t['hit.head'] = { cs2: ['Player.DamageHeadShot.Onlooker'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.18, f: 170, bright: 0.8, level: -14 } };
+  t['hit.head.helmet'] = { cs2: ['Player.DamageHeadShotArmor.Onlooker'], bus: 'impacts', space: 'world', synth: { kind: 'dink', dur: 0.35, f: 2600, level: -14 } };
+  t['feedback.head'] = { cs2: ['Player.DamageHeadShot.AttackerFeedback'], bus: 'impacts', space: 'local', synth: { kind: 'thump', dur: 0.15, f: 190, bright: 0.9, level: -18 } };
+  t['feedback.head.helmet'] = { cs2: ['Player.DamageHeadShotArmor.AttackerFeedback'], bus: 'impacts', space: 'local', synth: { kind: 'dink', dur: 0.3, f: 3000, level: -17 } };
+  t['victim.body'] = { cs2: ['Player.DamageBody.VictimFlesh'], bus: 'impacts', space: 'local', synth: { kind: 'thump', dur: 0.16, f: 100, bright: 0.1, level: -14 } };
+  t['victim.head'] = { cs2: ['Player.DamageHeadShot.Victim'], bus: 'impacts', space: 'local', synth: { kind: 'thump', dur: 0.22, f: 150, bright: 0.6, level: -13 } };
+  t['victim.head.helmet'] = { cs2: ['Player.DamageHeadShotArmor.Victim'], bus: 'impacts', space: 'local', synth: { kind: 'dink', dur: 0.4, f: 2200, level: -13 } };
+  t['kill.feedback'] = { cs2: ['Player.DeathBody.AttackerFeedback'], bus: 'ui', space: 'local', synth: { kind: 'thump', dur: 0.25, f: 75, bright: 0.3, level: -20 } };
+  t['kill.feedback.head'] = { cs2: ['Player.DeathHeadShot.AttackerFeedback'], bus: 'ui', space: 'local', synth: { kind: 'dink', dur: 0.45, f: 1800, level: -18 } };
+  t['death'] = { cs2: ['Player.DeathBody.Onlooker'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.3, f: 80, bright: 0.15, level: -17 } };
+  t['death.head'] = { cs2: ['Player.DeathHeadShot.Onlooker'], bus: 'impacts', space: 'world', synth: { kind: 'thump', dur: 0.32, f: 110, bright: 0.5, level: -16 } };
+  t['death.self'] = { cs2: ['Player.DeathBody.Victim'], bus: 'impacts', space: 'local', synth: { kind: 'thump', dur: 0.5, f: 60, bright: 0.1, level: -13 } };
   // Bullets in the world.
-  t['impact.concrete'] = { cs2: ['Concrete.BulletImpact'], bus: 'impacts', space: 'world', synth: click(2100, 0.1, 0.55) };
-  t['ricochet'] = { cs2: ['FX_RicochetSound.Ricochet'], bus: 'impacts', space: 'world', synth: { kind: 'whoosh', dur: 0.25, f: 4500, gain: 0.35 } };
-  t['whiz'] = { cs2: ['BulletBy.Supersonic.Crack'], bus: 'impacts', space: 'world', synth: { kind: 'whoosh', dur: 0.12, f: 5000, bright: 1, gain: 0.55 } };
+  t['impact.concrete'] = { cs2: ['Concrete.BulletImpact'], bus: 'impacts', space: 'world', synth: click(2100, 0.12, [0], { debris: 4, level: -20 }), variants: 3 };
+  t['ricochet'] = { cs2: ['FX_RicochetSound.Ricochet'], bus: 'impacts', space: 'world', synth: { kind: 'whoosh', dur: 0.25, f: 4500, level: -24 } };
+  t['whiz'] = { cs2: ['BulletBy.Supersonic.Crack'], bus: 'impacts', space: 'world', synth: { kind: 'whoosh', dur: 0.12, f: 5000, bright: 1, level: -18 } };
   // The bomb.
-  t['c4.initiate'] = { cs2: ['c4.initiate'], bus: 'bomb', space: 'world', synth: click(1200, 0.15, 0.5) };
-  t['c4.keypress'] = { cs2: ['c4.keypressquiet'], bus: 'bomb', space: 'world', synth: { kind: 'beep', dur: 0.06, f: 1900, gain: 0.35 } };
-  t['c4.plant'] = { cs2: ['c4.plant'], bus: 'bomb', space: 'world', synth: click(900, 0.2, 0.6) };
-  t['c4.beep'] = { cs2: ['C4.PlantSound'], bus: 'bomb', space: 'world', synth: { kind: 'beep', dur: 0.12, f: 2350, gain: 0.7 } };
-  t['c4.defuse.start'] = { cs2: ['c4.disarmstart'], bus: 'bomb', space: 'world', synth: click(1400, 0.3, 0.55) };
-  t['c4.defused'] = { cs2: ['c4.disarmfinish'], bus: 'bomb', space: 'world', synth: { kind: 'beep', dur: 0.4, f: 1200, gain: 0.6 } };
-  t['c4.explode'] = { cs2: ['c4.explode'], bus: 'bomb', space: 'world', synth: { kind: 'boom', dur: 2.6, f: 40, bright: 0.7, gain: 1 }, keepSec: 3 };
+  t['c4.initiate'] = { cs2: ['c4.initiate'], bus: 'bomb', space: 'world', synth: click(1200, 0.15, [0, 0.05], { level: -22 }) };
+  t['c4.keypress'] = { cs2: ['c4.keypressquiet'], bus: 'bomb', space: 'world', synth: { kind: 'beep', dur: 0.06, f: 1900, level: -24 } };
+  t['c4.plant'] = { cs2: ['c4.plant'], bus: 'bomb', space: 'world', synth: click(900, 0.22, [0, 0.07, 0.15], { level: -20 }) };
+  t['c4.beep'] = { cs2: ['C4.PlantSound'], bus: 'bomb', space: 'world', synth: { kind: 'beep', dur: 0.1, f: 2350, level: -16 } };
+  // A2: CS2 changed the beep of the last 10 seconds (patch of 2023-10-17, "New sound for final 10 seconds of bomb beeping").
+  t['c4.beep.10s'] = { cs2: ['C4.PlantSound_10sec'], bus: 'bomb', space: 'world', synth: { kind: 'beep', dur: 0.08, f: 2700, level: -15 } };
+  t['c4.defuse.start'] = { cs2: ['c4.disarmstart'], bus: 'bomb', space: 'world', synth: click(1400, 0.3, [0, 0.03, 0.1, 0.18], { slide: true, level: -20 }) };
+  t['c4.defused'] = { cs2: ['c4.disarmfinish'], bus: 'bomb', space: 'world', synth: { kind: 'beep', dur: 0.4, f: 1200, level: -18 } };
+  t['c4.explode'] = { cs2: ['c4.explode'], bus: 'bomb', space: 'world', synth: { kind: 'boom', dur: 2.6, f: 40, bright: 0.7, level: -5 }, keepSec: 3 };
   // Round and announcer (CS2's default music kit valve_cs2_01 and the CS2 classic announcer).
-  t['round.start'] = { cs2: ['Music.StartRound.valve_cs2_01'], bus: 'music', space: 'local', synth: { kind: 'sting', dur: 1.6, f: 220, gain: 0.4 }, keepSec: 4 };
-  t['round.won'] = { cs2: ['Music.WonRound.valve_cs2_01'], bus: 'music', space: 'local', synth: { kind: 'sting', dur: 2, f: 262, gain: 0.45 }, keepSec: 4 };
-  t['round.lost'] = { cs2: ['Music.LostRound.valve_cs2_01'], bus: 'music', space: 'local', synth: { kind: 'sting', dur: 2, f: 196, gain: 0.45 }, keepSec: 4 };
-  t['music.bomb'] = { cs2: ['Music.BombPlanted.valve_cs2_01'], bus: 'music', space: 'local', synth: { kind: 'sting', dur: 1.2, f: 147, gain: 0.3 }, keepSec: 4 };
-  t['announce.ctwin'] = { cs2: ['Announcer.CTWin.CS2_Classic'], bus: 'ui', space: 'local', synth: { kind: 'sting', dur: 0.8, f: 330, gain: 0.35 }, keepSec: 2.5 };
-  t['announce.twin'] = { cs2: ['Announcer.TWin.CS2_Classic'], bus: 'ui', space: 'local', synth: { kind: 'sting', dur: 0.8, f: 294, gain: 0.35 }, keepSec: 2.5 };
-  t['announce.planted'] = { cs2: ['Announcer.BombPlanted.CS2_Classic'], bus: 'ui', space: 'local', synth: { kind: 'sting', dur: 0.8, f: 247, gain: 0.35 }, keepSec: 2.5 };
-  t['announce.defused'] = { cs2: ['Announcer.BombDefused.CS2_Classic'], bus: 'ui', space: 'local', synth: { kind: 'sting', dur: 0.8, f: 392, gain: 0.35 }, keepSec: 2.5 };
+  t['round.start'] = { cs2: ['Music.StartRound.valve_cs2_01'], bus: 'music', space: 'local', synth: { kind: 'sting', dur: 1.6, f: 220, level: -18 }, keepSec: 4 };
+  t['round.won'] = { cs2: ['Music.WonRound.valve_cs2_01'], bus: 'music', space: 'local', synth: { kind: 'sting', dur: 2, f: 262, level: -18 }, keepSec: 4 };
+  t['round.lost'] = { cs2: ['Music.LostRound.valve_cs2_01'], bus: 'music', space: 'local', synth: { kind: 'sting', dur: 2, f: 196, level: -18 }, keepSec: 4 };
+  t['music.bomb'] = { cs2: ['Music.BombPlanted.valve_cs2_01'], bus: 'music', space: 'local', synth: { kind: 'sting', dur: 1.2, f: 147, level: -18 }, keepSec: 4 };
+  t['announce.ctwin'] = { cs2: ['Announcer.CTWin.CS2_Classic'], bus: 'ui', space: 'local', synth: { kind: 'sting', dur: 0.8, f: 330, level: -18 }, keepSec: 2.5 };
+  t['announce.twin'] = { cs2: ['Announcer.TWin.CS2_Classic'], bus: 'ui', space: 'local', synth: { kind: 'sting', dur: 0.8, f: 294, level: -18 }, keepSec: 2.5 };
+  t['announce.planted'] = { cs2: ['Announcer.BombPlanted.CS2_Classic'], bus: 'ui', space: 'local', synth: { kind: 'sting', dur: 0.8, f: 247, level: -18 }, keepSec: 2.5 };
+  t['announce.defused'] = { cs2: ['Announcer.BombDefused.CS2_Classic'], bus: 'ui', space: 'local', synth: { kind: 'sting', dur: 0.8, f: 392, level: -18 }, keepSec: 2.5 };
   return t;
 }
 

@@ -207,7 +207,7 @@ describe('expected encounters and the scheduled encounter', () => {
   it('builds one encounter: Lokier’s 73 HP / 7 armor SSG 08 hit on cart, from the 17.45 s sighting, at the window', () => {
     expect(encs).toHaveLength(1);
     const e = encs[0];
-    expect(e).toMatchObject({ key: 'enc:0', shooter: 'lokier', victim: 'cart', band: 'chest', weapon: 'ssg08', recordedSightTick: 1117, holdFromTick: 1161 });
+    expect(e).toMatchObject({ key: 'enc:0', shooter: 'lokier', victim: 'cart', band: 'chest', weapon: 'ssg08', recordedSightTick: 1117, holdFromTick: 1021 });
     expect(e?.damage).toMatchObject({ tick: 1184, amount: 73, armor: 7, lethal: false });
     expect(e?.spot).toEqual(model.trackAtTick('cart', 1184)?.pos);
     expect(e?.fireKeys.map((k) => script.plan.fire.find((f) => f.key === k)?.shotTicks)).toEqual([[1184]]);
@@ -271,8 +271,9 @@ describe('the switch to LIVE', () => {
     expect(unblocks).toEqual(['lokier>barely', 'barely>lokier', 'lokier>donk', 'donk>lokier', 'lokier>eradicate', 'eradicate>lokier', 'lokier>lokier', 'lokier>snarlbot', 'snarlbot>lokier']);
     expect(act.actions.filter((a) => a.type === 'set_mode').map((a) => (a.type === 'set_mode' ? a.id : ''))).toEqual(['lokier']);
     const set = act.actions.find((a) => a.type === 'set_mode');
-    expect(set).toMatchObject({ type: 'set_mode', id: 'lokier', mode: 'LIVE', goal: { role: 'hold', route: [] } });
-    expect(act.actions.some((a) => a.type === 'log' && a.text === 'lokier LIVE: outlived recording (+3.0 s); goal hold, 0 waypoints')).toBe(true);
+    // G8: outlived = his fate is gone (fate.ts): LIVE for good with a CT survivor's goal, retake.
+    expect(set).toMatchObject({ type: 'set_mode', id: 'lokier', mode: 'LIVE', goal: { role: 'retake', route: [] } });
+    expect(act.actions.some((a) => a.type === 'log' && a.text === 'lokier LIVE: outlived recording (+3.0 s); goal retake, 0 waypoints')).toBe(true);
     expect(act.status.find((s) => s.id === 'lokier')).toEqual({ id: 'lokier', mode: 'LIVE', trigger: 'outlived', sinceTick: 1395 });
     expect(act.inputs.some((i) => i.id === 'lokier')).toBe(false);
     expect(core.triggerOf('lokier')).toBe('outlived');

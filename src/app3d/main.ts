@@ -16,18 +16,22 @@
  * The view is CS2's (view-cs2.ts, with sources): mouse counts × sensitivity × m_yaw / m_pitch (0.022°), no
  * acceleration; FOV 90° horizontal at 4:3, hor+ on wider screens (vertical ≈ 73.74°); scoped FOVs and the zoomed
  * sensitivity (mouse 2 with the AWP / SSG 08); viewmodel_fov 60 in its own camera; the eye eases between 64 and 46
- * through a duck. Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b);
- * the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
- * shake, and the crosshair sits where the next bullet goes.
+ * through a duck at CS2's duck speed (M2: 0.166 s, smooth in the air too); the human's own camera is predicted a tick
+ * ahead (Sim3DHost.predictHumanMove, as CS2 predicts the local player), the other pawns are drawn between two ticks.
+ * Bullets leave along view + aim punch × 2 + the inaccuracy cone (the host's H2 weapon mechanics, H2b); the camera follows the "Recoil tracking" share (view_recoil_tracking, default 0.45) of the recoil plus the screen
+ * shake; the crosshair stays at the centre (CS2's cl_crosshair_recoil 0; "Crosshair follows recoil" puts it where the
+ * next bullet goes). W1: Q lastinv, F inspect, the knife's slash / stab, wheel jump, the round hotkeys (Enter, P,
+ * Backspace twice) and the Ctrl+W / Ctrl+scroll guards (docs/app3d.md "Controls").
  *
  * URL parameters: `?seed=<int>` (default 1), `?human=cart` plays cart from the start, `?sens=<CS2 sensitivity>`
  * (default 1.25; also the settings fields, kept in localStorage), `?res=<render scale>`.
  */
 import tuningJson from '../../data/tuning.json';
-import { parseMapId, type Observe, type PlayerId, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
+import { parseMapId, type Observe, type PawnObs, type PlayerId, type Team, type Tuning, type Vec3, type WeaponId } from '../contracts/index';
 import { summarize, tickOf } from '../core/index';
 import { FixedLoop, TICK_MS } from '../app/loop';
-import { Scene, interpolationAlpha, lerpAngle } from '../app/scene';
+import { Scene, eventHistory, interpolationAlpha, lerpAngle, type Pose } from '../app/scene';
+import { Economy } from './economy';
 import { Session, parseSessionData, type SessionData } from '../app/session';
 import { SummaryCache } from '../app/run-entries';
 import { weaponName } from '../app/hud-model';
@@ -46,10 +50,14 @@ import { Hud3D } from './hud3d';
 import { runBench } from './bench3d';
 import { FPS_PRESETS, FrameDriver, parseFpsLimit, type FpsLimit } from './frame-driver';
 import { BucketRate, FrameProbe, Ring, displayHz, meterText } from './perf';
-import { DEFAULT_SENSITIVITY, flyStep, fpsInput, turnView, wrapYaw, type Look } from './input3d';
+import { DEFAULT_SENSITIVITY, LastInv, WheelJump, crosshairOffsetPx, flyStep, fpsInput, lastInvSlots, turnView, wheelJumps, wrapYaw, type Look, type WheelJumpBinds } from './input3d';
+import { HotkeyMatcher, parseHotkeys, type PageHotkey } from './hotkeys3d';
+import { HotkeysDom } from './hotkeys-dom';
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
-import { Renderer3D, type DrawPawn, type DrawTracer } from './renderer3d';
-import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
+import { Renderer3D, type DrawPawn } from './renderer3d';
+import { worldMuzzle } from './effects/shot-fx';
+import { TeamDamageNotes } from './team-damage';
+import { DEATH_FADE, deathFade, type DeathFade, aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
 import { A1Mount } from './audio/mount';
 import { RadarSampler, buildRenderTiles, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
 import { decodeRenderMesh } from './render-package';
@@ -61,7 +69,7 @@ import {
   VIEWMODEL_FOV_MAX,
   VIEWMODEL_FOV_MIN,
   VIEW_RECOIL_TRACKING,
-  duckStep,
+  ViewEye,
   effectiveSensitivity,
   eyeHeightFor,
   verticalFov,
@@ -71,7 +79,6 @@ type Phase = 'ready' | 'running' | 'paused';
 /** The spectator camera (spectate.ts): pov = first person through the followed pawn's eyes (the default). */
 export type CameraMode = 'follow' | 'pov' | 'free';
 /** Tracers last this long (ticks of round time). */
-const TRACER_TICKS = 10;
 /** Third-person camera: distance behind and height above the followed pawn's eye (units). */
 const FOLLOW_BACK = 150;
 const FOLLOW_UP = 28;
@@ -99,7 +106,7 @@ export interface App3DStats {
   readonly humanShots: number;
   readonly humanHits: number;
   readonly costMs: { readonly sim: number; readonly draw: number; readonly render: number; readonly hud: number };
-  readonly hud: { readonly hp: string; readonly clock: string; readonly mode: string; readonly killfeed: number };
+  readonly hud: { readonly hp: string; readonly clock: string; readonly mode: string; readonly killfeed: number; readonly clockClass: string; readonly defuse: boolean; readonly alert: boolean; readonly banner: string; readonly money: string };
 }
 
 declare global {
@@ -252,25 +259,44 @@ class App3D {
    * setting, 0–1): 0 = the screen stays still and only the crosshair climbs; 1 = the camera follows the bullets.
    */
   private recoilTracking = VIEW_RECOIL_TRACKING;
-  /** The camera's duck amount (0..1, view-cs2.ts duckStep). */
-  private duck = 0;
+  /**
+   * W1 (#32): CS2's cl_crosshair_recoil (default 0: the crosshair stays at the centre, the view kicks by the recoil
+   * tracking; the bullet still goes where the aim punch puts it). The "Crosshair follows recoil" setting.
+   */
+  private crosshairRecoil = false;
+  /** W1 (#40): +jump on the wheel (the Keys group's checkboxes) and the notch latched for the next tick. */
+  private wheelBinds: WheelJumpBinds = { down: false, up: false };
+  private readonly wheelJump = new WheelJump();
+  /** W1 (#41): Q = lastinv: the human's previous item. */
+  private readonly lastInv = new LastInv();
+  /** W1 (#49): Start / Pause / Restart hotkeys (Enter, P, Backspace twice). */
+  private readonly hotkeys = new HotkeyMatcher();
+  /** W1 (#53): go fullscreen with the keyboard locked on Start / takeover / a click into the game (setting). */
+  private autoFullscreen = true;
+  /** L1: the bottom menu is slid out of view (the ` key, the ▾ Hide button, the Hide menu setting). */
+  private barHidden = false;
+  /** The camera's duck and its eye height above the drawn feet (view-cs2.ts ViewEye, M2). */
+  private readonly viewEye = new ViewEye();
   private session: Session;
   private scene: Scene;
   private phase: Phase = 'ready';
   private camMode: CameraMode = 'pov';
   /** U1: the radar (CS2's spotting per team, radar3d.ts) and its rules (the panel toggle; localStorage). */
   private readonly radar = new RadarTracker();
+  /** W3: CS2's team-damage notices (feed line, the human's hint). */
+  private readonly teamDamage = new TeamDamageNotes();
   private radarRules: RadarRules = 'cs2';
   /** U1: kills this round per player (the spectator panel) and when each player last fired (their viewmodel). */
   private kills = new Map<PlayerId, number>();
   private readonly lastShotMs = new Map<PlayerId, number>();
+  /** H6: every player's money and award flashes this round (economy.ts). */
+  private readonly economy: Economy;
   private followed: PlayerId = 'cart';
   /** The human's view (mouse look), or the spectator's orbit / free-fly view. */
   private look: Look = { yaw: 0, pitch: 0 };
   /** Spectator orbit offsets in follow mode (mouse under pointer lock). */
   private orbit: Look = { yaw: 0, pitch: 12 };
   private freePos: Vec3 = { x: -1500, y: 500, z: 200 };
-  private tracers: { from: Vec3; to: Vec3; team: 'T' | 'CT'; tick: number }[] = [];
   private lastHumanShotMs = -1e9;
   private lastHit: { ms: number; head: boolean } | null = null;
   private humanShots = 0;
@@ -280,6 +306,8 @@ class App3D {
   private frozen = false;
   private lastCamera: { eye: Vec3; yaw: number; pitch: number; viewId: PlayerId } | null = null;
   private lastView: PlayerId | null = null;
+  /** H6: the human was alive (first person) on the last frame drawn: their death starts their own death fade. */
+  private wasFirstPerson = false;
   private lastDraw: number | null = null;
   private lastFrame: number | null = null;
   private frames = 0;
@@ -316,6 +344,9 @@ class App3D {
     // X1: a map package with its own render mesh (?map=mirage-2020) draws that; else the collision mesh coloured from the radar.
     const tiles = render === null ? buildWorldTiles(world, new RadarSampler(art, h3.radar), h3.radar, rgba).tiles : buildRenderTiles(decodeRenderMesh(render));
     this.session = this.newSession(human);
+    // H6: the round's starting money where the recording knows it (free play: the award flashes only).
+    const start = new Map((data?.round.players ?? []).map((p) => [p.id, p.startMoney] as const));
+    this.economy = new Economy(this.session.model.players.map((p) => ({ id: p.id, team: p.team, startMoney: start.get(p.id) ?? null })));
     this.renderer = new Renderer3D(canvas, tiles, art, this.session.model.players.map((p) => ({ id: p.id, team: p.team })), { resolution: this.resScale, desynchronized: this.lowLatency });
     this.hud = new Hud3D(radar, h3.radar);
     this.a1 = new A1Mount(world, this.tuning, document.getElementById('bar'));
@@ -334,6 +365,12 @@ class App3D {
       onAttack2: () => {
         if (!this.playing()) this.spectateClick(-1);
       },
+      onWheel: (dy) => {
+        if (this.playing() && wheelJumps(this.wheelBinds, dy)) this.wheelJump.notch();
+      },
+    });
+    canvas.addEventListener('mousedown', () => {
+      if (this.playing()) this.autoFull();
     });
     this.controls.keyMap = keyMapFor(this.keys.binds);
     this.keys.onChange((b) => (this.controls.keyMap = keyMapFor(b)));
@@ -347,9 +384,13 @@ class App3D {
       // Under Keyboard Lock the browser no longer frees the mouse on a short Esc: do it here.
       onEscape: () => document.exitPointerLock(),
       onChange: () => this.updateControls(),
+      banner: document.getElementById('ctrlw-banner'),
     });
     const keybinds = document.getElementById('keybinds');
-    if (keybinds !== null) new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+    if (keybinds !== null) {
+      new KeyBindsDom(keybinds, this.keys, this.guard.mac);
+      this.wireW1Keys(keybinds);
+    }
     this.wireSettings();
     this.buttons = {
       start: el('start', HTMLButtonElement),
@@ -471,11 +512,13 @@ class App3D {
     this.phase = 'ready';
     this.loop.paused = true;
     this.loop.reset();
-    this.tracers = [];
+    this.renderer.shotFx.clear();
+    this.teamDamage.clear();
     const sc = new Scene(s.observe(), s.lastAct, this.host(s).activeEffects(), null);
     this.radar.reset(s.observe());
     this.kills = new Map();
     this.lastShotMs.clear();
+    this.economy.reset();
     const cart = sc.pawn(this.followed);
     if (cart !== null) this.orbit = { yaw: 0, pitch: 12 };
     if (s.human !== null && cart !== null) this.look = { yaw: cart.yaw, pitch: cart.pitch };
@@ -486,12 +529,16 @@ class App3D {
     const s = this.session;
     const act = s.step();
     const o = s.observe();
+    if (s.human !== null) this.lastInv.observe(o.pawns.find((p) => p.id === s.human)?.weapon ?? null);
     const h = this.host();
     const tick = o.tick - 1;
     for (const shot of h.shots()) {
       const p = o.pawns.find((q) => q.id === shot.shooter);
       if (p === undefined) continue;
-      this.tracers.push({ from: shot.from, to: shot.to, team: p.team, tick });
+      // W3: tracer (1 in the weapon's TracerFrequency) and impacts; the tracer ends where the bullet did.
+      const last = shot.impacts[shot.impacts.length - 1];
+      const to = last === undefined ? shot.to : last.pos;
+      this.renderer.addShot({ shooter: shot.shooter, tick, muzzle: worldMuzzle(shot.from, to, p.yaw, p.crouching), to, tracer: shot.tracer !== false, impacts: shot.impacts });
       this.lastShotMs.set(shot.shooter, performance.now());
       if (shot.shooter === s.human) {
         this.humanShots++;
@@ -499,16 +546,17 @@ class App3D {
       }
     }
     this.radar.ingest(o);
+    this.teamDamage.ingest(o);
     this.countKills(o);
+    this.economy.ingest(o);
     for (const e of o.events) {
       if (e.type === 'damage' && e.attacker !== null && e.attacker === s.human && !e.scripted) {
         this.humanHits++;
         this.lastHit = { ms: performance.now(), head: e.hitgroup === 'head' };
       }
     }
-    this.tracers = this.tracers.filter((t) => tick - t.tick < TRACER_TICKS);
     this.scene.ingest(o, act, h.activeEffects());
-    this.a1.tick(o, h, s.human);
+    this.a1.tick(o, h, s.human, this.loop.speed);
   }
 
   private takeControl(): void {
@@ -520,6 +568,9 @@ class App3D {
       s.control({ type: 'speed', x: 1 });
     }
     s.takeControl(target);
+    this.lastInv.reset();
+    this.wheelJump.reset();
+    this.autoFull();
     const p = this.scene.pawn(s.human ?? this.followed);
     if (p !== null) this.look = { yaw: p.yaw, pitch: p.pitch };
     this.controls.release();
@@ -539,6 +590,8 @@ class App3D {
     this.session.cancelSeek();
     this.seekResume = null;
     this.session.restart();
+    this.lastInv.reset();
+    this.wheelJump.reset();
     this.scene = this.ready(this.session);
     this.updateControls();
   }
@@ -561,7 +614,8 @@ class App3D {
     if (p === null || p.done) {
       this.scene = new Scene(s.observe(), s.lastAct, this.host().activeEffects(), null);
       this.afterJump();
-      this.tracers = [];
+      this.renderer.shotFx.clear();
+      this.teamDamage.clear();
       this.phase = this.seekResume ?? 'paused';
       this.seekResume = null;
       this.loop.reset();
@@ -628,13 +682,15 @@ class App3D {
     this.radar.reset(this.session.observe());
     this.lastShotMs.clear();
     this.kills = new Map();
-    for (const line of this.session.log().lines()) {
-      if (!line.includes('"type":"death"')) continue;
-      try {
-        this.countKills((JSON.parse(line) as { observe: Observe }).observe);
-      } catch {
-        // A malformed line: skip it.
-      }
+    this.economy.reset();
+    this.wasFirstPerson = false;
+    // H6: the kill feed, the deaths, the bomb and the round end (Scene.restore), the kills and the money, rebuilt from
+    // the session log's observes up to now (only the ~30 lines with a death, bomb or round_end event are parsed).
+    const history = eventHistory(this.session.log(), this.scene.cur.tick);
+    this.scene.restore(history);
+    for (const o of history) {
+      this.countKills(o);
+      this.economy.ingest(o);
     }
   }
 
@@ -650,6 +706,29 @@ class App3D {
 
   private onKey(code: string): boolean {
     const s = this.session;
+    // W1 (#49): the round hotkeys (keys no control of the game has; Restart wants a second press within 1 s).
+    if (!this.controls.keyMap.has(code)) {
+      const k = this.hotkeys.press(code, performance.now());
+      if (k !== null) {
+        this.hotkey(k);
+        return true;
+      }
+      if (code === this.hotkeys.keys.restart) return true;
+    }
+    if (this.playing() && !this.controls.keyMap.has(code)) {
+      // W1 (#41): Q = lastinv (CS2's default bind): back to the previous item, with its deploy.
+      if (code === 'KeyQ') {
+        const h = s.human as PlayerId;
+        const carried = (this.host().pawnState(h)?.inventory ?? []).map((q) => q.item);
+        for (const slot of lastInvSlots(this.lastInv.previous, this.scene.pawn(h)?.weapon ?? '', carried)) s.requestWeaponSlot(slot);
+        return true;
+      }
+      // W1 (#42): F = +lookatweapon: the viewmodel's inspect (no gameplay effect).
+      if (code === 'KeyF') {
+        if (this.zoom === 0) this.a1.inspect(this.scene.cur.tick, this.scene.renderTick(interpolationAlpha(this.loop.pending, TICK_MS)));
+        return true;
+      }
+    }
     if (code === 'KeyE' && s.human === null) {
       this.takeControl();
       return true;
@@ -673,11 +752,50 @@ class App3D {
       this.spectateStep(1);
       return true;
     }
-    if (code === 'KeyP') {
-      this.togglePause();
-      return true;
-    }
     return false;
+  }
+
+  /** W1 (#49): a round hotkey. */
+  private hotkey(k: PageHotkey): void {
+    if (k === 'start') {
+      if (this.phase === 'ready') {
+        this.start();
+        this.autoFull();
+      }
+    } else if (k === 'pause') this.togglePause();
+    else this.restart();
+    this.updateControls();
+  }
+
+  /** W1 (#53): fullscreen with Keyboard Lock, unless the setting is off (desktop only; needs a user gesture). */
+  private autoFull(): void {
+    if (this.autoFullscreen && !this.touchOnly && !this.guard.fullscreen) void this.guard.enter();
+  }
+
+  /** W1: the Keys group's round hotkeys (#49) and the wheel-jump checkboxes (#40), persisted with the settings. */
+  private wireW1Keys(container: HTMLElement): void {
+    new HotkeysDom(container, this.hotkeys.keys, (code) => this.controls.keyMap.has(code), (h) => {
+      this.hotkeys.keys = h;
+      this.saveSettings();
+    }, { start: document.getElementById('start') as HTMLButtonElement | null, pause: document.getElementById('pause') as HTMLButtonElement | null, restart: document.getElementById('restart') as HTMLButtonElement | null });
+    const check = (key: keyof WheelJumpBinds, text: string, title: string): void => {
+      const label = document.createElement('label');
+      label.className = 'keys-check';
+      label.title = title;
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.id = `set-wheel-jump-${key}`;
+      box.checked = this.wheelBinds[key];
+      box.addEventListener('change', () => {
+        this.wheelBinds = { ...this.wheelBinds, [key]: box.checked };
+        this.saveSettings();
+        box.blur();
+      });
+      label.append(box, text);
+      container.append(label);
+    };
+    check('down', 'Jump on scroll down', 'CS2 bind mwheeldown +jump: every wheel notch down is a jump press (the weapon wheel does nothing here).');
+    check('up', 'Jump on scroll up', 'CS2 bind mwheelup +jump: every wheel notch up is a jump press.');
   }
 
   private togglePause(): void {
@@ -698,7 +816,10 @@ class App3D {
         this.updateControls();
       });
     };
-    on(b.start, () => this.start());
+    on(b.start, () => {
+      this.start();
+      this.autoFull();
+    });
     on(b.pause, () => this.togglePause());
     on(b.restart, () => this.restart());
     on(b.takeover, () => this.takeControl());
@@ -751,7 +872,10 @@ class App3D {
       if (p !== null) this.setZoom(p.weapon, av.zoom, av.fov4x3);
       this.look = turnView(this.look, mouse.dx, mouse.dy, effectiveSensitivity(this.sensitivity, this.currentFov4x3(), this.zoomRatio));
       // H2b: the input carries the plain view; the host adds the aim punch × weapon_recoil_scale and the inaccuracy cone.
-      const inp = fpsInput(s.human as PlayerId, this.controls.controls(), this.look);
+      if (av.zoom > 0) this.a1.cancelInspect();
+      // W1 (#40): a wheel notch bound to +jump holds JUMP until a tick has seen it (WheelJump).
+      const held = this.controls.controls();
+      const inp = fpsInput(s.human as PlayerId, this.wheelJump.held() ? { ...held, jump: true } : held, this.look);
       s.setHumanInput(inp);
       this.a1.input(inp, p, this.scene.cur.tick, this.scene.cur.round.bomb.state === 'planted');
     } else if (this.camMode === 'free') {
@@ -763,6 +887,7 @@ class App3D {
     const t0 = performance.now();
     this.probe.mark('input', t0);
     const n = this.loop.advance(dt);
+    this.wheelJump.ticksRan(n);
     const t1 = performance.now();
     this.probe.mark('sim', t1);
     this.frames++;
@@ -817,23 +942,43 @@ class App3D {
     const human = s.human;
     const humanPawn = human === null ? null : this.scene.pawn(human);
     const firstPerson = humanPawn !== null && humanPawn.alive;
+    // H6 (#85): the human just died: their own death fade in first person, then spectating.
+    if (!firstPerson && this.wasFirstPerson && human !== null) {
+      this.followed = human;
+      this.camMode = 'pov';
+    }
+    this.wasFirstPerson = firstPerson;
     if (!firstPerson) {
       const f = this.scene.pawn(this.followed);
       if (f === null || !f.alive) {
+        // The next living teammate once the death fade (DEATH_FADE.sec, 2 s) is over.
         const targets = this.spectateTargets();
-        if (targets.length > 0 && this.camMode !== 'free' && f !== null && this.scene.deaths.has(f.id) && this.scene.cur.tick - (this.scene.deaths.get(f.id) ?? 0) > 128) this.followed = cycleTarget(targets, f.id, 1);
+        if (targets.length > 0 && this.camMode !== 'free' && f !== null && this.scene.deaths.has(f.id) && this.scene.renderTick(alpha) - (this.scene.deaths.get(f.id) ?? 0) >= DEATH_FADE.sec * 64) this.followed = cycleTarget(targets, f.id, 1);
       }
     }
     if (!firstPerson && this.zoom !== 0) this.setZoom('', 0);
     const viewId = firstPerson ? (human as PlayerId) : this.followed;
-    const vp = this.scene.pose(viewId, alpha);
     const vo = this.scene.pawn(viewId);
+    // M2: the human's own camera is predicted (as CS2 predicts the local player): drawn from this tick toward the next
+    // one the host will run with his input (Sim3DHost.predictHumanMove), not from the last tick to this one, so he sees
+    // a landing when the sim lands. Everything else is drawn between the last two ticks.
+    const next = firstPerson && !exact && !this.loop.paused && vo !== null ? this.host(s).predictHumanMove() : null;
+    const cur = this.scene.cur.tick;
+    const vp: Pose | null =
+      next === null || vo === null
+        ? this.scene.pose(viewId, alpha)
+        : { x: vo.pos.x + (next.pos.x - vo.pos.x) * alpha, y: vo.pos.y + (next.pos.y - vo.pos.y) * alpha, z: vo.pos.z + (next.pos.z - vo.pos.z) * alpha, yaw: vo.yaw };
     const crouch = vo?.crouching ?? false;
-    if (this.lastView !== viewId) this.duck = crouch ? 1 : 0;
+    if (this.lastView !== viewId || exact) this.viewEye.reset(crouch);
     this.lastView = viewId;
-    this.duck = exact ? (crouch ? 1 : 0) : duckStep(this.duck, crouch, Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000));
+    const before = this.scene.prev?.pawns.find((p) => p.id === viewId);
+    const ends =
+      next !== null && vo !== null
+        ? { a: { tick: cur, crouching: vo.crouching, onGround: vo.onGround }, b: { tick: cur + 1, crouching: next.crouching, onGround: next.onGround } }
+        : { a: before === undefined || this.scene.prev === null ? null : { tick: this.scene.prev.tick, crouching: before.crouching, onGround: before.onGround }, b: { tick: cur, crouching: crouch, onGround: vo?.onGround ?? true } };
+    const dtSec = Math.min(0.1, (now - (this.lastDraw ?? now)) / 1000);
     this.lastDraw = now;
-    this.eyeZ = eyeHeightFor(this.duck);
+    this.eyeZ = exact ? eyeHeightFor(crouch ? 1 : 0) : this.viewEye.step(ends.a, ends.b, alpha, dtSec, this.tuning.movement.airDuckLift);
     let eye: Vec3;
     let yaw: number;
     let pitch: number;
@@ -842,11 +987,18 @@ class App3D {
     let aim = { yaw: 0, pitch: 0 };
     let specFov = 90;
     let specZoom = 0;
-    if (firstPerson || this.camMode === 'pov') {
+    // H6 (#85): the first-person death fade of the viewed pawn (only for a death this Scene saw happen).
+    const fade = this.deathFadeOf(firstPerson ? null : vo, alpha);
+    if (fade !== null && vo !== null) {
+      // Their own view, frozen as they died, the eye dropping to the ground.
+      eye = { x: vo.pos.x, y: vo.pos.y, z: vo.pos.z + fade.eyeHeight };
+      yaw = vo.yaw;
+      pitch = vo.pitch;
+    } else if (firstPerson || this.camMode === 'pov') {
       eye = vp === null ? this.freePos : { x: vp.x, y: vp.y, z: vp.z + this.eyeZ };
       if (firstPerson) {
         // H2b: the camera follows `recoilTracking` (view_recoil_tracking, default 0.45) of the recoil plus the screen
-        // shake; the crosshair sits where the next bullet goes (view + aim punch × 2).
+        // shake; `aim` is where the next bullet goes (view + aim punch × 2), the crosshair only with follow-recoil on.
         const v = this.aimView(human as PlayerId, this.look);
         yaw = v.camera.yaw;
         pitch = v.camera.pitch;
@@ -892,15 +1044,11 @@ class App3D {
         alive: p.alive,
         human: p.id === human,
         tag: p.alive && p.id !== viewId && (p.team === viewTeam || viewSees.includes(p.id)),
-        hidden: (firstPerson || this.camMode === 'pov') && p.id === viewId && p.alive,
+        hidden: (firstPerson || this.camMode === 'pov') && p.id === viewId && (p.alive || fade !== null),
         weapon: p.weapon,
       };
     });
     const rt = this.scene.renderTick(alpha);
-    const tracers: DrawTracer[] = this.tracers.map((t) => {
-      // The human's own tracers start at the viewmodel's muzzle, a little right of and below the eye.
-      return { from: t.from, to: t.to, team: t.team, age: Math.min(1, Math.max(0, (rt - t.tick) / TRACER_TICKS)) };
-    });
     const o = this.scene.cur;
     const b = o.round.bomb;
     const bomb = b.pos !== null && b.state !== 'carried' ? { pos: b.pos, planted: b.state === 'planted' } : null;
@@ -919,9 +1067,12 @@ class App3D {
       pitch,
       fovDeg: vfovDeg,
       viewmodelFovDeg: verticalFov(this.viewmodelFov),
-      tracers,
+      fxMs: rt * TICK_MS,
+      // W3: in first person (playing, or watching through a player's eyes) his tracers start at the viewmodel's muzzle.
+      fpShooter: firstPerson ? human : specPov ? viewId : null,
       effects: this.scene.effects,
       bomb,
+      items: this.host(s).worldItems(),
       viewmodel: weapon === null || scoped ? null : { weapon, sinceShot, anim: !firstPerson ? null : exact && vmAnim !== null ? { ...vmAnim, sinceShot: 1e6 } : vmAnim, team: (firstPerson ? humanPawn?.team : vo?.team) ?? 'CT' },
       nowMs: now,
     });
@@ -951,8 +1102,9 @@ class App3D {
     const canTake = human === null && s.takeControlBlocked(this.takeTarget()) === null && !this.touchOnly;
     const spec = firstPerson ? null : spectatePanel(vo, this.kills.get(viewId) ?? 0, this.camMode, vo === null ? '' : weaponName(vo.weapon), canTake, this.takeTarget() ?? 'cart');
     const r = this.renderer.renderer.domElement;
-    // The crosshair sits where the next bullet goes (off centre only with a punch; clientHeight read only then).
-    const off = (firstPerson || specPov) && !scoped && (aim.yaw !== yaw || aim.pitch !== pitch) ? aimOffsetPx({ yaw, pitch }, aim, vfovDeg, r.clientHeight) : { x: 0, y: 0 };
+    // W1 (#32): the crosshair stays at the centre (CS2's cl_crosshair_recoil 0: it shows the view, the bullet goes
+    // where the aim punch puts it); with "Crosshair follows recoil" it sits where the next bullet goes.
+    const off = (firstPerson || specPov) && !scoped ? crosshairOffsetPx(this.crosshairRecoil, { yaw, pitch }, aim, (c, a) => aimOffsetPx(c, a, vfovDeg, r.clientHeight)) : { x: 0, y: 0 };
     const radarTeam = firstPerson ? (humanPawn?.team ?? null) : viewTeam;
     // P1: the HUD (DOM) at most once per sim tick or every 15.6 ms, not on every frame of an uncapped loop.
     const hudDue = exact || o.tick !== this.hudTick || now - this.hudAt >= TICK_MS || now < this.hudAt;
@@ -965,10 +1117,13 @@ class App3D {
       clock: s.clock,
       viewer: viewId,
       human,
+      viewerTeam: vo?.team ?? null,
+      money: { cash: this.economy.money(viewId), flashes: this.economy.flashes(viewId, o.tick) },
       at: { x: eye.x, y: eye.y, yaw },
       mode: this.phase === 'ready' && human === null ? 'Watching · press Start, or E to play cart' : mode,
       modeKind: firstPerson ? 'you' : human !== null ? 'dead' : 'watching',
       crosshair: (firstPerson || specPov) && !scoped,
+      deathFade: fade?.black ?? 0,
       crosshairAt: { x: Math.round(off.x * 2) / 2, y: Math.round(off.y * 2) / 2 },
       scope: scoped,
       radar: { tracker: this.radar, team: radarTeam, rules: this.radarRules },
@@ -978,11 +1133,27 @@ class App3D {
       summary: over ? summary : null,
       tick: o.tick,
       nowMs: now,
+      items: this.host(s).pawnState(viewId)?.inventory.map((q) => q.item) ?? null,
+      teamDamage: { feed: this.teamDamage.feed(o.tick), hint: this.teamDamage.hint(human, o.tick) },
+      plant: firstPerson && human !== null ? this.host(s).plantHud(human) : undefined,
     });
     const r2 = performance.now();
     if (this.probing) this.probe.mark('hud', r2);
     this.cost.render = this.cost.render * 0.95 + (r1 - r0) * 0.05;
     this.cost.hud = this.cost.hud * 0.95 + (r2 - r1) * 0.05;
+  }
+
+  /**
+   * H6 (#85): the death fade of `p` (dead, viewed in first person) now, or null: not dead, not first person, over, or a
+   * death this Scene didn't see (after a seek the Scene starts without the round's deaths).
+   */
+  private deathFadeOf(p: PawnObs | null, alpha: number): DeathFade | null {
+    if (p === null || p.alive || this.camMode !== 'pov') return null;
+    const how = this.scene.deathInfo.get(p.id);
+    const at = this.scene.deaths.get(p.id);
+    if (how === undefined || at === undefined) return null;
+    const f = deathFade((this.scene.renderTick(alpha) - at) / 64, how.headshot, p.crouching ? 46 : 64);
+    return f.done ? null : f;
   }
 
   /** Test API: seek synchronously (no frame slicing), the Scene restarted where it lands, tracers cleared. */
@@ -994,7 +1165,8 @@ class App3D {
     if (tick !== s.tick) s.seek(tick / 64);
     this.scene = new Scene(s.observe(), s.lastAct, this.host().activeEffects(), null);
     this.afterJump();
-    this.tracers = [];
+    this.renderer.shotFx.clear();
+    this.teamDamage.clear();
     if (this.phase === 'ready') this.phase = 'paused';
     this.loop.reset();
     this.loop.paused = this.phase !== 'running';
@@ -1063,9 +1235,15 @@ class App3D {
   /** The settings fields (CS2's sensitivity, zoom_sensitivity_ratio, viewmodel_fov), restored from localStorage. */
   private loadSettings(sensFromUrl: boolean): void {
     try {
-      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatency?: boolean; res?: number; recoilTracking?: number };
+      const j = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') as { sensitivity?: number; zoomRatio?: number; viewmodelFov?: number; radar?: string; fps?: unknown; lowLatencyOptIn?: boolean; res?: number; recoilTracking?: number; crosshairRecoil?: boolean; wheelJump?: { down?: unknown; up?: unknown }; hotkeys?: unknown; autoFullscreen?: boolean; barHidden?: boolean };
+      if (typeof j.crosshairRecoil === 'boolean') this.crosshairRecoil = j.crosshairRecoil;
+      if (typeof j.autoFullscreen === 'boolean') this.autoFullscreen = j.autoFullscreen;
+      if (typeof j.barHidden === 'boolean') this.barHidden = j.barHidden;
+      if (typeof j.wheelJump === 'object' && j.wheelJump !== null) this.wheelBinds = { down: j.wheelJump.down === true, up: j.wheelJump.up === true };
+      this.hotkeys.keys = parseHotkeys(j.hotkeys);
       this.fpsLimit = parseFpsLimit(j.fps);
-      if (typeof j.lowLatency === 'boolean') this.lowLatency = j.lowLatency;
+      // W1 (#78): off by default (it may flicker); an older stored `lowLatency` no longer counts, so everyone starts off.
+      if (typeof j.lowLatencyOptIn === 'boolean') this.lowLatency = j.lowLatencyOptIn;
       if (typeof j.res === 'number' && Number.isFinite(j.res)) this.resScale = clamp(j.res, 0.25, 2);
       if (j.radar === 'cs2' || j.radar === 'all') this.radarRules = j.radar;
       if (!sensFromUrl && typeof j.sensitivity === 'number') this.sensitivity = clamp(j.sensitivity, SENSITIVITY_MIN, SENSITIVITY_MAX);
@@ -1079,7 +1257,7 @@ class App3D {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatency: this.lowLatency, res: this.resScale }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sensitivity: this.sensitivity, zoomRatio: this.zoomRatio, viewmodelFov: this.viewmodelFov, radar: this.radarRules, recoilTracking: this.recoilTracking, fps: this.fpsLimit, lowLatencyOptIn: this.lowLatency, res: this.resScale, crosshairRecoil: this.crosshairRecoil, wheelJump: this.wheelBinds, hotkeys: this.hotkeys.keys, autoFullscreen: this.autoFullscreen, barHidden: this.barHidden }));
     } catch {
       // ignore
     }
@@ -1104,7 +1282,55 @@ class App3D {
     field('set-zoom', () => this.zoomRatio, (v) => (this.zoomRatio = clamp(v, 0.01, 3)));
     field('set-vmfov', () => this.viewmodelFov, (v) => (this.viewmodelFov = clamp(v, VIEWMODEL_FOV_MIN, VIEWMODEL_FOV_MAX)));
     field('set-tracking', () => this.recoilTracking, (v) => (this.recoilTracking = clamp(v, 0, 1)));
+    const box = (id: string, get: () => boolean, set: (v: boolean) => void): void => {
+      const input = document.getElementById(id);
+      if (!(input instanceof HTMLInputElement)) return;
+      input.checked = get();
+      input.addEventListener('change', () => {
+        set(input.checked);
+        this.saveSettings();
+        input.blur();
+      });
+    };
+    box('set-xhair-recoil', () => this.crosshairRecoil, (v) => (this.crosshairRecoil = v));
+    box('set-autofs', () => this.autoFullscreen, (v) => (this.autoFullscreen = v));
+    box('set-hidebar', () => this.barHidden, (v) => this.setBarHidden(v));
+    this.wireBar();
     this.wirePerfSettings(field);
+  }
+
+  /** L1: slide the bottom menu out / back in; --bar-h tells the HUD how much of the bottom the shown bar covers. */
+  private setBarHidden(hidden: boolean): void {
+    this.barHidden = hidden;
+    const app = document.getElementById('app');
+    const bar = document.getElementById('bar');
+    app?.classList.toggle('bar-hidden', hidden);
+    app?.style.setProperty('--bar-h', hidden || !bar ? '0px' : `${bar.offsetHeight}px`);
+    const cb = document.getElementById('set-hidebar');
+    if (cb instanceof HTMLInputElement) cb.checked = hidden;
+  }
+
+  private wireBar(): void {
+    const bar = document.getElementById('bar');
+    this.setBarHidden(this.barHidden);
+    if (bar && typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.setBarHidden(this.barHidden)).observe(bar);
+    const toggle = (): void => {
+      this.setBarHidden(!this.barHidden);
+      this.saveSettings();
+    };
+    for (const id of ['bar-hide', 'bar-tab']) {
+      document.getElementById(id)?.addEventListener('click', (e) => {
+        toggle();
+        (e.currentTarget as HTMLElement).blur();
+      });
+    }
+    // Backquote is in nobody's key map (and can't be bound as a hotkey), so it is free for this.
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'Backquote' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+      e.preventDefault();
+      toggle();
+    });
   }
 
   /** P1: the FPS limit (frame-driver.ts: presets, a custom number), the render scale and the low-latency canvas. */
@@ -1184,7 +1410,17 @@ class App3D {
       humanShots: this.humanShots,
       humanHits: this.humanHits,
       costMs: { ...this.cost },
-      hud: { hp: text('hp'), clock: text('clock'), mode: text('mode'), killfeed: document.getElementById('killfeed')?.childElementCount ?? 0 },
+      hud: {
+        hp: text('hp'),
+        clock: text('clock'),
+        mode: text('mode'),
+        killfeed: document.getElementById('killfeed')?.childElementCount ?? 0,
+        clockClass: document.getElementById('clock')?.getAttribute('class') ?? '',
+        defuse: document.getElementById('defuse')?.hidden === false,
+        alert: document.getElementById('alert')?.hidden === false,
+        banner: document.getElementById('banner')?.hidden === false ? text('banner') : '',
+        money: document.getElementById('money')?.hidden === false ? text('money') : '',
+      },
     };
   }
 }

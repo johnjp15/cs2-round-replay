@@ -21,6 +21,9 @@ export interface Effect {
   readonly radius: number;
   /** Tick the effect ends (the pop tick while flying). */
   readonly untilTick: number;
+  /** S1: a volumetric smoke's voxels (centres, density 0–1) and their size; absent for a disc smoke. */
+  readonly cells?: readonly { readonly x: number; readonly y: number; readonly z: number; readonly d: number }[];
+  readonly cellSize?: number;
 }
 
 /** Anything that lists the active effects for the current tick (Sim2DHost does). */

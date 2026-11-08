@@ -47,6 +47,8 @@
    "mixgroup": "UI",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "vo/announcer/game_sounds_cs2_classic.vsndevts"
   },
   "Announcer.BombPlanted.CS2_Classic": {
@@ -91,6 +93,8 @@
    "mixgroup": "UI",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "vo/announcer/game_sounds_cs2_classic.vsndevts"
   },
   "Announcer.CTWin.CS2_Classic": {
@@ -135,6 +139,8 @@
    "mixgroup": "UI",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "vo/announcer/game_sounds_cs2_classic.vsndevts"
   },
   "Announcer.TWin.CS2_Classic": {
@@ -179,6 +185,8 @@
    "mixgroup": "UI",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "vo/announcer/game_sounds_cs2_classic.vsndevts"
   },
   "BaseExplosionEffect.Sound": {
@@ -204,6 +212,8 @@
    "mixgroup": "",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "BaseGrenade.Explode": {
@@ -268,6 +278,8 @@
     "BaseGrenade.ExplodeDistant",
     "BaseExplosionEffect.Sound"
    ],
+   "instanceLimit": 1,
+   "fadeSec": 0.102857,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "BaseGrenade.ExplodeDistant": {
@@ -322,6 +334,8 @@
    "mixgroup": "ExplosionsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0.102857,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "BaseSmokeEffect.Sound": {
@@ -384,6 +398,8 @@
    "children": [
     "BaseSmokeEffect.SoundDistant"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "BaseSmokeEffect.SoundDistant": {
@@ -436,6 +452,8 @@
    "mixgroup": "ExplosionsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "BulletBy.Supersonic.Crack": {
@@ -487,6 +505,8 @@
    "children": [
     "BulletBy.Supersonic.TailM"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 0.097143,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "BulletBy.Supersonic.TailM": {
@@ -547,6 +567,8 @@
    "mixgroup": "PlayerDamage",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0.097143,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "C4.PlantSound": {
@@ -591,6 +613,54 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 1,
+   "fadeSec": 1,
+   "defined": "game_sounds_weapons.vsndevts"
+  },
+  "C4.PlantSound_10sec": {
+   "files": [
+    "sounds/weapons/c4/c4_beep2_10sec.vsnd"
+   ],
+   "volume": 0.9,
+   "pitch": 1,
+   "pitchRandom": [
+    0,
+    0
+   ],
+   "volumeRandom": [
+    0,
+    0
+   ],
+   "delay": 0.05,
+   "curve": [
+    [
+     0,
+     1,
+     -0.000968,
+     -0.000968,
+     2,
+     3
+    ],
+    [
+     1300,
+     0,
+     -0.000867,
+     -0.000867,
+     2,
+     3
+    ]
+   ],
+   "occlusion": 0.2,
+   "offset": [
+    0,
+    0,
+    20
+   ],
+   "mixgroup": "Weapons",
+   "local": false,
+   "children": [],
+   "instanceLimit": 1,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "CT_Concrete.StepLeft": {
@@ -675,6 +745,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "CT_Sand.StepLeft": {
@@ -754,6 +826,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "CT_SolidMetal.StepLeft": {
@@ -837,6 +911,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "CT_Tile.StepLeft": {
@@ -918,6 +994,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "CT_Wood.StepLeft": {
@@ -999,6 +1077,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "Concrete.BulletImpact": {
@@ -1054,6 +1134,8 @@
    "mixgroup": "BulletImpacts",
    "local": false,
    "children": [],
+   "instanceLimit": 1,
+   "fadeSec": 0.1,
    "defined": "game_sounds_physics.vsndevts"
   },
   "Decoy.Draw": {
@@ -1100,6 +1182,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Decoy.PullPin_Grenade": {
@@ -1152,6 +1236,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Decoy.Throw": {
@@ -1204,6 +1290,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Default.ClipEmpty_Pistol": {
@@ -1256,6 +1344,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 1,
+   "fadeSec": 0.102857,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Default.ClipEmpty_Rifle": {
@@ -1308,6 +1398,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 1,
+   "fadeSec": 0.102857,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Default.WalkJump": {
@@ -1360,6 +1452,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 3,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "FX_RicochetSound.Ricochet": {
@@ -1417,6 +1511,8 @@
    "mixgroup": "BulletImpacts",
    "local": false,
    "children": [],
+   "instanceLimit": 1,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Flashbang.Bounce": {
@@ -1477,6 +1573,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Flashbang.Draw": {
@@ -1521,6 +1619,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Flashbang.Explode": {
@@ -1576,6 +1676,8 @@
    "children": [
     "Flashbang.ExplodeDistant"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Flashbang.ExplodeDistant": {
@@ -1629,6 +1731,8 @@
    "mixgroup": "ExplosionsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Flashbang.PullPin_Grenade": {
@@ -1681,6 +1785,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Flashbang.Throw": {
@@ -1733,6 +1839,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Flesh.BulletImpact": {
@@ -1789,6 +1897,8 @@
    "mixgroup": "PlayerDamage",
    "local": false,
    "children": [],
+   "instanceLimit": 1,
+   "fadeSec": 0.1,
    "defined": "game_sounds_physics.vsndevts"
   },
   "Grenade.Throw.Gear": {
@@ -1842,6 +1952,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "HEGrenade.Bounce": {
@@ -1902,6 +2014,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "HEGrenade.Draw": {
@@ -1946,6 +2060,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "HEGrenade.PullPin_Grenade": {
@@ -1998,6 +2114,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "HEGrenade.Throw": {
@@ -2052,6 +2170,8 @@
    "children": [
     "Grenade.Throw.Gear"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "IncGrenade.Bounce": {
@@ -2117,6 +2237,8 @@
    "children": [
     "IncGrenade.Bounce_M"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "IncGrenade.Bounce_M": {
@@ -2177,6 +2299,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "IncGrenade.Draw": {
@@ -2221,6 +2345,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "IncGrenade.PullPin_Grenade": {
@@ -2273,6 +2399,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "IncGrenade.Throw": {
@@ -2329,6 +2457,8 @@
    "children": [
     "Grenade.Throw.Gear"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Inferno.Fire.Ignite": {
@@ -2375,6 +2505,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 3,
+   "fadeSec": 0.297143,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Inferno.Loop": {
@@ -2419,6 +2551,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Land.Thud": {
@@ -2487,6 +2621,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "Land_Concrete.StepLeft": {
@@ -2559,6 +2695,8 @@
    "children": [
     "Land.Thud"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "Land_Sand.StepLeft": {
@@ -2634,6 +2772,8 @@
    "children": [
     "Land.Thud"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "Land_SolidMetal.StepLeft": {
@@ -2709,6 +2849,8 @@
    "children": [
     "Land.Thud"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "Land_Tile.StepLeft": {
@@ -2783,6 +2925,8 @@
    "children": [
     "Land.Thud"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "Land_Wood.StepLeft": {
@@ -2867,6 +3011,8 @@
    "children": [
     "Land.Thud"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "Molotov.Bounce": {
@@ -2929,6 +3075,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Molotov.Draw": {
@@ -2973,6 +3121,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Molotov.Extinguish": {
@@ -3017,6 +3167,8 @@
    "mixgroup": "Explosions",
    "local": false,
    "children": [],
+   "instanceLimit": 1,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Molotov.PreThrow": {
@@ -3074,6 +3226,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Molotov.Throw": {
@@ -3139,6 +3293,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Music.BombPlanted.valve_cs2_01": {
@@ -3166,6 +3322,8 @@
    "mixgroup": "",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "music/valve_cs2_01/game_sounds_music.vsndevts"
   },
   "Music.LostRound.valve_cs2_01": {
@@ -3193,6 +3351,8 @@
    "mixgroup": "",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "music/valve_cs2_01/game_sounds_music.vsndevts"
   },
   "Music.StartRound.valve_cs2_01": {
@@ -3220,6 +3380,8 @@
    "mixgroup": "BuyMusic",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "music/valve_cs2_01/game_sounds_music.vsndevts"
   },
   "Music.WonRound.valve_cs2_01": {
@@ -3247,6 +3409,8 @@
    "mixgroup": "",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "music/valve_cs2_01/game_sounds_music.vsndevts"
   },
   "Player.DamageBody.VictimFlesh": {
@@ -3294,6 +3458,8 @@
    "mixgroup": "PlayerDamage",
    "local": false,
    "children": [],
+   "instanceLimit": 3,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DamageHeadShot.AttackerFeedback": {
@@ -3342,6 +3508,8 @@
    "mixgroup": "PlayerAttackerFeedback",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DamageHeadShot.Onlooker": {
@@ -3398,6 +3566,8 @@
    "mixgroup": "PlayerDamage",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DamageHeadShot.Victim": {
@@ -3446,6 +3616,8 @@
    "mixgroup": "PlayerVictim",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DamageHeadShotArmor.AttackerFeedback": {
@@ -3490,6 +3662,8 @@
    "mixgroup": "PlayerAttackerFeedback",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DamageHeadShotArmor.Onlooker": {
@@ -3542,6 +3716,8 @@
    "mixgroup": "PlayerDamage",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DamageHeadShotArmor.Victim": {
@@ -3586,6 +3762,8 @@
    "mixgroup": "PlayerVictim",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DamageKevlar": {
@@ -3642,6 +3820,8 @@
    "mixgroup": "PlayerDamage",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DeathBody.AttackerFeedback": {
@@ -3689,6 +3869,8 @@
    "mixgroup": "PlayerAttackerFeedback",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DeathBody.Flesh": {
@@ -3744,6 +3926,8 @@
    "mixgroup": "PlayerDamage",
    "local": false,
    "children": [],
+   "instanceLimit": 3,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DeathBody.Onlooker": {
@@ -3802,6 +3986,8 @@
    "children": [
     "Player.DeathBody.Flesh"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DeathBody.Victim": {
@@ -3852,6 +4038,8 @@
    "children": [
     "Player.DeathBody.Flesh"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DeathHeadShot.AttackerFeedback": {
@@ -3900,6 +4088,8 @@
    "mixgroup": "PlayerAttackerFeedback",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "Player.DeathHeadShot.Onlooker": {
@@ -3956,6 +4146,8 @@
    "mixgroup": "PlayerDamage",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_player.vsndevts"
   },
   "SmokeGrenade.Bounce": {
@@ -4018,6 +4210,8 @@
    "children": [
     "SmokeGrenade.Bounce_Can"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "SmokeGrenade.Bounce_Can": {
@@ -4079,6 +4273,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "SmokeGrenade.Draw": {
@@ -4130,6 +4326,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "SmokeGrenade.PullPin_Grenade": {
@@ -4182,6 +4380,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "SmokeGrenade.Throw": {
@@ -4236,6 +4436,8 @@
    "children": [
     "Grenade.Throw.Gear"
    ],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "T_Concrete.StepLeft": {
@@ -4320,6 +4522,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "T_Sand.StepLeft": {
@@ -4399,6 +4603,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "T_SolidMetal.StepLeft": {
@@ -4482,6 +4688,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "T_Tile.StepLeft": {
@@ -4563,6 +4771,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "T_Wood.StepLeft": {
@@ -4645,6 +4855,8 @@
    "mixgroup": "Footsteps",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_footsteps.vsndevts"
   },
   "Weapon_AK47.BoltPull": {
@@ -4697,6 +4909,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AK47.Clipin": {
@@ -4749,6 +4963,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AK47.Clipout": {
@@ -4801,6 +5017,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AK47.Draw": {
@@ -4845,6 +5063,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AK47.Single": {
@@ -4925,6 +5145,8 @@
    "children": [
     "Weapon_AK47.SingleDistant"
    ],
+   "instanceLimit": 1,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AK47.SingleDistant": {
@@ -4977,6 +5199,8 @@
    "mixgroup": "WeaponsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 2,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AWP.BoltBack": {
@@ -5029,6 +5253,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AWP.BoltForward": {
@@ -5081,6 +5307,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AWP.Clipin": {
@@ -5133,6 +5361,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AWP.Clipout": {
@@ -5185,6 +5415,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AWP.Draw": {
@@ -5229,6 +5461,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AWP.Single": {
@@ -5292,6 +5526,8 @@
    "children": [
     "Weapon_AWP.SingleDistant"
    ],
+   "instanceLimit": 1,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AWP.SingleDistant": {
@@ -5344,6 +5580,8 @@
    "mixgroup": "WeaponsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 2,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AWP.Zoom": {
@@ -5396,6 +5634,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_AWP.ZoomOut": {
@@ -5448,6 +5688,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_DEagle.Clipin": {
@@ -5500,6 +5742,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_DEagle.Clipout": {
@@ -5552,6 +5796,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_DEagle.Draw": {
@@ -5596,6 +5842,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_DEagle.Single": {
@@ -5675,6 +5923,8 @@
    "children": [
     "Weapon_DEagle.SingleDistant"
    ],
+   "instanceLimit": 1,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_DEagle.SingleDistant": {
@@ -5727,6 +5977,8 @@
    "mixgroup": "WeaponsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 2,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_DEagle.Slideback": {
@@ -5779,6 +6031,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_DEagle.Slideforward": {
@@ -5831,6 +6085,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Glock.Clipin": {
@@ -5883,6 +6139,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Glock.Clipout": {
@@ -5935,6 +6193,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Glock.Draw": {
@@ -5979,6 +6239,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Glock.Element_CRB": {
@@ -6040,6 +6302,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Glock.Element_Click": {
@@ -6084,6 +6348,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Glock.Single": {
@@ -6164,6 +6430,8 @@
     "Weapon_Glock.Element_CRB",
     "Weapon_Glock.Element_Click"
    ],
+   "instanceLimit": 1,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Glock.SingleDistant": {
@@ -6216,6 +6484,8 @@
    "mixgroup": "WeaponsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 2,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Glock.Slideback": {
@@ -6268,6 +6538,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Glock.Sliderelease": {
@@ -6320,6 +6592,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Knife.Deploy": {
@@ -6364,6 +6638,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Knife.Hit": {
@@ -6417,6 +6693,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Knife.HitWall": {
@@ -6473,6 +6751,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_Knife.Slash": {
@@ -6526,6 +6806,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_M4A1.BoltBack": {
@@ -6578,6 +6860,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_M4A1.BoltForward": {
@@ -6630,6 +6914,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_M4A1.Clipin": {
@@ -6682,6 +6968,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_M4A1.Clipout": {
@@ -6734,6 +7022,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_M4A1.Draw": {
@@ -6778,6 +7068,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_M4A1.Silenced": {
@@ -6862,6 +7154,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 2,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_M4A4.Single": {
@@ -6941,6 +7235,8 @@
    "children": [
     "Weapon_M4A4.SingleDistant"
    ],
+   "instanceLimit": 1,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_M4A4.SingleDistant": {
@@ -6993,6 +7289,8 @@
    "mixgroup": "WeaponsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 2,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_SSG08.BoltBack": {
@@ -7045,6 +7343,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_SSG08.BoltForward": {
@@ -7097,6 +7397,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_SSG08.Clipin": {
@@ -7149,6 +7451,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_SSG08.Clipout": {
@@ -7201,6 +7505,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_SSG08.Draw": {
@@ -7245,6 +7551,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_SSG08.Single": {
@@ -7323,6 +7631,8 @@
    "children": [
     "Weapon_SSG08.SingleDistant"
    ],
+   "instanceLimit": 1,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_SSG08.SingleDistant": {
@@ -7375,6 +7685,8 @@
    "mixgroup": "WeaponsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 2,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_SSG08.Zoom": {
@@ -7427,6 +7739,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_SSG08.ZoomOut": {
@@ -7479,6 +7793,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_USP.Clipin": {
@@ -7531,6 +7847,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_USP.Clipout": {
@@ -7583,6 +7901,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_USP.Draw": {
@@ -7627,6 +7947,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_USP.SilencedShot": {
@@ -7713,6 +8035,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 2,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_USP.Slideback": {
@@ -7765,6 +8089,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_USP.Sliderelease": {
@@ -7817,6 +8143,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_hkp2000.Clipin": {
@@ -7869,6 +8197,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_hkp2000.Clipout": {
@@ -7921,6 +8251,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_hkp2000.Draw": {
@@ -7965,6 +8297,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_hkp2000.Single": {
@@ -8045,6 +8379,8 @@
    "children": [
     "Weapon_hkp2000.SingleDistant"
    ],
+   "instanceLimit": 1,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_hkp2000.SingleDistant": {
@@ -8097,6 +8433,8 @@
    "mixgroup": "WeaponsDistant",
    "local": false,
    "children": [],
+   "instanceLimit": 2,
+   "fadeSec": 0.1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_hkp2000.Slideback": {
@@ -8149,6 +8487,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "Weapon_hkp2000.Sliderelease": {
@@ -8201,6 +8541,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "c4.disarmfinish": {
@@ -8261,6 +8603,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "c4.disarmstart": {
@@ -8321,6 +8665,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "c4.draw": {
@@ -8368,6 +8714,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "c4.explode": {
@@ -8412,6 +8760,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 1,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "c4.initiate": {
@@ -8464,6 +8814,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "c4.keypressquiet": {
@@ -8522,6 +8874,8 @@
    "mixgroup": "Foley",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   },
   "c4.plant": {
@@ -8582,6 +8936,8 @@
    "mixgroup": "Weapons",
    "local": false,
    "children": [],
+   "instanceLimit": 0,
+   "fadeSec": 0,
    "defined": "game_sounds_weapons.vsndevts"
   }
  },
@@ -8744,6 +9100,7 @@
   "sounds/weapons/awp/awp_draw.vsnd_c": 65750,
   "sounds/weapons/awp/zoom.vsnd_c": 41768,
   "sounds/weapons/c4/c4_beep2.vsnd_c": 14152,
+  "sounds/weapons/c4/c4_beep2_10sec.vsnd_c": 5796,
   "sounds/weapons/c4/c4_disarmfinish.vsnd_c": 265400,
   "sounds/weapons/c4/c4_disarmstart.vsnd_c": 221300,
   "sounds/weapons/c4/c4_draw_01.vsnd_c": 12173,
@@ -8905,5 +9262,59 @@
  "missing": [],
  "absent": [
   "sounds/common/explosions/explo_gas_can_01.vsnd_c"
- ]
+ ],
+ "mixers": {
+  "All": {
+   "vol": 1,
+   "parent": ""
+  },
+  "BulletImpacts": {
+   "vol": 0.3,
+   "parent": "All"
+  },
+  "BuyMusic": {
+   "vol": 1,
+   "parent": "All"
+  },
+  "Explosions": {
+   "vol": 0.7,
+   "parent": "All"
+  },
+  "ExplosionsDistant": {
+   "vol": 0.7,
+   "parent": "All"
+  },
+  "Foley": {
+   "vol": 1,
+   "parent": "All"
+  },
+  "Footsteps": {
+   "vol": 0.8,
+   "parent": "All"
+  },
+  "PlayerAttackerFeedback": {
+   "vol": 1,
+   "parent": "PlayerDamage"
+  },
+  "PlayerDamage": {
+   "vol": 1,
+   "parent": "All"
+  },
+  "PlayerVictim": {
+   "vol": 1,
+   "parent": "PlayerDamage"
+  },
+  "UI": {
+   "vol": 1,
+   "parent": "All"
+  },
+  "Weapons": {
+   "vol": 0.6,
+   "parent": "All"
+  },
+  "WeaponsDistant": {
+   "vol": 0.6,
+   "parent": "All"
+  }
+ }
 }

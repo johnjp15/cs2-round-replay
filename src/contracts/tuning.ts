@@ -82,8 +82,21 @@ export interface ReplayTuning {
   steerFallbackSec: number;
   /** B3 scripted events (docs/core.md "Scripted events"). A shooter aims at its target from this long (seconds) before the first shot of an engagement. */
   preAimSec: number;
-  /** Yaw and pitch turn limit while aiming (at a target, or at the bomb for a defuse), degrees per tick. */
+  /**
+   * Yaw and pitch turn limit while aiming (at a target, or at the bomb for a defuse), degrees per tick. F1: the peak of
+   * an eased flick (src/core/fight-aim.ts), not a constant turn speed.
+   */
   aimTurnRateDegPerTick: number;
+  /** F1: smooth time (seconds) of the critically damped ease that flicks a puppet's view onto a seen target. */
+  aimFlickSec: number;
+  /** F1: smooth time (seconds) of pre-aims, holds, the defuse look and the ease back to the puppet's own look. */
+  aimHoldSec: number;
+  /** F1: a shooter holds the angle its target will appear from this long (seconds) before the anticipated sight. */
+  aimLeadSec: number;
+  /** F1: after an engagement's last press the shooter keeps its view on the target this long (seconds). */
+  aimAfterSec: number;
+  /** F1: the largest residual (degrees, yaw and pitch) closed on the ATTACK tick itself so the shot leaves on target. */
+  aimShotSnapDeg: number;
   /** Ticks from an input (ATTACK, USE) in an Act to its effect in an Observe (the shot event): scripted inputs are sent this early. 2D sim: 1; CS2: probe P3. */
   inputLatencyTicks: number;
   /** Ticks from an action (damage, set_weapon, give) in an Act to its effect in an Observe: scripted actions are sent this early. 2D sim: 1. */
@@ -212,7 +225,7 @@ export interface WeaponModelTuning {
   recoilSuppressionShots: number;
   /** ... starting at this fraction of the magnitude (`weapon_recoil_suppression_factor`). */
   recoilSuppressionFactor: number;
-  /** +1: a recoil angle of +90° kicks the view left (+yaw); −1 mirrors. */
+  /** −1 (Valve's CCSPlayer::KickBack, yaw velocity −= sin a × m): a recoil angle of +90° kicks the aim right (−yaw); +1 mirrors (the pre-#54 bug). */
   recoilYawSign: number;
   /** The camera follows this share of the bullet's punch offset (CS:GO `view_recoil_tracking` 0.45; not in CS2's dump). */
   viewRecoilTracking: number;
@@ -220,7 +233,7 @@ export interface WeaponModelTuning {
   recoilViewPunchExtra: number;
   /** View punch exponential decay per second (CS2 `view_punch_decay`). */
   viewPunchDecay: number;
-  /** Recoil index decay per second (exponential) once no shot came for recoilIndexDelayCycles × the cycle time. */
+  /** `weapon_recoil_decay_coefficient` (CS:GO 2): the recoil index × e^(−ln 10 × this × dt) per tick once no shot came for recoilIndexDelayCycles × the cycle time. */
   recoilIndexDecay: number;
   recoilIndexDelayCycles: number;
   /** Rounds per Glock / FAMAS burst. */
@@ -229,8 +242,10 @@ export interface WeaponModelTuning {
   moveStartFraction: number;
   /** ... and is full at this fraction. */
   moveFullFraction: number;
-  /** Exponent on the 0–1 movement scale (1 = linear). */
+  /** Exponent on the 0–1 movement scale when not walking (CS `MOVEMENT_CURVE01_EXPONENT` 0.25; 1 = linear). */
   moveCurveExponent: number;
+  /** ... and while walking (CS: linear, 1). */
+  moveWalkCurveExponent: number;
   /** Jumping inaccuracy scale (CS2 `weapon_air_spread_scale`). */
   airSpreadScale: number;
   /** In the air: no vertical-speed penalty below this fraction of √(jump impulse) of √|vz| ... */
@@ -549,8 +564,24 @@ export interface DamageTuning {
   pawnRadius: number;
   /** Bullets travel at most this far (units). */
   maxRange: number;
-  /** false = bullets pass through teammates and grenades never hurt the thrower's teammates. */
+  /**
+   * The 2D host's and the pure modules' switch: false = bullets pass through teammates and grenades never hurt the
+   * thrower's teammates. The 3D host uses `mpFriendlyfire` and the ff ratios below instead.
+   */
   friendlyFire: boolean;
+  /**
+   * W3, the 3D host: CS2 `mp_friendlyfire` (competitive: 1). Team damage only from shooters and throwers that play by
+   * the mechanics (the human and LIVE pawns); puppets keep the recording's outcomes.
+   */
+  mpFriendlyfire: boolean;
+  /** CS2 `ff_damage_reduction_bullets` (competitive 0.33): × a teammate's bullet damage (before hitgroup and armor). */
+  ffDamageReductionBullets: number;
+  /** CS2 `ff_damage_reduction_grenade` (competitive 0.85): × a teammate's HE damage. */
+  ffDamageReductionGrenade: number;
+  /** CS2 `ff_damage_reduction_grenade_self` (competitive 1): × the thrower's own HE damage. */
+  ffDamageReductionGrenadeSelf: number;
+  /** CS2 `ff_damage_reduction_other` (competitive 0.4): × a teammate's other damage (knife, fire). */
+  ffDamageReductionOther: number;
   /** Deploy time for held items without their own (knife, c4). */
   defaultDeploySec: number;
   /** false = classic reload (top up from reserve); true = CS2 since March 2026 (the old magazine's rounds are lost). */
@@ -637,6 +668,16 @@ export interface AiTuning {
   blastMarginUnits: number;
   /** A CT starts (or keeps going for) a defuse only if it can finish this long (s) before the explosion. */
   defuseMarginSec: number;
+  /** G8: yaw and pitch limit (degrees per tick) when not fighting: looking where it walks, at a hold angle. */
+  lookTurnRateDegPerTick: number;
+  /** G8: an automatic gun firing from a standstill at a target this far (units) or more crouches. */
+  crouchRangeUnits: number;
+  /** G8: hit by an enemy it doesn't see: it takes cover for this long (s). */
+  coverSec: number;
+  /** G8: cover is looked for within this distance (units). */
+  coverSearchUnits: number;
+  /** G8: a pawn holding a spot only walks back to it once more than this far (units) from it (no shuffling). */
+  holdSlackUnits: number;
 }
 
 /** Nav-mesh geometry tolerances (see docs/nav.md). */
@@ -719,6 +760,11 @@ const REPLAY_KEYS = [
   'steerFallbackSec',
   'preAimSec',
   'aimTurnRateDegPerTick',
+  'aimFlickSec',
+  'aimHoldSec',
+  'aimLeadSec',
+  'aimAfterSec',
+  'aimShotSnapDeg',
   'inputLatencyTicks',
   'actionLatencyTicks',
   'sprayGapFactor',
@@ -770,6 +816,7 @@ const WEAPON_MODEL_KEYS = [
   'moveStartFraction',
   'moveFullFraction',
   'moveCurveExponent',
+  'moveWalkCurveExponent',
   'airSpreadScale',
   'airLowSpeedFraction',
   'airMaxPenalty',
@@ -953,6 +1000,10 @@ const DAMAGE_KEYS = [
   'pawnRadius',
   'maxRange',
   'defaultDeploySec',
+  'ffDamageReductionBullets',
+  'ffDamageReductionGrenade',
+  'ffDamageReductionGrenadeSelf',
+  'ffDamageReductionOther',
 ] as const;
 /** Hitgroups that need a multiplier (head uses the weapon's headshotMult) and the aim bands hitscan picks from. */
 const HITGROUP_MULT_KEYS = ['chest', 'stomach', 'arm', 'leg', 'neck', 'generic'] as const;
@@ -993,6 +1044,11 @@ const AI_KEYS = [
   'guardMaxUnits',
   'blastMarginUnits',
   'defuseMarginSec',
+  'lookTurnRateDegPerTick',
+  'crouchRangeUnits',
+  'coverSec',
+  'coverSearchUnits',
+  'holdSlackUnits',
 ] as const;
 const NAV_KEYS = ['stepHeight', 'edgeEpsilon', 'losMargin', 'dropHeight'] as const;
 
@@ -1031,6 +1087,7 @@ export function parseTuning(json: unknown): Tuning {
     hitgroupMult: pickNumbers(asObject(damageObj['hitgroupMult'], 'damage.hitgroupMult'), HITGROUP_MULT_KEYS, 'damage.hitgroupMult'),
     bandHeights: pickNumbers(asObject(damageObj['bandHeights'], 'damage.bandHeights'), BAND_KEYS, 'damage.bandHeights'),
     friendlyFire: asBoolean(damageObj['friendlyFire'], 'damage.friendlyFire'),
+    mpFriendlyfire: asBoolean(damageObj['mpFriendlyfire'], 'damage.mpFriendlyfire'),
     reloadDiscardsMagazine: asBoolean(damageObj['reloadDiscardsMagazine'], 'damage.reloadDiscardsMagazine'),
   };
   const collisionObj = asObject(root['collision'], 'collision');
@@ -1061,7 +1118,8 @@ export function parseTuning(json: unknown): Tuning {
  * and the retry > 0, and the speed factor in (0, 1] (a pawn can't be planned faster than it runs).
  */
 function checkReplay(r: ReplayTuning): ReplayTuning {
-  const nonNegative = ['rejoinCalmSec', 'rejoinMinLiveSec', 'rejoinMinTapeSec', 'rejoinLeadSec', 'rejoinLateSec'] as const;
+  for (const k of ['aimFlickSec', 'aimHoldSec', 'aimTurnRateDegPerTick'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
+  const nonNegative = ['aimLeadSec', 'aimAfterSec', 'aimShotSnapDeg', 'rejoinCalmSec', 'rejoinMinLiveSec', 'rejoinMinTapeSec', 'rejoinLeadSec', 'rejoinLateSec'] as const;
   for (const k of nonNegative) if (r[k] < 0) throw new TuningError(`replay.${k}: must be >= 0, got ${r[k]}`);
   for (const k of ['rejoinHorizonSec', 'rejoinRetrySec'] as const) if (!(r[k] > 0)) throw new TuningError(`replay.${k}: must be > 0, got ${r[k]}`);
   if (!(r.rejoinSpeedFactor > 0 && r.rejoinSpeedFactor <= 1)) throw new TuningError(`replay.rejoinSpeedFactor: must be in (0, 1], got ${r.rejoinSpeedFactor}`);

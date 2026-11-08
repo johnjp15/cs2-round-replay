@@ -68,6 +68,8 @@ export interface RoundMeta {
   readonly sources: {
     readonly html: { readonly file: string; readonly sha256: string };
     readonly shotsCsv: { readonly file: string; readonly sha256: string; readonly rows: number };
+    /** V2: the view fit merged into the tracks (data/source/view-fit.json). */
+    readonly viewFit?: { readonly file: string; readonly sha256: string };
   };
 }
 
@@ -128,6 +130,32 @@ export interface TrackSample {
    * jump). Not in round.json: `applyTracks3d` sets it from data/geometry/mirage-tracks.json.
    */
   readonly jump?: 'plain' | 'crouch';
+  /**
+   * V2: x / y (and z) were moved from the radar reading to where the video's first-person frames put the player
+   * (`data/source/view-fit.json` `positions`, docs/round-data.md "View fit: position refinements").
+   */
+  readonly refined?: 'viewfit';
+}
+
+/** Where a view sample comes from (V2, docs/viewfit.md). */
+export const VIEW_SOURCES = ['video', 'radar'] as const;
+export type ViewSource = (typeof VIEW_SOURCES)[number];
+
+/**
+ * V2: the watched player's view, fitted to the video frame (`source: 'video'`): yaw and pitch from aligning the CS2
+ * mesh with the frame. Where the fit fails, the radar yaw is kept (`source: 'radar'`, `pitch: null`).
+ * `confidence`: `observed` = a clear fit; `estimated` = a plausible but ambiguous fit (or the radar fallback);
+ * `inferred` = held from the first fitted frame of a camera segment back across the spectator's camera switch.
+ */
+export interface ViewSample {
+  readonly t: number;
+  readonly tick: number;
+  /** Degrees counter-clockwise from +x. */
+  readonly yaw: number;
+  /** Source's (positive = down), within ±89; null when only the radar yaw is known. */
+  readonly pitch: number | null;
+  readonly source: ViewSource;
+  readonly confidence: Confidence;
 }
 
 export interface YawSample {
@@ -142,6 +170,8 @@ export interface Track {
   /** Source samples that were not on the 0.1 s grid, kept verbatim (event anchors). */
   readonly offGridSamples: readonly TrackSample[];
   readonly yaw: readonly YawSample[];
+  /** V2: the fitted first-person view while the camera watches this player (empty for the others), by time. */
+  readonly view: readonly ViewSample[];
   readonly endT: number;
   readonly endTick: number;
 }
@@ -207,6 +237,11 @@ export interface Utility {
    */
   readonly landing: GrenadeLanding | null;
   readonly radio: string;
+  /**
+   * S1: the release view angles (Source degrees; pitch positive = down) that land this throw on `landing` with the CS2
+   * grenade engine. Not in round.json: `applyTracks3d` sets it from data/geometry/mirage-tracks.json `utility`.
+   */
+  readonly aim?: { readonly pitch: number; readonly yaw: number };
 }
 
 /** A measured grenade landing (Source units). */
@@ -456,6 +491,7 @@ function checkSample(value: unknown, path: string): number {
   if (s['uncertainty'] !== undefined) num(s['uncertainty'], `${path}.uncertainty`);
   if (s['resampled'] !== undefined) bool(s['resampled'], `${path}.resampled`);
   if (s['jump'] !== undefined) oneOf(s['jump'], ['plain', 'crouch'] as const, `${path}.jump`);
+  if (s['refined'] !== undefined) oneOf(s['refined'], ['viewfit'] as const, `${path}.refined`);
   return s['t'] as number;
 }
 
@@ -471,6 +507,20 @@ function checkTrack(value: unknown, path: string): void {
   });
   arr(tr['offGridSamples'], `${path}.offGridSamples`).forEach((s, i) => checkSample(s, `${path}.offGridSamples[${i}]`));
   arr(tr['yaw'], `${path}.yaw`).forEach((y, i) => num(timedObj(y, `${path}.yaw[${i}]`)['deg'], `${path}.yaw[${i}].deg`));
+  let prevView = Number.NEGATIVE_INFINITY;
+  arr(tr['view'], `${path}.view`).forEach((v, i) => {
+    const p = `${path}.view[${i}]`;
+    const o = timedObj(v, p);
+    num(o['yaw'], `${p}.yaw`);
+    const pitch = nullable(o['pitch'], `${p}.pitch`, num);
+    if (pitch !== null && Math.abs(pitch) > 89) fail(`${p}.pitch`, 'outside ±89');
+    const source = oneOf(o['source'], VIEW_SOURCES, `${p}.source`);
+    if (source === 'radar' && pitch !== null) fail(`${p}.pitch`, 'radar views have no pitch');
+    oneOf(o['confidence'], CONFIDENCES, `${p}.confidence`);
+    const t = o['t'] as number;
+    if (!(t > prevView)) fail(`${p}.t`, 'view samples not strictly increasing');
+    prevView = t;
+  });
   timed(tr, 'endT', 'endTick', path);
 }
 

@@ -26,6 +26,10 @@
     "bench:session": "tsx tools/bench-session.ts",
     "check:browser": "tsx tools/browser-check.ts",
     "check:browser:3d": "tsx tools/browser-check3d.ts",
+    "check:browser:3d:c1": "tsx tools/browser-check3d-c1.ts",
+    "check:browser:3d:w1": "tsx tools/browser-check3d-w1.ts",
+    "check:browser:3d:layout": "tsx tools/browser-check3d-layout.ts",
+    "check:browser:3d:crosshair": "tsx tools/browser-check3d-crosshair.ts",
     "bench:3d": "tsx tools/bench-app3d.ts",
     "ghost": "tsx tools/ghost-round.ts",
     "scripted": "tsx tools/scripted-round.ts",
@@ -43,7 +47,16 @@
     "parity:3d": "npm run build:3d && tsx tools/video-parity.ts --app 3d --times \"every 0.5\" --runs watch --out logs/parity-3d --baseline docs/parity/baseline-3d.json",
     "harness3d": "tsx tools/harness3d.ts",
     "map:build": "tsx tools/build-map.ts",
-    "map:check": "tsx tools/build-map.ts de_mirage --check && tsx tools/build-map.ts de_dust2 --check --skip-geometry && tsx tools/game-scenario.ts --check"
+    "map:check": "tsx tools/build-map.ts de_mirage --check && tsx tools/build-map.ts de_dust2 --check --skip-geometry && tsx tools/game-scenario.ts --check",
+    "test:e2e:spray": "tsx tools/e2e/spray.ts",
+    "test:e2e:weapons": "tsx tools/e2e/weapons.ts",
+    "test:e2e:movement": "tsx tools/e2e/movement.ts",
+    "test:e2e:grenades": "tsx tools/e2e/grenades.ts",
+    "test:e2e:round": "tsx tools/e2e/round.ts",
+    "test:e2e": "npm run test:e2e:round && npm run test:e2e:movement && npm run test:e2e:weapons && npm run test:e2e:ttk && npm run test:e2e:grenades && npm run test:e2e:spray",
+    "test:e2e:ttk": "tsx tools/e2e/ak-ttk.ts",
+    "test:e2e:ak-browser": "tsx tools/e2e/ak-browser.ts",
+    "test:e2e:mobile": "tsx tools/e2e/mobile3d.ts"
   },
   "repository": {
     "type": "git",

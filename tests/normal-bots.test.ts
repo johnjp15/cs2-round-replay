@@ -229,14 +229,22 @@ describe('window-2s-early: tape-like play up to 2 s ahead of the recording', () 
     expect(early.length).toBeGreaterThan(0);
     const enc = encounterLogs(run);
     expect(enc.some((t) => / in sight at the spot at tick /.test(t))).toBe(true);
-    expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'damage' && ev.attacker === 'lokier' && ev.victim === 'cart' && ev.scripted && ev.amount === 73))).toBe(true);
+    // D1 (John 13:10): his real headshot kills Lokier at 18.47 s. F1: Lokier, holding the window from 15.95 s (the
+    // encounter's lead-in), sees him at the spot at 16.84 s (-0.6 s), so his time-shifted 73 lands 1 s later (17.83 s),
+    // before that kill, as the scenario describes (before F1 he saw him too late for it to land).
+    const hits = run.entries.flatMap((e) => e.observe.events.filter((ev) => ev.type === 'damage' && ev.attacker === 'lokier' && ev.victim === 'cart').map((ev) => [e.observe.tick, ev.type === 'damage' ? ev.amount : 0]));
+    expect(hits).toEqual([[1142, 73]]);
+    expect(enc.some((t) => / over at tick \d+, lokier is dead/.test(t))).toBe(true);
   });
 
-  it.skipIf(!MESH_SIGHT)('cart kills Lokier in the recorded duel; then the round is the tape (outcome printed)', () => {
+  it.skipIf(!MESH_SIGHT)('cart kills Lokier in the recorded duel; then the round is on script: CT defuse (outcome printed)', () => {
     const kill = deaths(run.entries).find((d) => d.victim === 'lokier');
     expect(kill).toMatchObject({ attacker: 'cart', headshot: true });
     console.log(`[window-2s-early] ${headline(run)}; encounter: ${encounterLogs(run).join(' | ')}; kills: ${killTicks(run).join(', ')}`);
-    expect(headline(run)).toMatch(/^Played it like the tape/);
+    // D1: his real kill comes before Lokier's hit, so cart keeps 100 HP and survives sp4rtan's post-round shot (2 kills
+    // changed: Lokier early, no post-round kill); before D1 the duel held the kill to its tick ("Played it like the tape").
+    expect(headline(run)).toMatch(/^(Played it like the tape|Same result, different round): CT defuse, 0\.72 s left/);
+    expect(liveSwitches(run.entries)).toEqual([]);
   });
 
   it('the react invariant holds', () => {
@@ -272,9 +280,10 @@ describe('kill-lokier-early: cart fights Lokier from the window 4 s early; the s
     expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'damage' && ev.attacker === 'cart' && ev.victim === 'lokier' && !ev.scripted))).toBe(true);
   });
 
-  it.skipIf(!MESH_SIGHT)('Lokier’s recorded kill of eradicate is dropped (eradicate outlives his recording); the Ts LIVE before the plant rejoin; the plant is on the tape', () => {
+  it.skipIf(!MESH_SIGHT)('Lokier’s recorded kill of eradicate is dropped (G8: eradicate’s fate is gone, LIVE for good); the Ts LIVE before the plant rejoin; the plant is on the tape', () => {
     expect(logs).toContain('script: dropped damage lokier -> eradicate (lethal at tick 816): lokier is LIVE');
-    expect(liveSwitches(run.entries).find((s) => s.id === 'eradicate')?.trigger).toBe('outlived');
+    // G8: one tick after his recorded death (before G8: outlived, 3 s later, standing at the end of his track).
+    expect(liveSwitches(run.entries).find((s) => s.id === 'eradicate')).toMatchObject({ trigger: 'fate', tick: 817 });
     const back = rejoins(run.entries).map((x) => x.id);
     for (const id of liveSwitches(run.entries).filter((s) => s.tick < 1761).map((s) => s.id).filter((id) => id !== 'lokier' && id !== 'eradicate')) expect(back).toContain(id);
     const plant = run.entries.find((e) => e.observe.events.some((ev) => ev.type === 'bomb' && ev.phase === 'planted'));
@@ -285,6 +294,11 @@ describe('kill-lokier-early: cart fights Lokier from the window 4 s early; the s
 
   it('the react invariant holds', () => {
     expect(reactViolations(run, tuning)).toEqual([]);
+  });
+
+  it('D1: a kill outside the recorded duel (14.6 s, before Lokier sees him at the window): no duel, G7/G8 decide the rest, and the round ends by the rules', () => {
+    expect(logs.filter((t) => t.startsWith('duel cart -> lokier'))).toEqual([]);
+    expect(run.entries.some((e) => e.observe.events.some((ev) => ev.type === 'round_end'))).toBe(true);
   });
 });
 

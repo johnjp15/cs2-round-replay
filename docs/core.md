@@ -36,13 +36,19 @@ Without the `walk` argument (or with `null`) the puppets are off and every REPLA
 
 1. `teleport {pos, yaw}`
 2. `set_hp {hp, armor, helmet}`
-3. One `give` per item: primary, secondary, each grenade (a duplicate grenade gets its own `give`), `c4`, `defuser`.
-4. `set_weapon` to the primary, else the secondary, else `knife`.
+3. One `give` per item: primary, pistol, each grenade (a duplicate grenade gets its own `give`), `c4`, `defuser`.
+4. `set_weapon` to the primary, else the recorded secondary, else `knife`.
+
+W2, the pistol (`pistolOf`): the recorded `kit.secondary` (donk's Glock-18, Sp4rtaN's Desert Eagle), else the team's
+default (`DEFAULT_PISTOL`): Glock-18 for T, USP-S for CT. CS2 spawns every player with one
+(`mp_t_default_secondary weapon_glock`, `mp_ct_default_secondary weapon_hkp2000`, which nearly everyone sets to the
+USP-S in the loadout). The 2020 ESEA match page isn't reachable, and the video never shows the others' pistols
+(docs/round-data.md). The drawn weapon is unchanged, so every puppet holds what the tape says.
 
 Ammo:
 
 - The weapon drawn at t = 0 gets the round's `kit.clip/reserve`.
-- Any other gun gets `tuning.weapons[id].clip/reserve`. In this round that is only donk's glock, 20/120. A missing entry throws.
+- Any other gun gets `tuning.weapons[id].clip/reserve`: donk's glock 20/120, the default Glock-18s 20/120 and USP-Ss 12/24. A missing entry throws.
 - Grenades, `c4` and `defuser` are given with 0/0.
 
 Start yaw (`startYaw(model, id)` returns `{yaw, source}`). The first rule that applies wins:
@@ -104,7 +110,7 @@ For donk this means:
 
 Other cases:
 
-- lokier's 73 HP / 7 armor hit on cart at 18.50 s is a normal entry. With cart as the human it becomes B4's scheduled encounter ("Divergence"), time-shifted to when Lokier actually sees him (G5: on the recorded tick when cart is on course then), and cart's kill of Lokier at 18.80 s becomes the outcome of G5's recorded duel ("Recorded duels of the human").
+- lokier's 73 HP / 7 armor hit on cart at 18.50 s is a normal entry. With cart as the human it becomes B4's scheduled encounter ("Divergence"), time-shifted to when Lokier actually sees him (G5: on the recorded tick when cart is on course then), and cart's kill of Lokier at 18.80 s is the human's own business: inside G5's recorded duel his shots are real (D1, "Recorded duels of the human").
 - The build throws `ScheduleError` on inconsistent data: damage after a death, two killing hits, a kill whose killer is not the one who landed the killing hit, or a killing hit with no kill.
 
 ## ReplayCore (`replay-core.ts`)
@@ -116,7 +122,7 @@ Other cases:
 1. On the first step after `start` or `restart`, it emits `startActions`, resets every pawn's status to `REPLAY` since that tick, resets every puppet controller to the pawn's start yaw and the scripted events' state, and then (B3) emits the round-start `block_damage` actions (see "Scripted events"). Before any `start` it emits no setup.
 2. Status for all ten pawns, in id order: `DEAD` from the tick the observe first shows `alive: false`; `HUMAN` for the living pawn `observe.human` names (B4); otherwise `LIVE` stays `LIVE` (set by B4's triggers through `setPawnMode`) and anything else is `REPLAY`. `trigger` is the trigger that made the pawn LIVE (B4, see "Divergence"), `rejoin` for a REPLAY pawn that came back to its recording (G1), else `null`, and `sinceTick` is the tick the mode began (0 before the first start).
    - **G4: takeover.** Not on the setup step: if `observe.human` is not the last step's human, `humanChanged` lifts the new human's damage blocks, logs the takeover and activates his scheduled encounters (or, a release, makes the old one LIVE), after any resync prefix and before the triggers. See "Takeover".
-3. **Divergence** (B4, not on the setup step): `Divergence.step` runs the triggers and the scheduled encounters, appends their actions (`unblock_damage`, `set_mode`, logs; an encounter's `block_damage` and scripted `damage`) and returns the pawns that go LIVE, which `setPawnMode` switches before B3 sees the modes. On the setup step `Divergence.setup` replaces the recorded shot of an active encounter. Then (G1) **`Rejoin.step`** looks at every LIVE pawn with the modes after those switches: it may send an approach (`set_mode` LIVE with role `rejoin`) or switch the pawn back (`block_damage`s, reconciliation, `set_mode` REPLAY, log), and `setPawnMode` makes the returned pawns REPLAY (trigger `rejoin`) before B3 sees the modes; the puppet's commanded yaw restarts from the observed one. See "Rejoin". Then (G5) **`HumanDuels.step`**, with the modes after those switches: the human's recorded duels (their `block_damage` / `unblock_damage`, the recorded outcome of his shots as scripted `damage`, logs). See "Recorded duels of the human".
+3. **Divergence** (B4, not on the setup step): `Divergence.step` runs the triggers and the scheduled encounters, appends their actions (`unblock_damage`, `set_mode`, logs; an encounter's `block_damage` and scripted `damage`) and returns the pawns that go LIVE, which `setPawnMode` switches before B3 sees the modes. On the setup step `Divergence.setup` replaces the recorded shot of an active encounter. Then (G1) **`Rejoin.step`** looks at every LIVE pawn with the modes after those switches: it may send an approach (`set_mode` LIVE with role `rejoin`) or switch the pawn back (`block_damage`s, reconciliation, `set_mode` REPLAY, log), and `setPawnMode` makes the returned pawns REPLAY (trigger `rejoin`) before B3 sees the modes; the puppet's commanded yaw restarts from the observed one. See "Rejoin". Then (G5) **`HumanDuels.step`**, with the modes after those switches: the human's recorded duels (logs only since D1, 2026-11-07: his shots there are real; before, G5's `block_damage` / `unblock_damage` and the recorded outcome as scripted `damage`). See "Recorded duels of the human".
 4. **`scheduledActions(o, actions)`** (B3): appends this tick's scripted actions after the setup (`ScriptedEvents.actions`: damage, weapons, grenade selection, plant / defuse fallbacks, drop logs).
 5. **`pawnInput(pawn, o, actions)`** (B2): called once per REPLAY pawn (alive, not `o.human`, mode `REPLAY`), in id order. It returns the puppet's input and may append a snap (`teleport` + `log`) to `actions`, after the setup and scheduled actions. On the setup step every REPLAY pawn (puppets on or off) gets a neutral input at the yaw of its setup `teleport`: that observe predates the teleports, and the engine applies the input yaw after them, so echoing the observed (pre-setup) yaw would turn every pawn back to 0. Without puppets (no `walk`) the input is otherwise neutral: forward 0, side 0, the pawn's current yaw and pitch, no buttons. See "Puppets" below.
 6. **`scriptedInput(input, pawn, o, prevYaw)`** (B3): layers the scripted look (aim, defuse, grenade pitch) and buttons (`ATTACK`, `USE`) on that input, except on the setup step, and writes the commanded yaw back to the puppet's state. `prevYaw` is the puppet's commanded yaw before this tick's movement input (the observed yaw without puppets).
@@ -178,7 +184,7 @@ CTs other than sp4rtan (incredibad, lokier, snakelore, zwomp) have none.
 2. **Drift**: ref = reference at t; behind = |pawn − ref| (2D).
 3. **Snap** when behind > `driftSnapUnits` (96) **and** no human sees the pawn (the human pawn's `sees`; `observe.human === null` = nobody) **and** a teleport window not used yet is open at this tick: `teleport {pos: ref, yaw: current}`, then `log {info, "puppet <id>: snap to track at tick <k>, <n> u behind (<kind> at ticks <a>-<b>)"}`. One snap per teleport point. The input below is then computed from ref. A pawn a human sees is never teleported. Snaps are counted in `PuppetState.snaps` and `ReplayCore.snapCount`.
 4. **Lookahead**: ahead = reference at t + `lookaheadSec` (0.15 s), before = at t − 0.15 s.
-5. **Yaw**: the recorded yaw when known (two yaw samples ≤ 0.1 s apart bracket t; shortest-arc interpolation), else the heading of motion (bearing from before to ahead) while the recorded speed is ≥ `standSpeedThreshold`, else held. The commanded yaw turns toward that by at most `maxTurnRateDegPerTick` (12°). The recorded POV yaw never turns faster than 11.7°/tick, so recorded yaw is followed exactly; the limit only smooths motion headings and the switch between the two sources. Yaw is in (−180, 180], rounded to 0.001°. Pitch is 0 (B3 aims).
+5. **Yaw**: the recorded yaw when known (two yaw samples ≤ 0.1 s apart bracket t; shortest-arc interpolation), else the heading of motion (bearing from before to ahead) while the recorded speed is ≥ `standSpeedThreshold`, else held. The commanded yaw turns toward that by at most `maxTurnRateDegPerTick` (12°). The recorded POV yaw never turns faster than 11.7°/tick, so recorded yaw is followed exactly; the limit only smooths motion headings and the switch between the two sources. Yaw is in (−180, 180], rounded to 0.001°. **V2** (`docs/viewfit.md`): "recorded" is first the view fitted to the video (`Track.view`, `PuppetTrack.recordedViewAt`: two `source: 'video'` samples ≤ 0.1 s apart, shortest-arc yaw, linear pitch), then the radar yaw; a scoped rifle (AWP, SSG 08) slower than `walkSpeedThreshold` holds its angle instead of turning to its heading (an AWPer walking or crouch-walking holds an angle). **Pitch**: the fitted pitch while known; held while watched without one (the fit failed: radar fallback); level (0) otherwise; turned from the observed pitch at the same 12°/tick (no new state: B3's aim also starts from the observed pitch). B3's aim overrides both during engagements, as before.
 6. **Buttons**: the plan, or none while behind > `driftNudgeUnits` (24): run to catch up.
 7. **Steer** at ahead if `isWalkableLine(pawn, ahead)`; otherwise at the latest reference point before it, back to `steerFallbackSec` (2 s) ago, that is in walkable line (C1's wall-aware rule); ahead if none is.
 8. **Speed**: wish speed = min(cap, |ahead − pawn| / lookahead), cap = run speed of the held weapon (observed) × WALK / DUCK factors. A pawn on the reference then gets exactly the recorded velocity, and lag is fed back with gain 1 / lookahead.
@@ -264,7 +270,7 @@ window is over). Each take-off is used once (`PuppetState.usedJumps`). Tested wi
 
 ### Snaps on CS2 Mirage (G3)
 
-With 3D movement on the snapped tracks the golden master snaps 9 times instead of main's 6
+With 3D movement on the snapped tracks the golden master snaps 7 times instead of main's 6
 (`tests/golden-round.test.ts` lists them). A puppet only snaps inside a teleport window (an over-speed stretch of its
 track) when it is more than `driftSnapUnits` (96) behind and the human doesn't see it.
 
@@ -276,7 +282,14 @@ track) when it is more than `driftSnapUnits` (96) behind and the human doesn't s
 | cart 1393 | main's cart 1350 | the recording's discontinuity, reached later |
 | snarlbot 633 | new | T ramp: the 2020 z is 80 above CS2's floor there; the track rejoins the recording's floor in one step |
 | donk 1344 | new (main's donk 923 is gone) | Apartments: CS2 raises the floor 32 units where the 2020 floor is flat; the track gets onto it in one step (a jump would do it: the snapping's detours have no jumps yet) |
-| cart 1880, 4114 | new | A site: the recording walks through a box CS2 has; the snapping finds no way round in time |
+
+Gone with T2 (backlog 46, #61): cart 1880 and 4114, cart's way into and out of Shop (28.5 s, 63.5–64.3 s) through a
+full-height doorway the 2020 map had beside the Market window (his POV shows the door frame; the 2020 nav has a
+floor-level gap at x −2025…−1950 in Shop's north wall). CS2 has the window there (sill z −128, 38 above B) and boxes;
+the snapped track jumped through the wall in one tick. `tools/snap-tracks.ts` `WAYS_ROUND`: in, he climbs the window
+(a jump at 28.4 s onto the sill, down into Shop by 28.7 s: the only CS2 way in time; V2's fitted eye is in the opening,
+raised, at 28.5 s); out, he walks up the west corridor and through the Shop door (61.5–65.9 s, 437 u at 99 u/s, in the
+doorway at 64.5 s, the video's 64.3), on the recording's B-side spot for his spray at sp4rtan from 65.9 s.
 
 Gone with T1 (`docs/geometry.md`, "barely 33–48 s"): barely 2299 (the recording's drop from Catwalk into the underpass
 at 35.1 s) and barely 2880 (main's 2879, its jump back up at 44.8 s). Both were one level flip of the radar dot over
@@ -319,10 +332,15 @@ C3's docs and tests (`docs/combat.md`, `tests/bomb.test.ts`) count an event at t
 
 - **Engagements.** Every fire item with a target gives an aim window [first press − `preAimSec`, last press], and every damage entry one at [its tick − input latency − `preAimSec`, its tick − input latency] (act ticks). A shooter's overlapping or touching windows at the same target merge into one engagement (`plan.engagements`).
 - **Band.** `head` if a merged damage entry is a headshot (lokier → eradicate, cart → lokier, sp4rtan → barely), else `chest`.
-- **Look.** Each tick of an engagement the yaw turns toward the bearing to the target's **observed** position and the pitch toward the band's point (`aimPitchAt`: eye at `pos.z + damage.eyeHeight` or `crouchEyeHeight`, band at `pos.z + damage.bandHeights[band]`, scaled for a crouched target; the shooter counts as crouched when its input holds `DUCK`). Both turn at most `aimTurnRateDegPerTick` (30°) from the last commanded yaw and the observed pitch. The look is applied with `withLook`, so the pawn keeps moving the same way, and the yaw is written back to the puppet: between engagements B2's movement yaw takes over from there (at 12°/tick).
-- **Only at what it sees (G6).** The yaw and pitch track the target's body only while the target is in the shooter's `sees` (the engine's report on that observe: eye to the target's aim points on the CS2 mesh, FOV, smoke, flash; `docs/vision.md`). Otherwise the shooter holds the **pre-aim on the recorded spot**: the band's point over the target's recorded feet where the engagement's next shot or hit lands (`Engagement.spots`: one per merged window, its last act tick and the target's recorded position one input latency later, clamped to the track's ends; `aimSpotAt` takes the first spot still ahead, else the last), at the same turn rate. So nobody tracks a target through a wall; the target walks into the pre-aim and the tracking starts on the first tick it is seen. Run-time engagements (B4's encounter aim) have no spots: out of sight the shooter keeps its hold (Lokier's angle on the window). The recorded damage still lands on its tick (the tape is the truth); a bullet fired at a wall ends at the wall (no engine damage between puppets anyway), and the engine logs each scripted hit whose eye-to-victim line is blocked (`script: scripted hit through geometry`, `docs/vision.md`). In the no-human round only the look changes (fixtures: positions by ≤ 4e-5 units, the rotated stick's rounding; no kill, damage, `sees` or bomb event moves).
+- **Look.** Each tick of an engagement the look goes toward the bearing to the target's **observed** position and the pitch toward the band's point (`aimPitchAt`: eye at `pos.z + damage.eyeHeight` or `crouchEyeHeight`, band at `pos.z + damage.bandHeights[band]`, scaled for a crouched target; the shooter counts as crouched when its input holds `DUCK`). The look is applied with `withLook`, so the pawn keeps moving the same way, and the yaw is written back to the puppet: once the fight aim lets go, B2's movement yaw takes over from there (at 12°/tick).
+- **How the view moves (F1, `fight-aim.ts`, `docs/fights.md`).** Every scripted look (engagement, defuse, B4 hold, lead-in, after) moves from the last commanded yaw and the observed pitch by a critically damped ease (Lowe's SmoothDamp, Game Programming Gems 4 §1.10) with smooth time `aimFlickSec` (0.06 s) onto a seen target and `aimHoldSec` (0.12 s) otherwise, speeding up by at most a third of the peak per tick and never more than `aimTurnRateDegPerTick` (18°) a tick: no one-tick snaps; to within 0.5°, a 10° correction takes 0.16 s and a 90° flick 0.23 s (peak 16°/tick), a 90° hold turn 0.45 s. Before a shot the smooth time shrinks to at most half the ticks left (≥ 1), so the view is on the target on the ATTACK tick, where a residual of at most `aimShotSnapDeg` (3°) is closed; the defuse look arrives by the first USE tick the same way. The velocities are `ScriptState.aim` (snapshotted).
+- **Lead-in: pre-aim the angle (F1).** From `aimLeadSec` (1.5 s) before an engagement's anticipated sight, the shooter holds where its target will appear: the target's recorded feet, at head height, at the tape's first sighting of the pair (`sightings[]`, either way round) if that is at most `aimLeadSec` before the aim window, else at the window's start (`buildLeads`). Once the target is in his `sees` he tracks it (at the hold pace) instead. Not for an engagement that was dropped, whose shooter went LIVE since it began, or whose target is LIVE now.
+- **After (F1).** For `aimAfterSec` (0.4 s) after an engagement's last press the shooter stays on the target (where he fell; the view freezes if the target is alive but out of sight), then eases back to the puppet's own look; the fight aim lets go once yaw, pitch and both velocities are within 0.25°.
+- **V2.** A shooter with a fitted video view (`RoundModel.viewTrack`, `fittedViewAt`) skips the lead-in and after phases: outside the aim windows the video is the truth.
+- **The scheduled encounter's hold** (B4, `buildEncounters`) starts with the same lead-in (`leadStart`): Lokier holds the window from 15.95 s, 1.5 s before the recorded sighting, instead of from the recorded aim's start (18.14 s).
+- **Only at what it sees (G6).** The yaw and pitch track the target's body only while the target is in the shooter's `sees` (the engine's report on that observe: eye to the target's aim points on the CS2 mesh, FOV, smoke, flash; `docs/vision.md`). Otherwise the shooter holds the **pre-aim on the recorded spot**: the band's point over the target's recorded feet where the engagement's next shot or hit lands (`Engagement.spots`: one per merged window, its last act tick and the target's recorded position one input latency later, clamped to the track's ends; `aimSpotAt` takes the first spot still ahead, else the last), at the same turn rate. So nobody tracks a target through a wall; the target walks into the pre-aim and the tracking starts on the first tick it is seen. Run-time engagements (B4's encounter aim) have no spots: out of sight the shooter keeps its hold (Lokier's angle on the window). The recorded damage still lands on its tick (the tape is the truth); a bullet fired at a wall ends at the wall (no engine damage between puppets anyway), and the engine logs each scripted hit whose eye-to-victim line is blocked (`script: scripted hit through geometry`, `docs/vision.md`). In the no-human round only the look changes (fixtures: positions by ≤ 4e-5 units, the rotated stick's rounding; no kill, damage, `sees` or bomb event moves). F1 again: only yaw, pitch and `sees` change, plus the rotated stick's 1e-6 rounding (5 units for barely on the tunnel stairs at 42.8 s, where it decides a step); every event tick is unchanged.
 - When a shooter has two engagements at once, it aims in the one that ends first.
-- `aim.ts` repeats the 2D hitscan's band geometry (the Core can't import `src/sim2d`); a test checks the two agree. The opening duel: snarlbot aims from tick 9 and faces incredibad (within 0.01°) from tick 11, well before the kill at tick 32.
+- `aim.ts` repeats the 2D hitscan's band geometry (the Core can't import `src/sim2d`); a test checks the two agree. The opening duel: snarlbot pre-aims incredibad from the start (F1's lead-in) and faces him (within 0.01°) well before the kill at tick 32.
 
 ### Firing
 
@@ -346,8 +364,8 @@ All 33 recorded exact-time shots land within a tick (20 exactly), and every gun 
 When `observe.human` is a pawn (normally cart):
 
 - the Core sends it no input, no weapon change, no grenade, plant or defuse: he never fires by himself;
-- no scripted damage to or from it at the recorded tick (one `debug` log per skipped entry: lokier's 73 on cart, cart's kill of lokier, sp4rtan's post-round kill of cart). B4 plays Lokier's hit on cart as a time-shifted, gated scheduled encounter ("Divergence"); G5 plays cart's kill of Lokier as the outcome of his own shots in their recorded duel ("Recorded duels of the human");
-- no B3 `block_damage` pair involves it, so its fights are real: puppets still aim and shoot at the human, and the engine decides those hits. The exception (G5) are his recorded duels: while he is in one, his bullets on its target are blocked and resolved like the tape.
+- no scripted damage to or from it at the recorded tick (one `debug` log per skipped entry: lokier's 73 on cart, cart's kill of lokier, sp4rtan's post-round kill of cart). B4 plays Lokier's hit on cart as a time-shifted, gated scheduled encounter ("Divergence"); cart's kill of Lokier is his own shots' (D1: real damage, inside the recorded duel too; "Recorded duels of the human");
+- no B3 `block_damage` pair involves it, so its fights are real: puppets still aim and shoot at the human, and the engine decides those hits. D1 (John 2026-11-07 13:10): his recorded duels too (G5 blocked his bullets there and resolved them like the tape).
 
 With `human === null` (the golden master) cart is a puppet like everyone else. G4: every rule above tests `observe.human` on the tick it applies, so from a mid-round takeover on they apply to him; the blocks he had as a puppet are lifted on the takeover tick ("Takeover").
 
@@ -411,7 +429,12 @@ HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/10
 | Key | Value | Meaning |
 | --- | --- | --- |
 | `preAimSec` | 0.35 | Aim at the target from this long before the first shot of an engagement (and at the bomb before a defuse). |
-| `aimTurnRateDegPerTick` | 30 | Yaw and pitch limit while aiming. |
+| `aimTurnRateDegPerTick` | 18 | Peak yaw and pitch rate of the eased aim (F1; was a constant 30°/tick turn). |
+| `aimFlickSec` | 0.06 | F1: smooth time of the flick onto a seen target. |
+| `aimHoldSec` | 0.12 | F1: smooth time of pre-aims, holds, the defuse look and the ease back. |
+| `aimLeadSec` | 1.5 | F1: the shooter holds the angle its target appears from this long before the anticipated sight. |
+| `aimAfterSec` | 0.4 | F1: the shooter stays on its target this long after the engagement's last press. |
+| `aimShotSnapDeg` | 3 | F1: the residual closed on the ATTACK tick itself. |
 | `inputLatencyTicks` | 1 | Act → Observe latency of inputs (`shot` events); scripted inputs are sent this early. CS2: probe P3. |
 | `actionLatencyTicks` | 1 | Act → Observe latency of actions (`damage`, `set_weapon`, `give`); scripted actions are sent this early. |
 | `sprayGapFactor` | 1.5 | Consecutive shots at most this many cycles apart are one spray. |
@@ -431,7 +454,7 @@ HP: donk 100 → 73 (3194) → 39 (3200) → 13 (3206) → 0 (3222); cart 100/10
 
 By default the round replays exactly. When the human does something different, only the puppets whose world actually changed go **LIVE** (the engine's AI drives them, carrying their recorded intent as a goal), and everyone else keeps replaying. A puppet follows its recording until something happens that its recorded self never experienced; divergence spreads only through cause and effect from an **off-script** pawn (the human, or a LIVE pawn): damage, sight, gunfire, a body block. A cancelled event alone changes nothing: B3 drops the shots and damage whose other side is dead or LIVE and the puppet carries on replaying (barely's 44.2 s kill of an already dead Zwomp).
 
-**Modes** (G1): REPLAY → LIVE (a trigger below, or G4's `released`: the human let go of the pawn without a rewind) → REPLAY again once the reason is gone (**rejoin**, below: calm, still alive on the tape, its state fits the recorded future) → LIVE again if something new reaches it, and so on; DEAD ends it. A pawn with no tape left (outlived) stays LIVE. The human is never LIVE or REPLAY. Before G1 modes went one way (REPLAY → LIVE → DEAD): one small deviation by the human (cart idle in Back Alley) cascaded through the rest of the round (never-peeks ended in a T win instead of the recorded CT defuse).
+**Modes** (G1): REPLAY → LIVE (a trigger below, or G4's `released`: the human let go of the pawn without a rewind) → REPLAY again once the reason is gone (**rejoin**, below: calm, still alive on the tape, its state fits the recorded future) → LIVE again if something new reaches it, and so on; DEAD ends it. A pawn with no tape left (outlived) stays LIVE; G8: a pawn whose recorded death can no longer happen is **LIVE for good** ("Fate gone: LIVE for good", below). The human is never LIVE or REPLAY. Before G1 modes went one way (REPLAY → LIVE → DEAD): one small deviation by the human (cart idle in Back Alley) cascaded through the rest of the round (never-peeks ended in a T win instead of the recorded CT defuse).
 
 ### Triggers (checked every tick, pure functions)
 
@@ -442,7 +465,8 @@ Every alive REPLAY puppet that isn't the human, in id order, the first that appl
 | 1 | `damage` (`damageTrigger`) | a `damage` event on it from the human or a LIVE pawn (any weapon; world and self damage don't count) | `hit by cart (27 hp, ak47)` |
 | 2 | `sighting` (`sightingTrigger`) | its `sees` holds an off-script enemy that the recording doesn't have it engaging or sighting then (`ExpectedEncounters.saw`; G7: within `closeRangeUnits` only with the enemy about where the tape has him, `recordedPairInSight`); not the human while he is **on script** (G7, `humanOnScript`: within `offCourseUnits` of his recorded track at some tick within `onCourseDriftSec` of now: then he is the recording, exactly as two puppets seeing each other is no divergence); not a pair a scheduled encounter owns | `sees cart (the human), not in the recording` |
 | 3 | `gunfire` (`gunfireTrigger`) | a `shot` sound from an off-script enemy within `hearingRangeUnits` (2D, as the AI hears) that isn't recorded fire of that shooter (`ExpectedEncounters.fired`, shifted by a started encounter: cart's late shots at Lokier; G7: and from about where the tape has him fire, within `humanSpotToleranceUnits` of his recorded track in the window, or of the encounter's spot when shifted) | `heard donk fire 1387 u away` |
-| 4 | `outlived` (`outlivedTrigger`) | alive `outliveGraceSec` (3 s) or more after its recorded death (kill feed) | `outlived recording (+3.0 s)` |
+| 0 | `fate` (`fateGone`, G8) | alive on a tick after its recorded death (kill feed) by a player other than the human: the scripted lethal hit was dropped; checked first, LIVE for good with a survivor's goal | `alive after its recorded death (lokier at tick 816): fate gone, LIVE for good` |
+| 4 | `outlived` (`outlivedTrigger`; G8: `fateGone`) | alive `outliveGraceSec` (3 s) or more after its recorded death (kill feed) by the human (his recorded duel may land late, G5); G8: LIVE for good with a survivor's goal | `outlived recording (+3.0 s)` |
 | 5 | `blocked` (`blockedTrigger`) | the human sees it, a solid pawn touches it on the side of its puppet reference (`blockingPawn`: centres within 2 × `collision.pawnRadius` + `contactSlackUnits`, the direction within 90° of the way back to its track), and either the contact has *added* more than `offCourseUnits` to its drift (pushed), or it has stood in the contact (slower than `standSpeedThreshold`) for `blockedSec` while more than `offCourseUnits` off course (held). Counting only the added drift keeps a puppet that already lags its track (sp4rtan's fast inferred one) from switching at a touch. Inferred from positions and velocities: `host.blockedBy` is a debug hint the Core can't use, and neither engine pushes players | `blocked by cart, held 110 u off course, seen by cart` |
 | — | `encounter` | a scheduled encounter's gate fails (below) | `encounter lokier -> cart at tick 1191: cart not in sight` |
 
@@ -464,7 +488,7 @@ Every non-lethal recorded hit on the default human by an enemy is a scheduled en
 - **Setup**: B3's recorded tap and aim of that hit are suppressed (`ScriptedEvents.suppress`), and from the recorded aim's start (tick 1161) Lokier **holds the angle** on the spot (a B3 `HoldItem`: he looks at chest height there whenever no engagement is active), after replaying to his track's end on B and holding there.
 - **waiting → seen**: the first tick Lokier (REPLAY) has cart in `sees` within `humanSpotToleranceUnits` (192) of the spot, **G7: within `encounterWindowSec` (3 s) of the recorded sighting** (17.45 s, tick 1117; `inEncounterWindow`). Seen at the spot outside it (cart there 9 s early in `cart-dies`), the encounter is **cancelled** (`encounter lokier -> cart: cancelled at tick 513, cart in sight at the spot -9.4 s against the recording, beyond the encounter window (3.0 s): a real fight`), it owns nothing from then, and trigger 2 makes Lokier LIVE on that tick: a real fight, no scripted 73. **G5: on course then** (`onCourse`: within `offCourseUnits` of his recorded track at that tick, so he is the recording, as for trigger 2) the hit is due on its **recorded tick** (18.50 s, 1184) if that is at least one latency ahead (`encounterShotTick`): tape-like play gets the tape's hit whatever tick the engine's sight catches him on (the 2D sight sees the follow run's cart at 17.59 s, tick 1126, when he comes within 192 u of the spot; the recording's sighting is 17.45 s, 211 u out). Otherwise (early, late, or at the spot off his track) the hit is due `encounterDelaySec` (1 s) later, as in B4. Lokier aims at cart's chest from now (a run-time B3 engagement). Logged with the shift against the recording (and `(on course: the recorded tick)`).
 - **seen → fired**, on the hit's act tick, if the **gate** passes (Lokier still REPLAY, cart in his `sees` and within the tolerance of the spot): `block_damage lokier → cart` (the scripted hit replaces the engine's bullet), the tap (a run-time B3 fire item: the shot and its sound are real) and the recorded `damage` (73 / 7, chest), landing on the due tick. The block is lifted when Lokier's shot is seen, or when he goes LIVE. If the gate fails, Lokier goes LIVE (`encounter`) and fights.
-- **done**: when Lokier or cart dies or Lokier leaves REPLAY. B3 skips the recorded kill (cart is the human: he never fires by himself); G5: cart's own shots at Lokier from the window are the **recorded duel** this encounter opens (shifted with its hit), so if he fires on Lokier there the recorded kill lands like the tape (18.80 s plus the shift), and outside it his bullets are real ("Recorded duels of the human"). If Lokier is still alive at 18.80 + 3 s, he has outlived his recording (trigger 4): LIVE, `hold` on B with the SSG 08, no forced death; the Ts walking onto the site then see a live enemy.
+- **done**: when Lokier or cart dies or Lokier leaves REPLAY. B3 skips the recorded kill (cart is the human: he never fires by himself); G5: cart's own shots at Lokier from the window are the **recorded duel** this encounter opens (shifted with its hit); D1 (John 2026-11-07 13:10): his bullets there are real, so a kill before the recorded 18.80 s is his, and his hits there don't make Lokier LIVE ("Recorded duels of the human"). If Lokier is still alive at 18.80 + 3 s, he has outlived his recording (trigger 4): LIVE, `hold` on B with the SSG 08, no forced death; the Ts walking onto the site then see a live enemy.
 - **Sightings it owns** (`encounterOwnsSighting`): during `seen` always (the gate decides), while `waiting` only with cart at the spot inside the encounter window (G7), and while `fired` only with cart at the spot. Seen anywhere else, cart is judged by trigger 2 (on script, a recorded pair ±2 s, else LIVE): walking up to Lokier on B after the hit isn't the recording, and since G7 neither is rushing the window 9 s early (before G7 that got the time-shifted 73 at 9.0 s, `cart-dies`).
 
 Sp4rtan's post-round kill on cart stays real, if it happens (B3: an implied tap, the engine decides). G5: cart's sprays at sp4rtan (the defuse, after the round) are recorded duels whose outcome is no damage.
@@ -494,6 +518,47 @@ John: "if the bots are able to attack the enemy, they can; they don't have to st
 Rejoin's calm (`unrestReason`) uses the same on-script rule. The **LIVE AI** (docs/ai.md) also changed for holders: a `hold` pawn reacting to an enemy in sight stops and turns to it instead of walking on to its hold spot (before, a LIVE Lokier who saw cart from Truck walked off it during his reaction and lost him).
 
 **Invariant** (`tools/react-check.ts`, `reactViolations`; asserted over the golden master and every scenario in `tests/scenarios.test.ts`, `tests/duels.test.ts`, `tests/normal-bots.test.ts`): no alive REPLAY bot has an off-script enemy (the human, or a LIVE pawn) in its `sees` for more than `ai.reactionSec` (16 ticks) in a row unless on each of those ticks the recording covers it: the human on script, a recorded pair with the enemy at his recorded place or beyond close range, or the scheduled encounter engaging him (from its sighting to the hit; after it at the spot). Two REPLAY puppets seeing each other are both the recording and don't count. Before G7 (B4 rules, measured with this check): `block-sp4rtan` sp4rtan → cart 140 ticks (57.42–59.59 s); with the pair taken without range (as first tried) the follow run, `duel-perfect-aim`, `early-peek-lokier`, `lokier-late`, `takeover-duel`, `takeover-mid-duel` showed sp4rtan → cart 60 ticks at 57.4 s, and `block-barely` / `miss-lokier-shop` Lokier → cart 23 / 52 ticks (long range: covered by rule 3). After G7: 0 everywhere.
+
+### Fate gone: LIVE for good (`fate.ts`, G8)
+
+John (11:35): "If he does not die to Lokier, he should continue to play out the round as a normal player. This applies
+to all players." Before G8 a pawn that survived its recorded death had a tape that has it dead: kill Lokier before
+12.75 s (`kill-lokier-early`) and eradicate, REPLAY, stood still at the end of his track in the Apartments corridor
+for 3 s; at 15.75 s `outlived` made him LIVE with `take_site` and as hold "where the recording has him at the plant",
+which for a dead man is his last sample: he stood in the corridor until the plant (27.5 s); then `guard_bomb` walked
+him to the Apartments window, where the 2020 nav's way down is a step up onto the sill on CS2 Mirage, and he pushed
+into it, shuffling ±2 units with a re-plan every tick, until the round ended (19 s); after it he stuck again on a
+Back Alley door frame (`tools/live-trace.ts` shows it, 1,000 idle LIVE ticks, 23 jitters). The rule:
+
+1. **When** (`fateGone`, every tick, every alive pawn but the human, before the triggers): its recorded death is gone
+   once it is alive on a tick after the kill feed's tick, if its recorded killer is a puppet (B3 lands the scripted
+   lethal hit on that tick, so alive after it means the hit was dropped: the killer LIVE or dead, or the victim LIVE);
+   if its recorded killer is the human, once it is alive `outliveGraceSec` (3 s) after it (G5 shifts the human's
+   recorded duels; before G8 this was trigger 4 for everyone). Nothing else counts: a killer whose victim is already
+   dead keeps its tape (its recorded future after the kill is still one it was recorded alive in: barely after the
+   44.2 s kill of a Zwomp cart already killed, `mid-zwomp`); the rule only fires once the recorded future is impossible.
+2. **What**: a REPLAY puppet goes LIVE with trigger `fate` (or `outlived`); a pawn already LIVE gets the new goal
+   (`set_mode` LIVE, log `<id> LIVE for good: …; goal <role>`). Either way it is in `DivergenceState.forGood` (Core
+   snapshot) from then on: **rejoin never plans or switches it** (there is no tape to go back to), a takeover release
+   and a resync give it the survivor's goal back.
+3. **The goal** (`survivorGoal`): a T gets `execute` with the recorded plant spot as `hold` (the site the team takes: B
+   here); a CT gets `retake` with the end of its recorded track as `hold`. No route: the AI walks the nav mesh. What the
+   roles do (plant with the c4 when the site is reached, otherwise cover the plant from the site, guard the bomb, go to
+   the planted bomb and defuse, fight on the way, take cover under fire) is docs/ai.md's.
+
+Scenarios (`tests/survivors.test.ts`, 2D and the 3D host): `eradicate-survives` (cart kills Lokier from the window
+at 10.2 s): eradicate LIVE for good at 12.77 s (`fate`), jumps onto the Apartments sill, drops onto B and covers the
+plant from (−1268, 506), guards the bomb after it, kills sp4rtan when he comes for the defuse (58.4 s): T elimination.
+`zwomp-survives` (John 15:22, "if barely does not kill Zwomp, Zwomp just stands still"; the human takes barely at 40 s
+and stands still): Zwomp LIVE for good at 47.20 s (`outlived`: his recorded killer is the human), kills barely, walks
+to the bomb and defuses it without a kit (53.55 → 63.55 s): CT bomb_defused. `never-peeks` (Lokier survives: LIVE for
+good at 21.80 s, `retake`, holds B) and `flank-sp4rtan` (donk and barely survive sp4rtan: `fate` one tick after their
+recorded deaths, guard the bomb, leave its blast). In each: LIVE from the switch to death or the round's end, no idle
+LIVE stretch over 1 s, at most 2 jitters, no calm turn over 12°/tick, no tick above the run speed (`liveMotion`), and
+G7's react invariant.
+
+The no-human run never reaches the rule (everyone dies on his tick): byte-identical (`9a994b97`, main's). It works for any
+human pawn (it reads `observe.human`; the human's own death is never "gone").
 
 ### The human's pawn
 
@@ -592,6 +657,8 @@ Every event that doesn't involve cart is on the golden master's observe tick. Wi
 - **The recording's own sightings** decide "unexpected enemy in sight" (2 s windows per pair, not positions): a LIVE pawn that runs into a REPLAY enemy the tape doesn't pair it with stays LIVE and the AI fights it.
 
 ### Scenarios (`tests/scenarios.test.ts`, `fixtures/scenarios/*.json`)
+
+**D1 (John 2026-11-07 13:10)**: the human's shots do real damage inside recorded duels too. The runs below that kill Lokier in the window duel now kill him with the first would-hit bullet, not on the duel's tick: follow-recording 18.61 s ("1 kill changed"), `duel-perfect-aim` 18.05 s, `takeover-mid-duel` 18.61 s, `takeover-duel` 18.72 s, `window-2s-early` 18.47 s, `lokier-late` 21.42 s, `smoke-window` 21.38 s; nobody goes LIVE in any of them and the rest of the round is unchanged ("Recorded duels of the human" → Results). The texts below are G5's where they say otherwise.
 
 Played by the human-bot (`tools/human-bot.ts`: `followRecording`, `walkTo`, `aimAt`, `fire`, `holdStill`, `throw`, setup `teleport`; `npm run harness -- --scenario <file>` prints the timeline). Seed 1, deterministic. Shared invariant: a puppet nothing touched replays exactly; on every tick it is REPLAY (and not body-blocked, and, G1, not LIVE yet: a rejoined pawn catches up from where its LIVE self left it) it is within 0.01 units of the no-human golden master's position (measured: 0.0005 at most, in every scenario). Where a LIVE fight's winner depends on the toy AI, the tests assert the triggers and print the winner. The recorded opening (snarlbot's kills of incredibad and snakelore, Lokier's of eradicate, sp4rtan's of snarlbot) is the same in all but `cart-dies` and is left out.
 
@@ -931,14 +998,26 @@ watches to t and has cart taken over there (`docs/golden.md`); `--takeover 0` is
   track: off course at once, so an enemy that sees him then goes LIVE.
 - The release path exists for CS2 (a player leaving); the 2D app has no "give control back" (rewind instead).
 
-## Recorded duels of the human (`duels.ts`, G5)
+## Recorded duels of the human (`duels.ts`, G5; D1)
 
 Once the player controls cart he **never fires by himself**: the Core sends the human nothing, so a recorded shot of
-cart's happens only if the player fires it. His recorded engagements are **recorded duels**: if he shoots in one, his
-shots land like the tape; if he doesn't, nothing is forced. That is John's call ("only my own shots"). Before G5 his
-bullets were always real, and with no spread, recoil or aim punch in 2D the first AK bullet of a tape-like spray at
-Lokier was a headshot at 18.50 s, before Lokier's own hit could land: Lokier died 0.30 s early, cart kept 100 HP and
-survived sp4rtan's post-round shot ("2 kills changed").
+cart's happens only if the player fires it (John: "only my own shots"). His recorded engagements are **recorded
+duels**.
+
+**The rule (John 2026-11-07 13:10, backlog #74, D1): the human's shots do real damage immediately, like CS2, inside
+recorded duels too.** A hit is the engine's (hitbox, armor, falloff, penetration, tagging, aim punch); the target dies
+when his HP reaches 0, on that tick, as a real kill. Killing him before the tape's kill tick is fine: inside the drift
+window (`onCourseDriftSec`, the encounter window) the tape's kill was coming anyway and the rest of the round stays on
+script; beyond it the divergence rules ("Normal bots", G8's permanent LIVE) decide. What stays from G5: no self-fire for
+the controlled pawn; the target's own scripted shot at the human (Lokier's 73 at 18.50 s) still lands by the tape while
+he is REPLAY and the human on script (the encounter, "Divergence"), so cart can still die to it if he stands in it; and
+the human's hits on the target **while in the duel** don't make the target LIVE (the duel is the tape's engagement: the
+damage trigger skips them, `Divergence.recordedHit`), so a wounded Lokier keeps replaying until he dies.
+
+Before D1 (G5, 2026-11-06): while he was in a duel his bullets on its target did no engine damage (`block_damage`), the
+engine reported them as `blocked_hit`, and the tape's outcome was applied to them (Lokier's kill on its recorded 18.80 s
+for a spray on target through it). V1's audit (`docs/audit/v1-e2e-2026-11-07.md`) found that made the AK feel slow at
+the window (a headshot at 18.05 s did nothing for 0.75 s). Before G5 his bullets were always real, as now.
 
 ### The duels (`buildDuels`)
 
@@ -959,57 +1038,32 @@ ticks, so they are not shifted.
 ### Each tick (`HumanDuels.step`)
 
 After the triggers and the rejoin (so it sees this tick's modes), before B3, for each duel while `observe.human` is its
-shooter (watching, they do nothing: the no-human round is byte for byte the golden master):
+shooter (watching, they do nothing: the no-human round is byte for byte the golden master). The duels send only logs:
 
 1. **Armed** once its shift is known: an anchored duel when its encounter has seen him at the spot (`seen`, or `fired`
    after a takeover past the recorded hit); the window then opens at that sighting and closes at the last press plus
    the shift. Any other at once, on its recorded window. An anchored duel whose encounter ends first (Lokier LIVE or
    dead, cart dead) never arms.
-2. **In the duel**: he is alive, the target alive and REPLAY, the tick inside the window, he within
-   `humanSpotToleranceUnits` (192, 2D) of the duel's spot (or a hit is due). Then `block_damage {cart, target}` is in
-   force: sent on the first tick he is in it, lifted on the first he isn't (he stepped away, the target went LIVE, the
-   window closed). His bullets on the target do no engine damage; the engine reports each one that would have hit as
-   `blocked_hit {attacker, victim, weapon, hitgroup}` (`docs/contracts.md`), and every `shot` of his is noted.
-3. **The outcome.** With hits (Lokier): the next recorded hit, at its shifted tick K (1203 + shift), lands
-   - **on K**, if his spray is on the target through it: at act K − `actionLatencyTicks` he has had a would-hit shot
-     since the recorded spray's first shot (shifted) less one fire cycle (`cycleTicks`: the AK's 6.4 ticks, 7), and he
-     is still firing (a shot within one cycle before K);
-   - else **one action latency after his first would-hit shot** reported after that act (he opened fire late, or let
-     go and fired again).
+2. **In the duel** (`engaged`): he is alive, the target alive and REPLAY, the tick inside the window, he within
+   `humanSpotToleranceUnits` (192, 2D) of the duel's spot. His real hits on the target then are counted, and the damage
+   trigger ignores them (as of the previous step's `engaged`, the Act his bullets came from).
+3. **Over** when the target or he dies, or the window has passed: logged with the count of his hits and, for a kill of
+   his, how it compares with the tape's (shifted) kill tick.
 
-   Never before K: his shots before it miss, so Lokier's recorded hit on him lands first; a spray that stops more than
-   a cycle short of K is a miss, like the tape's first shots. The hit is a scripted `damage` with B3's rules (attacker
-   cart, AK-47, head, lethal: the `death` is cart's headshot kill; sent one action latency early; dropped, logged, if
-   he or the target is dead or the target LIVE by then; a non-lethal one would stay non-lethal). Without hits
-   (sp4rtan): his shots do nothing, as on the tape: the defuse completes, and sp4rtan's post-round shot at cart stays
-   real (B3's implied tap, the engine decides).
-4. **Over** when the target or he dies, or the window and its last report have passed with nothing due: the block is
-   lifted, and if he was ever in it a log line says why, with the count of would-hit shots it blocked.
-
-**Outside a duel his bullets are real**: another place (beyond 192 u of the spot), another time (before Lokier has seen
-him at the window, after the window closed) or another target. So different input can still change history:
-`early-peek-lokier` kills Lokier for real at 16.45 s from the corridor, and `flank-sp4rtan` kills sp4rtan at 44.63 s.
-If he never fires on the target in a duel, nothing is forced: Lokier lives (never-peeks, miss-lokier-shop, an idle
-takeover) and outlives his recording at 21.80 s as before.
-
-**Why the kill lands on 18.80 s rather than one tick after "his first shot at or after 18.80 s".** A spray that starts
-on the tape's first shot can't put its 4th bullet on the tape's 18.80 s: the engine's AK fires at 0, 7, 13, 20, … ticks
-after the press, so B3's fit lands it on 1184, 1191, 1197, **1204**, 1210, 1216 against the tape's 1185, 1191, 1197,
-**1203**, 1210, 1216. And the Core learns of a blocked shot one tick after the engine fires it, so a kill sent on that
-report lands one more tick later (1205). A spray still on target at the kill moment is the tape's spray, so it kills on
-the tape's tick, as the puppet's does, and its 4th bullet then hits a dead Lokier, as in the golden master. One
-would-hit shot is enough for "on target" because the engine's sight decides which bullets reach him at all: with the
-follow script only the first does (at 18.61 and 18.70 s the sight mask's window wall is between them; G6's CS2 mesh
-will move that).
+**An early kill** (before the tape's kill tick): B3 drops every scripted event the target still had (`script: dropped
+… : lokier is dead`: no ghost shots), the encounter is over (`encounter lokier -> cart: over at tick k, lokier is
+dead`; if his hit was not yet due it never lands), and nobody else's script changes. The follow script's first would-hit
+bullet kills Lokier at 18.61 s (0.19 s early) after his hit; `duel-perfect-aim` kills him at 18.05 s, before it (so cart
+keeps 100 HP and survives sp4rtan's post-round shot). **A kill nobody expected then** (sp4rtan at 18 s, Lokier from the
+corridor at 14.6 s in `kill-lokier-early`) is no duel: G7's time-aware rules and G8's survivors handle it, and the
+round ends by the game rules.
 
 ### Takeover (G4)
 
-A takeover inside a duel's window arms it on that tick, after the takeover's `unblock_damage` for cart's B3 pairs (the
-duel's `block_damage {cart, target}` comes later in the same Act). From then the duel's rules apply. Taken over in the
-middle of the recorded spray (between the puppet's first shot, 18.50 s, and the kill), the puppet's shots of it that
-landed before the takeover (B3 decided its spray while nobody played him, and aims it at Lokier) start his spray: a
-player who keeps firing gets the kill on 18.80 s (`takeover-mid-duel`); one who doesn't fire leaves Lokier alive (the
-idle takeover at 18.6 s: he outlives his recording, as before G5).
+A takeover inside a duel's window arms it on that tick, after the takeover's `unblock_damage` for cart's B3 pairs. From
+then his bullets are real (D1). Taken over mid-spray at 18.6 s (`takeover-mid-duel`), after the puppet took Lokier's
+hit (27 HP), the next would-hit bullet kills Lokier at 18.61 s; one who doesn't fire leaves Lokier alive (the idle
+takeover at 18.6 s: he outlives his recording, as before G5).
 
 ### Encounter: on course, the recorded tick
 
@@ -1023,44 +1077,40 @@ and keeps B4's shift (lokier-late +2.64 s, smoke-window +2.61 s, cart-dies −9.
 
 ### State and logs
 
-`DuelState` per duel, in the Core snapshot (absent in snapshots from before G5: every duel afresh): `shift`, `fromTick`,
-`toTick` (armed), `startedTick`, `blocked`, `next` (the next recorded hit), `dueTick`, `aimedTick` (his last would-hit
-shot in the spray), `lastShotTick`, `shots` (would-hit shots blocked), `done`. A resync rewind re-sends a standing duel
-block with the encounters' (`standingBlocks`). Logs (integers, ids and tenths of seconds only):
+`DuelState` per duel, in the Core snapshot (absent in snapshots from before G5: every duel afresh; a G5 snapshot keeps
+its window and start, its block is not re-sent): `shift`, `fromTick`, `toTick` (armed), `startedTick`, `engaged`,
+`hits` (his hits on the target in it), `done`. Logs (integers, ids and tenths of seconds only):
 
-- `duel cart -> lokier: in the recorded duel from tick 1126 (+0.0 s against the recording, to tick 1215); his shots on
-  lokier land as recorded: kill (ak47, head) at tick 1203`
-- `duel cart -> lokier: his spray is on lokier through the recorded kill (ak47, head) (on target at tick 1184, still
-  firing at tick 1197): it lands at tick 1203 (recorded 1203)`, or `… his shot at tick 1206 would hit (head): the
-  recorded kill (ak47, head) lands at tick 1207 (recorded 1203)`
-- `duel cart -> lokier: dropped the recorded kill (ak47, head) due at tick k: lokier is LIVE`
-- `duel cart -> lokier: over at tick 1203, lokier is dead; 1 would-hit shot blocked` (or `the recorded duel is over`,
-  `cart is dead`)
+- `duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on
+  lokier are real (the tape: kill (ak47, head) at tick 1203)`
+- `duel cart -> lokier: over at tick 1191, lokier is dead (cart's kill, -0.2 s against the tape's kill at tick 1203); 1
+  hit on lokier in it` (or `the recorded duel is over`, `cart is dead`, `lokier is dead` for another killer)
 
-The scenario timelines list them (kind `duel`).
+### Results (`tests/duels.test.ts`, `tests/scenarios.test.ts`, `tests/takeover*.test.ts`, `tests/normal-bots.test.ts`; seed 1, 2D)
 
-### Results (`tests/duels.test.ts`, `tests/scenarios.test.ts`, `tests/takeover*.test.ts`; seed 1)
-
-| run | Lokier → cart | cart → Lokier | sp4rtan → cart | headline (before G5) |
+| run | Lokier → cart | cart → Lokier | sp4rtan → cart | headline (G5) |
 | --- | --- | --- | --- | --- |
-| follow-recording (tape-identical input) | 18.50 s, 73 / 7 | **18.80 s** (1203), the duel's AK-47 HS | 69.41 s (4442) | **Played it like the tape: CT defuse, 0.72 s left** (Same result, …; 2 kills changed: Lokier 18.50 s real, no hit, cart survived) |
-| duel-perfect-aim (on target from 18.05 s) | 18.50 s | **18.80 s**; 8 would-hit shots before it blocked | 69.41 s | **Played it like the tape** (new) |
-| takeover-mid-duel (18.6 s) | 18.50 s (on the puppet) | **18.80 s** | 69.41 s | **Played it like the tape** (new) |
-| takeover-duel (18.0 s, fires from 18.7 s) | 18.50 s | **18.80 s** | 69.41 s | **Played it like the tape** (Same result, …; 1 kill changed: hit 18.59 s, kill 18.72 s real) |
-| early-peek-lokier (16.4 s from the corridor) | – | 16.45 s, **real** | – (100 HP) | Same result, different round: CT defuse, 0.72 s left; 2 kills changed (new) |
-| lokier-late | 21.14 s | 21.44 s, the duel's (+2.64 s) | 69.41 s | Same result, …; 1 kill changed (kill 21.42 s real) |
-| smoke-window (to 30 s) | 21.11 s | 21.41 s, the duel's (+2.61 s) | – | Round still on (kill 21.38 s real) |
-| miss-lokier-shop (sprays 6° wide) | 18.50 s | – (no would-hit shot: Lokier outlives, barely kills him 22.16 s) | – | Same result, …, 0.83 s left; 3 kills changed (hit 18.59 s) |
+| follow-recording (tape-identical input) | 18.50 s, 73 / 7 | **18.61 s** (1191), real AK-47 HS | 69.41 s (4442) | **Same result, different round: CT defuse, 0.72 s left; 1 kill changed** (Played it like the tape) |
+| duel-perfect-aim (on target from 18.05 s) | – (Lokier dead first) | **18.05 s** (1155), his first shot | – (100 HP) | **Same result, …; 2 kills changed** (Played it like the tape) |
+| duel-kill-18.2 (inline, D1) | – | **18.19 s** (1164) | – | Same result, …; 2 kills changed: plant 1761, defuse 3955 → 4275, every other kill on its tick, nobody LIVE |
+| takeover-mid-duel (18.6 s) | 18.50 s (on the puppet) | **18.61 s** (1191) | 69.41 s | Same result, …; 1 kill changed (Played it like the tape) |
+| takeover-duel (18.0 s, fires from 18.7 s) | 18.50 s | **18.72 s** (1198) | 69.41 s | Same result, …; 1 kill changed (Played it like the tape) |
+| window-2s-early | – | **18.47 s** (1182), before the hit | – | Same result, …; 2 kills changed (Played it like the tape) |
+| early-peek-lokier (16.4 s from the corridor) | – | 16.45 s, real | – (100 HP) | unchanged: no duel |
+| kill-lokier-early (14.6 s) | – (Lokier LIVE) | 14.61 s, real | – | unchanged: no duel; G7/G8 |
+| lokier-late | 20.86 s | **21.42 s** (1371), real | 69.41 s | (kill 21.44 s, the duel's) |
+| smoke-window (to 30 s) | 21.27 s | **21.38 s** (1368), real | – | (kill 21.41 s, the duel's) |
+| miss-lokier-shop (sprays 6° wide) | 18.50 s | – (no hit: Lokier outlives, barely kills him) | – | unchanged |
 | never-peeks, cart-goes-a, block-barely | – | – | – | unchanged, byte for byte (never in a duel) |
+
+Nobody goes LIVE in any of the in-window kills. The golden master (no human) is byte-identical.
 
 ### Known limits
 
-- **The engine decides "would hit"**: 2D's sight mask, cover and pitch bands now; G6's CS2 mesh changes which shots of
-  a spray reach Lokier, CS2 its spread and recoil. A spray none of whose bullets reaches him before the kill moment gets
-  the kill one action latency after its first one that does (up to a few ticks late), or none.
-- **"On target" is one would-hit shot**: a player who hits once in the spray and then sprays the wall through 18.80 s
-  still gets the kill on its tick (the tape's spray had misses too).
-- **A fixed spot** per duel, 192 u: stepping out of it mid-spray makes his bullets real again (and the block toggles
-  with him on the edge of it).
-- Duels exist for the default human only (cart), like encounters, and only for his recorded engagements: shooting a
-  CT he never shot on the tape is always real.
+- **"In the duel" is a fixed spot** per duel, 192 u, and its window: a wounded Lokier hit from outside it goes LIVE
+  (trigger 1), as any puppet the human hits off the tape.
+- **2D has no spread or recoil**, so a tape-like spray's first would-hit bullet is a headshot that kills at once: the
+  follow run kills Lokier 0.19 s before the tape (the tape's first shots missed). The 3D host's CS2 spread and recoil
+  (W2, R1) make that closer to the tape.
+- Duels exist for the default human only (cart), like encounters (U2 generalizes the human slot), and only for his
+  recorded engagements: shooting a CT he never shot on the tape is always real, and makes him LIVE.

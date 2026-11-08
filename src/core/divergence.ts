@@ -24,6 +24,8 @@ import { dist2 } from './puppet';
 import type { RoundModel } from './round-model';
 import type { DamageEntry, EventSchedule } from './schedule';
 import { secTicks, type PawnMode, type ScriptPlan, type ScriptedEvents } from './scripted';
+import { fateGone, survivorGoal } from './fate';
+import { leadStart } from './fight-aim';
 
 // ---------------------------------------------------------------------------
 // Triggers
@@ -31,9 +33,10 @@ import { secTicks, type PawnMode, type ScriptPlan, type ScriptedEvents } from '.
 
 /**
  * What switched a pawn to LIVE (`PawnStatus.trigger`). G4: `released`: the human let go of his pawn mid-round without
- * a rewind (CS2: the player left; the bot plays on), so it goes on as a LIVE bot (docs/core.md "Takeover").
+ * a rewind (CS2: the player left; the bot plays on), so it goes on as a LIVE bot (docs/core.md "Takeover"). G8: `fate`:
+ * alive after its recorded death by a puppet (fate.ts, "Fate gone: LIVE for good").
  */
-export const TRIGGER_KINDS = ['damage', 'sighting', 'gunfire', 'outlived', 'blocked', 'encounter', 'released'] as const;
+export const TRIGGER_KINDS = ['damage', 'sighting', 'gunfire', 'outlived', 'blocked', 'encounter', 'released', 'fate'] as const;
 export type TriggerKind = (typeof TRIGGER_KINDS)[number];
 
 export interface TriggerHit {
@@ -82,12 +85,18 @@ export function tenthsText(ticks: number, signed: boolean): string {
 
 /**
  * Trigger 1, unscripted damage: a `damage` event this tick on `id` from the human or a LIVE pawn (any hit, any weapon,
- * grenades included; world damage and self-damage don't count).
+ * grenades included; world damage and self-damage don't count). D1: nor a hit `recorded(attacker, victim)` says is a
+ * recorded engagement (the human's hits on the target of the recorded duel he is in: his shots there do real damage,
+ * but the duel is the tape's, so the target keeps replaying until he dies).
  */
-export function damageTrigger(o: Observe, modes: readonly PawnMode[], id: PlayerId): TriggerHit | null {
+/** D1: true when a hit of `attacker` on `victim` is part of a recorded engagement (HumanDuels.engaged). */
+export type RecordedHit = (attacker: PlayerId, victim: PlayerId) => boolean;
+
+export function damageTrigger(o: Observe, modes: readonly PawnMode[], id: PlayerId, recorded: RecordedHit | null = null): TriggerHit | null {
   for (const e of o.events) {
     if (e.type !== 'damage' || e.victim !== id || e.attacker === null || e.attacker === id) continue;
     if (!isOffScript(o, modes, e.attacker)) continue;
+    if (recorded !== null && recorded(e.attacker, id)) continue;
     return { id, trigger: 'damage', reason: `hit by ${e.attacker} (${intText(e.amount)} hp${e.weapon === null ? '' : `, ${e.weapon}`})` };
   }
   return null;
@@ -422,7 +431,10 @@ export interface EncounterPlan {
   /** The plan's recorded fire items and engagements of this hit, suppressed while the encounter is active. */
   readonly fireKeys: readonly string[];
   readonly aimKeys: readonly string[];
-  /** From this tick (the recorded aim's start) the shooter holds the angle on the spot until the encounter ends. */
+  /**
+   * From this tick the shooter holds the angle on the spot until the encounter ends: F1's lead-in before the recorded
+   * aim's start (`leadStart`: `aimLeadSec` before the recorded sighting, or before the aim's start).
+   */
   readonly holdFromTick: number;
 }
 
@@ -496,6 +508,8 @@ export function buildEncounters(model: RoundModel, schedule: EventSchedule, plan
     const aims = plan.engagements.filter((e) => e.shooter === d.attacker && e.target === d.victim && e.fromTick <= d.tick - li && e.toTick >= d.tick - li);
     let holdFrom = d.tick - li - secTicks(tuning.replay.preAimSec);
     for (const e of aims) if (e.fromTick < holdFrom) holdFrom = e.fromTick;
+    // F1: the shooter holds the angle from aimLeadSec before the anticipated sight, as a puppet's lead-in (fight-aim.ts).
+    holdFrom = leadStart(holdFrom, sight, secTicks(tuning.replay.aimLeadSec));
     out.push({
       key: `enc:${out.length}`,
       shooter: d.attacker,
@@ -695,10 +709,15 @@ export interface DivergenceState {
   encounters: EncounterState[];
   /** Puppets in body contact now, in PLAYER_IDS order. */
   contacts: ContactState[];
+  /**
+   * G8: the pawns whose recorded death can no longer happen (`fateGone`), in PLAYER_IDS order: LIVE for good with a
+   * survivor's goal (`survivorGoal`), never rejoined. Optional so snapshots from before G8 restore (absent = none).
+   */
+  forGood?: PlayerId[];
 }
 
 function initialDivergenceState(encounters: readonly EncounterPlan[]): DivergenceState {
-  return { encounters: encounters.map((e) => ({ key: e.key, phase: 'waiting', seenTick: null, shotTick: null, blocked: false, puppetSightTick: null, puppetSightOnCourse: false })), contacts: [] };
+  return { encounters: encounters.map((e) => ({ key: e.key, phase: 'waiting', seenTick: null, shotTick: null, blocked: false, puppetSightTick: null, puppetSightOnCourse: false })), contacts: [], forGood: [] };
 }
 
 /**
@@ -711,6 +730,10 @@ export class Divergence {
   private readonly model: RoundModel;
   private readonly tuning: Tuning;
   private st: DivergenceState;
+  /** G8: the LIVE pawns whose fate went on the last `step` (they got the survivor's goal), with the trigger, id order. */
+  regoaled: { id: PlayerId; trigger: 'fate' | 'outlived' }[] = [];
+  /** D1: hits the damage trigger ignores (the human's hits on his recorded duel's target); set by ReplayCore. */
+  recordedHit: RecordedHit | null = null;
 
   constructor(model: RoundModel, schedule: EventSchedule, plan: ScriptPlan, tuning: Tuning) {
     this.model = model;
@@ -737,7 +760,23 @@ export class Divergence {
         return { key: q.key, phase: q.phase, seenTick: q.seenTick, shotTick: q.shotTick, blocked: q.blocked, puppetSightTick: q.puppetSightTick ?? null, puppetSightOnCourse: q.puppetSightOnCourse ?? false };
       }),
       contacts: s.contacts.map((c) => ({ id: c.id, sinceTick: c.sinceTick, behind: c.behind, stalledSince: c.stalledSince })),
+      forGood: PLAYER_IDS.filter((id) => (s.forGood ?? []).includes(id)),
     };
+  }
+
+  /** G8: `id`'s recorded death can no longer happen: LIVE for good (fate.ts). */
+  isForGood(id: PlayerId): boolean {
+    return (this.st.forGood ?? []).includes(id);
+  }
+
+  /** The goal `id` gets going LIVE now: a survivor's (G8, LIVE for good) or the recording's (`liveGoal`). */
+  goalFor(id: PlayerId, o: Observe): Goal {
+    return this.isForGood(id) ? survivorGoal(this.model, id) : liveGoal(this.model, id, o, this.tuning);
+  }
+
+  private markForGood(id: PlayerId): void {
+    const had = this.st.forGood ?? [];
+    this.st.forGood = PLAYER_IDS.filter((p) => p === id || had.includes(p));
   }
 
   /**
@@ -764,13 +803,29 @@ export class Divergence {
     const hits: TriggerHit[] = [];
     const encs = this.encounters;
     const states = this.st.encounters;
+    this.regoaled = [];
     this.noteContacts(o, modes, refs);
+    // G8: fate gone (fate.ts). A puppet whose recorded death can't happen any more goes LIVE on this rule (it comes
+    // before the others: it decides the goal); a LIVE pawn gets the survivor's goal now and is never rejoined.
+    for (const id of PLAYER_IDS) {
+      if (this.isForGood(id) || modeOf(modes, id) === 'DEAD' || modeOf(modes, id) === 'HUMAN') continue;
+      const f = fateGone(o, this.model, id, this.tuning);
+      if (f === null) continue;
+      this.markForGood(id);
+      if (modeOf(modes, id) !== 'LIVE') continue;
+      this.regoaled.push({ id, trigger: f.trigger });
+      const goal = survivorGoal(this.model, id);
+      out.push({ type: 'set_mode', id, mode: 'LIVE', goal });
+      out.push({ type: 'log', level: 'info', text: `${id} LIVE for good: ${f.reason}; goal ${goal.role}` });
+    }
     for (let i = 0; i < PLAYER_IDS.length; i++) {
       const id = PLAYER_IDS[i] as PlayerId;
       if (!isPuppet(o, modes, id)) continue;
       const contact = this.st.contacts.find((c) => c.id === id) ?? null;
+      const fate = this.isForGood(id) ? fateGone(o, this.model, id, this.tuning) : null;
       const hit =
-        damageTrigger(o, modes, id) ??
+        (fate === null ? null : { id, trigger: fate.trigger, reason: fate.reason }) ??
+        damageTrigger(o, modes, id, this.recordedHit) ??
         sightingTrigger(o, modes, id, this.model, this.index, encs, states, this.tuning) ??
         gunfireTrigger(o, modes, id, this.model, this.index, encs, states, this.tuning) ??
         outlivedTrigger(o, this.model, id, this.tuning) ??
@@ -1023,7 +1078,7 @@ export class Divergence {
         s.blocked = false;
       }
     }
-    const goal = liveGoal(this.model, id, o, this.tuning);
+    const goal = this.goalFor(id, o);
     out.push({ type: 'set_mode', id, mode: 'LIVE', goal });
     out.push({ type: 'log', level: 'info', text: `${id} LIVE: ${h.reason}; goal ${goal.role}, ${goal.route.length} waypoint${goal.route.length === 1 ? '' : 's'}` });
   }

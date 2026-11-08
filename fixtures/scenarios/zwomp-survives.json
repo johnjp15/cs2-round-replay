@@ -1,0 +1,11 @@
+{
+  "name": "zwomp-survives",
+  "description": "G8 (John 15:22): barely doesn't kill Zwomp. Nobody plays until 40 s (the round is the tape: barely has planted B and holds Catwalk), then the human takes barely over and stands still without firing. Zwomp, walking up Catwalk on his recorded route, isn't killed at 44.2 s: his recorded killer is the human, so 3 s later his fate is gone and he plays on as a normal CT for good (retake): he fights what he sees and goes for the planted bomb to defuse it, or dies trying; the round ends by the rules.",
+  "human": "barely",
+  "seed": 1,
+  "until": "end",
+  "takeover": 40,
+  "steps": [
+    { "do": "holdStill", "until": 70.6 }
+  ]
+}

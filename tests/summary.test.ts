@@ -103,14 +103,13 @@ describe('summary of the follow run (cart plays his recording, F)', () => {
   const run = playScript(data, readFileSync(resolve(ROOT, FOLLOW_SCRIPT), 'utf8'));
   const s = summarize(model, run.log);
 
-  it('played it like the tape (G5): every kill the same, on its recorded tick, nobody LIVE', () => {
-    // Before G5: "Same result, different round: …; 2 kills changed" (cart's real AK headshot killed Lokier 0.30 s early,
-    // before Lokier's hit, so cart survived the post-round shot). Now his recorded duels resolve like the tape.
-    expect(s.headline).toBe('Played it like the tape: CT defuse, 0.72 s left');
-    expect(s.verdict).toBe('tape');
+  it('same result (D1): every kill on its recorded tick but cart’s real headshot on Lokier, 0.19 s early; nobody LIVE', () => {
+    // D1 (John 13:10): his shots do real damage in the recorded duel, so the follow script's first would-hit bullet kills
+    // Lokier at 18.61 s (G5 held it to the tape's 18.80 s); Lokier's hit (18.50 s) still lands first, so the rest is the tape.
+    expect(s.headline).toBe('Same result, different round: CT defuse, 0.72 s left; 1 kill changed');
     expect(s.result).toEqual({ winner: 'CT', reason: 'bomb_defused', endTick: 4275, score: { ct: 12, t: 15 } });
     expect(s.switches).toEqual([]);
-    for (const k of s.kills) expect(k).toMatchObject({ status: 'same', deltaTicks: 0, text: 'same' });
+    for (const k of s.kills) expect(k).toMatchObject(k.victim === 'lokier' ? { status: 'shifted', deltaTicks: -12, text: '-0.19 s' } : { status: 'same', deltaTicks: 0, text: 'same' });
     expect(s.player).toMatchObject({ id: 'cart', human: true, kills: 1, damageDealt: 100, damageTaken: 100, deathTick: 4442 });
   });
 });
@@ -135,9 +134,9 @@ describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
     for (const victim of ['donk', 'barely']) {
       expect(row('sp4rtan', victim)).toMatchObject({ status: 'missed', runTick: null, text: "didn't happen: sp4rtan was dead (44.63 s)" });
     }
-    // G5: cart plays his recording up to 44.6 s, so Lokier's hit lands (27 HP) and the duel lands the kill on its tick
-    // (before: shifted −0.30 s, cart on 100 HP). On 27 HP the explosion's 43 HP through armor in Back Alley kills him.
-    expect(row('cart', 'lokier')).toMatchObject({ status: 'same', deltaTicks: 0, text: 'same' });
+    // cart plays his recording up to 44.6 s, so Lokier's hit lands (27 HP); D1: his real headshot then kills Lokier
+    // 0.19 s early (G5: on its tick). On 27 HP the explosion's 43 HP through armor in Back Alley kills him.
+    expect(row('cart', 'lokier')).toMatchObject({ status: 'shifted', deltaTicks: -12, text: '-0.19 s' });
     expect(row(null, 'cart')).toMatchObject({ status: 'new', runTick: 4321 });
     expect(row('sp4rtan', 'cart')).toMatchObject({ status: 'missed', runTick: null, text: "didn't happen: cart died to the bomb at 67.52 s" });
     // F: the LIVE guards leave the bomb's blast after the round, so the explosion kills neither (it killed both before).
@@ -151,8 +150,9 @@ describe('summary of flank-sp4rtan (B4 scenario 5)', () => {
   it('lists the LIVE switches with trigger, time and reason', () => {
     expect(s.switches).toEqual([
       { id: 'sp4rtan', tick: 2855, trigger: 'sighting', reason: 'sees cart (the human), not in the recording' },
-      { id: 'donk', tick: 3414, trigger: 'outlived', reason: 'outlived recording (+3.0 s)' },
-      { id: 'barely', tick: 3958, trigger: 'outlived', reason: 'outlived recording (+3.0 s)' },
+      // G8: their killer (sp4rtan) is a puppet, so their fate is gone one tick after the recorded death (LIVE for good).
+      { id: 'donk', tick: 3223, trigger: 'fate', reason: 'alive after its recorded death (sp4rtan at tick 3222): fate gone, LIVE for good' },
+      { id: 'barely', tick: 3767, trigger: 'fate', reason: 'alive after its recorded death (sp4rtan at tick 3766): fate gone, LIVE for good' },
     ]);
   });
 
