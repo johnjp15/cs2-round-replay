@@ -8,9 +8,11 @@
  * - Table, per mode: a `ValveUniformRandom` seeded with the recoil seed; for bullet j:
  *   `angle_j' = angle + U(−angleVariance, +angleVariance)`, `mag_j' = magnitude + U(−magVariance, +magVariance)`;
  *   full-auto weapons smooth consecutive bullets, `x_j = x_{j−1} + (x_j' − x_{j−1}) × recoilVariance` (j > 0), and
- *   damp the first `recoilSuppressionShots` magnitudes by lerp(j / shots, suppressionFactor, 1). 64 entries.
- * - Kick per shot (table entry at ⌊recoilIndex⌋): aim punch velocity += (−cos a × mag, sign × sin a × mag); view punch
- *   += the same × recoilViewPunchExtra.
+ *   damp the first `recoilSuppressionShots` magnitudes by lerp(j / shots, suppressionFactor, 1), in place (the damped
+ *   value feeds the next bullet's smoothing). 64 entries. Source: CS:GO's WeaponRecoilData::GenerateRecoilTable
+ *   (cs_weapon_parse.cpp, the 2020 source as in SwagSoftware/Kisak-Strike).
+ * - Kick per shot (table entry at ⌊recoilIndex⌋ mod 64): aim punch velocity += (−cos a × mag, −sin a × mag) (Valve's
+ *   KickBack; `recoilYawSign` −1); view punch += the same × recoilViewPunchExtra.
  * - Per tick dt: |punch| ← max(0, |punch| e^(−decayExp·dt) − decayLin·dt); punch += vel·dt/2; vel ×= e^(−velDecay·dt);
  *   punch += vel·dt/2. View punch ×= e^(−viewPunchDecay·dt).
  * - The bullet leaves along view + punch × recoilScale.
@@ -31,7 +33,7 @@ export interface Angle2 {
 export const ZERO_ANGLE: Angle2 = { pitch: 0, yaw: 0 };
 
 export interface RecoilEntry {
-  /** Degrees from straight up (positive toward +yaw with recoilYawSign 1). */
+  /** Degrees from straight up; Valve's KickBack turns a positive angle to −yaw (the player's right). */
   readonly angle: number;
   readonly magnitude: number;
 }
@@ -55,18 +57,19 @@ export function recoilTable(w: WeaponDef, mode: 0 | 1, m: TableTuning): RecoilEn
     const aNew = Math.fround(angle + rnd.randomFloat(-angleVar, angleVar));
     const rNew = Math.fround(mag + rnd.randomFloat(-magVar, magVar));
     if (w.fullAuto && j > 0) {
-      a = Math.fround(a + (aNew - a) * m.recoilVariance);
-      r = Math.fround(r + (rNew - r) * m.recoilVariance);
+      a = Math.fround(a + Math.fround((aNew - a) * m.recoilVariance));
+      r = Math.fround(r + Math.fround((rNew - r) * m.recoilVariance));
     } else {
       a = aNew;
       r = rNew;
     }
-    let stored = r;
+    // Valve multiplies the running magnitude (fMagnitude *= fSuppressionFactor), so the damping also carries into
+    // the next bullets through the smoothing; it is not a separate stored copy.
     if (w.fullAuto && j < m.recoilSuppressionShots) {
-      const f = m.recoilSuppressionFactor + (1 - m.recoilSuppressionFactor) * (j / m.recoilSuppressionShots);
-      stored = Math.fround(r * f);
+      const f = Math.fround(m.recoilSuppressionFactor + (1 - m.recoilSuppressionFactor) * Math.fround(j / m.recoilSuppressionShots));
+      r = Math.fround(r * f);
     }
-    out.push({ angle: a, magnitude: stored });
+    out.push({ angle: a, magnitude: r });
   }
   return out;
 }
@@ -93,8 +96,10 @@ export const ZERO_PUNCH: PunchState = { aim: ZERO_ANGLE, aimVel: ZERO_ANGLE, vie
 /** The kick of one shot fired at recoil index `index` (velocity impulse, degrees per second). */
 export function recoilKick(tables: RecoilTables, mode: 0 | 1, index: number, m: Pick<WeaponModelTuning, 'recoilYawSign'>): Angle2 {
   const t = tables[mode];
-  const e = t[Math.max(0, Math.min(RECOIL_TABLE_SIZE - 1, Math.floor(index)))] as RecoilEntry;
+  // CWeaponCSBase::Recoil: (int) m_flRecoilIndex, then GetRecoilOffsets wraps it (iIndex % 64), it does not clamp.
+  const e = t[Math.max(0, Math.floor(index)) % RECOIL_TABLE_SIZE] as RecoilEntry;
   const a = e.angle * DEG;
+  // CCSPlayer::KickBack: angleVelocity[YAW] = −sin(a) × m, [PITCH] = −cos(a) × m (recoilYawSign −1).
   return { pitch: -Math.cos(a) * e.magnitude, yaw: m.recoilYawSign * Math.sin(a) * e.magnitude };
 }
 

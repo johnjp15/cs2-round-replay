@@ -183,7 +183,7 @@ describe('CS2 Mirage: what sees what', () => {
   it('every recorded duel is in sight at every sample at the snapped positions (tools/sight-snap.ts, pass 5)', () => {
     const data = loadHarnessData();
     const duels = recordedDuels(data.recorded ?? data.round);
-    expect(duels.map((d) => `${d.a}-${d.b}`)).toEqual(['eradicate-lokier', 'cart-lokier', 'donk-sp4rtan', 'cart-sp4rtan']);
+    expect(duels.map((d) => `${d.a}-${d.b}`)).toEqual(['eradicate-lokier', 'cart-lokier', 'donk-sp4rtan', 'barely-sp4rtan', 'cart-sp4rtan']);
     for (const d of duels) {
       const ta = data.round.tracks[d.a]?.samples ?? [];
       const tb = data.round.tracks[d.b]?.samples ?? [];

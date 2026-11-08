@@ -403,7 +403,7 @@ export class SoundDirector {
   }
 
   /** The human's own actions the host has no event for (local cues). */
-  human(kind: 'dry' | 'knife' | 'zoomIn' | 'zoomOut' | 'pin' | 'plantStart' | 'keypress', weapon: string, pos: Vec3): void {
+  human(kind: 'dry' | 'knife' | 'knifeWall' | 'zoomIn' | 'zoomOut' | 'pin' | 'plantStart' | 'keypress', weapon: string, pos: Vec3): void {
     const gun = gunOf(weapon);
     switch (kind) {
       case 'dry':
@@ -411,6 +411,9 @@ export class SoundDirector {
         return;
       case 'knife':
         this.cue('knife.swing', pos, { origin: true, self: true }, true);
+        return;
+      case 'knifeWall':
+        this.cue('knife.hitwall', pos, { origin: true, self: true });
         return;
       case 'zoomIn':
       case 'zoomOut':

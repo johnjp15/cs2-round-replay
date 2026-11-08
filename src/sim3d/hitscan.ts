@@ -21,6 +21,18 @@ export interface ShotPawn {
   readonly alive: boolean;
 }
 
+/**
+ * W3: one place a bullet touched, for the renderer's impact effects: a world surface it stopped in or entered
+ * ('wall'), a surface it left through ('exit', penetration), or a pawn it hit ('flesh'). `normal` is the surface's
+ * unit normal on the side the effect shows (the bullet's side for 'wall', the far side for 'exit', back toward the
+ * shooter for 'flesh'); positions and normals rounded to 6 decimals.
+ */
+export interface Impact3 {
+  readonly kind: 'wall' | 'exit' | 'flesh';
+  readonly pos: Vec3;
+  readonly normal: Vec3;
+}
+
 /** Where one bullet went (for damage, the renderer's tracer and hit marker, and tests). */
 export interface Shot3 {
   readonly shooter: PlayerId;
@@ -43,6 +55,14 @@ export interface Shot3 {
    */
   readonly surfaces?: number;
   readonly penDamage?: number;
+  /**
+   * W3: where it touched, in flight order (impact effects): entry and exit of every solid it went through, then the
+   * wall that stopped it or the pawn it hit; empty for a bullet that flew out of range. Visual only: with
+   * penetration, a bullet that hits nobody is followed through thin walls to where it stops (no damage changes).
+   */
+  readonly impacts: readonly Impact3[];
+  /** W3, set by the host: this bullet draws a tracer (CS2's 1-in-TracerFrequency rule). */
+  readonly tracer?: boolean;
 }
 
 /** H2b: what a bullet needs to go through walls: the weapon (penetration power, damage), the solids, the model. */
@@ -92,6 +112,30 @@ export function meshSolidQuery(g: MapGeometry): SolidQuery {
   };
 }
 
+const r6 = (v: Vec3): Vec3 => ({ x: roundNumber(v.x), y: roundNumber(v.y), z: roundNumber(v.z) });
+
+/** The surface normal where the ray o + dir·t meets a face at distance `t` from the side `side` (−1: toward o, +1: beyond). */
+function faceNormal(world: MapGeometry, o: Vec3, dir: Vec3, t: number, side: -1 | 1): Vec3 {
+  // From the side the normal should face, across the face: traceLineNormal turns it toward the segment's start.
+  const a = t + side * 2;
+  const b = t - side * 2;
+  const h = world.traceLineNormal(o.x + dir.x * a, o.y + dir.y * a, o.z + dir.z * a, o.x + dir.x * b, o.y + dir.y * b, o.z + dir.z * b);
+  return h === null ? { x: dir.x * side, y: dir.y * side, z: dir.z * side } : h.normal;
+}
+
+const at = (o: Vec3, dir: Vec3, t: number): Vec3 => r6({ x: o.x + dir.x * t, y: o.y + dir.y * t, z: o.z + dir.z * t });
+
+/** W3: entry and exit impacts of the solids a bullet passed (`spans` before `limit`, the first `surfaces` of them). */
+function passImpacts(world: MapGeometry, o: Vec3, dir: Vec3, spans: readonly SolidSpan[], surfaces: number, out: Impact3[]): void {
+  let n = 0;
+  for (const sp of spans) {
+    if (n >= surfaces) break;
+    out.push({ kind: 'wall', pos: at(o, dir, sp.enter), normal: r6(faceNormal(world, o, dir, sp.enter, -1)) });
+    out.push({ kind: 'exit', pos: at(o, dir, sp.exit), normal: r6(faceNormal(world, o, dir, sp.exit, 1)) });
+    n++;
+  }
+}
+
 export function eyeOf(p: Pick<ShotPawn, 'pos' | 'crouching'>, d: Pick<DamageTuning, 'eyeHeight' | 'crouchEyeHeight'>): Vec3 {
   return { x: p.pos.x, y: p.pos.y, z: p.pos.z + (p.crouching ? d.crouchEyeHeight : d.eyeHeight) };
 }
@@ -128,6 +172,9 @@ export function traceShot3(shooter: ShotPawn, pawns: readonly ShotPawn[], world:
       const r = penetrate(pen.weapon, pen.query(o, dir, behind.t), behind.t, d, pen.model);
       if (r.stoppedAt === null && r.damage > 0) {
         const tt = behind.t;
+        const impacts: Impact3[] = [];
+        passImpacts(world, o, dir, pen.query(o, dir, tt), r.surfaces, impacts);
+        impacts.push({ kind: 'flesh', pos: at(o, dir, tt), normal: r6({ x: -dir.x, y: -dir.y, z: -dir.z }) });
         return {
           shooter: shooter.id,
           from: { x: roundNumber(o.x), y: roundNumber(o.y), z: roundNumber(o.z) },
@@ -139,12 +186,25 @@ export function traceShot3(shooter: ShotPawn, pawns: readonly ShotPawn[], world:
           wall: false,
           surfaces: r.surfaces,
           penDamage: roundNumber(r.damage),
+          impacts,
         };
       }
     }
   }
   const t = best === null ? wallT : best.t;
   const to = { x: roundNumber(o.x + dir.x * t), y: roundNumber(o.y + dir.y * t), z: roundNumber(o.z + dir.z * t) };
+  const impacts: Impact3[] = [];
+  if (best !== null) impacts.push({ kind: 'flesh', pos: to, normal: r6({ x: -dir.x, y: -dir.y, z: -dir.z }) });
+  else if (f < 1) {
+    // W3 (visual): with penetration, follow the bullet through what it can pass (no pawn behind: no damage) to the
+    // surface that stops it; without, the wall it hit.
+    const spans = pen === null ? null : pen.query(o, dir, range);
+    const r = spans === null || pen === null ? null : penetrate(pen.weapon, spans, range, d, pen.model);
+    if (spans !== null && r !== null && r.surfaces > 0) {
+      passImpacts(world, o, dir, spans, r.surfaces, impacts);
+      if (r.stoppedAt !== null) impacts.push({ kind: 'wall', pos: at(o, dir, r.stoppedAt), normal: r6(faceNormal(world, o, dir, r.stoppedAt, -1)) });
+    } else impacts.push({ kind: 'wall', pos: to, normal: r6(faceNormal(world, o, dir, t, -1)) });
+  }
   return {
     shooter: shooter.id,
     from: { x: roundNumber(o.x), y: roundNumber(o.y), z: roundNumber(o.z) },
@@ -154,5 +214,86 @@ export function traceShot3(shooter: ShotPawn, pawns: readonly ShotPawn[], world:
     hitbox: best === null ? null : best.box,
     distance: roundNumber(t),
     wall: best === null && f < 1,
+    impacts,
   };
+}
+
+/** W1: where a knife attack went (host `swings()`, the viewmodel and sounds, tests). */
+export interface Melee3 {
+  readonly attacker: PlayerId;
+  readonly attack: 'slash' | 'stab';
+  readonly from: Vec3;
+  readonly to: Vec3;
+  /** The pawn hit, or null (the world or nothing). */
+  readonly victim: PlayerId | null;
+  /** True if the world stopped it (CS2's knife wall-hit sound). */
+  readonly wall: boolean;
+  /** Set by the host for a pawn hit: from behind, and the damage before armor. */
+  readonly backstab?: boolean;
+  readonly damage?: number;
+}
+
+/** Entry fraction (0..1) of segment o + d·s into the box [lo, hi], or null. */
+function segmentBox(o: Vec3, d: Vec3, lo: Vec3, hi: Vec3): number | null {
+  let t0 = 0;
+  let t1 = 1;
+  for (const k of ['x', 'y', 'z'] as const) {
+    const dk = d[k];
+    if (Math.abs(dk) < 1e-12) {
+      if (o[k] < lo[k] || o[k] > hi[k]) return null;
+      continue;
+    }
+    let a = (lo[k] - o[k]) / dk;
+    let b = (hi[k] - o[k]) / dk;
+    if (a > b) [a, b] = [b, a];
+    t0 = Math.max(t0, a);
+    t1 = Math.min(t1, b);
+    if (t0 > t1) return null;
+  }
+  return t0;
+}
+
+/**
+ * W1 (#38): CS:GO / CS2's knife trace (CKnife::SwingOrStab, src/engine/weapons/knife.ts): a line from the eye along
+ * the view, `reach` units, against the world mesh and the pawns' collision boxes (MASK_SOLID: hull 32 × 32 × 72,
+ * 54 crouched; not hitboxes); if it hits nothing, the same sweep with the ±16 × ±16 × ±18 head hull (the world by
+ * `traceAabb`, a pawn by its box grown by the hull). Pawns it may hit as bullets: alive, not the attacker, enemies
+ * unless `damage.friendlyFire`. Ties go to the lower id.
+ */
+export function traceMelee3(
+  attacker: ShotPawn,
+  pawns: readonly ShotPawn[],
+  world: MapGeometry,
+  d: DamageTuning,
+  attack: 'slash' | 'stab',
+  reach: number,
+  hull: { readonly x: number; readonly y: number; readonly z: number },
+  boxOf: (p: ShotPawn) => { readonly halfWidth: number; readonly height: number },
+): Melee3 {
+  const o = eyeOf(attacker, d);
+  const dir = viewDir(attacker.yaw, attacker.pitch);
+  const delta = { x: dir.x * reach, y: dir.y * reach, z: dir.z * reach };
+  const nearest = (grow: { x: number; y: number; z: number }, maxF: number): { id: PlayerId; f: number } | null => {
+    let b: { id: PlayerId; f: number } | null = null;
+    for (const p of pawns) {
+      if (p.id === attacker.id || !p.alive) continue;
+      if (!d.friendlyFire && p.team === attacker.team) continue;
+      const bb = boxOf(p);
+      const f = segmentBox(o, delta, { x: p.pos.x - bb.halfWidth - grow.x, y: p.pos.y - bb.halfWidth - grow.y, z: p.pos.z - grow.z }, { x: p.pos.x + bb.halfWidth + grow.x, y: p.pos.y + bb.halfWidth + grow.y, z: p.pos.z + bb.height + grow.z });
+      if (f === null || f > maxF) continue;
+      if (b === null || f < b.f || (f === b.f && p.id < b.id)) b = { id: p.id, f };
+    }
+    return b;
+  };
+  const at = (f: number): Vec3 => ({ x: roundNumber(o.x + delta.x * f), y: roundNumber(o.y + delta.y * f), z: roundNumber(o.z + delta.z * f) });
+  const from = at(0);
+  const lineWall = world.traceLine(o.x, o.y, o.z, o.x + delta.x, o.y + delta.y, o.z + delta.z);
+  const line = nearest({ x: 0, y: 0, z: 0 }, lineWall);
+  if (line !== null) return { attacker: attacker.id, attack, from, to: at(line.f), victim: line.id, wall: false };
+  if (lineWall < 1) return { attacker: attacker.id, attack, from, to: at(lineWall), victim: null, wall: true };
+  const box = world.traceAabb(o.x, o.y, o.z, hull.x, hull.y, hull.z, delta.x, delta.y, delta.z);
+  const swept = nearest(hull, box.fraction);
+  if (swept !== null) return { attacker: attacker.id, attack, from, to: at(swept.f), victim: swept.id, wall: false };
+  if (box.fraction < 1) return { attacker: attacker.id, attack, from, to: at(box.fraction), victim: null, wall: true };
+  return { attacker: attacker.id, attack, from, to: at(1), victim: null, wall: false };
 }

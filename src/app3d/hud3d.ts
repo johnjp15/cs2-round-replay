@@ -41,6 +41,36 @@ export interface HudFrame {
   readonly summary: string | null;
   readonly tick: number;
   readonly nowMs: number;
+  /** W2: the viewed pawn's carried items (the engine's inventory), for the slot list; absent or null: hidden. */
+  readonly items?: readonly string[] | null;
+  /** W3: CS2's team-damage notices (team-damage.ts): feed lines "<x> attacked a teammate" and the human's hint. */
+  readonly teamDamage?: { readonly feed: readonly string[]; readonly hint: string | null };
+}
+
+/** W2: CS2's slot of an item (1 primary, 2 pistol, 3 knife, 4 grenades, 5 C4), or null (the defuser). */
+export function slotOfItem(item: string): 1 | 2 | 3 | 4 | 5 | null {
+  if (['ak47', 'm4a4', 'm4a1s', 'awp', 'ssg08'].includes(item)) return 1;
+  if (['deagle', 'glock', 'usps', 'p2000'].includes(item)) return 2;
+  if (item === 'knife') return 3;
+  if (['he', 'flash', 'smoke', 'molotov'].includes(item)) return 4;
+  if (item === 'c4') return 5;
+  return null;
+}
+
+/** W2: the slot list's HTML: one row per carried item in slot order (grenades in carry order), the held one marked. */
+export function slotsHtml(items: readonly string[], held: string): string {
+  const rows = items
+    .map((it, i) => ({ it, i, slot: slotOfItem(it) }))
+    .filter((r): r is { it: string; i: number; slot: 1 | 2 | 3 | 4 | 5 } => r.slot !== null)
+    .sort((a, b) => a.slot - b.slot || a.i - b.i);
+  let heldMarked = false;
+  return rows
+    .map((r) => {
+      const on = !heldMarked && r.it === held;
+      if (on) heldMarked = true;
+      return `<div${on ? ' class="on"' : ''}>${weaponName(r.it)}<b>${r.slot}</b></div>`;
+    })
+    .join('');
 }
 
 function el(id: string): HTMLElement {
@@ -111,7 +141,11 @@ export class Hud3D {
         return `<div class="slab${you}"><span class="${cls(k.killerTeam)}">${k.killer ?? ''}</span><span class="w">${weaponName(k.weapon)}${k.headshot ? ' ◎' : ''}</span><span class="${cls(k.victimTeam)}">${k.victim}</span></div>`;
       })
       .join('');
-    this.html('killfeed', feed);
+    const ff = (f.teamDamage?.feed ?? []).map((l) => `<div class="slab ff">${l}</div>`).join('');
+    this.html('killfeed', feed + ff);
+    const hint = f.teamDamage?.hint ?? null;
+    this.attr('ffhint', 'hidden', hint === null ? '' : null);
+    if (hint !== null) this.text('ffhint', hint);
     // Team panel.
     const rows = (team: 'T' | 'CT'): string =>
       o.pawns
@@ -128,6 +162,10 @@ export class Hud3D {
     this.text('reserve', v !== null && hasAmmo(v.weapon) ? `/ ${v.ammo.reserve}` : '');
     this.text('mode', f.mode);
     this.attr('mode', 'class', `slab ${f.modeKind}`);
+    // W2: the slot list (1–5) of the viewed pawn while it is alive.
+    const slots = f.items !== undefined && f.items !== null && v !== null && v.alive ? slotsHtml(f.items, v.weapon) : '';
+    this.html('slots', slots);
+    this.attr('slots', 'hidden', slots === '' ? '' : null);
     const sp = f.spectate;
     this.attr('spec', 'hidden', sp === null ? '' : null);
     this.attr('vignette', 'hidden', sp === null ? '' : null);

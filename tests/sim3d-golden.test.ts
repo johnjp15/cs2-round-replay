@@ -75,10 +75,11 @@ describe('Sim3DHost, nobody plays (H1)', () => {
   it('fires the puppets’ bullets in 3D but blocks their damage (the scripted damage is the recording)', () => {
     // The engine traced every puppet shot; blocked hits are in the combat log, never applied.
     // G6: plus the audit of scripted hits whose eye-to-victim line crosses a wall (the same 8 as in 2D, docs/vision.md;
-    // T1: barely -> zwomp at 2829 is in sight now that barely is on Catwalk).
+    // T1: barely -> zwomp at 2829 is in sight now that barely is on Catwalk; K1: sp4rtan -> barely at 3766 now that sp4rtan
+    // arrives on time and barely stands in the arch opening).
     const lines = host3d(watching).combatLog();
     expect(lines.every((l) => l.text.startsWith('blocked ') || l.text.startsWith('script: scripted hit through geometry: '))).toBe(true);
-    expect(lines.filter((l) => l.text.startsWith('script: ')).map((l) => l.tick)).toEqual([32, 816, 1142, 1184, 1203, 3194, 3206, 3766]);
+    expect(lines.filter((l) => l.text.startsWith('script: ')).map((l) => l.tick)).toEqual([32, 816, 1142, 1184, 1203, 3194, 3206]);
   });
 });
 

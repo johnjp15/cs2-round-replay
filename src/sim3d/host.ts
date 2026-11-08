@@ -54,16 +54,25 @@ import {
   type Tuning,
   type Vec3,
   type WeaponId,
+  type WeaponTuning,
 } from '../contracts/index';
 import weaponsJson from '../../data/weapons.json';
 import {
+  FIRST_SWING_SEC,
+  KNIFE_HULL_HALF,
+  KNIFE_RANGE,
   applyHit,
+  armorPen,
   armsContext,
   cameraAngles,
   compensatedView,
   crosshairAngles,
   damageAfterHitgroup,
   freshArms,
+  isBackstab,
+  knifeAttackFor,
+  knifeDamage,
+  knifeDelays,
   maxSpeedOf,
   nextShotPunch,
   parseWeaponTable,
@@ -89,7 +98,9 @@ import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, t
 import { MeshGrenadeNav, MeshSight, meshSightOptionsFromTuning, scriptedHitThroughGeometry } from '../sim2d/mesh-sight';
 import { GrenadeSight, Sight, computeSees, sightOptionsFromTuning } from '../sim2d/vision';
 import type { AiDebug, BlockedPair, CombatLogLine, HostNote, InventoryItem, PawnState, RosterEntry, Sim2DOptions, Sim2DVision } from '../sim2d/host';
-import { meshSolidQuery, traceShot3, type Shot3, type ShotPawn } from './hitscan';
+import { gunTable, tableId } from './guns';
+import { eyeOf, meshSolidQuery, traceMelee3, traceShot3, type Melee3, type Shot3, type ShotPawn } from './hitscan';
+import { DROP_SPEED, PRIMARY_GUNS, TOUCH_DELAY_TICKS, deathDropGun, gunSlot, spawnItem, stepItems, takeNearest, touched, useTarget, viewDir, type WorldItem } from './items';
 import {
   armorDamage,
   bulletDamage,
@@ -125,6 +136,8 @@ const ENGINE = 'sim3d';
 /** CS2 spawn state for a pawn before Core sets it up (game rules, not calibration). */
 const SPAWN_HP = 100;
 const SPAWN_WEAPON: WeaponId = 'knife';
+/** W2: how far (2D units) a puppet's recorded gun pickup reaches for the gun on the floor (the tape's positions are rough). */
+const SCRIPTED_PICKUP_RANGE = 256;
 /** Items that can be carried but not held. */
 const NON_WIELDABLE: readonly string[] = ['defuser'];
 
@@ -153,6 +166,21 @@ interface HostState {
   readonly aiSeed: number;
   /** H2: per pawn (pawn order) the weapon mechanics state (accuracy, recoil, punch, scope, tagging); absent in older snapshots. */
   readonly arms?: readonly ArmsState[];
+  /** W2: guns lying in the world, by seq, and the next seq; absent in older snapshots (none). */
+  readonly items?: readonly WorldItem[];
+  readonly nextItemSeq?: number;
+  /** W2: the human's USE and DROP on the last tick (their presses act once). */
+  readonly humanUse?: boolean;
+  readonly humanDrop?: boolean;
+  /** W1: the knife's next slash / stab ticks of the pawns that have swung (by id); absent while nobody has. */
+  readonly melee?: readonly MeleeTimers[];
+}
+
+/** W1: a pawn's knife timers (fractional ticks): m_flNextPrimaryAttack / m_flNextSecondaryAttack after a swing. */
+interface MeleeTimers {
+  readonly id: PlayerId;
+  readonly slash: number;
+  readonly stab: number;
 }
 
 export class Sim3DHost implements IHost {
@@ -197,10 +225,23 @@ export class Sim3DHost implements IHost {
   private shotsOut: Shot3[] = [];
   /** H2: CS2 weapon mechanics (src/engine/weapons); null if the tuning has no `weapons._engine` (bullets go exactly along the view). */
   private readonly armsCtx: ArmsContext | null;
+  /** W2: CS2's guns from the weapon table (guns.ts), for mechanical pawns; null without a weapon model. */
+  private readonly guns: ReadonlyMap<string, WeaponTuning> | null;
   /** H2: per pawn (pawn order). */
   private arms: ArmsState[] = [];
+  /** W1: knife timers of the pawns that have swung, sorted by id (state, snapshotted). */
+  private melee: MeleeTimers[] = [];
+  /** W1: knife attacks of the last completed tick (viewmodel, sounds, tests); not state. */
+  private lastSwings: Melee3[] = [];
+  private swingsOut: Melee3[] = [];
   /** H2b: the solids along a bullet on the world mesh, for wall penetration (built on first use). */
   private solids: SolidQuery | null = null;
+  /** W2: guns lying in the world (src/sim3d/items.ts), by seq. */
+  private items: WorldItem[] = [];
+  private nextItemSeq = 1;
+  /** W2: the human's USE / DROP held on the last tick (pickup and drop act on the press). */
+  private humanUse = false;
+  private humanDrop = false;
   /** B1: bots (LIVE AI) and puppets compensate recoil (docs/weapons.md); off only for tests of the old behaviour. */
   private botRecoilControl = true;
 
@@ -235,6 +276,7 @@ export class Sim3DHost implements IHost {
     }
     this.round = freshRound(o.roundTimeSec, o.score);
     this.armsCtx = tuning.weaponModel === undefined ? null : armsContext(parseWeaponTable(weaponsJson), tuning, TICKS_PER_SEC);
+    this.guns = this.armsCtx === null ? null : gunTable(this.armsCtx.table);
     this.arms = this.freshArmsAll();
   }
 
@@ -309,6 +351,12 @@ export class Sim3DHost implements IHost {
       events: this.events,
       aiSeed: this.aiSeed,
       arms: this.arms,
+      items: this.items,
+      nextItemSeq: this.nextItemSeq,
+      humanUse: this.humanUse,
+      humanDrop: this.humanDrop,
+      // Only once someone has swung a knife, so a run without one snapshots exactly as before.
+      ...(this.melee.length > 0 ? { melee: this.melee } : {}),
     };
     return { kind: 'host', data: toJsonValue(state) };
   }
@@ -357,6 +405,12 @@ export class Sim3DHost implements IHost {
     this.events = [...copy.events];
     this.aiSeed = copy.aiSeed;
     this.arms = copy.arms !== undefined && copy.arms.length === this.pawns.length ? [...copy.arms] : this.freshArmsAll();
+    this.items = copy.items !== undefined ? [...copy.items] : [];
+    this.nextItemSeq = copy.nextItemSeq ?? 1;
+    this.humanUse = copy.humanUse ?? false;
+    this.humanDrop = copy.humanDrop ?? false;
+    this.melee = Array.isArray(copy.melee) ? [...copy.melee] : [];
+    this.lastSwings = [];
     this.seesCache = null;
     this.aiInputs = [];
     this.lastShots = [];
@@ -376,9 +430,12 @@ export class Sim3DHost implements IHost {
     const t = this.tickNo;
     this.outbox = [];
     this.shotsOut = [];
+    this.swingsOut = [];
     this.stepLiveAi(t);
     const locked = lockedPawns(this.bomb, t, this.bombPawns(), this.tuning.bomb);
     this.moveAll(t, locked);
+    this.stepHumanItems(t);
+    if (this.items.length > 0) this.items = stepItems(this.items, this.meshSight.geometry(), t, TICK_DT);
     for (const p of this.pawns) if (p.alive) this.stepPawnWeapon(p, t);
     this.stepGrenades(t);
     const queued = this.pendingDamage;
@@ -397,12 +454,24 @@ export class Sim3DHost implements IHost {
     this.outbox = [];
     this.lastShots = this.shotsOut;
     this.shotsOut = [];
+    this.lastSwings = this.swingsOut;
+    this.swingsOut = [];
     this.seesCache = null;
   }
 
   /** H1: the bullets fired on the last tick (eye, impact, victim, hitgroup), in firing order. Not part of observe(). */
   shots(): readonly Shot3[] {
     return this.lastShots.map((x) => ({ ...x, from: copyVec(x.from), to: copyVec(x.to) }));
+  }
+
+  /** W2: the guns lying in the world (copies), by seq. Not part of observe() (CS2's observe has no world items). */
+  worldItems(): readonly WorldItem[] {
+    return this.items.map((it) => ({ ...it, pos: copyVec(it.pos), vel: copyVec(it.vel) }));
+  }
+
+  /** W1: the knife attacks of the last tick (slash / stab, what they hit), in pawn order. Not part of observe(). */
+  swings(): readonly Melee3[] {
+    return this.lastSwings.map((x) => ({ ...x, from: copyVec(x.from), to: copyVec(x.to) }));
   }
 
   /** H1: the sight and bullet mesh (the world, no player clips). */
@@ -581,7 +650,7 @@ export class Sim3DHost implements IHost {
         others: others.filter((q) => q.id !== p.id),
         sees: sees[i] ?? [],
         events: this.events,
-        bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick },
+        bomb: { planted: planted === null ? null : copyVec(planted), ticking: isTicking(this.bomb), explodeTick: this.bomb.explodeTick, defuser: this.bomb.defuse?.id ?? null },
         round: { phase: roundPhase(this.round, isTicking(this.bomb)) },
         nav: this.nav,
         sight: this.meshSight,
@@ -592,7 +661,7 @@ export class Sim3DHost implements IHost {
       p.aiDraws = step.state.draws;
       if (step.weapon !== null && p.inventory.some((q) => q.item === step.weapon) && p.weapon !== step.weapon) {
         p.weapon = step.weapon;
-        p.wpn = deployState(p.wpn, t, deploySec(step.weapon, this.tuning));
+        p.wpn = deployState(p.wpn, t, this.deployOf(p, step.weapon));
       }
       this.aiInputs.push(canonicalize({ id: p.id, ...step.input, buttons: sortButtons(step.input.buttons) }));
     });
@@ -659,9 +728,31 @@ export class Sim3DHost implements IHost {
     return this.pawns.findIndex((q) => q.id === id);
   }
 
-  /** The weapon table id of a held item (the 2D ids are the table's; anything unknown counts as the knife). */
+  /** The weapon table id of a held item (guns.ts tableId; anything unknown counts as the knife). */
   private armsWeapon(item: string): string {
-    return this.armsCtx !== null && this.armsCtx.table.weapons[item] !== undefined ? item : 'knife';
+    return this.armsCtx === null ? 'knife' : (tableId(this.armsCtx.table, item) ?? 'knife');
+  }
+
+  /**
+   * W2: a pawn's gun stats: CS2's weapon table (guns.ts) for a mechanical pawn, the 2D table for puppets (the tape's
+   * cadence, so a run nobody plays stays the 2D golden master). null: it doesn't shoot.
+   */
+  private gunOf(p: PawnState, item: string): WeaponTuning | null {
+    if (this.guns !== null && this.armsCtx !== null && this.mechanical(p)) {
+      const id = tableId(this.armsCtx.table, item);
+      if (id !== null) return this.guns.get(id) ?? null;
+    }
+    return gunStats(item, this.tuning);
+  }
+
+  /** W2: seconds to deploy `item`: the table's `deployTime` for a mechanical pawn, else the 2D rules (deploySec). */
+  private deployOf(p: PawnState, item: string): number {
+    if (this.armsCtx !== null && this.mechanical(p)) {
+      const id = tableId(this.armsCtx.table, item);
+      const w = id === null ? undefined : this.armsCtx.table.weapons[id];
+      if (w !== undefined) return w.deployTime;
+    }
+    return deploySec(item, this.tuning);
   }
 
   /**
@@ -734,11 +825,16 @@ export class Sim3DHost implements IHost {
   private stepPawnWeapon(p: PawnState, t: number): void {
     const input = this.inputFor(p.id);
     const buttons = input === null ? [] : input.buttons;
-    const held = p.inventory.find((q) => q.item === p.weapon) ?? null;
-    const gun = gunStats(p.weapon, this.tuning);
+    let held = p.inventory.find((q) => q.item === p.weapon) ?? null;
+    const gun = this.gunOf(p, p.weapon);
+    // W2: a mechanical pawn's gun is CS2's: no more in the magazine or the reserve than the table's (AWP 5 / 10).
+    if (gun !== null && held !== null && this.guns !== null && this.mechanical(p) && (held.clip > gun.clip || held.reserve > gun.reserve)) {
+      this.setAmmo(p, p.weapon, { clip: Math.min(held.clip, gun.clip), reserve: Math.min(held.reserve, gun.reserve) });
+      held = p.inventory.find((q) => q.item === p.weapon) ?? null;
+    }
     const ai = this.pawnIndex(p.id);
     const ctx = this.armsCtx;
-    const motion: Motion = { velocity: p.move.vel, onGround: p.move.onGround, crouched: p.move.crouching, onLadder: false };
+    const motion: Motion = { velocity: p.move.vel, onGround: p.move.onGround, crouched: p.move.crouching, onLadder: false, walking: buttons.includes('WALK') };
     if (ctx !== null && ai >= 0) {
       this.arms[ai] = trackArms(ctx, this.arms[ai] as ArmsState, {
         tick: t,
@@ -749,6 +845,7 @@ export class Sim3DHost implements IHost {
         motion,
       });
     }
+    if (p.weapon === 'knife' && ctx !== null && this.mechanical(p)) this.stepKnife(p, t, buttons, ctx);
     const step = stepWeapon(p.wpn, {
       tick: t,
       item: p.weapon,
@@ -756,7 +853,8 @@ export class Sim3DHost implements IHost {
       gun,
       attack: buttons.includes('ATTACK'),
       reload: buttons.includes('RELOAD'),
-      discardMagazine: this.tuning.damage.reloadDiscardsMagazine,
+      // W2: CS2 (March 2026) throws the rest of the magazine away on a reload (docs/weapons.md S8); puppets keep the tuning's rule.
+      discardMagazine: this.guns !== null && this.mechanical(p) ? true : this.tuning.damage.reloadDiscardsMagazine,
     });
     p.wpn = step.state;
     if (step.ammo !== null) this.setAmmo(p, p.weapon, step.ammo);
@@ -783,15 +881,20 @@ export class Sim3DHost implements IHost {
       const targets = this.pawns.map((q) => shotPawn(q));
       const mech = ctx !== null && this.mechanical(p);
       const pen = mech && ctx !== null ? { weapon: weaponDef(ctx.table, this.armsWeapon(p.weapon)), query: (this.solids ??= meshSolidQuery(world)), model: ctx.model } : null;
-      const shot = mech ? traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir, pen) : traceShot3(shotPawn(p), targets, world, this.tuning.damage);
-      this.shotsOut.push(mech || dir === null ? shot : traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir));
+      // W3: mp_friendlyfire: the bullets of a pawn that plays by the mechanics may hit teammates (puppets' never do).
+      const dmgT = mech && this.tuning.damage.mpFriendlyfire && !this.tuning.damage.friendlyFire ? { ...this.tuning.damage, friendlyFire: true } : this.tuning.damage;
+      const shot = mech ? traceShot3(shotPawn(p), targets, world, dmgT, dir, pen) : traceShot3(shotPawn(p), targets, world, this.tuning.damage);
+      const drawn = mech || dir === null ? shot : traceShot3(shotPawn(p), targets, world, this.tuning.damage, dir);
+      this.shotsOut.push({ ...drawn, tracer: this.tracerFor(p, held === null ? null : held.clip) });
       if (shot.victim !== null && shot.hitgroup !== null) {
         const victim = this.pawn(shot.victim) as PawnState;
+        // W3: a teammate takes ff_damage_reduction_bullets of the damage, before hitgroup and armor.
+        const ff = this.teamDamageRatio(p.id, victim, 'bullet');
         // Open air: the 2D table's damage (as before); through a wall: the damage penetration left, then hitgroup and armor.
         const dmg =
           shot.penDamage !== undefined && pen !== null
-            ? damageAfterHitgroup(pen.weapon, shot.penDamage, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage)
-            : bulletDamage(gun, shot.distance, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
+            ? damageAfterHitgroup(pen.weapon, shot.penDamage * ff, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage)
+            : bulletDamage(ff === 1 ? gun : { ...gun, damage: gun.damage * ff }, shot.distance, shot.hitgroup, victim.armor, victim.helmet, this.tuning.damage);
         // G5: the human's bullet on a blocked pair (a recorded duel, docs/core.md): report where it would have hit.
         if (p.id === this.human && this.isBlocked(p.id, victim.id)) this.outbox.push({ type: 'blocked_hit', attacker: p.id, victim: victim.id, weapon: p.weapon, hitgroup: shot.hitgroup });
         // H2: tagging and hit punch for a hit that lands (not on a blocked pair, so the recording's runs are unchanged).
@@ -805,6 +908,44 @@ export class Sim3DHost implements IHost {
     if (step.thrown && isGrenade(p.weapon)) this.throwHeld(p, t);
   }
 
+  /**
+   * W1 (#38): the knife of a mechanical pawn (the human, LIVE bots; puppets keep their recorded outcomes): mouse 1
+   * slashes, mouse 2 stabs, on CS:GO / CS2's timers, reach, backstab rule and damage (src/engine/weapons/knife.ts);
+   * the trace is hitscan.ts traceMelee3. A hit is `generic` (MASK_SOLID hits the collision box, not a hitbox): ×1,
+   * armored, 85 % through armor (m_flArmorRatio 1.7). Damage, kills and blocked duels go as a bullet's do.
+   */
+  private stepKnife(p: PawnState, t: number, buttons: readonly string[], ctx: ArmsContext): void {
+    if (!reached(t, p.wpn.deployEndTick)) return;
+    const timers = this.melee.find((m) => m.id === p.id);
+    // The deploy sets both timers (m_flNextPrimaryAttack = deploy end), as in CS.
+    const slashAt = Math.max(timers?.slash ?? 0, p.wpn.deployEndTick);
+    const stabAt = Math.max(timers?.stab ?? 0, p.wpn.deployEndTick);
+    const attack = knifeAttackFor(buttons.includes('ATTACK'), buttons.includes('ATTACK2'), reached(t, slashAt), reached(t, stabAt));
+    if (attack === null) return;
+    // bFirstSwing = m_flNextPrimaryAttack + 0.4 < curtime.
+    const firstSwing = slashAt + FIRST_SWING_SEC * TICKS_PER_SEC < t;
+    const world = this.meshSight.geometry();
+    // W3: with mp_friendlyfire a swing can hit a teammate (× ff_damage_reduction_other below).
+    const dmgT = this.tuning.damage.mpFriendlyfire && !this.tuning.damage.friendlyFire ? { ...this.tuning.damage, friendlyFire: true } : this.tuning.damage;
+    const tr = traceMelee3(shotPawn(p), this.pawns.map((q) => shotPawn(q)), world, dmgT, attack, KNIFE_RANGE[attack], KNIFE_HULL_HALF, (q) => hullOf(q.crouching));
+    const d = knifeDelays(attack, tr.victim !== null || tr.wall);
+    const next: MeleeTimers = { id: p.id, slash: roundNumber(t + d.slash * TICKS_PER_SEC), stab: roundNumber(t + d.stab * TICKS_PER_SEC) };
+    this.melee = [...this.melee.filter((m) => m.id !== p.id), next].sort((a, b) => compareOrdinal(a.id, b.id));
+    if (tr.victim === null) {
+      this.swingsOut.push(tr);
+      return;
+    }
+    const victim = this.pawn(tr.victim) as PawnState;
+    const backstab = isBackstab(p.move.pos, victim.move.pos, victim.move.yaw);
+    const raw = knifeDamage(attack, backstab, firstSwing);
+    this.swingsOut.push({ ...tr, backstab, damage: raw });
+    const dmg = armorDamage(raw * this.teamDamageRatio(p.id, victim, 'other'), armorPen(weaponDef(ctx.table, 'knife')), victim.armor, isArmored('generic', victim.helmet), this.tuning.damage);
+    if (p.id === this.human && this.isBlocked(p.id, victim.id)) this.outbox.push({ type: 'blocked_hit', attacker: p.id, victim: victim.id, weapon: p.weapon, hitgroup: 'generic' });
+    const vi = this.pawnIndex(victim.id);
+    if (vi >= 0 && !this.isBlocked(p.id, victim.id)) this.arms[vi] = applyHit(ctx, this.arms[vi] as ArmsState, 'knife', victim.armor > 0);
+    this.engineDamage(p.id, victim, p.weapon, 'generic', dmg);
+  }
+
   private throwHeld(p: PawnState, t: number): void {
     const kind = p.weapon;
     if (!isGrenade(kind)) return;
@@ -816,7 +957,118 @@ export class Sim3DHost implements IHost {
     if (!p.inventory.some((q) => q.item === kind)) {
       p.weapon = fallbackWeapon(p.inventory.map((q) => q.item));
     }
-    p.wpn = deployState(p.wpn, t, deploySec(p.weapon, this.tuning));
+    p.wpn = deployState(p.wpn, t, this.deployOf(p, p.weapon));
+  }
+
+  // ---- W2: world items (drop on death, G, E / touch pickup) -----------------------------------------------------------
+
+  /** The weapon table's price of a gun (the death drop's "most valuable"); without a table, primaries first. */
+  private priceOf(item: WeaponId): number {
+    const w = this.armsCtx?.table.weapons[item];
+    if (w !== undefined) return w.price;
+    return PRIMARY_GUNS.includes(item) ? 1000 : 100;
+  }
+
+  private eye(p: PawnState): Vec3 {
+    return eyeOf({ pos: p.move.pos, crouching: p.move.crouching }, this.tuning.damage);
+  }
+
+  /** `mp_death_drop_gun 1`: the dead pawn's most valuable gun falls from its eye with its velocity. Its inventory stays as it was (observe reports a dead pawn's last weapon and ammo). */
+  private deathDrop(p: PawnState): void {
+    const g = deathDropGun(
+      p.inventory.map((q) => q.item),
+      (w) => this.priceOf(w),
+    );
+    if (g === null) return;
+    const q = p.inventory.find((x) => x.item === g);
+    if (q === undefined) return;
+    this.addItem(spawnItem(this.nextItemSeq++, g, q.clip, q.reserve, this.eye(p), p.move.vel, p.move.yaw, p.id, this.tickNo));
+  }
+
+  private addItem(it: WorldItem): void {
+    this.items = [...this.items, it];
+  }
+
+  /** Remove a gun from a live pawn and throw it along its view (G, or the swap of a pickup). True if it had it. */
+  private throwGun(p: PawnState, item: WeaponId, t: number): boolean {
+    const i = p.inventory.findIndex((q) => q.item === item);
+    if (i < 0) return false;
+    const q = p.inventory[i] as InventoryItem;
+    p.inventory = [...p.inventory.slice(0, i), ...p.inventory.slice(i + 1)];
+    const d = viewDir(p.move.yaw, p.move.pitch);
+    const vel = { x: d.x * DROP_SPEED, y: d.y * DROP_SPEED, z: d.z * DROP_SPEED };
+    this.addItem(spawnItem(this.nextItemSeq++, item, q.clip, q.reserve, this.eye(p), vel, p.move.yaw, p.id, t));
+    return true;
+  }
+
+  /** Hold `item` (in the inventory) with its deploy time. */
+  private draw(p: PawnState, item: WeaponId, t: number): void {
+    if (p.weapon === item) return;
+    p.weapon = item;
+    p.wpn = deployState({ ...p.wpn, reloadEndTick: null }, t, this.deployOf(p, item));
+  }
+
+  /**
+   * The human's G (DROP pressed: the active gun is thrown, the best weapon left is drawn), E (USE pressed: the gun
+   * looked at is picked up and drawn, a full slot swaps) and touch pickup (a gun walked over whose slot is empty).
+   */
+  private stepHumanItems(t: number): void {
+    const p = this.human === null ? null : this.pawn(this.human);
+    const input = p === null || this.humanInput === null ? null : this.humanInput;
+    const useNow = input !== null && input.buttons.includes('USE');
+    const dropNow = input !== null && input.buttons.includes('DROP');
+    const usePress = useNow && !this.humanUse;
+    const dropPress = dropNow && !this.humanDrop;
+    this.humanUse = useNow;
+    this.humanDrop = dropNow;
+    if (p === null || input === null || !p.alive) return;
+    if (dropPress && gunSlot(p.weapon) !== null && this.throwGun(p, p.weapon, t)) {
+      this.draw(p, fallbackWeapon(p.inventory.map((q) => q.item)), t);
+    }
+    if (usePress && this.items.length > 0 && !this.couldDefuse(p)) {
+      const i = useTarget(this.items, this.eye(p), viewDir(p.move.yaw, p.move.pitch), this.meshSight.geometry());
+      if (i >= 0) this.pickUp(p, i, true, t);
+    }
+    if (this.items.length > 0) {
+      for (const i of touched(this.items, p.move.pos).reverse()) {
+        const it = this.items[i] as WorldItem;
+        const slot = gunSlot(it.item);
+        if (slot === null || this.slotGun(p, slot) !== null) continue;
+        if (it.dropper === p.id && t - it.dropTick < TOUCH_DELAY_TICKS) continue;
+        this.pickUp(p, i, false, t);
+      }
+    }
+  }
+
+  /** A CT the bomb rules would let defuse (planted bomb within reach): E is the defuse, not a pickup. */
+  private couldDefuse(p: PawnState): boolean {
+    const b = this.bomb;
+    if (p.team !== 'CT' || b.state !== 'planted' || b.pos === null) return false;
+    return Math.hypot(p.move.pos.x - b.pos.x, p.move.pos.y - b.pos.y) <= this.tuning.bomb.defuseRange;
+  }
+
+  /** The gun a pawn carries in slot 1 or 2, or null. */
+  private slotGun(p: PawnState, slot: 1 | 2): WeaponId | null {
+    const q = p.inventory.find((x) => gunSlot(x.item) === slot);
+    return q === undefined ? null : (q.item as WeaponId);
+  }
+
+  /** Take item `i` off the floor into `p`'s inventory; `use`: a full slot's gun is thrown (swap) and the new one drawn. */
+  private pickUp(p: PawnState, i: number, use: boolean, t: number): void {
+    const it = this.items[i] as WorldItem;
+    const slot = gunSlot(it.item);
+    if (slot === null) return;
+    this.items = [...this.items.slice(0, i), ...this.items.slice(i + 1)];
+    const old = this.slotGun(p, slot);
+    if (old !== null) this.throwGun(p, old, t);
+    p.inventory = [...p.inventory.filter((q) => q.item !== it.item), { item: it.item, clip: it.clip, reserve: it.reserve }].sort((x, y) => compareOrdinal(x.item, y.item));
+    if (use || (old !== null && old === p.weapon)) this.forceDraw(p, it.item, t);
+  }
+
+  /** Draw even when the id is the same (a swapped-in gun of the same kind is a new weapon). */
+  private forceDraw(p: PawnState, item: WeaponId, t: number): void {
+    p.weapon = item;
+    p.wpn = deployState({ ...p.wpn, reloadEndTick: null }, t, this.deployOf(p, item));
   }
 
   private stepGrenades(t: number): void {
@@ -825,7 +1077,8 @@ export class Sim3DHost implements IHost {
       nav: this.grenadeNav,
       pawns: this.pawns.map((p) => ({ id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, alive: p.alive })),
       grenades: this.tuning.grenades,
-      damage: this.tuning.damage,
+      // W3: with mp_friendlyfire the step reports teammates too; applyGrenadeOutcome keeps a puppet's off them.
+      damage: this.tuning.damage.mpFriendlyfire && !this.tuning.damage.friendlyFire ? { ...this.tuning.damage, friendlyFire: true } : this.tuning.damage,
       ai: this.tuning.ai,
     });
     this.grenades = r.grenades;
@@ -841,7 +1094,13 @@ export class Sim3DHost implements IHost {
       case 'hurt': {
         const victim = this.pawn(o.victim);
         if (victim === null || !victim.alive) return;
-        const dmg = armorDamage(o.damage, o.armorPen, victim.armor, isArmored('generic', victim.helmet), this.tuning.damage);
+        // W3: team damage (the grenades step with friendly fire on, see stepGrenades): only from a thrower that plays
+        // by the mechanics; HE × ff_damage_reduction_grenade, fire × _other; the thrower's own HE × _grenade_self.
+        const thrower = this.pawn(o.thrower);
+        const mate = thrower !== null && thrower.id !== victim.id && thrower.team === victim.team;
+        if (mate && !(this.tuning.damage.friendlyFire || this.mechanical(thrower))) return;
+        const ff = this.teamDamageRatio(o.thrower, victim, o.kind === 'he' ? 'grenade' : 'other');
+        const dmg = armorDamage(o.damage * ff, o.armorPen, victim.armor, isArmored('generic', victim.helmet), this.tuning.damage);
         this.engineDamage(o.thrower, victim, o.kind, 'generic', dmg);
         return;
       }
@@ -855,6 +1114,36 @@ export class Sim3DHost implements IHost {
   }
 
   // ---- damage --------------------------------------------------------------------------------
+
+  /**
+   * W3: CS2's team-damage ratio (`CCSPlayer::OnTakeDamage`; competitive values from gamemode_competitive.cfg, docs/
+   * combat.md "Friendly fire"): 1 for an enemy (or no attacker); the attacker's own HE × ff_damage_reduction_grenade_self;
+   * a teammate's bullets × _bullets, HE × _grenade, anything else (knife, fire) × _other. 0 for a teammate without
+   * mp_friendlyfire.
+   */
+  teamDamageRatio(attacker: PlayerId | null, victim: Pick<PawnState, 'id' | 'team'>, kind: 'bullet' | 'grenade' | 'other'): number {
+    const a = attacker === null ? null : this.pawn(attacker);
+    if (a === null) return 1;
+    const d = this.tuning.damage;
+    if (a.id === victim.id) return kind === 'grenade' ? d.ffDamageReductionGrenadeSelf : 1;
+    if (a.team !== victim.team) return 1;
+    if (!d.mpFriendlyfire && !d.friendlyFire) return 0;
+    return kind === 'bullet' ? d.ffDamageReductionBullets : kind === 'grenade' ? d.ffDamageReductionGrenade : d.ffDamageReductionOther;
+  }
+
+  /**
+   * W3: whether this bullet draws a tracer (CS `CCSPlayer::CreateWeaponTracer`): bullet number n = clip size − rounds
+   * left before the shot + 1, a tracer when n % TracerFrequency = 0 (weapons.vdata `m_nTracerFrequency`: rifles and
+   * SMGs 3, pistols and snipers 1, 0 = never). Without the weapon table: always.
+   */
+  private tracerFor(p: PawnState, clipBefore: number | null): boolean {
+    const ctx = this.armsCtx;
+    const w = ctx === null ? undefined : ctx.table.weapons[p.weapon];
+    if (w === undefined || clipBefore === null) return true;
+    const freq = w.tracerFrequency;
+    const n = w.clip - clipBefore + 1;
+    return freq !== 0 && n % freq === 0;
+  }
 
   /** Bullet or grenade damage: skipped (logged) for a blocked pair, else applied. */
   private engineDamage(attacker: PlayerId, victim: PawnState, weapon: WeaponId, hitgroup: Hitgroup, dmg: HitDamage): void {
@@ -895,6 +1184,7 @@ export class Sim3DHost implements IHost {
     if (victim.hp <= 0) {
       victim.hp = 0;
       victim.alive = false;
+      this.deathDrop(victim);
       victim.move = { ...victim.move, vel: { x: 0, y: 0, z: 0 } };
       victim.wpn = { ...victim.wpn, reloadEndTick: null, grenadePrimed: false };
       this.outbox.push({ type: 'death', victim: victim.id, attacker, weapon, headshot: hitgroup === 'head' });
@@ -956,7 +1246,7 @@ export class Sim3DHost implements IHost {
           // A dead pawn keeps reporting the c4 as its last weapon; a planter draws its best gun.
           if (p.alive && p.weapon === 'c4') {
             p.weapon = fallbackWeapon(p.inventory.map((q) => q.item));
-            p.wpn = deployState(p.wpn, t, deploySec(p.weapon, this.tuning));
+            p.wpn = deployState(p.wpn, t, this.deployOf(p, p.weapon));
           }
           break;
         }
@@ -1068,6 +1358,7 @@ export class Sim3DHost implements IHost {
       nextAltTick: roundNumber(a.nextAltTick + delta),
       lastShotTick: roundNumber(a.lastShotTick + delta),
     }));
+    this.melee = this.melee.map((m) => ({ ...m, slash: roundNumber(m.slash + delta), stab: roundNumber(m.stab + delta) }));
     for (const p of this.pawns) {
       p.wpn = shiftWeaponState(p.wpn, delta);
       p.blindUntilTick = p.blindUntilTick === 0 ? 0 : Math.max(0, roundNumber(p.blindUntilTick + delta));
@@ -1116,6 +1407,11 @@ export class Sim3DHost implements IHost {
         const entry: InventoryItem = { item, clip: action.clip, reserve: action.reserve };
         const kept = isGrenade(item) ? p.inventory : p.inventory.filter((q) => q.item !== item);
         p.inventory = [...kept, entry].sort((x, y) => compareOrdinal(x.item, y.item));
+        // W2: a puppet's recorded pickup (Sp4rtaN's AK-47) takes that gun off the floor if it lies near him.
+        if (p.alive && gunSlot(item) !== null && this.items.length > 0) {
+          const i = takeNearest(this.items, item, p.move.pos, SCRIPTED_PICKUP_RANGE);
+          if (i >= 0) this.items = [...this.items.slice(0, i), ...this.items.slice(i + 1)];
+        }
         return;
       }
       case 'set_weapon': {
@@ -1127,7 +1423,7 @@ export class Sim3DHost implements IHost {
         if (p.weapon === action.weapon) return;
         p.weapon = action.weapon;
         // A switch that comes with a teleport in the same act is state placement (setup, rewind): ready at once.
-        p.wpn = deployState(p.wpn, this.tickNo, teleported.has(p.id) ? 0 : deploySec(weapon, this.tuning));
+        p.wpn = deployState(p.wpn, this.tickNo, teleported.has(p.id) ? 0 : this.deployOf(p, weapon));
         return;
       }
       case 'set_mode': {
@@ -1167,7 +1463,7 @@ export class Sim3DHost implements IHost {
         // New weapon entities in CS2: no reload, cadence or deploy left over; with a teleport (resync) ready at once.
         p.inventory = [{ item: SPAWN_WEAPON, clip: 0, reserve: 0 }];
         p.weapon = SPAWN_WEAPON;
-        p.wpn = deployState(freshWeaponState(), this.tickNo, teleported.has(p.id) ? 0 : deploySec(SPAWN_WEAPON, this.tuning));
+        p.wpn = deployState(freshWeaponState(), this.tickNo, teleported.has(p.id) ? 0 : this.deployOf(p, SPAWN_WEAPON));
         return;
       }
       case 'log':

@@ -30,9 +30,10 @@ import {
   type WalkQuery,
 } from '../contracts/index';
 import { RoundClock, TICK_RATE } from './clock';
-import { Divergence, liveGoal, type DivergenceState } from './divergence';
+import { Divergence, type DivergenceState } from './divergence';
 import { HumanDuels, type DuelState } from './duels';
 import { REJOIN_TRIGGER, Rejoin, type RejoinState } from './rejoin';
+import { survivorGoal } from './fate';
 import { copyLoadouts, initialLoadouts, noteActions, noteObserve, releaseWindowTicks, type LoadoutState } from './loadout';
 import { PuppetController, PuppetTrack, roundYaw, type PuppetState } from './puppet';
 import { resyncActions, resyncHazards, type StandingBlock } from './resync';
@@ -147,6 +148,8 @@ export class ReplayCore implements ICore {
     this.divergenceOn = options === null || options.divergence;
     this.rejoin = walk === null || !this.divergenceOn || options?.rejoin === false ? null : new Rejoin(model, schedule, tuning, this.divergence, this.script, walk);
     this.duels = new HumanDuels(model, this.script.plan, this.divergence.encounters, tuning);
+    // D1: the human's hits on his recorded duel's target don't make it LIVE (the duel is the tape's).
+    this.divergence.recordedHit = (a, v) => this.duels.engaged(a, v);
     this.state = initialState();
     this.loadout = initialLoadouts(model);
   }
@@ -215,6 +218,13 @@ export class ReplayCore implements ICore {
         this.script.noteLive(h.id, o.tick);
         this.rejoin?.noteLive(h.id, o.tick, h.trigger);
       }
+      // G8: a LIVE pawn whose fate went this tick plays on for good: its status trigger says so from now.
+      for (const r of this.divergence.regoaled) {
+        const p = s.pawns.find((q) => q.id === r.id);
+        if (p === undefined || p.mode !== 'LIVE') continue;
+        p.since = o.tick;
+        p.trigger = r.trigger;
+      }
       // G1: LIVE pawns heading back to, or rejoining, their recording (after this tick's LIVE switches).
       if (this.rejoin !== null && this.puppets !== null) {
         const tracks = this.puppets.map((c) => c.track);
@@ -228,7 +238,7 @@ export class ReplayCore implements ICore {
         }
       }
       // G5: the human's recorded duels (after this tick's switches, so a target that just went LIVE is out of it).
-      this.duels.step(o, s.pawns, this.divergence.encounters, this.divergence.state.encounters, this.script, actions);
+      this.duels.step(o, s.pawns, this.divergence.encounters, this.divergence.state.encounters, actions);
     }
 
     this.scheduledActions(o, actions);
@@ -308,7 +318,7 @@ export class ReplayCore implements ICore {
         this.setPawnMode(prev, 'LIVE', tick, RELEASED_TRIGGER);
         this.script.noteLive(prev, tick);
         this.rejoin?.noteLive(prev, tick, RELEASED_TRIGGER);
-        const goal = liveGoal(this.model, prev, o, this.tuning);
+        const goal = this.divergence.goalFor(prev, o);
         actions.push({ type: 'set_mode', id: prev, mode: 'LIVE', goal });
         actions.push({ type: 'log', level: 'info', text: `${prev} LIVE: released by the human at tick ${tick}; goal ${goal.role}, ${goal.route.length} waypoint${goal.route.length === 1 ? '' : 's'}` });
       }
@@ -354,25 +364,26 @@ export class ReplayCore implements ICore {
     return copyLoadouts(this.loadout);
   }
 
-  /** G1: the rejoin goals in force (LIVE pawns heading back to their track), for a resync. */
+  /**
+   * G1: the rejoin goals in force (LIVE pawns heading back to their track), for a resync; G8: and the survivor's goal
+   * of every pawn LIVE for good (fate.ts).
+   */
   private rejoinGoals(): { id: PlayerId; goal: Goal }[] {
     const out: { id: PlayerId; goal: Goal }[] = [];
-    if (this.rejoin === null) return out;
     for (const id of PLAYER_IDS) {
-      const g = this.rejoin.goalOf(id);
+      const g = this.divergenceOn && this.divergence.isForGood(id) ? survivorGoal(this.model, id) : (this.rejoin?.goalOf(id) ?? null);
       if (g !== null) out.push({ id, goal: g });
     }
     return out;
   }
 
-  /** B4 encounter blocks in force (the scripted hit's block_damage shooter → human, not yet lifted), then G5's duel blocks (human → target). */
+  /** B4 encounter blocks in force (the scripted hit's block_damage shooter → human, not yet lifted). D1: the duels block nothing. */
   private standingBlocks(): StandingBlock[] {
     const out: StandingBlock[] = [];
     const st = this.divergence.state.encounters;
     this.divergence.encounters.forEach((e, i) => {
       if (st[i]?.blocked === true) out.push({ attacker: e.shooter, victim: e.victim });
     });
-    for (const b of this.duels.standingBlocks()) out.push(b);
     return out;
   }
 

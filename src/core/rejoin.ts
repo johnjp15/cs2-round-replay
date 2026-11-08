@@ -214,7 +214,8 @@ export class Rejoin {
     }
     this.st = keep;
     for (const s of this.st) {
-      if (tick <= s.liveSince) continue;
+      // G8: fate gone (fate.ts): no recorded future to go back to, LIVE for good.
+      if (tick <= s.liveSince || this.divergence.isForGood(s.id)) continue;
       const me = pawnOf(o, s.id) as PawnObs;
       const track = tracks[PLAYER_IDS.indexOf(s.id)];
       if (unrestReason(o, modes, s.id, this.model, this.divergence, this.tuning) !== null) {

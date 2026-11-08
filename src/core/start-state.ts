@@ -2,7 +2,7 @@
  * Tick-0 setup: the actions that put every pawn where, and as, the recording starts.
  * See docs/core.md "Start state".
  */
-import type { Action, Ammo, ItemId, PlayerId, Tuning, WeaponId } from '../contracts/index';
+import type { Action, Ammo, ItemId, PlayerId, Team, Tuning, WeaponId } from '../contracts/index';
 import type { ModelPlayer, RoundModel } from './round-model';
 
 /** How far ahead (ticks) the motion rule looks for the first sample that has moved. 1.0 s. */
@@ -60,10 +60,24 @@ export function startYaw(model: RoundModel, id: PlayerId): StartYaw {
 }
 
 /**
+ * W2: the pistol a pawn starts with when the recording doesn't show one (CS2 competitive: every player spawns with
+ * the team's default pistol, `mp_t_default_secondary weapon_glock`, `mp_ct_default_secondary weapon_hkp2000`, which
+ * players almost always set to the USP-S in their loadout). John: "T side usually has a Glock, and CT side usually
+ * has a USP".
+ */
+export const DEFAULT_PISTOL: { readonly [T in Team]: WeaponId } = { T: 'glock', CT: 'usps' };
+
+/** The pawn's pistol: the recorded one (kit.secondary), else its team's default. */
+export function pistolOf(p: ModelPlayer): WeaponId {
+  return p.kit.secondary ?? DEFAULT_PISTOL[p.team];
+}
+
+/**
  * The tick-0 setup actions. For each player in id order:
  * `teleport {pos, yaw}`, `set_hp {hp, armor, helmet}`, one `give` per item
- * (primary, secondary, each grenade, `c4`, `defuser`), then `set_weapon` to the
- * primary (the secondary when there is none; `knife` when neither).
+ * (primary, pistol, each grenade, `c4`, `defuser`), then `set_weapon` to the
+ * primary (the recorded secondary when there is none; `knife` when neither). The pistol is the recorded secondary,
+ * else the team's default (pistolOf): the drawn weapon never changes, so puppets hold what the tape says.
  *
  * The weapon drawn at t = 0 gets the round's `kit.clip/reserve`; any other gun gets
  * `tuning.weapons[id].clip/reserve`. Grenades, c4 and the defuser are given with
@@ -77,7 +91,7 @@ export function startActions(model: RoundModel, tuning: Tuning): Action[] {
     const k = p.kit;
     const drawn = k.primary ?? k.secondary;
     if (k.primary !== null) out.push(giveGun(p, k.primary, drawn, tuning));
-    if (k.secondary !== null) out.push(giveGun(p, k.secondary, drawn, tuning));
+    out.push(giveGun(p, pistolOf(p), drawn, tuning));
     for (const g of k.grenades) out.push(giveItem(p.id, g));
     if (k.c4) out.push(giveItem(p.id, 'c4'));
     if (k.kit) out.push(giveItem(p.id, 'defuser'));

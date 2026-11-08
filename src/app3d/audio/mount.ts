@@ -25,6 +25,8 @@ export interface A1Host {
   shots(): readonly Bullet[];
   activeEffects(): readonly Effect[];
   pawnState(id: PlayerId): { readonly wpn: unknown } | null;
+  /** W1: the knife attacks of the last tick (Sim3DHost.swings). */
+  swings?(): readonly { readonly attacker: PlayerId; readonly attack: 'slash' | 'stab'; readonly wall: boolean }[];
 }
 
 export interface A1Frame {
@@ -215,6 +217,13 @@ export class A1Mount {
         const thrown = effects.some((e) => e.thrower === fp && e.phase === 'flying' && e.untilTick > o.tick && !this.knownNade(e.seq));
         const r = this.tracker.ingest(o.tick, p, timers, shot, thrown);
         if (r.primed && fp === human) this.director.human('pin', p.weapon, p.pos);
+        // W1: the knife swings as the host swung it (slash / stab, on CS's timers); the hit sound is the damage event's.
+        for (const w of host.swings?.() ?? []) {
+          if (w.attacker !== fp) continue;
+          this.tracker.swing(o.tick - 1, w.attack);
+          this.director.human('knife', p.weapon, p.pos);
+          if (w.wall) this.director.human('knifeWall', p.weapon, p.pos);
+        }
       }
     } else this.tracker.reset();
   }
@@ -238,10 +247,8 @@ export class A1Mount {
     const pressed = (b: string): boolean => now.has(b) && !this.prevButtons.has(b);
     const w = pawn.weapon;
     if (pressed('ATTACK')) {
-      if (w === 'knife' && this.tracker.sinceSwing(tick) >= 0.4) {
-        this.tracker.swing(tick);
-        this.director.human('knife', w, pawn.pos);
-      } else if (gunOf(w) !== null && pawn.ammo.clip === 0) this.director.human('dry', w, pawn.pos);
+      // The knife's swings come from the host (tick()).
+      if (gunOf(w) !== null && pawn.ammo.clip === 0) this.director.human('dry', w, pawn.pos);
     }
     if (w === 'c4' && !bombPlanted && (now.has('USE') || now.has('ATTACK'))) {
       if (pressed('USE') || pressed('ATTACK')) {
@@ -254,6 +261,19 @@ export class A1Mount {
       this.tracker.plant(tick);
     } else this.tracker.plant(null);
     this.prevButtons = now;
+  }
+
+  /** W1: F (+lookatweapon): inspect the first-person weapon from `tick` (not while it is being drawn). */
+  inspect(tick: number, nowRenderTick: number): boolean {
+    const a = this.tracker.anim(nowRenderTick, 0.1, 0, 0);
+    if (a === null || a.deploy !== null || a.reload !== null || a.primed) return false;
+    this.tracker.inspect(tick);
+    return true;
+  }
+
+  /** W1: stop an inspect (scope in, takeover). */
+  cancelInspect(): void {
+    this.tracker.cancelInspect();
   }
 
   /** Every drawn frame: the listener and the viewmodel's animation input. */

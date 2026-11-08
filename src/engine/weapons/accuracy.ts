@@ -20,6 +20,11 @@ export interface Motion {
   readonly onGround: boolean;
   readonly crouched: boolean;
   readonly onLadder: boolean;
+  /**
+   * Holding WALK (shift; CS `m_bIsWalking`): the movement scale stays linear (`moveWalkCurveExponent`) instead of the
+   * run curve (`moveCurveExponent`). Absent = false.
+   */
+  readonly walking?: boolean;
 }
 
 /** The part of the RNG contract the spread draw needs (contracts/rng.ts `Rng` fits). */
@@ -45,16 +50,27 @@ export function penaltyFloor(w: WeaponDef, mode: 0 | 1, motion: Motion, reloadin
   return p;
 }
 
+/** Where the shooter is, for the recovery time: on the ground, in the air, or on a ladder. */
+export type Footing = 'ground' | 'air' | 'ladder';
+
+
 /**
- * Recovery time (seconds for the penalty to fall to a tenth) at recoil index `recoilIndex`: the stand / crouch time,
- * moving linearly to the "final" time between transitionStartBullet and transitionEndBullet.
+ * Recovery time (seconds for the penalty to fall to a tenth), CS:GO's `CWeaponCSBase::GetRecoveryTime` (docs/weapons.md
+ * S9): on a ladder the standing time; else (also in the air, see below) the stand / crouch time, moving linearly to the "final" time between transitionStartBullet and
+ * transitionEndBullet of the **integer** recoil index (`int nRecoilIndex = m_flRecoilIndex`; RemapValClamped), unless
+ * the final time is unset (−1).
  */
-export function recoveryTime(w: WeaponDef, crouched: boolean, recoilIndex: number): number {
+export function recoveryTime(w: WeaponDef, crouched: boolean, recoilIndex: number, footing: Footing = 'ground'): number {
   const r = w.recovery;
+  if (footing === 'ladder') return r.stand;
+  // CS:GO's in-air rule (crouch × 4) is not applied: CS2's air model (m_flInaccuracyJumpApex, which CS:GO's 2020 code
+  // doesn't have) differs, and the sim's air terms follow CS2's fields; docs/weapons.md, gunplay checklist G9.
   const a = crouched ? r.crouch : r.stand;
   const b = crouched ? r.crouchFinal : r.standFinal;
+  if (b === -1) return a;
+  const n = Math.trunc(recoilIndex);
   const span = r.transitionEndBullet - r.transitionStartBullet;
-  const t = span <= 0 ? (recoilIndex >= r.transitionEndBullet ? 1 : 0) : Math.max(0, Math.min(1, (recoilIndex - r.transitionStartBullet) / span));
+  const t = span === 0 ? (n >= r.transitionEndBullet ? 1 : 0) : Math.max(0, Math.min(1, (n - r.transitionStartBullet) / span));
   return a + (b - a) * t;
 }
 
@@ -69,15 +85,23 @@ export function decayPenalty(penalty: number, floor: number, recovery: number, d
   return roundNumber(floor + (penalty - floor) * k);
 }
 
-type InaccuracyTuning = Pick<WeaponModelTuning, 'moveStartFraction' | 'moveFullFraction' | 'moveCurveExponent' | 'airSpreadScale' | 'airLowSpeedFraction' | 'airMaxPenalty' | 'jumpImpulse' | 'maxInaccuracy'>;
+type InaccuracyTuning = Pick<
+  WeaponModelTuning,
+  'moveStartFraction' | 'moveFullFraction' | 'moveCurveExponent' | 'moveWalkCurveExponent' | 'airSpreadScale' | 'airLowSpeedFraction' | 'airMaxPenalty' | 'jumpImpulse' | 'maxInaccuracy'
+>;
 
-/** The 0–1 movement scale: 0 up to moveStartFraction × maxSpeed, 1 from moveFullFraction × maxSpeed, linear between, ^ exponent. */
-export function movementScale(speed2d: number, maxSpeed: number, m: InaccuracyTuning): number {
+/**
+ * The 0–1 movement scale (CS `CWeaponCSBase::GetInaccuracy`): `RemapValClamped(speed, maxSpeed × 0.34, maxSpeed × 0.95,
+ * 0, 1)`, then, when above 0, `^ moveCurveExponent` (CS `MOVEMENT_CURVE01_EXPONENT` 0.25: the penalty rises steeply
+ * just above the threshold) unless walking (`^ moveWalkCurveExponent`, 1: linear). Below 34 % of the weapon's max
+ * speed the movement term is 0: counter-strafing is slowing below that, and the term is instantaneous.
+ */
+export function movementScale(speed2d: number, maxSpeed: number, m: InaccuracyTuning, walking = false): number {
   if (maxSpeed <= 0) return 0;
   const lo = maxSpeed * m.moveStartFraction;
   const hi = maxSpeed * m.moveFullFraction;
   const s = Math.max(0, Math.min(1, (speed2d - lo) / (hi - lo)));
-  return s > 0 ? Math.pow(s, m.moveCurveExponent) : 0;
+  return s > 0 ? Math.pow(s, walking ? m.moveWalkCurveExponent : m.moveCurveExponent) : 0;
 }
 
 /** The 0–airMaxPenalty air scale from the vertical speed: √|vz| remapped from airLowSpeedFraction·√J … √J to 0 … 1. */
@@ -95,7 +119,7 @@ export function airScale(vz: number, m: InaccuracyTuning): number {
 export function inaccuracy(w: WeaponDef, mode: 0 | 1, penalty: number, motion: Motion, m: InaccuracyTuning): number {
   let acc = penalty;
   const speed = Math.hypot(motion.velocity.x, motion.velocity.y);
-  acc += movementScale(speed, w.maxSpeed[mode], m) * w.inaccuracy.move[mode];
+  acc += movementScale(speed, w.maxSpeed[mode], m, motion.walking === true) * w.inaccuracy.move[mode];
   if (!motion.onGround && !motion.onLadder) acc += airScale(motion.velocity.z, m) * w.inaccuracy.jump[mode] * m.airSpreadScale;
   return Math.min(acc, m.maxInaccuracy);
 }
