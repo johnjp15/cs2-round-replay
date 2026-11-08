@@ -30,7 +30,8 @@
  *  6. H3 (normal build only): the Scenario / Map pickers list the scenarios; `?scenario=dust2-5v5` (free play on CS2's
  *     Dust II) loads, plays at 4× for a few seconds with the bots moving, E takes over the spectated pawn; screenshots
  *     app3d-freeplay-dust2-*.jpg;
- *  7. fails on page errors, console errors or requests to other origins.
+ *  7. H6 (tools/browser-check3d-h6.ts): the death fade when cart dies, first person (`--only h6`: just that);
+ *  8. fails on page errors, console errors or requests to other origins.
  * Port: `--port <n>` or CHECK3D_PORT (default 4180).
  * Screenshots: `--out` (default docs/img) as app3d-*.jpg.
  */
@@ -41,6 +42,7 @@ import { fileURLToPath } from 'node:url';
 import { cpus, loadavg } from 'node:os';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { a1Checks } from './browser-check3d-a1';
+import { h6Checks } from './browser-check3d-h6';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const PORT = Number(process.argv.includes('--port') ? process.argv[process.argv.indexOf('--port') + 1] : (process.env['CHECK3D_PORT'] ?? '4180'));
@@ -52,6 +54,8 @@ function arg(name: string, fallback: string): string {
 }
 
 const SINGLE = process.argv.includes('--single');
+/** `--only h6`: just the H6 death-fade check. */
+const ONLY_H6 = arg('--only', '') === 'h6';
 const OUT = resolve(ROOT, arg('--out', 'docs/img'));
 const SECONDS = Number(arg('--seconds', '4'));
 const [FPS_W, FPS_H] = arg('--fps-size', '640x400').split('x').map(Number) as [number, number];
@@ -267,6 +271,11 @@ async function main(): Promise<void> {
   const problems: string[] = [];
   const report: Record<string, unknown> = { page: SINGLE ? 'dist-single-3d/index.html' : 'dist-3d/', bytes: statSync(join(DIR, 'index.html')).size };
   try {
+    full: {
+    if (ONLY_H6) {
+      await h6Checks(browser, { open: (w, h) => open(browser, w, h, problems), out: OUT }, problems, report);
+      break full;
+    }
     // 1. Five moments, watching.
     const page = await open(browser, 1280, 720, problems);
     report['renderer'] = await page.evaluate(() => {
@@ -468,6 +477,9 @@ async function main(): Promise<void> {
     // 5. A1: sound and the viewmodels.
     await a1Checks(browser, { open: (w, h) => open(browser, w, h, problems), seek, out: OUT, root: ROOT }, problems, report);
     if (!SINGLE) report['freePlay'] = await freePlayChecks(browser, problems);
+    // 7. H6 (#85): the death fade.
+    await h6Checks(browser, { open: (w, h) => open(browser, w, h, problems), out: OUT }, problems, report);
+    }
   } finally {
     await browser.close();
     server.close();

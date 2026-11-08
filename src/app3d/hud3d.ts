@@ -27,6 +27,8 @@ export interface HudFrame {
   /** The mode line's style: playing, watching (nobody controlled) or the human dead and spectating. */
   readonly modeKind: 'you' | 'watching' | 'dead';
   readonly crosshair: boolean;
+  /** H6 (#85): the death fade's black over the view, 0..1 (0: none). */
+  readonly deathFade?: number;
   /** The crosshair's offset from the screen centre (px; the aim punch), rounded by the caller. */
   readonly crosshairAt: { readonly x: number; readonly y: number };
   /** The scope overlay (the viewed pawn scoped in first person). */
@@ -181,6 +183,9 @@ export class Hud3D {
       this.text('perf', f.perf);
     }
     this.attr('crosshair', 'hidden', f.crosshair ? null : '');
+    const black = Math.round((f.deathFade ?? 0) * 20) / 20;
+    this.attr('deathfade', 'hidden', black > 0 ? null : '');
+    this.attr('deathfade', 'style', black > 0 ? `opacity:${black}` : null);
     this.attr('crosshair', 'style', f.crosshairAt.x === 0 && f.crosshairAt.y === 0 ? null : `transform:translate(${f.crosshairAt.x}px,${f.crosshairAt.y}px)`);
     this.attr('scope', 'hidden', f.scope ? null : '');
     const showHit = f.hit !== null && f.hit.ageMs < 180;

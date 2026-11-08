@@ -190,6 +190,15 @@ docs/app.md "Ctrl+W, fullscreen and key bindings".
   direction through the camera (`aimOffsetPx`). No crosshair in third person or free fly.
 - **Who**: watching, every living player in id order; dead, your living teammates (everyone once they're dead).
   When the spectated player dies the camera moves on after 2 s.
+- **Death fade (H6, #85)**: when you die, or the player you watch in first person dies, you keep their own view,
+  frozen where they looked (no turn to the killer, no free look), the eye drops to the ground (to 14 u, CS's
+  `VEC_DEAD_VIEWHEIGHT`, in 0.5 s) and the screen fades to black over 2 s (CS2's `cl_deathcam_audio_mix_phase1_fade_time`
+  2 and `spec_freeze_time` 2); a headshot goes black in 0.4 s (our pick: CS2 documents no headshot fade; 0.4 s is its
+  `cl_deathcam_audio_mix_phase2_fade_time`), the black then held to 2 s. Then the next living teammate. The fade needs
+  the death to have happened in front of the Scene (after a seek past it there is none). `deathFade` in spectate.ts,
+  `#deathfade` under the HUD text; `npm run check:browser:3d -- --only h6` checks it live (cart's death, 69.4 s).
+
+![Cart's death fade at 70.4 s: his own view from the ground, half black](img/app3d-h6-death-fade.jpg)
 - **Unmistakable**: the line under the score says "Watching" (or "You: cart (dead) · spectating") vs "You: cart";
   the bottom panel says SPECTATING and the name in team colour, with the mode (1st person / 3rd person / free camera),
   HP, armor, weapon, kills this round and the controls' hints; a soft vignette darkens the screen edges. The panel's
