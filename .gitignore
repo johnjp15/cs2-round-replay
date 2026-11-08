@@ -11,3 +11,7 @@ logs/
 __pycache__/
 *.pyc
 local/
+
+# X1b: Valve material/model files from John's extraction (183 MB): local only, never committed
+data/source/csgo-2020/materials
+data/source/csgo-2020/models

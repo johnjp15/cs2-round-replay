@@ -19,6 +19,7 @@ import { BspFile, CONTENTS, LUMP, SURF, type Entity, type Face, type TexInfo } f
 import { angleMatrix, boxTriangles, brushFaces, displacementMesh, facePolygon, fan, FaceLightmap, modelBrushes, NODRAW_FLAGS, transformPoints } from './geometry';
 import { AssetError, baseMaterialName, mdlMaterialPaths, normalizePath, readMdl, readVmt, readVtfHeader, zipEntries, zipRead, type MdlInfo } from './assets';
 import { PhyError, readPhy } from './phy';
+import { clusterMesh, readStudioMesh, type StudioMesh } from './studio';
 
 /** Build parameters (written into the manifest). */
 export const PACKAGE_PARAMS = {
@@ -26,6 +27,21 @@ export const PACKAGE_PARAMS = {
   quant: 8,
   /** Brush contents that block a player's hull besides PLAYERCLIP (bspflags.h MASK_PLAYERSOLID). */
   solidContents: CONTENTS.SOLID | CONTENTS.WINDOW | CONTENTS.GRATE | CONTENTS.MOVEABLE,
+  /**
+   * X1b: of those, the ones sight and bullets pass (not in MASK_OPAQUE / MASK_VISIBLE; GRATE not in MASK_SHOT): the
+   * railings (WINDOW) and fences (GRATE). A brush with these and without SOLID / MOVEABLE goes to the clips mesh
+   * (player-solid, ignored by sight), not the world.
+   */
+  seeThroughContents: CONTENTS.WINDOW | CONTENTS.GRATE,
+  /**
+   * X1b: props are drawn as their real meshes (LOD 0), vertex-clustered until a model has at most
+   * min(propTriangleCap, max(propTriangleFloor, propInstanceBudget / its instance count)) triangles: one-off props keep
+   * their shape, a curb piece placed 60 times gets fewer.
+   */
+  propTriangleCap: 400,
+  propTriangleFloor: 48,
+  propInstanceBudget: 4000,
+  propClusterCells: [1, 1.5, 2, 3, 4, 6, 8, 12, 16],
   /** The lightmap luminance (Rec. 709 weights) that renders as the material's own colour: this percentile of the drawn faces' mean lightmaps... */
   exposurePercentile: 0.9,
   /** ... scaled by this. */
@@ -83,6 +99,8 @@ export interface PackageStats {
   readonly propsFromPhy: number;
   readonly propsFromHullBox: number;
   readonly propsWithoutModel: number;
+  readonly propsDrawnFromMesh: number;
+  readonly skyboxProps: number;
   readonly propModelsMissing: readonly string[];
   readonly renderFaces: number;
   readonly renderTriangles: number;
@@ -341,6 +359,8 @@ interface PropModel {
   readonly mdl: MdlInfo | null;
   /** Convex hull triangles in the model frame (from .phy), or null. */
   readonly hulls: Float64Array | null;
+  /** X1b: the drawn mesh (LOD 0, clustered to `propTriangleCap`), or null without VVD / VTX. */
+  readonly mesh: StudioMesh | null;
 }
 
 export interface BuildOptions {
@@ -356,6 +376,30 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
   const brushes = bsp.brushes();
   const models = bsp.models();
   const ents = bsp.entities();
+
+  // X1b: the 3D skybox (the area of the leaf holding sky_camera): its bounds, so neither collision nor the render
+  // mesh carries the 1/16-scale city (Mirage: x 4096..6144, far outside the playable map).
+  const skyCam = ents.find((e) => e.get('classname') === 'sky_camera');
+  const skyAt = vec(skyCam?.get('origin'));
+  let skyBox: Box | null = null;
+  if (skyAt !== null) {
+    const leafs = bsp.leafs();
+    const area = (leafs[bsp.leafAt(...skyAt)] as { area: number }).area;
+    const min: [number, number, number] = [Infinity, Infinity, Infinity];
+    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+    for (const l of leafs) {
+      if (l.area !== area || l.contents !== 0) continue;
+      for (let k = 0; k < 3; k++) {
+        min[k] = Math.min(min[k] as number, (l.mins[k] as number) - 1);
+        max[k] = Math.max(max[k] as number, (l.maxs[k] as number) + 1);
+      }
+    }
+    // The skybox is its own sealed area; the world's area 0 / 1 leaves never fall inside it.
+    if (area !== 0 && Number.isFinite(min[0])) skyBox = { min, max };
+  }
+  const inSky = (b: Box, shift: readonly [number, number, number] = [0, 0, 0]): boolean =>
+    skyBox !== null && [0, 1, 2].every((k) => (b.min[k] as number) + (shift[k] as number) >= (skyBox as Box).min[k]! && (b.max[k] as number) + (shift[k] as number) <= (skyBox as Box).max[k]!);
+  const pointInSky = (x: number, y: number, z: number): boolean => inSky({ min: [x, y, z], max: [x, y, z] });
 
   // Brushes: the world's and the solid brush entities'.
   const brushCounts: Record<string, number> = { world: 0, clip: 0, grenadeClip: 0, ladder: 0, water: 0, other: 0 };
@@ -379,7 +423,17 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
   };
   const classify = (bi: number, shift: readonly [number, number, number], entitySolid: boolean): void => {
     const c = (brushes[bi] as { contents: number }).contents;
-    if ((c & P.solidContents) !== 0) {
+    if (inSky(brushBox(bsp, bi), shift)) {
+      brushCounts.skybox = (brushCounts.skybox ?? 0) + 1;
+      return;
+    }
+    if ((c & P.solidContents) !== 0 && (c & (CONTENTS.SOLID | CONTENTS.MOVEABLE)) === 0) {
+      // Railings and fences: player-solid, see-through (X1b).
+      if (entitySolid) {
+        clipTris.push(brushTris(bi, shift));
+        brushCounts.seeThrough = (brushCounts.seeThrough ?? 0) + 1;
+      }
+    } else if ((c & P.solidContents) !== 0) {
       if (entitySolid) {
         worldTris.push(brushTris(bi, shift));
         brushCounts.world = (brushCounts.world as number) + 1;
@@ -431,6 +485,7 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
     const info = dispInfos[f.dispInfo];
     if (info === undefined) throw new AssetError(`face ${fi}: dispinfo ${f.dispInfo} out of range`);
     const m = displacementMesh(info, facePolygon(f, verts, edges, surfEdges), dispVerts, dispTris);
+    if (pointInSky(m.positions[0] as number, m.positions[1] as number, m.positions[2] as number)) return;
     dispMeshes.set(fi, m);
     const tri = new Float64Array(m.tris.length * 3);
     for (let i = 0; i < m.tris.length; i++) for (let k = 0; k < 3; k++) tri[i * 3 + k] = m.positions[(m.tris[i] as number) * 3 + k] as number;
@@ -440,6 +495,7 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
 
   // Static props and solid prop_dynamics.
   const propCache = new Map<string, PropModel>();
+  const instances = new Map<string, number>();
   const propModel = (path: string): PropModel => {
     const key = normalizePath(path);
     const hit = propCache.get(key);
@@ -472,7 +528,28 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
         }
       }
     }
-    const out = { mdl, hulls };
+    let mesh: StudioMesh | null = null;
+    const vvd = mdlBytes === null || mdl === null ? null : assets.read(key.replace(/\.mdl$/, '.vvd'));
+    const vtx = vvd === null ? null : assets.read(key.replace(/\.mdl$/, '.dx90.vtx'));
+    if (mdlBytes !== null && mdl !== null && vvd !== null && vtx !== null) {
+      try {
+        mesh = readStudioMesh(mdlBytes, mdl, vvd, vtx, 0);
+        const cap = Math.min(P.propTriangleCap, Math.max(P.propTriangleFloor, Math.floor(P.propInstanceBudget / Math.max(1, instances.get(key) ?? 1))));
+        if (mesh.tris.length / 3 > cap) {
+          for (const cell of P.propClusterCells) {
+            const c = clusterMesh(mesh as StudioMesh, cell);
+            if (c.tris.length / 3 <= cap || cell === P.propClusterCells[P.propClusterCells.length - 1]) {
+              mesh = c;
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        if (!(e instanceof AssetError)) throw e;
+        mesh = null;
+      }
+    }
+    const out = { mdl, hulls, mesh };
     propCache.set(key, out);
     return out;
   };
@@ -493,7 +570,10 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
     if (!(cls === 'prop_dynamic' || cls === 'prop_dynamic_override' || cls === 'prop_physics_multiplayer' || cls === 'prop_physics' || cls === 'prop_physics_override') || m === undefined || !m.toLowerCase().endsWith('.mdl')) continue;
     const o = vec(e.get('origin'));
     if (o === null) continue;
-    const solid = Number(e.get('solid') ?? String(SOLID_VPHYSICS));
+    // X1b: prop_physics_multiplayer is pushed aside by players (CPhysicsPropMultiplayer, PHYSICS_MULTIPLAYER_NON_SOLID
+    // for light props: Mirage's are all cans, pots, cinder blocks, stools): drawn, not in the player collision.
+    const physicsSolid = cls !== 'prop_physics_multiplayer' || e.get('physicsmode') === '1';
+    const solid = physicsSolid ? Number(e.get('solid') ?? String(SOLID_VPHYSICS)) : SOLID_NONE;
     placed.push({ model: m, origin: o, angles: vec(e.get('angles')) ?? [0, 0, 0], scale: Number(e.get('modelscale') ?? '1') || 1, solid: Number.isFinite(solid) ? solid : SOLID_VPHYSICS, skin: Number(e.get('skin') ?? '0') || 0 });
   }
   let solidProps = 0;
@@ -501,8 +581,15 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
   let fromBox = 0;
   let withoutModel = 0;
   const missingModels = new Set<string>();
-  const propRender: { tris: Float64Array; model: string; skin: number }[] = [];
+  for (const p of placed) if (!pointInSky(p.origin[0], p.origin[1], p.origin[2])) instances.set(normalizePath(p.model), (instances.get(normalizePath(p.model)) ?? 0) + 1);
+  const propRender: { tris: Float64Array; model: string; skin: number; refs: Uint16Array | null }[] = [];
+  let skyProps = 0;
+  let propsFromMesh = 0;
   for (const p of placed) {
+    if (pointInSky(p.origin[0], p.origin[1], p.origin[2])) {
+      skyProps++;
+      continue;
+    }
     const pm = propModel(p.model);
     const m = angleMatrix(p.angles[0], p.angles[1], p.angles[2]);
     let local: Float64Array | null = null;
@@ -518,7 +605,13 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
       continue;
     }
     const world = transformPoints(local, m, p.scale, p.origin[0], p.origin[1], p.origin[2]);
-    propRender.push({ tris: world, model: normalizePath(p.model), skin: p.skin });
+    if (pm.mesh !== null) {
+      const sm = pm.mesh;
+      const soup = new Float64Array(sm.tris.length * 3);
+      for (let i = 0; i < sm.tris.length; i++) for (let k = 0; k < 3; k++) soup[i * 3 + k] = sm.positions[(sm.tris[i] as number) * 3 + k] as number;
+      propRender.push({ tris: transformPoints(soup, m, p.scale, p.origin[0], p.origin[1], p.origin[2]), model: normalizePath(p.model), skin: p.skin, refs: sm.skinRef });
+      propsFromMesh++;
+    } else propRender.push({ tris: world, model: normalizePath(p.model), skin: p.skin, refs: null });
     if (p.solid === SOLID_NONE) continue;
     solidProps++;
     if (p.solid === SOLID_VPHYSICS && pm.hulls !== null) fromPhy++;
@@ -529,11 +622,16 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
   // Render: drawn faces of the world and the drawn brush entities, minus the 3D skybox's area.
   const ents2 = readEntities(bsp, [...new Set(ladders)].sort((a, b) => a - b), water);
   const skyFaces = new Set<number>();
-  if (ents2.skyCamera !== null) {
-    const leafs = bsp.leafs();
-    const leafFaces = bsp.leafFaces();
-    const skyArea = (leafs[bsp.leafAt(...ents2.skyCamera)] as { area: number }).area;
-    for (const leaf of leafs) if (leaf.area === skyArea) for (let k = 0; k < leaf.numLeafFaces; k++) skyFaces.add(leafFaces[leaf.firstLeafFace + k] as number);
+  if (skyBox !== null) {
+    const m0 = models[0];
+    for (let fi = m0?.firstFace ?? 0; fi < (m0?.firstFace ?? 0) + (m0?.numFaces ?? 0); fi++) {
+      const f = faces[fi];
+      if (f === undefined) continue;
+      const poly = facePolygon(f, verts, edges, surfEdges);
+      let all = true;
+      for (let i = 0; i < poly.length && all; i += 3) all = pointInSky(poly[i] as number, poly[i + 1] as number, poly[i + 2] as number);
+      if (all) skyFaces.add(fi);
+    }
   }
   const resolver = new MaterialResolver(bsp, assets, options.mapName);
   const matIndex = new Map<string, number>();
@@ -622,12 +720,12 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
   const exposure = ref > 0 ? P.exposureScale / ref : 1;
   // Props: shaded by the sun, coloured by their first material.
   const sun = sunOf(ents);
-  const propMat = (model: string, skin: number): number => {
+  const propMat = (model: string, skin: number, ref = 0): number => {
     const pm = propCache.get(model);
     const mdl = pm?.mdl ?? null;
     if (mdl !== null && mdl.textures.length > 0) {
       const family = mdl.skins[skin] ?? mdl.skins[0];
-      const tex = family?.[0] ?? 0;
+      const tex = family?.[ref] ?? family?.[0] ?? 0;
       for (const path of mdlMaterialPaths(mdl, tex)) {
         const name = path.replace(/^materials\//, '').replace(/\.vmt$/, '');
         if (resolver.vtfColor(name) !== null) return material(name, null);
@@ -658,9 +756,10 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
     }
   }
   for (const pr of propRender) {
-    const mat = propMat(pr.model, pr.skin);
-    const lin = linearOf[mat] as number[];
+    const mat0 = propMat(pr.model, pr.skin);
     for (let o = 0; o + 9 <= pr.tris.length; o += 9) {
+      const mat = pr.refs === null ? mat0 : propMat(pr.model, pr.skin, pr.refs[o / 9] as number);
+      const lin = linearOf[mat] as number[];
       const ux = (pr.tris[o + 3] as number) - (pr.tris[o] as number);
       const uy = (pr.tris[o + 4] as number) - (pr.tris[o + 1] as number);
       const uz = (pr.tris[o + 5] as number) - (pr.tris[o + 2] as number);
@@ -713,6 +812,8 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
       propsFromPhy: fromPhy,
       propsFromHullBox: fromBox,
       propsWithoutModel: withoutModel,
+      propsDrawnFromMesh: propsFromMesh,
+      skyboxProps: skyProps,
       propModelsMissing: [...missingModels].sort(),
       renderFaces: rfaces.length,
       renderTriangles: triMat.length,
