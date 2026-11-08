@@ -28,7 +28,8 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
   drawn in its own pass and camera (viewmodel_fov), crosshair, hit marker (white; red for a headshot), the scope
   overlay while zoomed (the viewmodel hidden, as in CS2).
 - **Sound** (A1): CS2's sound events with positional HRTF audio, CS2's distance curves and occlusion on the mesh,
-  starting with the first click or key; placeholders until John's CS2 files are packed. docs/cs2-sounds.md.
+  starting with the first click or key; placeholders until John's CS2 files are packed. docs/cs2-sounds.md;
+  A2: CS2's mixer volumes, instance limits, a limiter, tick-accurate cues, re-made placeholders (docs/audio.md).
 - **HUD**: score and round clock (the bomb timer once planted, red; green while defusing), the bomb line (carrier,
   planted, who is defusing and how long is left, defused), the kill feed, the radar minimap (the CS2 radar around the
   camera, every pawn as a dot, the view cone), the team panel (HP bar, mode: REPLAY / LIVE / YOU), HP / armor and

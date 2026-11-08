@@ -545,7 +545,7 @@ class App3D {
       }
     }
     this.scene.ingest(o, act, h.activeEffects());
-    this.a1.tick(o, h, s.human);
+    this.a1.tick(o, h, s.human, this.loop.speed);
   }
 
   private takeControl(): void {
