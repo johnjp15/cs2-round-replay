@@ -404,7 +404,7 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
     if (area !== 0 && Number.isFinite(min[0])) skyBox = { min, max };
   }
   const inSky = (b: Box, shift: readonly [number, number, number] = [0, 0, 0]): boolean =>
-    skyBox !== null && [0, 1, 2].every((k) => (b.min[k] as number) + (shift[k] as number) >= (skyBox as Box).min[k]! && (b.max[k] as number) + (shift[k] as number) <= (skyBox as Box).max[k]!);
+    skyBox !== null && [0, 1, 2].every((k) => (b.min[k] as number) + (shift[k] as number) >= ((skyBox as Box).min[k] as number) && (b.max[k] as number) + (shift[k] as number) <= ((skyBox as Box).max[k] as number));
   const pointInSky = (x: number, y: number, z: number): boolean => inSky({ min: [x, y, z], max: [x, y, z] });
 
   // Brushes: the world's and the solid brush entities'.
