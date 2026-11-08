@@ -684,35 +684,8 @@ export class Sim3DHost implements IHost {
         p.move = roundMove({ ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } });
         continue;
       }
-      const input = this.inputFor(p.id);
-      const isLocked = locked.includes(p.id);
-      const from = p.move.pos;
-      const lockedInput = input === null ? null : { ...input, forward: 0, side: 0, buttons: input.buttons.filter((b) => b !== 'JUMP') };
-      const base: MoveState = isLocked ? { ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } } : p.move;
-      const step: MoveStep = stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT, this.moveOptionsFor(p, input));
-      let next = step.state;
-      if (!isLocked) {
-        const obstacles = this.solidFor(p, next);
-        if (obstacles.length > 0) {
-          const c = collideMove(from, next.pos, obstacles, this.tuning.collision.pawnRadius, new HullClamp(g, next.pos.z, hullOf(next.crouching)));
-          if (c.blockedBy !== null) {
-            let z = next.pos.z;
-            let x = c.x;
-            let y = c.y;
-            if (g.hullBlocked(x, y, z, hullOf(next.crouching))) {
-              // Back where it was in xy, at its old height if that fits (else it doesn't move at all).
-              if (!g.hullBlocked(x, y, from.z, hullOf(next.crouching))) z = from.z;
-              else {
-                x = from.x;
-                y = from.y;
-                z = from.z;
-              }
-            }
-            next = { ...next, pos: { x, y, z }, vel: { x: (x - from.x) / TICK_DT, y: (y - from.y) / TICK_DT, z: next.vel.z } };
-            p.blockedBy = c.blockedBy;
-          }
-        }
-      }
+      const { step, next, blockedBy } = this.nextMove(p, locked.includes(p.id));
+      if (blockedBy !== null) p.blockedBy = blockedBy;
       p.move = roundMove(next);
       if (step.landSpeed >= m.landSoundSpeed) this.sound(p, 'land');
       if (step.fallDamage > 0) this.hurt(null, p, null, 'generic', step.fallDamage, 0, false, false);
@@ -722,6 +695,61 @@ export class Sim3DHost implements IHost {
         p.nextFootstepTick = roundNumber(t + snd.footstepIntervalSec * TICKS_PER_SEC);
       }
     }
+  }
+
+  /**
+   * One alive pawn's move this tick from its current state and input, without changing anything: `stepMove3d` (a
+   * locked pawn keeps its position, still turning and crouching), then cut against the solid pawns. `moveAll` applies
+   * it; `predictHumanMove` shows it.
+   */
+  private nextMove(p: PawnState, isLocked: boolean): { step: MoveStep; next: MoveState; blockedBy: PlayerId | null } {
+    const m = this.tuning.movement;
+    const g = this.geometry;
+    const input = this.inputFor(p.id);
+    const from = p.move.pos;
+    const lockedInput = input === null ? null : { ...input, forward: 0, side: 0, buttons: input.buttons.filter((b) => b !== 'JUMP') };
+    const base: MoveState = isLocked ? { ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } } : p.move;
+    const step: MoveStep = stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT, this.moveOptionsFor(p, input));
+    let next = step.state;
+    if (!isLocked) {
+      const obstacles = this.solidFor(p, next);
+      if (obstacles.length > 0) {
+        const c = collideMove(from, next.pos, obstacles, this.tuning.collision.pawnRadius, new HullClamp(g, next.pos.z, hullOf(next.crouching)));
+        if (c.blockedBy !== null) {
+          let z = next.pos.z;
+          let x = c.x;
+          let y = c.y;
+          if (g.hullBlocked(x, y, z, hullOf(next.crouching))) {
+            // Back where it was in xy, at its old height if that fits (else it doesn't move at all).
+            if (!g.hullBlocked(x, y, from.z, hullOf(next.crouching))) z = from.z;
+            else {
+              x = from.x;
+              y = from.y;
+              z = from.z;
+            }
+          }
+          next = { ...next, pos: { x, y, z }, vel: { x: (x - from.x) / TICK_DT, y: (y - from.y) / TICK_DT, z: next.vel.z } };
+          return { step, next, blockedBy: c.blockedBy };
+        }
+      }
+    }
+    return { step, next, blockedBy: null };
+  }
+
+  /**
+   * M2 (docs/movement.md "M2"): the human pawn's movement state one tick ahead, as the next `tick()` will move it
+   * with the stored human input, changing nothing. CS2 (as Source) predicts the local player: the client runs the
+   * same movement code on its own input at once and draws other players in the past (entity interpolation); the 3D
+   * app draws the human's camera between the current tick and this, so a landing shows when the sim lands (a press
+   * on it is in time for a perfect bunny hop) instead of a tick later. Not predicted: what the tick does after the
+   * move (damage, items) and pawns that move earlier in the same tick. null: no human, no input or not alive.
+   */
+  predictHumanMove(): MoveState | null {
+    if (this.human === null || this.humanInput === null) return null;
+    const p = this.pawn(this.human);
+    if (p === null || !p.alive) return null;
+    const locked = lockedPawns(this.bomb, this.tickNo, this.bombPawns(), this.tuning.bomb);
+    return roundMove(this.nextMove(p, locked.includes(p.id)).next);
   }
 
   private pawnIndex(id: PlayerId): number {
