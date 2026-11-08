@@ -57,7 +57,9 @@ import {
   type AimBand,
   type Look,
 } from '../src/core/index';
-import { gunStats, throwElevation, type NavMesh } from '../src/sim2d/index';
+import { gunStats, throwElevation, type MapGeometry, type NavMesh } from '../src/sim2d/index';
+import { aimAtLanding } from '../src/engine/grenades/index';
+import { MeshGrenadeWorld } from '../src/sim3d/smokes';
 import { walkQueryOf } from '../src/app/index';
 import type { Session, SessionData } from '../src/app/index';
 import { FollowAim } from './follow-aim';
@@ -221,6 +223,8 @@ interface Running {
   pullTick: number | null;
   releaseTick: number | null;
   previous: WeaponId | null;
+  /** throw (S1): a smoke's look solved on the CS2 grenade engine (the hosts' smokes), or null. */
+  aim: Look | null;
 }
 
 /**
@@ -234,6 +238,8 @@ export class HumanBot implements HumanDriver {
   readonly trace: string[] = [];
   private readonly nav: NavMesh;
   private readonly tuning: Tuning;
+  /** S1: the world mesh smokes fly through, or null (2D). */
+  private readonly world: MapGeometry | null;
   private readonly model: RoundModel;
   /** Shadow puppet for followRecording: a ReplayCore without divergence that sees the human as a puppet; never snaps. */
   private readonly shadow: ReplayCore;
@@ -253,6 +259,7 @@ export class HumanBot implements HumanDriver {
     this.id = id;
     this.nav = data.nav;
     this.tuning = data.tuning;
+    this.world = data.world ?? data.geometry ?? null;
     this.model = new RoundModel(data.round);
     const tuning: Tuning = { ...data.tuning, replay: { ...data.tuning.replay, driftSnapUnits: 1e9 } };
     const schedule = new EventSchedule(data.round);
@@ -331,7 +338,7 @@ export class HumanBot implements HumanDriver {
     for (let guard = 0; guard < 1000; guard++) {
       if (this.cur === null) {
         if (this.nextIndex >= this.steps.length) return { input: this.idle(o, me), weapon };
-        this.cur = { index: this.nextIndex++, startTick: tick, path: null, next: 1, drawnTick: null, pullTick: null, releaseTick: null, previous: null };
+        this.cur = { index: this.nextIndex++, startTick: tick, path: null, next: 1, drawnTick: null, aim: null, pullTick: null, releaseTick: null, previous: null };
         this.note(tick, 'start');
       }
       const step = this.steps[this.cur.index] as BotStep;
@@ -484,7 +491,15 @@ export class HumanBot implements HumanDriver {
           cur.previous = me.weapon;
           return { input: this.idle(o, me), weapon: step.kind, done: false };
         }
-        const want: Look = { yaw: bearing(me.pos, at), pitch: this.throwPitch(dist2(me.pos, at), me.crouching) };
+        // S1: a smoke flies on the CS2 grenade engine in the hosts (src/sim3d/smokes.ts): aim it on the world mesh from
+        // where he stands (once; flat throws, -10...+20 deg, which stay under ceilings); other grenades and runs without the
+        // mesh: the 2D model's flat-ground pitch.
+        if (step.kind === 'smoke' && this.world !== null && cur.aim === null) {
+          const eye = { x: me.pos.x, y: me.pos.y, z: me.pos.z + (me.crouching ? this.tuning.damage.crouchEyeHeight : this.tuning.damage.eyeHeight) };
+          const a = aimAtLanding({ type: 'smoke', thrower: this.id, team: me.team, eye, velocity: { x: 0, y: 0, z: 0 } }, at, new MeshGrenadeWorld(this.world), { tuning: this.tuning.grenades.cs2 }, { strengths: [1], pitchMin: -10, pitchMax: 20 });
+          cur.aim = { yaw: Math.round(a.yaw * 1000) / 1000, pitch: Math.round(a.pitch * 1000) / 1000 };
+        }
+        const want: Look = cur.aim ?? { yaw: bearing(me.pos, at), pitch: this.throwPitch(dist2(me.pos, at), me.crouching) };
         const rate = this.tuning.replay.aimTurnRateDegPerTick;
         const look: Look = { yaw: turnToward(this.yaw, want.yaw, rate), pitch: clampStep(this.pitch, want.pitch, rate) };
         const deployed = tick >= cur.drawnTick + ceilTicks(this.tuning.grenades.deploySec) + 1;
