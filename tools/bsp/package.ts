@@ -42,6 +42,12 @@ export const PACKAGE_PARAMS = {
   propTriangleFloor: 48,
   propInstanceBudget: 4000,
   propClusterCells: [1, 1.5, 2, 3, 4, 6, 8, 12, 16],
+  /**
+   * X1c: breakable props placed as already broken (neither collision nor drawn): Mirage's Market-window shutter
+   * (`shutter_window_l_breakable.mdl`, prop_data "Wooden.Medium" health 1: the first bullet or knife breaks it). cart
+   * climbs through that window at 28.4 s on the tape; its hinge piece (`*_remainder.mdl`, not solid) stays drawn.
+   */
+  brokenProps: ['models/props/de_mirage/shutter_window_l_breakable.mdl'],
   /** The lightmap luminance (Rec. 709 weights) that renders as the material's own colour: this percentile of the drawn faces' mean lightmaps... */
   exposurePercentile: 0.9,
   /** ... scaled by this. */
@@ -569,7 +575,7 @@ export function buildPackage(bsp: BspFile, options: BuildOptions): MapPackage {
     const m = e.get('model');
     if (!(cls === 'prop_dynamic' || cls === 'prop_dynamic_override' || cls === 'prop_physics_multiplayer' || cls === 'prop_physics' || cls === 'prop_physics_override') || m === undefined || !m.toLowerCase().endsWith('.mdl')) continue;
     const o = vec(e.get('origin'));
-    if (o === null) continue;
+    if (o === null || (P.brokenProps as readonly string[]).includes(normalizePath(m))) continue;
     // X1b: prop_physics_multiplayer is pushed aside by players (CPhysicsPropMultiplayer, PHYSICS_MULTIPLAYER_NON_SOLID
     // for light props: Mirage's are all cans, pots, cinder blocks, stools): drawn, not in the player collision.
     const physicsSolid = cls !== 'prop_physics_multiplayer' || e.get('physicsmode') === '1';

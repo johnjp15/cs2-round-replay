@@ -18,7 +18,7 @@
   },
   "assets": {
    "files": 1998,
-   "read": 1627
+   "read": 1623
   },
   "extraction": {
    "sha256": "41c4fb863646945b4106c20ef45eda75f52dd80d2709ee6dcb62b5eeb88fb749",
@@ -46,8 +46,13 @@
   "quant": 8,
   "solidContents": 16395,
   "seeThroughContents": 10,
-  "propTriangleCap": 300,
+  "propTriangleCap": 400,
+  "propTriangleFloor": 48,
+  "propInstanceBudget": 4000,
   "propClusterCells": [1, 1.5, 2, 3, 4, 6, 8, 12, 16],
+  "brokenProps": [
+   "models/props/de_mirage/shutter_window_l_breakable.mdl"
+  ],
   "exposurePercentile": 0.9,
   "exposureScale": 1,
   "minLight": 0.06,
@@ -56,8 +61,8 @@
  },
  "outputs": {
   "geometry.bin": {
-   "bytes": 701915,
-   "sha256": "c1fbe0d3e8dd8a53d9687bec650c31a93c410aae8dc6a01b2a5129737d6263eb"
+   "bytes": 701846,
+   "sha256": "cc3371dc32e0450879b99d519b2e51aca279b447e889181f1a05c4b1e9cc8d00"
   },
   "clips.bin": {
    "bytes": 44599,
@@ -68,17 +73,17 @@
    "sha256": "f6a45fb39339f39c24f0366de31c1825bcb9fa2ccdd228cf07fb4ecb3d980b3f"
   },
   "render.bin": {
-   "bytes": 10777038,
-   "sha256": "9c5d76f7f10c20f00fef248273d5627877467d876df76540814eaae034ac12e0"
+   "bytes": 11005011,
+   "sha256": "bca1d3d07f0177a19bb8fa668530d8f26d030b6fd1ed3ab777aadcb0a4ac8d25"
   }
  },
  "counts": {
-  "worldVertices": 65565,
-  "worldTriangles": 131617,
+  "worldVertices": 65557,
+  "worldTriangles": 131605,
   "clipTriangles": 7731,
   "grenadeClipTriangles": 12,
-  "renderVertices": 1248140,
-  "renderTriangles": 454056,
+  "renderVertices": 1277720,
+  "renderTriangles": 463916,
   "materials": 361
  },
  "stats": {
@@ -92,21 +97,21 @@
    "skybox": 6,
    "seeThrough": 16
   },
-  "worldTriangles": 131617,
+  "worldTriangles": 131605,
   "clipTriangles": 7731,
   "grenadeClipTriangles": 12,
   "displacements": 704,
   "displacementTriangles": 25504,
   "staticProps": 1371,
-  "solidProps": 463,
-  "propsFromPhy": 448,
+  "solidProps": 462,
+  "propsFromPhy": 447,
   "propsFromHullBox": 15,
   "propsWithoutModel": 0,
-  "propsDrawnFromMesh": 1436,
+  "propsDrawnFromMesh": 1435,
   "skyboxProps": 22,
   "propModelsMissing": [],
   "renderFaces": 15736,
-  "renderTriangles": 454056,
+  "renderTriangles": 463916,
   "skyboxFacesDropped": 0,
   "materials": {
    "vtf": 360,
@@ -2181,11 +2186,6 @@
     "source": "vtf"
    },
    {
-    "name": "models/props/de_mirage/shutter_window/shutter_window_diffuse",
-    "color": [0.364, 0.339, 0.324],
-    "source": "vtf"
-   },
-   {
     "name": "models/props/de_mirage/wall_hole/sheet_metal_panel",
     "color": [0.596, 0.592, 0.57],
     "source": "vtf"
@@ -2203,6 +2203,11 @@
    {
     "name": "models/props/de_mirage/tarp_a/tarp_a_diffuse",
     "color": [0.611, 0.376, 0.343],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/shutter_window/shutter_window_diffuse",
+    "color": [0.364, 0.339, 0.324],
     "source": "vtf"
    }
   ]

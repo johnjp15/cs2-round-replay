@@ -90,6 +90,9 @@ const UNCONNECTED_COST = 1000;
  * through a full-height doorway beside the Market window (his POV at 27.8-28.5 and 63.5-64.3 s: door frame, floor
  * through it; the 2020 nav: a floor-level gap at x -2025...-1950 in Shop's north wall) where CS2 has the window over a
  * sill (z -128, 38 up) and boxes. Without this the gap stays and the puppet snaps through the wall (ticks 1880, 4114).
+ * X1c: the March 2020 BSP has no such doorway either: Shop's north wall is one solid brush from x -2080 to -1956
+ * (brush 1896, z -168..96) and the Market window has the same 40 u sill as CS2's (brushes 2240/2241, top z -128), so
+ * both packages take these ways (the 2020 nav's floor-level gap there is stale).
  */
 const WAYS_ROUND: readonly { readonly id: PlayerId; readonly from: number; readonly to: number; readonly via?: readonly (readonly [number, number, number, ('plain' | 'crouch')?])[] }[] = [
   // In at 28.2-28.5 s through the same 2020 doorway (V2's fitted eye is in the opening at 28.5 s): on CS2 the Shop door
@@ -283,6 +286,30 @@ class Heap<T> {
   }
 }
 
+/**
+ * X1c: a hull at (x, y) with its feet at z is inside a closed solid (a brush or a prop's hull it exactly fits in, so no
+ * face crosses the box and the triangle tests call it free: barely's B-site samples at 22.9-23.1 s sat inside a 32 u
+ * brick pier on the 2020 map): the first surface above the hull's centre faces up (its outward normal, by the
+ * triangle's winding) instead of down. Only for meshes wound outward (the BSP package's brushes, displacements and
+ * convex prop hulls).
+ */
+export function insideSolid(g: MapGeometry, x: number, y: number, z: number): boolean {
+  let best = Infinity;
+  let up = false;
+  for (const s of g.footprintSpans(x, y, 0.01, z + 1, z + 4096)) {
+    const lo = s[0] as number;
+    if ((s[2] as number) < 1e-6 || lo <= z + 1 || lo >= best) continue;
+    const t = g.triangle(s[3] as number);
+    const ux = (t[3] as number) - (t[0] as number);
+    const uy = (t[4] as number) - (t[1] as number);
+    const vx = (t[6] as number) - (t[0] as number);
+    const vy = (t[7] as number) - (t[1] as number);
+    best = lo;
+    up = ux * vy - uy * vx > 0;
+  }
+  return up;
+}
+
 export class Snapper {
   private readonly near = searchOffsets(SNAP_PARAMS.searchRadius);
   private readonly wide = searchOffsets(SNAP_PARAMS.wideRadius);
@@ -296,6 +323,8 @@ export class Snapper {
     private readonly step: number,
     /** For jump edges in `astar` (`reroute`); null = no jumps. */
     private readonly m: MovementTuning | null = null,
+    /** X1c: the movement mesh's triangles are wound outward (the 2020 BSP package): reject levels inside a solid (`insideSolid`). */
+    private readonly wound = false,
   ) {}
 
   /**
@@ -316,7 +345,7 @@ export class Snapper {
     return standLevels(this.g, x, y, z + window, z - window)
       .filter((l) => l.standing)
       .map((l) => l.z)
-      .filter((lz) => this.pieces.allowsLevel(x, y, lz))
+      .filter((lz) => this.pieces.allowsLevel(x, y, lz) && !(this.wound && insideSolid(this.g, x, y, lz)))
       .sort((a, b) => Math.abs(a - z) - Math.abs(b - z) || b - a);
   }
 
@@ -756,7 +785,7 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
   const roundBytes = read('data/round.json');
   const worldBytes = read(paths.geometry);
   const clipsBytes = read(paths.clips);
-  const navBytes = map === DEFAULT_MAP ? read(CS2_NAV_PATH) : null;
+  const navBytes = map === 'mirage-cs2' ? read(CS2_NAV_PATH) : null;
   const round: RoundData = parseRound(new TextDecoder().decode(roundBytes));
   const tuning = parseTuning(JSON.parse(readFileSync(resolve(ROOT, 'data/tuning.json'), 'utf8')) as unknown);
   const m = tuning.movement;
@@ -764,7 +793,7 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
   const world = new MapGeometry(worldMesh);
   const g = new MapGeometry(combineMeshes(worldMesh, decodeGeometry(clipsBytes)));
   const pieces = new Pieces(world, world.triangleCount, navBytes === null ? ALLOW_ALL : new NavCover(readCs2Nav(navBytes).areas));
-  const snapper = new Snapper(g, pieces, m.stepSize, m);
+  const snapper = new Snapper(g, pieces, m.stepSize, m, map !== 'mirage-cs2');
   const model = new RoundModel(round);
   const schedule = new EventSchedule(round);
   const weapons = (id: PlayerId) => recordedWeapons(model, schedule, id);
@@ -849,7 +878,7 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
     }
     for (const w of WAYS_ROUND.filter((x) => x.id === id)) {
       const r = wayRound(g, snapper, tr.samples, snapped, w.from, w.to, m.stepSize, w.via ?? null);
-      if (r === null) throw new Error(`snap-tracks: no CS2 way round for ${id} ${w.from}-${w.to} s`);
+      if (r === null) throw new Error(`snap-tracks: no way round for ${id} ${w.from}-${w.to} s on ${map}`);
       snapped = r.out;
       rerouted.push(`${id} ${r.note}`);
     }
@@ -950,7 +979,7 @@ export function buildTracks(map: MapId = DEFAULT_MAP): SnapProducts {
     edges.map((e, k) => `${k === 0 ? '≤' : ''}${e}${k + 1 < edges.length ? '' : '+'}: ${v.filter((x) => x <= e && (k === 0 || x > (edges[k - 1] as number))).length}`).join(', ');
   const data: Tracks3d = {
     format: TRACKS3D_FORMAT,
-    note: `Every recorded track sample of data/round.json snapped onto ${map === DEFAULT_MAP ? 'CS2 Mirage' : `the ${map} map package`} (world mesh + player clips): the nearest spot within 64 units where a hull stands, z = that floor; and the samples a jump takes off from. Built by tools/snap-tracks.ts (docs/geometry.md "Track snapping"); applied by applyTracks3d.`,
+    note: `Every recorded track sample of data/round.json snapped onto ${map === 'mirage-cs2' ? 'CS2 Mirage' : `the ${map} map package`} (world mesh + player clips): the nearest spot within 64 units where a hull stands, z = that floor; and the samples a jump takes off from. Built by tools/snap-tracks.ts (docs/geometry.md "Track snapping"); applied by applyTracks3d.`,
     sources: [
       { file: 'data/round.json', sha256: sha256(roundBytes) },
       { file: paths.geometry, sha256: sha256(worldBytes) },
@@ -1440,7 +1469,7 @@ function main(): void {
   const ms = Number(process.hrtime.bigint() - t0) / 1e6;
   if (args.includes('--check')) {
     if (readFileSync(resolve(ROOT, out), 'utf8') !== p.text) {
-      console.error(`stale: ${out}: run npx tsx tools/snap-tracks.ts${map === DEFAULT_MAP ? '' : ` --map ${map}`}`);
+      console.error(`stale: ${out}: run npx tsx tools/snap-tracks.ts --map ${map}`);
       process.exit(1);
     }
     console.log(`${out} is up to date (${ms.toFixed(0)} ms)`);
