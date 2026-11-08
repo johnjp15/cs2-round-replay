@@ -1,0 +1,2215 @@
+{
+ "format": "cs2-round-replay/map-package@1",
+ "id": "mirage-2020",
+ "note": "Built by tools/extract-bsp.ts from de_mirage.bsp (docs/maps.md). Valve's data: private repo and encrypted pages only.",
+ "source": {
+  "dir": "data/source/csgo-2020",
+  "bsp": {
+   "file": "maps/de_mirage.bsp",
+   "bytes": 45896688,
+   "sha256": "ab2482292f6079d6cf889c5c64923b487feaec12fafcb88340f2e536d7852486",
+   "version": 21,
+   "mapRevision": 10033
+  },
+  "nav": {
+   "file": "maps/de_mirage.nav",
+   "bytes": 382650,
+   "sha256": "dca1d08b6d3c6f6b169b61b0e63af3396b354d9798eaeba2bb752f472371f135"
+  },
+  "assets": {
+   "files": 1998,
+   "read": 1623
+  },
+  "extraction": {
+   "sha256": "41c4fb863646945b4106c20ef45eda75f52dd80d2709ee6dcb62b5eeb88fb749",
+   "source": {
+    "app": 730,
+    "depot": 731,
+    "manifest": "7867263815789485437",
+    "build": 4743948,
+    "patch": "1.37.4.4",
+    "liveFrom": "2020-03-05",
+    "liveUntil": "2020-03-22",
+    "map": "de_mirage",
+    "bspSha1": "b899465dc1627b52cc020d7614c4991662a0bda4",
+    "bspDepotSha1": "b899465dc1627b52cc020d7614c4991662a0bda4",
+    "listing": true
+   },
+   "counts": {
+    "files": 2000,
+    "bytes": 233693114,
+    "missing": 0
+   }
+  }
+ },
+ "params": {
+  "quant": 8,
+  "solidContents": 16395,
+  "seeThroughContents": 10,
+  "propTriangleCap": 400,
+  "propTriangleFloor": 48,
+  "propInstanceBudget": 4000,
+  "propClusterCells": [1, 1.5, 2, 3, 4, 6, 8, 12, 16],
+  "brokenProps": [
+   "models/props/de_mirage/shutter_window_l_breakable.mdl"
+  ],
+  "exposurePercentile": 0.9,
+  "exposureScale": 1,
+  "minLight": 0.06,
+  "propAmbient": 0.55,
+  "propDiffuse": 0.45
+ },
+ "outputs": {
+  "geometry.bin": {
+   "bytes": 701846,
+   "sha256": "cc3371dc32e0450879b99d519b2e51aca279b447e889181f1a05c4b1e9cc8d00"
+  },
+  "clips.bin": {
+   "bytes": 44599,
+   "sha256": "3eafe6eb0a47133dda06ed014a789b31e4e42dbf47c3cadd85d6f782bea3f275"
+  },
+  "grenade-clips.bin": {
+   "bytes": 87,
+   "sha256": "f6a45fb39339f39c24f0366de31c1825bcb9fa2ccdd228cf07fb4ecb3d980b3f"
+  },
+  "render.bin": {
+   "bytes": 11005011,
+   "sha256": "bca1d3d07f0177a19bb8fa668530d8f26d030b6fd1ed3ab777aadcb0a4ac8d25"
+  }
+ },
+ "counts": {
+  "worldVertices": 65557,
+  "worldTriangles": 131605,
+  "clipTriangles": 7731,
+  "grenadeClipTriangles": 12,
+  "renderVertices": 1277720,
+  "renderTriangles": 463916,
+  "materials": 361
+ },
+ "stats": {
+  "brushes": {
+   "world": 6419,
+   "clip": 670,
+   "grenadeClip": 1,
+   "ladder": 0,
+   "water": 0,
+   "other": 85,
+   "skybox": 6,
+   "seeThrough": 16
+  },
+  "worldTriangles": 131605,
+  "clipTriangles": 7731,
+  "grenadeClipTriangles": 12,
+  "displacements": 704,
+  "displacementTriangles": 25504,
+  "staticProps": 1371,
+  "solidProps": 462,
+  "propsFromPhy": 447,
+  "propsFromHullBox": 15,
+  "propsWithoutModel": 0,
+  "propsDrawnFromMesh": 1435,
+  "skyboxProps": 22,
+  "propModelsMissing": [],
+  "renderFaces": 15736,
+  "renderTriangles": 463916,
+  "skyboxFacesDropped": 0,
+  "materials": {
+   "vtf": 360,
+   "reflectivity": 0,
+   "palette": 1
+  },
+  "exposure": 23.62682908040978
+ },
+ "bounds": {
+  "min": [-4104, -3872, -456],
+  "max": [6152, 2056, 1264]
+ },
+ "entities": {
+  "spawns": [
+   {
+    "team": "CT",
+    "origin": [-1976, -1812, -272],
+    "yaw": 0,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1972, -1988, -264],
+    "yaw": 0,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1957, -1898, -262],
+    "yaw": 0,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1902, -1976, -240],
+    "yaw": 0,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1902, -1816, -240],
+    "yaw": 0,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1830, -1896, -240],
+    "yaw": 0,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1776, -1976, -240],
+    "yaw": 331,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1776, -1800, -240],
+    "yaw": 36,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1720, -1896, -240],
+    "yaw": 50,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1656, -1976, -240],
+    "yaw": 299,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1656, -1800, -240],
+    "yaw": 94,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1632, -2072, -240],
+    "yaw": 270,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1608, -1888, -240],
+    "yaw": 306,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1598, -1732, -240],
+    "yaw": 106,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1552, -1968, -240],
+    "yaw": 288,
+    "priority": 0
+   },
+   {
+    "team": "CT",
+    "origin": [-1552, -1808, -240],
+    "yaw": 116,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1136, -256, -144],
+    "yaw": 270,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1136, -160, -144],
+    "yaw": 270,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1136, -64, -144],
+    "yaw": 90,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1136, 32, -144],
+    "yaw": 90,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1216, -307, -144],
+    "yaw": 270,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1216, -211, -144],
+    "yaw": 270,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1216, -115, -144],
+    "yaw": 90,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1216, -16, -144],
+    "yaw": 90,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1296, -352, -144],
+    "yaw": 227,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1296, -256, -144],
+    "yaw": 227,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1296, -160, -144],
+    "yaw": 227,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1296, -64, -144],
+    "yaw": 141,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1296, 32, -144],
+    "yaw": 141,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1376, -304, -144],
+    "yaw": 227,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1376, -208, -144],
+    "yaw": 227,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1376, -112, -144],
+    "yaw": 141,
+    "priority": 0
+   },
+   {
+    "team": "T",
+    "origin": [1376, -16, -144],
+    "yaw": 141,
+    "priority": 0
+   }
+  ],
+  "bombTargets": [
+   {
+    "name": "B site",
+    "min": [-2216, 72, -159],
+    "max": [-1880, 440, -143]
+   },
+   {
+    "name": "A site",
+    "min": [-616, -2328, -180],
+    "max": [-264.0077209472656, -2007.999755859375, -156]
+   }
+  ],
+  "buyZones": [
+   {
+    "team": "CT",
+    "min": [-2176, -2184, -320],
+    "max": [-1472, -1544, -208]
+   },
+   {
+    "team": "T",
+    "min": [1088, -424, -160],
+    "max": [1408, 152, -104]
+   }
+  ],
+  "ladders": [
+   {
+    "min": [-1016.0000000000036, -230, -156],
+    "max": [-968, -206, -19.999934412626317]
+   },
+   {
+    "min": [156, -1992.0000000000073, -168],
+    "max": [168, -1952, -8]
+   }
+  ],
+  "water": [],
+  "skyCamera": [5208, -968, 44.5],
+  "skyName": "sky_dust",
+  "entityCounts": {
+   "color_correction": 1,
+   "cs_bot_patrol_route_waypoint": 4,
+   "env_fog_controller": 1,
+   "env_soundscape": 42,
+   "env_sprite": 34,
+   "env_sun": 1,
+   "env_tonemap_controller": 1,
+   "env_wind": 1,
+   "func_areaportal": 27,
+   "func_areaportalwindow": 1,
+   "func_bomb_target": 2,
+   "func_breakable": 3,
+   "func_brush": 56,
+   "func_buyzone": 2,
+   "func_clip_vphysics": 3,
+   "func_dustmotes": 8,
+   "info_particle_system": 6,
+   "info_player_counterterrorist": 16,
+   "info_player_start": 1,
+   "info_player_terrorist": 17,
+   "info_target": 15,
+   "infodecal": 2,
+   "keyframe_rope": 85,
+   "light": 43,
+   "light_environment": 1,
+   "light_spot": 36,
+   "logic_auto": 2,
+   "logic_relay": 2,
+   "move_rope": 23,
+   "point_viewcontrol": 4,
+   "postprocess_controller": 1,
+   "prop_dynamic": 11,
+   "prop_dynamic_override": 2,
+   "prop_physics_multiplayer": 74,
+   "shadow_control": 1,
+   "sky_camera": 1,
+   "water_lod_control": 1,
+   "worldspawn": 1
+  }
+ },
+ "render": {
+  "materials": [
+   {
+    "name": "de_mirage/wood/de_mirage_wood_ver3_diffuse",
+    "color": [0.591, 0.543, 0.481],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/sitebwall13a",
+    "color": [0.678, 0.632, 0.548],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/base/de_mirage_mid_ver1_diffuse",
+    "color": [0.597, 0.56, 0.5],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/sitebwall08a",
+    "color": [0.83, 0.806, 0.765],
+    "source": "vtf"
+   },
+   {
+    "name": "cs_italy/hpe_plaster_tan_wall",
+    "color": [0.691, 0.645, 0.598],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/woodfloor005a",
+    "color": [0.418, 0.374, 0.333],
+    "source": "vtf"
+   },
+   {
+    "name": "brick/brick_ext_04",
+    "color": [0.728, 0.67, 0.592],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/base/de_mirage_top_ver1_diffuse",
+    "color": [0.912, 0.896, 0.864],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/marketwall02",
+    "color": [0.766, 0.75, 0.709],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/stonestep04",
+    "color": [0.579, 0.555, 0.505],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/brick/de_mirage_brick_ver1_diffuse",
+    "color": [0.723, 0.678, 0.612],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/stonestep03",
+    "color": [0.559, 0.538, 0.467],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/wood_ext_05",
+    "color": [0.767, 0.756, 0.735],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/plaster/de_mirage_plaster_salmon1_diffuse",
+    "color": [0.686, 0.512, 0.512],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/residwall04a",
+    "color": [0.809, 0.79, 0.75],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/wood_int_02",
+    "color": [0.456, 0.416, 0.398],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/plywood02",
+    "color": [0.498, 0.414, 0.343],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/tile/de_mirage_tile_ver4_diffuse",
+    "color": [0.698, 0.674, 0.619],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/stonestep01",
+    "color": [0.553, 0.522, 0.459],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/stonestep02",
+    "color": [0.53, 0.497, 0.42],
+    "source": "vtf"
+   },
+   {
+    "name": "cs_italy/hpe_plaster_yellow_wall",
+    "color": [0.646, 0.605, 0.527],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/marketwall05a",
+    "color": [0.735, 0.671, 0.603],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/hr_mirage/mirage_plaster_1",
+    "color": [0.768, 0.693, 0.563],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/stone/counter01_-1093_508_-32",
+    "color": [0.205, 0.18, 0.149],
+    "source": "vtf"
+   },
+   {
+    "name": "concrete/concrete_floor_04",
+    "color": [0.557, 0.522, 0.49],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/woodsteps001",
+    "color": [0.379, 0.359, 0.323],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/dutile1",
+    "color": [0.542, 0.482, 0.412],
+    "source": "vtf"
+   },
+   {
+    "name": "tools/toolsblack",
+    "color": [0.7, 0.62, 0.5],
+    "source": "palette"
+   },
+   {
+    "name": "de_dust/tilefloor01",
+    "color": [0.446, 0.433, 0.395],
+    "source": "vtf"
+   },
+   {
+    "name": "plaster/plaster_int_02",
+    "color": [0.753, 0.723, 0.635],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/hr_mirage/mirage_plaster_2",
+    "color": [0.778, 0.702, 0.567],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/dusandwlltrim3",
+    "color": [0.505, 0.469, 0.414],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/plaster/de_mirage_plaster_blue1_diffuse",
+    "color": [0.477, 0.567, 0.674],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/wood_dock_pylon_01",
+    "color": [0.462, 0.395, 0.367],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/milsteps001",
+    "color": [0.349, 0.329, 0.308],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_975_-1953_-23",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_1240_-139_-118",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_990_529_-214",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/milbeams003",
+    "color": [0.494, 0.452, 0.432],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_-435_-2139_-131",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_-900_-2420_-119",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_71_-2019_-119",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_79_-1553_-127",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_-711_-1438_-123",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "concrete/concrete_ext_07",
+    "color": [0.607, 0.595, 0.557],
+    "source": "vtf"
+   },
+   {
+    "name": "plaster/plasterwall021a",
+    "color": [0.551, 0.543, 0.489],
+    "source": "vtf"
+   },
+   {
+    "name": "cs_italy/plasterwall04",
+    "color": [0.586, 0.555, 0.51],
+    "source": "vtf"
+   },
+   {
+    "name": "cs_italy/hpe_plaster_trim_light",
+    "color": [0.779, 0.746, 0.705],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/base/de_mirage_top_ver1_blend_wvt_patch",
+    "color": [0.597, 0.56, 0.5],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/door011",
+    "color": [0.542, 0.442, 0.381],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/wooddoor026a",
+    "color": [0.252, 0.226, 0.226],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_-2047_274_-140",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/woodtrim_ext_01",
+    "color": [0.691, 0.659, 0.638],
+    "source": "vtf"
+   },
+   {
+    "name": "de_nuke/nuke_metaltrims_01",
+    "color": [0.369, 0.364, 0.346],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/woodbeam001a",
+    "color": [0.607, 0.592, 0.55],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/plaster_worn/de_mirage_plaster_brick4_diffuse",
+    "color": [0.736, 0.688, 0.574],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/ground/de_mirage_tilef_diffuse",
+    "color": [0.688, 0.636, 0.57],
+    "source": "vtf"
+   },
+   {
+    "name": "metal/vertigo_ibeam",
+    "color": [0.433, 0.371, 0.314],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_147_-2327_9",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/base/de_mirage_base_trim_ver1_diffuse ",
+    "color": [0.667, 0.594, 0.501],
+    "source": "vtf"
+   },
+   {
+    "name": "effects/metalrail011a",
+    "color": [0.079, 0.066, 0.049],
+    "source": "vtf"
+   },
+   {
+    "name": "metal/metaltrack001a",
+    "color": [0.293, 0.253, 0.234],
+    "source": "vtf"
+   },
+   {
+    "name": "cs_italy/hpe_plaster_tint_tan",
+    "color": [0.741, 0.741, 0.741],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tilewall009b_-1301_269_-119",
+    "color": [0.688, 0.661, 0.592],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metal_corrugated03a_-1004_-516_-239",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metal_corrugated03a_-678_-678_-222",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metaldoor034a_-1002_0_-319",
+    "color": [0.529, 0.504, 0.47],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metaldoor034a_-1329_-2350_-178",
+    "color": [0.529, 0.504, 0.47],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/sitebwall07a",
+    "color": [0.701, 0.671, 0.587],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/doors/door_c",
+    "color": [0.404, 0.366, 0.327],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metaldoor034a_-1656_-1909_-221",
+    "color": [0.529, 0.504, 0.47],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/brick/de_mirage_brick_ver2_blend_update_wvt_patch",
+    "color": [0.723, 0.678, 0.612],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tilewall009b_-1093_508_-32",
+    "color": [0.688, 0.661, 0.592],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/stone/counter01_-853_164_-124",
+    "color": [0.205, 0.18, 0.149],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/stone/counter01_-1301_269_-119",
+    "color": [0.205, 0.18, 0.149],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/door02",
+    "color": [0.241, 0.229, 0.224],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/plaster/de_mirage_plaster_salmon1_blend_wvt_patch",
+    "color": [0.597, 0.56, 0.5],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/concrete/blend_blacktopsand_01_wvt_patch",
+    "color": [0.354, 0.33, 0.292],
+    "source": "vtf"
+   },
+   {
+    "name": "metal/metalfence004a",
+    "color": [0.122, 0.119, 0.117],
+    "source": "vtf"
+   },
+   {
+    "name": "de_dust/door04",
+    "color": [0.339, 0.302, 0.254],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/milcab001",
+    "color": [0.42, 0.393, 0.364],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_-1329_-2350_-178",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metal_corrugated03a_-768_-383_-119",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tilewall009b_-1680_754_0",
+    "color": [0.688, 0.661, 0.592],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metal_corrugated03a_-1137_-161_-7",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metaldoor034a_-1004_-516_-239",
+    "color": [0.529, 0.504, 0.47],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metaldoor034a_-1181_-639_-119",
+    "color": [0.529, 0.504, 0.47],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metaldoor034a_-1210_-1014_-119",
+    "color": [0.529, 0.504, 0.47],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metaldoor034a_-1137_-161_-7",
+    "color": [0.529, 0.504, 0.47],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metal_corrugated03a_-1086_-120_-136",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metal_corrugated03a_-2555_316_-119",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/glass/glasswindow048a_-1159_-1391_-125",
+    "color": [0.246, 0.292, 0.287],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/glass/glasswindow048a_-2020_753_0",
+    "color": [0.246, 0.292, 0.287],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metal_corrugated03a_-2047_274_-140",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metal_corrugated03a_-1999_-528_-148",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metal_corrugated03a_-1884_-111_-119",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/glass/glasswindow048a_293_40_-170",
+    "color": [0.246, 0.292, 0.287],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/glass/glasswindow048a_1330_-782_-119",
+    "color": [0.246, 0.292, 0.287],
+    "source": "vtf"
+   },
+   {
+    "name": "cs_italy/tileroof01",
+    "color": [0.339, 0.28, 0.247],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/wooddoor019a",
+    "color": [0.494, 0.484, 0.472],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_551_-2281_9",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tilewall009b_-942_419_-319",
+    "color": [0.688, 0.661, 0.592],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/doors/door_b",
+    "color": [0.441, 0.451, 0.437],
+    "source": "vtf"
+   },
+   {
+    "name": "wood/woodsiding_ext_05",
+    "color": [0.77, 0.771, 0.77],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metaldoor034a_-2773_-2056_-216",
+    "color": [0.529, 0.504, 0.47],
+    "source": "vtf"
+   },
+   {
+    "name": "props/metalfan001a",
+    "color": [0.502, 0.501, 0.487],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_-1555_-900_-136",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_1330_-782_-119",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tile_mall_floor00_1262_-1425_-119",
+    "color": [0.729, 0.694, 0.618],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_mirage/marble/marble_01_1262_-1425_-119",
+    "color": [0.699, 0.676, 0.623],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tile_mall_floor00_975_-1953_-23",
+    "color": [0.729, 0.694, 0.618],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tile_mall_floor00_960_-1592_-71",
+    "color": [0.729, 0.694, 0.618],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_606_638_-87",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_261_818_-88",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_552_816_-87",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "cs_havana/door01",
+    "color": [0.41, 0.386, 0.329],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_-1093_508_-32",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_-1002_0_-319",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_-1680_754_0",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_-2020_753_0",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_-942_419_-319",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tile_mall_floor00_594_-2052_9",
+    "color": [0.729, 0.694, 0.618],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tile_mall_floor00_594_-2064_8",
+    "color": [0.729, 0.694, 0.618],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_-1086_-120_-136",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/de_dust/tilefloor02_-662_-1015_-167",
+    "color": [0.536, 0.488, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/milflr002_-1999_-528_-148",
+    "color": [0.557, 0.555, 0.527],
+    "source": "vtf"
+   },
+   {
+    "name": "tile/tile_int_02",
+    "color": [0.626, 0.586, 0.578],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/doors/door_a",
+    "color": [0.343, 0.466, 0.535],
+    "source": "vtf"
+   },
+   {
+    "name": "brick/infwllg",
+    "color": [0.626, 0.573, 0.531],
+    "source": "vtf"
+   },
+   {
+    "name": "plaster/plaster_ext_19",
+    "color": [0.602, 0.572, 0.524],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metaldoor034a_-1968_-536_-120",
+    "color": [0.529, 0.504, 0.47],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tile_mall_floor00_551_-2281_9",
+    "color": [0.729, 0.694, 0.618],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/tile/tile_mall_floor00_147_-2327_9",
+    "color": [0.729, 0.694, 0.618],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/hr_mirage/mirage_plaster_blend_3",
+    "color": [0.768, 0.693, 0.563],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/base/de_mirage_top_ver1_blend",
+    "color": [0.597, 0.56, 0.5],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/plaster/de_mirage_plaster_salmon1_blend",
+    "color": [0.597, 0.56, 0.5],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/ground/de_mirage_ground_tilec_blend_diffuse ",
+    "color": [0.663, 0.606, 0.518],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/brick/de_mirage_brick_ver2_blend_update",
+    "color": [0.723, 0.678, 0.612],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/plaster/de_mirage_plaster_blue1_blend",
+    "color": [0.597, 0.56, 0.5],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/ground/de_mirage_ground_tileh_blend_diffuse ",
+    "color": [0.515, 0.487, 0.453],
+    "source": "vtf"
+   },
+   {
+    "name": "concrete/blend_blacktopsand_01",
+    "color": [0.354, 0.33, 0.292],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/tile/de_mirage_tile_ver4_blend",
+    "color": [0.446, 0.433, 0.395],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/brick/de_mirage_brick_ver1pl_blend_diffuse",
+    "color": [0.723, 0.678, 0.612],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/ground/de_mirage_ground_tileh_blend2_diffuse",
+    "color": [0.515, 0.487, 0.453],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/base/de_mirage_base_ver1_blend",
+    "color": [0.476, 0.401, 0.306],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/brick/de_mirage_brick_ver2_blend2_diffuse",
+    "color": [0.723, 0.678, 0.612],
+    "source": "vtf"
+   },
+   {
+    "name": "de_mirage/brick/de_mirage_brick_ver1_blend",
+    "color": [0.723, 0.678, 0.612],
+    "source": "vtf"
+   },
+   {
+    "name": "metal/metalhull003a",
+    "color": [0.192, 0.186, 0.174],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metalwall031a_-768_-383_-119",
+    "color": [0.627, 0.632, 0.614],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metalwall031a_-1004_-516_-239",
+    "color": [0.627, 0.632, 0.614],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metalwall031a_-1137_-161_-7",
+    "color": [0.627, 0.632, 0.614],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/metal/metalwall031a_-678_-678_-222",
+    "color": [0.627, 0.632, 0.614],
+    "source": "vtf"
+   },
+   {
+    "name": "maps/de_mirage/glass/glass01_-900_-2420_-119",
+    "color": [0.412, 0.436, 0.432],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/bench_wood_color",
+    "color": [0.379, 0.376, 0.389],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/curbs001",
+    "color": [0.362, 0.344, 0.328],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_c17/gate_door01a",
+    "color": [0.098, 0.074, 0.058],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/porch_light003",
+    "color": [0.513, 0.522, 0.51],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/awning01",
+    "color": [0.436, 0.471, 0.436],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_barks01_still",
+    "color": [0.353, 0.329, 0.296],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_branches03",
+    "color": [0.373, 0.378, 0.242],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/flower_d",
+    "color": [0.472, 0.18, 0.63],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/infwllf",
+    "color": [0.607, 0.576, 0.532],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/props_utilities/electric_cables01",
+    "color": [0.533, 0.525, 0.507],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/hr_dust/dust_crates/dust_shipping_crate_02_wood_color",
+    "color": [0.462, 0.444, 0.427],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_lighting/light_shop_off",
+    "color": [0.466, 0.474, 0.471],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/shelvingstore_grocery01",
+    "color": [0.419, 0.408, 0.371],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/food_used",
+    "color": [0.713, 0.681, 0.647],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/dust_food_crates",
+    "color": [0.771, 0.758, 0.748],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/broken_wall_1/broken_wall_1",
+    "color": [0.591, 0.541, 0.479],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_assault/wall_wires1",
+    "color": [0.446, 0.437, 0.423],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/towertop_e/towertop_e",
+    "color": [0.65, 0.578, 0.457],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/large_door_b/large_door_b",
+    "color": [0.588, 0.539, 0.433],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/large_door_b/large_door_c",
+    "color": [0.279, 0.265, 0.255],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_wasteland/prison_switchbox01",
+    "color": [0.257, 0.244, 0.219],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_branches03_small",
+    "color": [0.373, 0.378, 0.242],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_aztec/aztec_scaffolding_system",
+    "color": [0.402, 0.369, 0.347],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_c17/furnitureboiler001a",
+    "color": [0.404, 0.418, 0.396],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/pwtrim2",
+    "color": [0.283, 0.252, 0.222],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/plaster",
+    "color": [0.397, 0.379, 0.338],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/wall_hole/wall_hole_diffuse",
+    "color": [0.429, 0.392, 0.353],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/gg_vietnam/vietnam_hut_wood_gang",
+    "color": [0.416, 0.372, 0.329],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_6x10_arch_flat",
+    "color": [0.34, 0.322, 0.299],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/flower_c",
+    "color": [0.654, 0.485, 0.137],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/mall_trees_branches03",
+    "color": [0.286, 0.287, 0.19],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/objects/stoneblocks01",
+    "color": [0.356, 0.325, 0.273],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_rooftop/roof_vent003",
+    "color": [0.161, 0.163, 0.158],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/chimneys001",
+    "color": [0.429, 0.404, 0.4],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/blkmetal",
+    "color": [0.165, 0.152, 0.127],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/light_orange2",
+    "color": [0.552, 0.527, 0.459],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/lampholder2a",
+    "color": [0.154, 0.141, 0.106],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/flower_b",
+    "color": [0.449, 0.201, 0.352],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/wood_roof_plank/wood_ver3_diffuse",
+    "color": [0.591, 0.543, 0.481],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/plastic_table_set001",
+    "color": [0.812, 0.795, 0.74],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/telephone_pole_addons001",
+    "color": [0.513, 0.515, 0.496],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_assault/warehouserailing",
+    "color": [0.324, 0.293, 0.263],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_wasteland/prison_objects004",
+    "color": [0.512, 0.489, 0.433],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/airconditioner001",
+    "color": [0.407, 0.397, 0.376],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_6x10_arch",
+    "color": [0.336, 0.33, 0.326],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/rusted_fence_a/rusted_fence_a",
+    "color": [0.434, 0.386, 0.349],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/rug02",
+    "color": [0.604, 0.439, 0.284],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/doora",
+    "color": [0.494, 0.467, 0.432],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_rooftop/rooftopcluster06a",
+    "color": [0.236, 0.204, 0.189],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_4x6_square",
+    "color": [0.344, 0.336, 0.304],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/ammo_pallet01",
+    "color": [0.331, 0.326, 0.306],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/bomb_tanks",
+    "color": [0.419, 0.417, 0.4],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_militia/sawhorse",
+    "color": [0.259, 0.203, 0.15],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/ceiling_light",
+    "color": [0.428, 0.431, 0.416],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/wall_lamp_bulb",
+    "color": [0.667, 0.667, 0.625],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_unique/grocerystorechiller01",
+    "color": [0.388, 0.39, 0.382],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/garbage001a_01",
+    "color": [0.512, 0.496, 0.445],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_4x8_square_flat",
+    "color": [0.344, 0.32, 0.313],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/sofa_chair",
+    "color": [0.102, 0.128, 0.162],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/furniture_wood01",
+    "color": [0.334, 0.21, 0.128],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_rooftop/roof_dish001",
+    "color": [0.468, 0.468, 0.468],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_debris/composite_debris2",
+    "color": [0.351, 0.343, 0.301],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_c17/gasmeters001a",
+    "color": [0.37, 0.433, 0.428],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/lamp/lamp_diffuse/lamp_diffuse",
+    "color": [0.104, 0.084, 0.084],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/sign_street01",
+    "color": [0.46, 0.533, 0.46],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/fence001",
+    "color": [0.362, 0.355, 0.352],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/hazard_ribbons",
+    "color": [0.564, 0.277, 0.072],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/sign_shop03",
+    "color": [0.662, 0.21, 0.149],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_vertigo/wood_pallet_01",
+    "color": [0.454, 0.415, 0.351],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_vertigo/cinderblock",
+    "color": [0.398, 0.401, 0.391],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/rug01",
+    "color": [0.495, 0.32, 0.272],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_pipes/pipeset_metal",
+    "color": [0.323, 0.237, 0.163],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/bench_a/bench_a",
+    "color": [0.66, 0.657, 0.654],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_italy/hpe_italy_pipe_wall",
+    "color": [0.354, 0.351, 0.339],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_vostok/trashcans",
+    "color": [0.285, 0.297, 0.281],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/trashdumpster01a",
+    "color": [0.357, 0.403, 0.297],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/trashclusters01",
+    "color": [0.146, 0.142, 0.134],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_pipes/pipeset02d_512_001a",
+    "color": [0.231, 0.22, 0.193],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_lab/powerbox001",
+    "color": [0.433, 0.428, 0.393],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/gg_tibet/furnitureinteriorcabinetswood",
+    "color": [0.295, 0.242, 0.17],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_6x8_shutters",
+    "color": [0.32, 0.323, 0.322],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/garbage003a_01",
+    "color": [0.549, 0.525, 0.43],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/furniture_couch02a",
+    "color": [0.471, 0.376, 0.229],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/woodfurniture01",
+    "color": [0.478, 0.344, 0.239],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/lamps_off",
+    "color": [0.591, 0.531, 0.414],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/furniture_wood02",
+    "color": [0.27, 0.168, 0.099],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/clothing_pile3",
+    "color": [0.462, 0.414, 0.393],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_6x8_shutters_flat",
+    "color": [0.356, 0.374, 0.392],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/mkt_container3",
+    "color": [0.342, 0.339, 0.331],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_prodigy/prodwlla",
+    "color": [0.58, 0.523, 0.438],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/mall_trees_branches01",
+    "color": [0.219, 0.228, 0.155],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/mall_trees_barks01",
+    "color": [0.305, 0.292, 0.258],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_barks01_medium_animated",
+    "color": [0.353, 0.329, 0.296],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_branches03_medium_animated",
+    "color": [0.373, 0.378, 0.242],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_assault/wirespout",
+    "color": [0.219, 0.22, 0.199],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/pillow_b/pillow_b_diffuse",
+    "color": [0.8, 0.397, 0.238],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/pillow_c/pillow_c_diffuse",
+    "color": [0.604, 0.502, 0.369],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/pillow_a/pillow_a_diffuse",
+    "color": [0.471, 0.26, 0.292],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/rug06",
+    "color": [0.572, 0.357, 0.319],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_barks01_small",
+    "color": [0.353, 0.329, 0.296],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_assault/ladderaluminium",
+    "color": [0.433, 0.456, 0.452],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/skybox_dust_hotel02",
+    "color": [0.752, 0.75, 0.723],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_4x8_arch_flat",
+    "color": [0.313, 0.294, 0.271],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_italy/brick_arch01",
+    "color": [0.509, 0.503, 0.468],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_street/electrical_boxes",
+    "color": [0.503, 0.509, 0.511],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_4x8_square",
+    "color": [0.325, 0.309, 0.306],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/flower_a",
+    "color": [0.436, 0.309, 0.507],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/claypot02",
+    "color": [0.359, 0.307, 0.255],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_branches02_mip0",
+    "color": [0.149, 0.153, 0.076],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_branches03_medium",
+    "color": [0.373, 0.378, 0.242],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_barks01_medium",
+    "color": [0.353, 0.329, 0.296],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/stoop002",
+    "color": [0.53, 0.528, 0.509],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/window_a/window_a_diffuse",
+    "color": [0.56, 0.511, 0.426],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_office/rolling_gate",
+    "color": [0.167, 0.177, 0.176],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/rungs",
+    "color": [0.352, 0.347, 0.345],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/rug04",
+    "color": [0.495, 0.382, 0.295],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_mall/cash_register",
+    "color": [0.506, 0.493, 0.469],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/rug03",
+    "color": [0.444, 0.217, 0.198],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/rug05",
+    "color": [0.519, 0.381, 0.31],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/lightbulb01a",
+    "color": [0.549, 0.555, 0.494],
+    "source": "vtf"
+   },
+   {
+    "name": "models/effects/urban_puddle01a",
+    "color": [0.079, 0.072, 0.053],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_assault/camera",
+    "color": [0.352, 0.374, 0.37],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/railing01a",
+    "color": [0.288, 0.269, 0.253],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/railing01",
+    "color": [0.234, 0.235, 0.233],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/dust_arch_small",
+    "color": [0.602, 0.578, 0.528],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/couch_a/couch_a_diffuse",
+    "color": [0.562, 0.531, 0.53],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_illum_backing",
+    "color": [0.928, 0.889, 0.809],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/gg_tibet/dishestibet",
+    "color": [0.363, 0.309, 0.262],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_c17/furnituretable001a",
+    "color": [0.218, 0.143, 0.094],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_vertigo/construction_wood_2x4_pile01",
+    "color": [0.601, 0.514, 0.416],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/dust_rusty_barrel",
+    "color": [0.425, 0.418, 0.427],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/telephone_pole001",
+    "color": [0.483, 0.459, 0.46],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_c17/furniturewooddresser001a",
+    "color": [0.293, 0.141, 0.04],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_palm_trunkdust_animated",
+    "color": [0.319, 0.309, 0.265],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_foliage/urban_trees_branches03_animated",
+    "color": [0.373, 0.378, 0.242],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_street/trashbin01",
+    "color": [0.133, 0.172, 0.126],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_vehicles/bus01_a_2",
+    "color": [0.322, 0.336, 0.331],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_vehicles/bus01_b_2",
+    "color": [0.305, 0.301, 0.293],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/sign_shop01",
+    "color": [0.15, 0.316, 0.412],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/furniturecouch001a",
+    "color": [0.309, 0.132, 0.099],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_lighting/light_shop",
+    "color": [0.466, 0.474, 0.471],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/streetlight001",
+    "color": [0.386, 0.387, 0.402],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_street/parking_bumper_01",
+    "color": [0.472, 0.48, 0.474],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_vehicles/4carz1024",
+    "color": [0.495, 0.482, 0.463],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_vehicles/4carz1024_glass",
+    "color": [0.266, 0.243, 0.227],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_exteriors/guardrail",
+    "color": [0.427, 0.45, 0.457],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/bucket_tools",
+    "color": [0.308, 0.274, 0.239],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/garbage002a_01",
+    "color": [0.512, 0.475, 0.442],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_italy/paint_roller",
+    "color": [0.834, 0.814, 0.783],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/mkt_table2",
+    "color": [0.418, 0.326, 0.239],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_wasteland/prison_objects002",
+    "color": [0.523, 0.502, 0.458],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_piranesi/pi_apc",
+    "color": [0.39, 0.388, 0.365],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/base_rocks_a/base_rocks_a",
+    "color": [0.635, 0.571, 0.489],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_vostok/hardwareitems01",
+    "color": [0.701, 0.673, 0.647],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/wall_arch_a/wall_arch_a1",
+    "color": [0.67, 0.614, 0.517],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_highway/metal_corrugated03a",
+    "color": [0.687, 0.668, 0.6],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/tire001",
+    "color": [0.152, 0.152, 0.151],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_c17/furniturestove001a",
+    "color": [0.541, 0.531, 0.477],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/refrigerator01a",
+    "color": [0.684, 0.623, 0.517],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_office/microwave",
+    "color": [0.585, 0.602, 0.607],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/refrigeratordoor01a",
+    "color": [0.63, 0.57, 0.474],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/refrigeratordoor02a",
+    "color": [0.664, 0.604, 0.504],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/sign_stop",
+    "color": [0.733, 0.491, 0.38],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_4x6_arch",
+    "color": [0.354, 0.353, 0.333],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_vehicles/van1",
+    "color": [0.549, 0.538, 0.525],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_highway/metal_corrugated03b",
+    "color": [0.738, 0.73, 0.665],
+    "source": "vtf"
+   },
+   {
+    "name": "models/cs_italy/market_dolly01",
+    "color": [0.598, 0.193, 0.176],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_militia/van2",
+    "color": [0.202, 0.215, 0.214],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_militia/van1",
+    "color": [0.378, 0.4, 0.396],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/sofa01",
+    "color": [0.143, 0.178, 0.221],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/florescentlight01a_on",
+    "color": [0.509, 0.512, 0.467],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_dust/awning_smalldoor",
+    "color": [0.547, 0.458, 0.409],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/artillery02",
+    "color": [0.413, 0.345, 0.2],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/wagon",
+    "color": [0.329, 0.328, 0.31],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/cart_wheel",
+    "color": [0.305, 0.314, 0.31],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/cannon",
+    "color": [0.328, 0.314, 0.303],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/flower_barrel",
+    "color": [0.313, 0.316, 0.295],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_rooftop/rooftop01a",
+    "color": [0.179, 0.155, 0.123],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/small_door_b/small_door_b_diffuse",
+    "color": [0.21, 0.122, 0.072],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/hanging_cloth_a/hanging_cloth_a",
+    "color": [0.489, 0.387, 0.358],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_6x8_sill",
+    "color": [0.315, 0.289, 0.283],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_militia/ladderwood",
+    "color": [0.173, 0.154, 0.137],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_2x6_arch",
+    "color": [0.288, 0.278, 0.267],
+    "source": "vtf"
+   },
+   {
+    "name": "models/de_dust/windows/window_4x8_arch",
+    "color": [0.333, 0.32, 0.293],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/overhang/overhang/overhang_ver1_diffuse",
+    "color": [0.52, 0.481, 0.427],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/cashregister01",
+    "color": [0.324, 0.313, 0.309],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/hr_i/inferno_ceiling_fan/inferno_ceiling_fan_color",
+    "color": [0.395, 0.283, 0.199],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/claypot_plants01",
+    "color": [0.184, 0.19, 0.012],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_inferno/claypot03",
+    "color": [0.377, 0.304, 0.264],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/physics_trash_hospital",
+    "color": [0.437, 0.411, 0.375],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/gg_vietnam/cloth01",
+    "color": [0.61, 0.607, 0.599],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/physics_trash",
+    "color": [0.385, 0.358, 0.32],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/cinderblock01a",
+    "color": [0.378, 0.381, 0.371],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/cardboard_boxes001a",
+    "color": [0.516, 0.446, 0.355],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_c17/potspans001a",
+    "color": [0.323, 0.257, 0.185],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/cs_office/shelves_stuff",
+    "color": [0.734, 0.691, 0.643],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/tvebstest",
+    "color": [0.508, 0.537, 0.551],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_interiors/tv",
+    "color": [0.112, 0.118, 0.11],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/plasticcrate01a",
+    "color": [0.317, 0.335, 0.36],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_c17/chair_stool01a",
+    "color": [0.23, 0.23, 0.2],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/metalbucket01a",
+    "color": [0.524, 0.53, 0.508],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_furniture/cafe_barstool1",
+    "color": [0.173, 0.101, 0.08],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_urban/plastic_junk001",
+    "color": [0.544, 0.555, 0.524],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/wall_hole/sheet_metal_panel",
+    "color": [0.596, 0.592, 0.57],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/bomb_site_tarp/bomb_site_tarp",
+    "color": [0.426, 0.503, 0.4],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props_junk/shoe001a",
+    "color": [0.2, 0.147, 0.125],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/tarp_a/tarp_a_diffuse",
+    "color": [0.611, 0.376, 0.343],
+    "source": "vtf"
+   },
+   {
+    "name": "models/props/de_mirage/shutter_window/shutter_window_diffuse",
+    "color": [0.364, 0.339, 0.324],
+    "source": "vtf"
+   }
+  ]
+ }
+}

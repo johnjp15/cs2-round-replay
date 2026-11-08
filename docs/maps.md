@@ -7,7 +7,7 @@ package, because they all use Mirage's one coordinate frame (`docs/conventions.m
 | id | what | files |
 | --- | --- | --- |
 | `mirage-cs2` (default) | CS2's collision mesh (awpy-data, decimated to 8 units, no clips) with player clips rebuilt from the CS2 nav; rendered from the collision mesh and the radar | `data/geometry/mirage-{geometry,clips}.bin`, `mirage-tracks.json` (`docs/geometry.md`) |
-| `mirage-2020` | the March 2020 CS:GO `de_mirage.bsp` the round was played on: its brushes, displacements, props and **its own player clips**, rendered with its materials and lightmaps | `data/maps/mirage-2020/` (below). Built once John's files are in `data/source/csgo-2020/` (`docs/csgo-2020-files.md`) |
+| `mirage-2020` | the March 2020 CS:GO `de_mirage.bsp` the round was played on: its brushes, displacements, props and **its own player clips**, rendered with its materials and lightmaps | `data/maps/mirage-2020/` (below; built, X1c). Rebuilt from John's files in `data/source/csgo-2020/` (`docs/csgo-2020-files.md`) |
 | `de_dust2` (H3) | CS2's Dust II from awpy-data, built by `tools/build-map.ts` like any awpy-data map: collision mesh, clips from its CS2 nav, its nav and facts. Free play only (no recording) | `data/maps/de_dust2/` (below) |
 
 H3: every package also has the map's **CS2 nav** (`nav.json`, the LIVE AI's in free play) and **facts** (`map.json`:
@@ -27,6 +27,57 @@ The normal builds find the other packages' files at build time (`src/app/map-pac
 `data/maps/*/`). The **single-file (locked) builds embed only the default package**, and `?map=` with another id says
 so. Embedding the 2020 package there is a later, size-budgeted step. The 2D app's height layer stays CS2's
 (`mirage-height.png`) on every package.
+
+## The 2020 package (X1c)
+
+Built by `npx tsx tools/extract-bsp.ts` from `de_mirage.bsp` (SHA-1 b899465d…, depot manifest 7867263815789485437,
+live 2020-03-05…22) with John's `materials/` and `models/` (not in git; symlinked into `data/source/csgo-2020/`).
+
+| file | bytes | gzip | what |
+| --- | ---: | ---: | --- |
+| `geometry.bin` | 701,846 | 268,286 | 131,605 triangles: 6,419 world brushes, 704 displacements (25,504 triangles), 462 solid props (447 from `.phy` hulls, 15 hull boxes, 0 missing) |
+| `clips.bin` | 44,599 | 15,582 | 7,731 triangles: 670 PLAYERCLIP brushes and 16 see-through (WINDOW / GRATE) brushes |
+| `grenade-clips.bin` | 87 | 109 | 12 triangles (1 brush) |
+| `render.bin` | 11,005,011 | 3,888,785 | 463,916 triangles / 1,277,720 vertices: 15,736 faces lightmapped per vertex (360 VTF materials), 1,435 props drawn from their LOD-0 meshes (clustered to ≤ 400 triangles a model) |
+| `tracks.json` | 71,247 | 15,450 | the recording snapped onto this package (`snap-tracks --map mirage-2020`) |
+| `manifest.json` | 51,618 | | provenance, parameters, counts, entities (spawns T 17 / CT 16, both `func_bomb_target`s, buy zones) |
+
+`?map=mirage-2020` loads in the 3D app (headless Chromium, software WebGL: 464,846 triangles drawn, no page errors) and
+stays inside the frame budget (`docs/perf/README.md`, `bench:3d --frames 300`, the same session): `inround-5s-120hz`
+main-thread frame p50 **1.47 ms** (render 0.62 ms, 19 draw calls) against 1.38 ms (render 0.52 ms, 20 draw calls) on
+`mirage-cs2`; `watch-1x-480hz` 0.62 vs 0.65 ms. The GPU draws 3.5× the triangles: software WebGL ran 3 fps instead of
+14, which a phone GPU doesn't notice at 465 k triangles.
+
+Build rules added in X1c: the Market-window shutter (`shutter_window_l_breakable.mdl`, `prop_data` "Wooden.Medium",
+health 1: the first bullet breaks it) is placed as broken, neither solid nor drawn (`PACKAGE_PARAMS.brokenProps`;
+cart climbs through that window at 28.4 s). Snapping on this package rejects stand levels **inside a closed solid**
+(`insideSolid` in tools/snap-tracks.ts: the first surface above the hull's centre faces up by its winding; the BSP's
+brushes and prop hulls are wound outward, the CS2 mesh isn't, so `mirage-cs2` is unchanged).
+
+### Where the 2020 map differs from CS2's (the places that matter for the round)
+
+| place | `mirage-cs2` | `mirage-2020` (the BSP) | for the round |
+| --- | --- | --- | --- |
+| Apartments window over B (cart ↔ Lokier, 17.45–18.8 s) | opening x −1816…−1752 (y 646–664), z −20…52 plus the arch | **the same**: `du_window_88x80.mdl` frame (static prop, solid) in the same wall, opening x −1816…−1752, z −20…52 plus the arch; the elevations of both meshes match at 4 u | the eye-to-eye line cart → Lokier is blocked on 0/7 samples 18.2–18.8 s **on both**, at the recorded positions and at V2's fitted ones (+22, −11 / +10, −10), on the same wall at (−1856…−1888, 660, −30). So `WINDOW_DUEL_AS_FITTED` stays off. V2's "the 2020 opening reaches ~60 u further west" is not in the BSP |
+| window bars | the east Apartments window (x −1678…−1600) is an open hole in the render; flooded clip | `rusted_fence_b.mdl` iron bars (drawn; not solid, as in the game) and a real player clip (brush 571, z −28…120) closing that window | drawn now (#66) |
+| Shop doorway beside the Market window | none (the window over a 40 u sill) | **none either**: Shop's north wall is one solid brush x −2080…−1956, y −272…−264, z −168…96 (brush 1896); the Market window has the same sill (brushes 2240/2241, top z −128) and a breakable shutter (health 1, placed broken) | T2's ways round (cart in over the sill at 28.4 s, out by the Shop door at 64.5 s) apply to both packages: on the 2020 mesh a hull walking south at x −2000 hits a world triangle at y −263 (z −168…−102), and the 1/8-unit triangle tests find no opening in x −2025…−1950. The 2020 nav's floor-level gap there (S1 / T2) is stale |
+| B van | a "Truck" box x −2400…−2176, y 784…850 with clip prisms flooded from the CS2 nav (C1 patched 19 pieces) | `props_vehicles/van.mdl` at (−2328, 706) yawed 79.5° (its `.phy` hulls) and a 44 u player-clip box round a rusty barrel at (−2356, 798) (brush 291, z −160…−84) | no invisible nav clips; Lokier's recorded spot (−2387, 815, −127) is inside the barrel's clip, so his track starts 32 u west of it (−2419, 825) |
+| B-site brick pier | the block x −1970…−1880, y 350…440 | the same block plus a brick pier x −1880…−1848, y 356…472 and x −1948…−1848, y 440…472 (brushes 6725–6730, z −168…−8) | barely's recorded 22.9–23.1 s samples are inside it: the inside-solid rule re-routes him round it |
+| B tarps | not in the CS2 mesh's render | `bomb_site_tarp.mdl` (prop_dynamic at (−2252, 472, −158)) and `tarp_a.mdl` ((−2414, 150, 56)): drawn from their meshes, not solid (solid 0, as in the game) | drawn |
+| cylinder stack / bomb spot (−1982, 311) | the tanks' top z −45…−47 at x −1960…−1900, y 200 | the same stack (`bomb_tanks.mdl` at (−1928, 200, −160)) and a shell pallet at (−1928, 389); `func_bomb_target` B is x −2216…−1880, y 72…440, z −159…−143 | (−1982, 311) is open floor z −160 on both, inside the target box; the plant location is a follow-up (B2) |
+
+### The round on it (`--map mirage-2020`)
+
+| | `mirage-cs2` | `mirage-2020` |
+| --- | --- | --- |
+| no-human round, 2D and 3D harness | Played it like the tape: CT defuse, 0.72 s left | **the same**, every kill / plant / defuse tick unchanged (32, 794, 816, 1142, 1203, 2829, 3222, 3766, 4442; plant 1761; defuse 3955 → 4275) |
+| harness snaps (puppet teleports) | 7: snarlbot@633 cart@920 sp4rtan@1171/1229/1245 donk@1344 cart@1392 | 9: snarlbot@333 lokier@851 cart@920 donk@921 sp4rtan@1169/1229/1245 donk@1344 cart@1395 |
+| snapped track pairs not in a clear hull line | 3 | 4 |
+| scripted hits through geometry (`scenario-outcomes.ts --map …`, docs/vision.md) | 7: 32, 816, 1142, 1184, 1203, 3194, 3206 | **5**: 32, 816, 1142, 1184, 3206 (cart's 1203 headshot and sp4rtan's 3194 hit are in sight) |
+
+The new snaps are 2020 geometry the inferred / estimated positions don't fit: Lokier's start in the barrel clip
+(lokier@851), snarlbot's 5.1 s recording gap at T spawn (a clip edge), donk lagging his 13.4–14.4 s samples. The ones
+the two maps share (cart@920/1392, sp4rtan, donk@1344) are the recording's, not the map's.
 
 ## Building a map package from awpy-data (H3, `tools/build-map.ts`)
 

@@ -234,6 +234,9 @@ export interface Leaf {
   readonly numLeafBrushes: number;
   readonly firstLeafFace: number;
   readonly numLeafFaces: number;
+  /** X1b: the leaf's bounds (int16 in the lump). */
+  readonly mins: readonly [number, number, number];
+  readonly maxs: readonly [number, number, number];
 }
 
 export interface DispInfo {
@@ -582,6 +585,8 @@ export class BspFile {
         numLeafFaces: dv.getUint16(o + 22, true),
         firstLeafBrush: dv.getUint16(o + 24, true),
         numLeafBrushes: dv.getUint16(o + 26, true),
+        mins: [dv.getInt16(o + 8, true), dv.getInt16(o + 10, true), dv.getInt16(o + 12, true)],
+        maxs: [dv.getInt16(o + 14, true), dv.getInt16(o + 16, true), dv.getInt16(o + 18, true)],
       };
     }
     return out;
