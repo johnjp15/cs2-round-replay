@@ -60,6 +60,8 @@ export interface HudFrame {
   readonly items?: readonly string[] | null;
   /** W3: CS2's team-damage notices (team-damage.ts): feed lines "<x> attacked a teammate" and the human's hint. */
   readonly teamDamage?: { readonly feed: readonly string[]; readonly hint: string | null };
+  /** B2: the human's plant progress (0..1, null: not planting) and the "must be in a bomb zone" hint. */
+  readonly plant?: { readonly progress: number | null; readonly needZone: boolean } | undefined;
 }
 
 /** W2: CS2's slot of an item (1 primary, 2 pistol, 3 knife, 4 grenades, 5 C4), or null (the defuser). */
@@ -190,6 +192,12 @@ export class Hud3D {
     const hint = f.teamDamage?.hint ?? null;
     this.attr('ffhint', 'hidden', hint === null ? '' : null);
     if (hint !== null) this.text('ffhint', hint);
+    // B2: the plant progress bar and CS2's hint outside a bomb zone.
+    const pp = f.plant?.progress ?? null;
+    this.attr('plantbar', 'hidden', pp === null ? '' : null);
+    if (pp !== null) this.attr('plantfill', 'style', `width:${Math.round(pp * 100)}%`);
+    this.attr('planthint', 'hidden', f.plant?.needZone === true ? null : '');
+    this.text('planthint', 'You must be in a bomb zone to plant');
     // Team panel.
     const rows = (team: 'T' | 'CT'): string =>
       o.pawns
