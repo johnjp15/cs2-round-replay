@@ -63,8 +63,9 @@ const SNAPS: [PlayerId, number][] = [
   ['sp4rtan', 1245],
   ['donk', 1344], // new (main's donk 923 is gone): Apartments, CS2 has a raised (+32) floor where the 2020 one is flat; the track climbs it in one step (a jump would do)
   ['cart', 1392], // main's cart 1350: the recording's discontinuity (1344–1350), snapped later (G6: a tick earlier, 1393 before: he comes off the window duel's track, docs/vision.md "Recorded duels")
-  ['cart', 1880], // new: A site, the recording walks through a box CS2 has there (the snapping finds no way round in time)
-  ['cart', 4114], // new: A site, the same box on the way back
+  // T2 (backlog 46, #61): main's cart 1880 and 4114 (the way into and out of Shop through a 2020 doorway CS2 hasn't,
+  // one-tick jumps along the Market window line) are gone: snap-tracks' WAYS_ROUND climbs him in through the window at
+  // 28.4 s (a jump onto the sill) and walks him out by the Shop door at 64.5 s.
 ];
 
 describe('golden master: the run', () => {
@@ -117,7 +118,7 @@ describe('golden master: movement (B2)', () => {
     }
   });
 
-  it('teleports only at B2’s documented teleport points: the nine snaps (G3, T1), each inside a teleport window and logged once', () => {
+  it('teleports only at B2’s documented teleport points: the seven snaps (G3, T1, T2), each inside a teleport window and logged once', () => {
     expect(run.snaps.map((s) => [s.id, s.tick])).toEqual(SNAPS);
     expect(run.snaps.length).toBe(run.core.snapCount);
     for (const s of run.snaps) {

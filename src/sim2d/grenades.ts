@@ -87,10 +87,70 @@ export interface GrenadeEffect {
   readonly phase: 'flying' | 'smoke' | 'fire';
   readonly thrower: PlayerId;
   readonly pos: Vec3;
-  /** Area radius (0 while flying). */
+  /** Area radius (0 while flying). A volumetric smoke: the radius of a disc with its footprint's area. */
   readonly radius: number;
   /** Tick the effect ends (pop tick while flying). */
   readonly untilTick: number;
+  /**
+   * S1: a volumetric smoke (the CS2 engine's, `SmokeEngine`): its voxels at this tick, centres and density 0–1 (0 = not
+   * grown in yet or faded), each `cellSize` units on a side. Absent for the 2D model's disc smokes.
+   */
+  readonly cells?: readonly SmokeCellView[];
+  readonly cellSize?: number;
+}
+
+/** One voxel of a volumetric smoke for the renderer. */
+export interface SmokeCellView {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly d: number;
+}
+
+/** What a smoke engine needs to know about a pawn (bounces off players). */
+export interface SmokePawn {
+  readonly id: PlayerId;
+  readonly team: Team;
+  readonly alive: boolean;
+  /** Feet. */
+  readonly pos: Vec3;
+  readonly crouching: boolean;
+  readonly yaw: number;
+  readonly pitch: number;
+}
+
+/** A smoke that popped this tick (host seq). */
+export interface SmokePop {
+  readonly seq: number;
+  readonly thrower: PlayerId;
+  readonly pos: Vec3;
+}
+
+/**
+ * S1: the smoke grenades of a host with the CS2 world mesh, on a real grenade engine (src/sim3d/smokes.ts: H5's
+ * `src/engine/grenades`, docs/grenades.md): the CS2 throw law (eye, view angles, 1.25 × the thrower's velocity),
+ * bounces on the mesh, the rest check, and the flood-filled volumetric cloud. The host keeps the 2D model
+ * (`throwGrenade` here) for flashes, HE and molotovs. Hosts call it in tick order: `throwSmoke` during the tick's
+ * shots, `step` once per tick after them. Its state is plain JSON (`snapshot` / `restore`).
+ */
+export interface SmokeEngine {
+  /** Release a smoke at host tick `tick` (full strength, ATTACK). `seq`: the host's grenade seq (effects carry it). */
+  throwSmoke(tick: number, seq: number, thrower: PlayerId, team: Team, eye: Vec3, pitch: number, yaw: number, velocity: Vec3): void;
+  /** Simulate host tick `tick`: flight, bounces, pops (returned, in seq order), clouds growing and running out. */
+  step(tick: number, pawns: readonly SmokePawn[]): SmokePop[];
+  /** The eye-to-eye line a–b is blocked by smoke at `tick` (the tick just stepped). */
+  blocks(a: Vec3, b: Vec3, tick: number): boolean;
+  /** Smoke density 0–1 at `p` (fire smothering). */
+  densityAt(p: Vec3, tick: number): number;
+  /** Flying smokes and clouds at `tick`, by seq (for the renderers). */
+  effects(tick: number): GrenadeEffect[];
+  /** True while a smoke is in flight or a cloud is up. */
+  active(): boolean;
+  /** Plain-JSON state (null when idle). */
+  snapshot(): unknown;
+  restore(s: unknown): void;
+  /** Drop every smoke (B5 `set_round`: grenades and clouds don't survive a resync). */
+  clear(): void;
 }
 
 function roundVec(v: Vec3): Vec3 {
@@ -264,6 +324,16 @@ export interface GrenadeWorld {
   readonly grenades: GrenadeTuning;
   readonly damage: Pick<DamageTuning, 'friendlyFire' | 'bandHeights' | 'eyeHeight' | 'crouchEyeHeight'>;
   readonly ai: Pick<AiTuning, 'fovDeg'>;
+  /**
+   * S1: the host's other smokes (a `SmokeEngine`'s volumetric clouds): `smokeBlocks` stops a flash through them (with
+   * `smokeBlocksFlash`; eye to the flash), `smokeCovers` smothers a molotov that bursts in one and puts out a fire
+   * when a cloud pops over it (`smokePops`, this tick's).
+   */
+  readonly smoke?: {
+    smokeBlocks(a: Vec3, b: Vec3): boolean;
+    smokeCovers(p: Vec3): boolean;
+    readonly pops: readonly Vec3[];
+  };
 }
 
 /**
@@ -278,6 +348,12 @@ export function stepGrenades(list: readonly Grenade[], tick: number, w: GrenadeW
   let cur: Grenade[] = [...list].sort((a, b) => a.seq - b.seq);
 
   const nav = w.nav;
+  // S1: a cloud of the host's smoke engine that popped this tick puts out the fires it lands on, as a 2D smoke does.
+  const ext = w.smoke;
+  if (ext !== undefined && ext.pops.length > 0) {
+    const r2 = g.smokeRadius * g.smokeRadius;
+    cur = cur.filter((q) => !(q.kind === 'molotov' && q.phase === 'active' && q.center !== null && ext.pops.some((c) => dist2(q.center as Vec3, c) < r2)));
+  }
   for (const gr0 of [...cur]) {
     if (gr0.phase !== 'flying' || tick < gr0.popTick) continue;
     const air = flightPos(gr0, gr0.popTick, g);
@@ -292,7 +368,7 @@ export function stepGrenades(list: readonly Grenade[], tick: number, w: GrenadeW
       cur.push({ ...gr0, phase: 'active', center, untilTick: gr0.popTick + secToTicks(g.smokeSec) });
     } else if (gr0.kind === 'molotov') {
       const r2 = g.smokeRadius * g.smokeRadius;
-      const smothered = cur.some((q) => isActive(q, 'smoke', tick) && q.center !== null && dist2(q.center, center) < r2);
+      const smothered = cur.some((q) => isActive(q, 'smoke', tick) && q.center !== null && dist2(q.center, center) < r2) || (ext !== undefined && ext.smokeCovers({ x: center.x, y: center.y, z: center.z + 8 }));
       if (!smothered) cur.push({ ...gr0, phase: 'active', center, untilTick: gr0.popTick + secToTicks(g.molotovSec) });
     } else if (gr0.kind === 'he') {
       for (const p of w.pawns) {
@@ -314,6 +390,10 @@ export function stepGrenades(list: readonly Grenade[], tick: number, w: GrenadeW
           if (!nav.effectClear(origin, eye)) continue;
         }
         if (g.smokeBlocksFlash && smokeBlocks(cur, tick, p.pos, center, g)) continue;
+        if (g.smokeBlocksFlash && ext !== undefined) {
+          const eye = { x: p.pos.x, y: p.pos.y, z: p.pos.z + (p.crouching === true ? w.damage.crouchEyeHeight : w.damage.eyeHeight) };
+          if (ext.smokeBlocks(eye, origin)) continue;
+        }
         const sec = flashSeconds(Math.hypot(p.pos.x - center.x, p.pos.y - center.y), angleOff(p.yaw, p.pos, center), g, w.ai);
         if (sec <= 0) continue;
         outcomes.push({ type: 'blind', seq: gr0.seq, thrower: gr0.thrower, victim: p.id, untilTick: gr0.popTick + secToTicks(sec) });
