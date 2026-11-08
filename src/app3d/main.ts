@@ -54,6 +54,7 @@ import { HotkeysDom } from './hotkeys-dom';
 import { RadarTracker, type RadarMark, type RadarRules } from './radar3d';
 import { Renderer3D, type DrawPawn } from './renderer3d';
 import { worldMuzzle } from './effects/shot-fx';
+import { TeamDamageNotes } from './team-damage';
 import { aimOffsetPx, cycleTarget, nextSpectateMode, spectatable, spectatePanel } from './spectate';
 import { A1Mount } from './audio/mount';
 import { RadarSampler, buildRenderTiles, buildWorldTiles, floorArt, type RgbaImage } from './world-mesh';
@@ -280,6 +281,8 @@ class App3D {
   private camMode: CameraMode = 'pov';
   /** U1: the radar (CS2's spotting per team, radar3d.ts) and its rules (the panel toggle; localStorage). */
   private readonly radar = new RadarTracker();
+  /** W3: CS2's team-damage notices (feed line, the human's hint). */
+  private readonly teamDamage = new TeamDamageNotes();
   private radarRules: RadarRules = 'cs2';
   /** U1: kills this round per player (the spectator panel) and when each player last fired (their viewmodel). */
   private kills = new Map<PlayerId, number>();
@@ -501,6 +504,7 @@ class App3D {
     this.loop.paused = true;
     this.loop.reset();
     this.renderer.shotFx.clear();
+    this.teamDamage.clear();
     const sc = new Scene(s.observe(), s.lastAct, this.host(s).activeEffects(), null);
     this.radar.reset(s.observe());
     this.kills = new Map();
@@ -532,6 +536,7 @@ class App3D {
       }
     }
     this.radar.ingest(o);
+    this.teamDamage.ingest(o);
     this.countKills(o);
     for (const e of o.events) {
       if (e.type === 'damage' && e.attacker !== null && e.attacker === s.human && !e.scripted) {
@@ -599,6 +604,7 @@ class App3D {
       this.scene = new Scene(s.observe(), s.lastAct, this.host().activeEffects(), null);
       this.afterJump();
       this.renderer.shotFx.clear();
+      this.teamDamage.clear();
       this.phase = this.seekResume ?? 'paused';
       this.seekResume = null;
       this.loop.reset();
@@ -1085,6 +1091,7 @@ class App3D {
       tick: o.tick,
       nowMs: now,
       items: this.host(s).pawnState(viewId)?.inventory.map((q) => q.item) ?? null,
+      teamDamage: { feed: this.teamDamage.feed(o.tick), hint: this.teamDamage.hint(human, o.tick) },
     });
     const r2 = performance.now();
     if (this.probing) this.probe.mark('hud', r2);
@@ -1102,6 +1109,7 @@ class App3D {
     this.scene = new Scene(s.observe(), s.lastAct, this.host().activeEffects(), null);
     this.afterJump();
     this.renderer.shotFx.clear();
+    this.teamDamage.clear();
     if (this.phase === 'ready') this.phase = 'paused';
     this.loop.reset();
     this.loop.paused = this.phase !== 'running';

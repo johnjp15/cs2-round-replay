@@ -43,6 +43,8 @@ export interface HudFrame {
   readonly nowMs: number;
   /** W2: the viewed pawn's carried items (the engine's inventory), for the slot list; absent or null: hidden. */
   readonly items?: readonly string[] | null;
+  /** W3: CS2's team-damage notices (team-damage.ts): feed lines "<x> attacked a teammate" and the human's hint. */
+  readonly teamDamage?: { readonly feed: readonly string[]; readonly hint: string | null };
 }
 
 /** W2: CS2's slot of an item (1 primary, 2 pistol, 3 knife, 4 grenades, 5 C4), or null (the defuser). */
@@ -139,7 +141,11 @@ export class Hud3D {
         return `<div class="slab${you}"><span class="${cls(k.killerTeam)}">${k.killer ?? ''}</span><span class="w">${weaponName(k.weapon)}${k.headshot ? ' ◎' : ''}</span><span class="${cls(k.victimTeam)}">${k.victim}</span></div>`;
       })
       .join('');
-    this.html('killfeed', feed);
+    const ff = (f.teamDamage?.feed ?? []).map((l) => `<div class="slab ff">${l}</div>`).join('');
+    this.html('killfeed', feed + ff);
+    const hint = f.teamDamage?.hint ?? null;
+    this.attr('ffhint', 'hidden', hint === null ? '' : null);
+    if (hint !== null) this.text('ffhint', hint);
     // Team panel.
     const rows = (team: 'T' | 'CT'): string =>
       o.pawns

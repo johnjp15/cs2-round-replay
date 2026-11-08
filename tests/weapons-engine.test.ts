@@ -359,7 +359,9 @@ describe('inaccuracy model: 10,000 seeded shots per stance at 1,024 units', () =
     ['standing', still, ak.inaccuracy.stand[0]],
     ['crouched', { ...still, crouched: true }, ak.inaccuracy.crouch[0]],
     ['running 215 u/s', { ...still, velocity: { x: 215, y: 0, z: 0 } }, ak.inaccuracy.stand[0]],
-    ['walking 111.8 u/s', { ...still, velocity: { x: 111.8, y: 0, z: 0 } }, ak.inaccuracy.stand[0]],
+    ['walking 111.8 u/s', { ...still, velocity: { x: 111.8, y: 0, z: 0 }, walking: true }, ak.inaccuracy.stand[0]],
+    // W3: the same speed without WALK (e.g. slowing down from a run): CS's run curve, ^0.25.
+    ['slowing 111.8 u/s (no walk)', { ...still, velocity: { x: 111.8, y: 0, z: 0 } }, ak.inaccuracy.stand[0]],
     ['jumping (take-off, vz 302)', { velocity: { x: 0, y: 0, z: 301.99338 }, onGround: false, crouched: false, onLadder: false }, ak.inaccuracy.stand[0] + ak.inaccuracy.jumpInitial],
   ];
   const expectedI: Record<string, number> = {
@@ -367,6 +369,7 @@ describe('inaccuracy model: 10,000 seeded shots per stance at 1,024 units', () =
     crouched: 0.00481,
     'running 215 u/s': 0.00641 + 0.17506,
     'walking 111.8 u/s': 0.00641 + 0.17506 * ((111.8 - 215 * 0.34) / (215 * 0.95 - 215 * 0.34)),
+    'slowing 111.8 u/s (no walk)': 0.00641 + 0.17506 * Math.pow((111.8 - 215 * 0.34) / (215 * 0.95 - 215 * 0.34), 0.25),
     'jumping (take-off, vz 302)': 0.00641 + 0.10094 + 0.14076,
   };
 
@@ -404,6 +407,16 @@ describe('inaccuracy model: 10,000 seeded shots per stance at 1,024 units', () =
     expect(movementScale(73.1, 215, m)).toBe(0);
     expect(movementScale(204.25, 215, m)).toBeCloseTo(1, 9);
     expect(movementScale(250, 215, m)).toBe(1);
+  });
+
+  it('W3: movement scale curve: ^0.25 running (CS MOVEMENT_CURVE01_EXPONENT), linear walking', () => {
+    expect(m.moveCurveExponent).toBe(0.25);
+    expect(m.moveWalkCurveExponent).toBe(1);
+    const mid = 215 * 0.34 + 0.5 * (215 * 0.95 - 215 * 0.34);
+    expect(movementScale(mid, 215, m)).toBeCloseTo(Math.pow(0.5, 0.25), 12);
+    expect(movementScale(mid, 215, m, true)).toBeCloseTo(0.5, 12);
+    // Just above the 34 % threshold the run curve is already steep: 1 % of the range is ~32 % of the penalty.
+    expect(movementScale(215 * 0.34 + 0.01 * 215 * 0.61, 215, m)).toBeCloseTo(Math.pow(0.01, 0.25), 9);
   });
 
   it('scoped AWP is pinpoint, unscoped it is not; scoped max speed 100', () => {

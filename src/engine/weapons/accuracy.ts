@@ -20,6 +20,11 @@ export interface Motion {
   readonly onGround: boolean;
   readonly crouched: boolean;
   readonly onLadder: boolean;
+  /**
+   * Holding WALK (shift; CS `m_bIsWalking`): the movement scale stays linear (`moveWalkCurveExponent`) instead of the
+   * run curve (`moveCurveExponent`). Absent = false.
+   */
+  readonly walking?: boolean;
 }
 
 /** The part of the RNG contract the spread draw needs (contracts/rng.ts `Rng` fits). */
@@ -80,15 +85,23 @@ export function decayPenalty(penalty: number, floor: number, recovery: number, d
   return roundNumber(floor + (penalty - floor) * k);
 }
 
-type InaccuracyTuning = Pick<WeaponModelTuning, 'moveStartFraction' | 'moveFullFraction' | 'moveCurveExponent' | 'airSpreadScale' | 'airLowSpeedFraction' | 'airMaxPenalty' | 'jumpImpulse' | 'maxInaccuracy'>;
+type InaccuracyTuning = Pick<
+  WeaponModelTuning,
+  'moveStartFraction' | 'moveFullFraction' | 'moveCurveExponent' | 'moveWalkCurveExponent' | 'airSpreadScale' | 'airLowSpeedFraction' | 'airMaxPenalty' | 'jumpImpulse' | 'maxInaccuracy'
+>;
 
-/** The 0–1 movement scale: 0 up to moveStartFraction × maxSpeed, 1 from moveFullFraction × maxSpeed, linear between, ^ exponent. */
-export function movementScale(speed2d: number, maxSpeed: number, m: InaccuracyTuning): number {
+/**
+ * The 0–1 movement scale (CS `CWeaponCSBase::GetInaccuracy`): `RemapValClamped(speed, maxSpeed × 0.34, maxSpeed × 0.95,
+ * 0, 1)`, then, when above 0, `^ moveCurveExponent` (CS `MOVEMENT_CURVE01_EXPONENT` 0.25: the penalty rises steeply
+ * just above the threshold) unless walking (`^ moveWalkCurveExponent`, 1: linear). Below 34 % of the weapon's max
+ * speed the movement term is 0: counter-strafing is slowing below that, and the term is instantaneous.
+ */
+export function movementScale(speed2d: number, maxSpeed: number, m: InaccuracyTuning, walking = false): number {
   if (maxSpeed <= 0) return 0;
   const lo = maxSpeed * m.moveStartFraction;
   const hi = maxSpeed * m.moveFullFraction;
   const s = Math.max(0, Math.min(1, (speed2d - lo) / (hi - lo)));
-  return s > 0 ? Math.pow(s, m.moveCurveExponent) : 0;
+  return s > 0 ? Math.pow(s, walking ? m.moveWalkCurveExponent : m.moveCurveExponent) : 0;
 }
 
 /** The 0–airMaxPenalty air scale from the vertical speed: √|vz| remapped from airLowSpeedFraction·√J … √J to 0 … 1. */
@@ -106,7 +119,7 @@ export function airScale(vz: number, m: InaccuracyTuning): number {
 export function inaccuracy(w: WeaponDef, mode: 0 | 1, penalty: number, motion: Motion, m: InaccuracyTuning): number {
   let acc = penalty;
   const speed = Math.hypot(motion.velocity.x, motion.velocity.y);
-  acc += movementScale(speed, w.maxSpeed[mode], m) * w.inaccuracy.move[mode];
+  acc += movementScale(speed, w.maxSpeed[mode], m, motion.walking === true) * w.inaccuracy.move[mode];
   if (!motion.onGround && !motion.onLadder) acc += airScale(motion.velocity.z, m) * w.inaccuracy.jump[mode] * m.airSpreadScale;
   return Math.min(acc, m.maxInaccuracy);
 }
