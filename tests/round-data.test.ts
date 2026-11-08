@@ -76,7 +76,7 @@ describe('data/round.json', () => {
     expect(b.carrier).toBe('barely');
     expect(b.plantT).toBe(27.517);
     expect(b.plantTick).toBe(Math.round(27.517 * 64));
-    expect(b.pos).toEqual({ x: -1982, y: 311, z: -160 });
+    expect(b.pos).toEqual({ x: -1882, y: 243, z: -160 });
     expect(b.defuseStartT).toBe(61.8);
     expect(b.defuseT).toBe(66.8);
   });

@@ -586,8 +586,8 @@ describe('plant and defuse', () => {
 
   it('falls back to a plant action (logged) when no planted event arrives by plantTick + 3, then draws the gun', () => {
     expect(actionsAt(golden.log, 1764)).toEqual([
-      { type: 'plant', id: 'barely', pos: { x: -1982, y: 311, z: -160 } },
-      { type: 'log', level: 'info', text: 'script: no planted event by tick 1764, sending plant for barely at (-1982, 311, -160)' },
+      { type: 'plant', id: 'barely', pos: { x: -1882, y: 243, z: -160 } },
+      { type: 'log', level: 'info', text: 'script: no planted event by tick 1764, sending plant for barely at (-1882, 243, -160)' },
       { type: 'set_weapon', id: 'barely', weapon: 'ak47' },
     ]);
     expect(allActions(golden.log).filter((x) => x.a.type === 'plant')).toHaveLength(1);

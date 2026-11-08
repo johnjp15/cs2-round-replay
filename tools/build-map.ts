@@ -52,6 +52,21 @@ const SITE_MARGIN = 64;
 const SITE_CLIP = 130;
 const SITE_Z_BELOW = 32;
 const SITE_Z_ABOVE = 96;
+/**
+ * P3: a `func_bomb_target` is a trigger: a T is in the bomb zone while his collision hull touches its brush (Source
+ * triggers fire on hull overlap). The CS:GO / CS2 player hull is 32 x 32 units, 72 high standing (Valve Developer
+ * Community, "Dimensions (Half-Life 2 and Counter-Strike: Source)" / CS:GO `CCSGameMovement` hull: mins (-16, -16, 0),
+ * maxs (16, 16, 72)). So the zone for the player's origin is the brush's box grown 16 units in x and y, with the origin
+ * between (brush bottom - 72) and the brush top.
+ */
+const HULL_HALF_WIDTH = 16;
+const HULL_HEIGHT = 72;
+
+/** P3: the bomb target of site `name` ("A" / "B"): Mirage 2020 names them "A site" / "B site". */
+export function bombTargetFor<T extends { readonly name: string }>(targets: readonly T[], name: string): T | null {
+  const want = name.toLowerCase();
+  return targets.find((b) => b.name.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w !== 'site' && w !== 'bombsite' && w !== '').at(-1) === want) ?? null;
+}
 
 function sha256(b: Uint8Array): string {
   return createHash('sha256').update(b).digest('hex');
@@ -301,10 +316,13 @@ export function mapInfo(facts: MapFacts, src: MapSource, file: Cs2NavFile, nav: 
     let rects: MapRect[];
     let z: { zMin: number; zMax: number };
     const planter = s.planter ?? [];
-    const target = bsp?.bombTargets.find((b) => b.name.toLowerCase().endsWith(s.name.toLowerCase())) ?? null;
+    const target = bsp === null ? null : bombTargetFor(bsp.bombTargets, s.name);
     if (target !== null) {
-      rects = [{ x1: target.min[0], y1: target.min[1], x2: target.max[0], y2: target.max[1] }];
-      z = { zMin: target.min[2] + SITE_Z_BELOW, zMax: target.max[2] - SITE_Z_ABOVE };
+      // The brush grown by the hull (HULL_HALF_WIDTH, HULL_HEIGHT); z1/z2 below add SITE_Z_BELOW/ABOVE back.
+      const g = HULL_HALF_WIDTH;
+      rects = [{ x1: round3(target.min[0] - g), y1: round3(target.min[1] - g), x2: round3(target.max[0] + g), y2: round3(target.max[1] + g) }];
+      z = { zMin: target.min[2] - HULL_HEIGHT + SITE_Z_BELOW, zMax: target.max[2] - SITE_Z_ABOVE };
+      notes.push(`bomb site ${s.name}: the BSP's func_bomb_target "${target.name}" grown by the player hull`);
     } else if (s.legacyPlace !== undefined) {
       const l = legacyPlaceRects(s.legacyPlace);
       rects = l.rects;

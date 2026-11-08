@@ -190,7 +190,8 @@ describe('a takeover at T (G4)', () => {
     // walking up it on his inferred route, for real at 2650 instead of the tape's 2829 (docs/core.md "Results: never-peeks").
     // G8: plant 6 ticks late (1767: his LIVE leg jumps onto the Balcony's sill), and with G8's LIVE movement barely
     // doesn't catch Zwomp before he is back on his tape: the tape's kill (2829).
-    const late = [1767, 2829, 3222, 3766, 4275];
+    // P3: the plant spot is the corridor's east mouth (-1882, 243), ~110 u further on barely's way: 1792 instead of 1767.
+    const late = [1792, 2829, 3222, 3766, 4275];
     expect(got).toEqual({
       '0': { end: defuse, events: late },
       '5': { end: defuse, events: late },
@@ -198,11 +199,13 @@ describe('a takeover at T (G4)', () => {
       // course; G6: on the CS2 mesh only at 49.2–49.6 s, from the corridor), goes LIVE, kills donk (LIVE when hit) a
       // little before the tape's 50.34 s, then cart, and rejoins (before G6 he saw him through the mask at ~47.6 s).
       // F1 (17.6): Lokier goes LIVE at 18.48 s without hitting cart (above); barely kills him sooner (20.36 s) and
-      // plants on the tape's tick.
-      '17.6': { end: defuse, events: [1761, 2829, 3190, 3766, 4275] },
-      '18': { end: defuse, events: [1767, 2829, 3193, 3766, 4275] },
+      // plants on the tape's tick. P3: barely's re-snapped walk to B changes the chain after it: sp4rtan, LIVE from his
+      // fight with cart in the Apartments, is still LIVE at 58.8 s, so his scripted kill on barely is dropped and LIVE
+      // barely kills him at 59.88 s: Ts win by elimination (docs/core.md "Results: idle after the takeover").
+      '17.6': { end: 'T elimination 11-16 @3832', events: [1761, 2829, 3190, null, null] },
+      '18': { end: defuse, events: [1792, 2829, 3193, 3766, 4275] },
       // F1 (18.6): sp4rtan's lead-in for donk changes when he sees cart and goes LIVE; LIVE, he kills donk 7 ticks sooner.
-      '18.6': { end: defuse, events: [1767, 2829, 3207, 3766, 4275] },
+      '18.6': { end: defuse, events: [1792, 2829, 3213, 3766, 4275] },
       '30': { end: defuse, events: tape },
       '45': { end: defuse, events: tape },
       '60': { end: defuse, events: tape },
