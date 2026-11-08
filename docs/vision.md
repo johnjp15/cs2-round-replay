@@ -144,8 +144,8 @@ the positions from the video and X1 brings the 2020 BSP. In the no-human round (
 | 32 | 0.50 | snarlbot → incredibad | AK-47, chest | 126 / 223 u | no | incredibad's position is inferred (kill feed only) |
 | 816 | 12.75 | lokier → eradicate | SSG 08, head | 415 / 1,189 u | no | the balcony-door line; eradicate's puppet lags the pass-5 samples |
 | 1142 | 17.84 | sp4rtan → snarlbot | Deagle, chest | 31 / 441 u | no | sp4rtan's route is inferred |
-| 1184 | 18.50 | lokier → cart | SSG 08, chest | 351 / 467 u | yes | **the window duel**: the line meets the Apartments wall at (−1826, 648, −23), 10 u west of the window's edge (x −1816) |
-| 1203 | 18.80 | cart → lokier | AK-47, head | 114 / 477 u | yes | **the window duel**: the same wall at (−1821, 648, −10), 5 u west of the edge |
+| 1184 | 18.50 | lokier → cart | SSG 08, chest | 351 / 467 u | yes | **the window duel — a known CS2-vs-2020 map difference at the Apartments window, not a position error** (`tools/scenario-outcomes.ts` labels it): the line meets the Apartments wall at (−1826, 648, −23), 10 u west of the window's edge (x −1816). V2 (`docs/viewfit.md`): cart's first-person frames put him and Lokier within the radar's ±40 u of their dots, and no spot in that range opens the duel on CS2 Mirage; the 2020 opening reaches ~60 u further west |
+| 1203 | 18.80 | cart → lokier | AK-47, head | 114 / 477 u | yes | **the window duel — the same map difference**: the same wall at (−1821, 648, −10), 5 u west of the edge |
 | 3194 | 49.91 | sp4rtan → donk | AK-47, chest | 424 / 528 u | yes | the Apartments corridor door frame |
 | 3206 | 50.09 | sp4rtan → donk | AK-47, chest | 434 / 529 u | yes | the same; donk's 3200 hit is open |
 

@@ -175,9 +175,11 @@ describe.skipIf(htmlPath === '')('tools/extract-round.ts (needs the web-apps sou
     const tuning = JSON.parse(readFileSync(new URL('../data/tuning.json', import.meta.url), 'utf8')) as {
       weapons: Record<string, { clip: number; reserve: number }>;
     };
+    const viewFitUrl = new URL('../data/source/view-fit.json', import.meta.url);
     const inp = {
       html,
       csv: csvText,
+      viewFit: existsSync(viewFitUrl) ? readFileSync(viewFitUrl, 'utf8') : null,
       tuningWeapons: tuning.weapons,
       htmlName: 'web-apps/cs2/mirage-round-replay/index.html',
       csvName: 'web-apps/cs2/mirage-round-replay/source/shots/mirage-round-sp4rtan-1v3-shots.csv',

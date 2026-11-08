@@ -164,7 +164,7 @@ export function freePlayRound(s: Scenario, plan: FreePlayPlan, info: MapInfo): R
   const hp: Record<string, RoundData['timelines']['hp'][string]> = {};
   const money: Record<string, RoundData['timelines']['money'][string]> = {};
   for (const p of plan.pawns) {
-    tracks[p.id] = { samples: [{ t: 0, tick: 0, x: p.pos.x, y: p.pos.y, z: p.pos.z, confidence: 'observed' }], offGridSamples: [], yaw: [{ t: 0, tick: 0, deg: p.yaw }], endT: 0, endTick: 0 };
+    tracks[p.id] = { samples: [{ t: 0, tick: 0, x: p.pos.x, y: p.pos.y, z: p.pos.z, confidence: 'observed' }], offGridSamples: [], yaw: [{ t: 0, tick: 0, deg: p.yaw }], view: [], endT: 0, endTick: 0 };
     weapon[p.id] = [{ t: 0, tick: 0, weapon: p.weapons[0]?.weapon ?? 'knife', raw: '' }];
     hp[p.id] = [{ t: 0, tick: 0, value: p.hp }];
     money[p.id] = [{ t: 0, tick: 0, value: p.money }];
