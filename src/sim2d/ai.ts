@@ -465,7 +465,8 @@ export function legacyMapNav(nav: NavMesh): MapNav {
     snap: (p) => snapToNav(nav, p),
     path: (a, b) => nav.path(a, b),
     segmentWalkable: (a, b) => nav.segmentWalkable(a, b),
-    inBombsite: (p) => (nav.placeName(p) ?? '').startsWith('Bombsite') && inLegacyPlantZone(p),
+    // B2: the plant zones decide (the 2020 nav's Bombsite places also cover Apartments and the Market window).
+    inBombsite: (p) => inLegacyPlantZone(p),
     bombsitePoint: (p) => nearestBombsitePoint(nav, p),
     spawnCentre: (team) => placeCentre(nav, team === 'T' ? 'T Spawn' : 'CT Spawn'),
     escapeSpot: (from, bomb, clear) => escapeSpot(nav, from, bomb, clear),
