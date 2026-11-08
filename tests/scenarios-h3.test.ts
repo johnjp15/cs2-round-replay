@@ -19,7 +19,7 @@ describe('scenario format', () => {
     }
     const rec = loadGameScenario('mirage-sp4rtan-1v3');
     expect(rec.recording).toEqual({ round: 'data/round.json', playable: 'cart' });
-    expect(rec.map).toBe('mirage-cs2');
+    expect(rec.map).toBe('mirage-2020');
   });
 
   it('rejects what it cannot play, naming the field', () => {

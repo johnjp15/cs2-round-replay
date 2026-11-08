@@ -79,7 +79,7 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
 
 /** X1: `map` picks the 3D world's package (`?map=`); the round, nav, sight mask, radar and height map are shared. */
 export async function loadAssets(map: MapId = DEFAULT_MAP): Promise<PageAssets> {
-  const w = map === DEFAULT_MAP ? { geometry: geometryUrl, clips: clipsUrl, tracks: tracksUrl } : packageWorldUrls(map);
+  const w = map === 'mirage-cs2' ? { geometry: geometryUrl, clips: clipsUrl, tracks: tracksUrl } : packageWorldUrls(map);
   const [round, nav, vision, radar, geometry, clips, tracks, height] = await Promise.all([
     fetchJson(roundUrl),
     fetchJson(navUrl),

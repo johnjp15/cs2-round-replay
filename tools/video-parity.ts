@@ -19,6 +19,7 @@
  * The video and audio stay outside the repo: --video (default ../web-apps/cs2/mirage-round-replay/source/
  * video_1080p60_h264.mp4 next to the repo, or $PARITY_VIDEO).
  */
+import { DEFAULT_MAP, mapPackagePaths } from '../src/contracts/maps';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -217,7 +218,8 @@ function similarityMarkdown(v: ViewSummary): string {
 
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
-  const snapped = (JSON.parse(readFileSync(resolve(ROOT, 'data/geometry/mirage-tracks.json'), 'utf8')) as { tracks: RoundLite['snapped'] }).tracks;
+  // X1c: the default map package's snapped tracks (the page plays the recorded round on it).
+  const snapped = (JSON.parse(readFileSync(resolve(ROOT, mapPackagePaths(DEFAULT_MAP).tracks), 'utf8')) as { tracks: RoundLite['snapped'] }).tracks;
   const round = { ...(JSON.parse(readFileSync(resolve(ROOT, 'data/round.json'), 'utf8')) as RoundLite), ...(snapped === undefined ? {} : { snapped }) };
   const times = buildTimes(TIMES, round, EVENTS);
   log(`video parity (${APP}): ${times.length} timestamps, runs ${RUNS.join(', ')}, out ${relative(ROOT, OUT) || '.'}`);
