@@ -412,12 +412,39 @@ is the world merged with the clips (`combineMeshes`), so every trace sees them a
 3. Under each frontier level, every forbidden piece the hull would rest on gets a prism up 512 units (or to just
    under the ceiling). Allowed floors are never covered, so a pawn beside a low wall isn't pushed off it.
 4. Repeat on the merged mesh until nothing new is reached (3 rounds), then validate: a flood of the merged mesh with
-   **no** nav filter reaches 243,495 stand levels, 35 of them (19 cells) not nav-covered (prop corners and nav holes,
-   listed in the manifest).
+   **no** nav filter reaches 244,742 stand levels, 1,267 of them not nav-covered (the van top after C1's patches, below, prop
+   corners and nav holes; 35 of 243,495 before them; the first 40 cells are in the manifest).
 
 So pawns stand on the B-site and A-site boxes, the Catwalk, the Balcony and Window, and not on wall tops, roofs or
 outside the map (tests in `tests/movement3d.test.ts`). The clips don't cover glass (windows stay open) and don't add
 invisible walls in mid-air (there are none in the nav to find).
+
+### Clip patches (C1, `MIRAGE_CLIP_PATCH`)
+
+The flood puts a prism on every surface the CS2 nav doesn't cover that a pawn can reach, which is right for wall tops and
+wrong for a prop the nav skips but CS2 lets you stand on. `ClipSpec.patch` removes flooded pieces by id (the world
+triangle and its 8-unit cell: `tri`, `ci`, `cj`) after the flood and before nav relief; each entry says why, a piece that
+isn't a flooded clip is an error, and the manifest lists them under `patch`. `npm run map:check` rebuilds with the patch
+(`mirageClipSpec()` carries it), so the rest of the package stays byte-identical to a build without it. Mirage has 19:
+
+- **The van (the Truck near Lokier's recorded spot, −2387, 815, −127), 18 pieces.** The van is the box at x −2400…−2176,
+  y 784…850 (box roof z −8, reached by a jump from the z −45 box at y < 770), its cab at x −2420…−2384 (roof z 24–30) and a
+  long narrow roof strip at x −2425…−2392, y 667…781 (z 21–24) that ends 100 units above the z −80 crate. The nav has
+  nothing on any of it, so the flood walled it: a 512-unit prism on each of 16 cells of the strip (a pawn on it started
+  inside a prism: no standing, walking or jumping there) and on two cells of a z 0 sliver inside the cab roof (tri 27904,
+  (−2398, 784, 0)(−2392, 786, −2)(−2387, 822, 0)), whose prisms stand straight up through the roof (`ceilingAbove` found
+  no ceiling) and stopped a pawn running south over the cab at y 808 (`traceBox`: clip triangle 73881, box x −2398…−2396,
+  y 784…792, z 0…512). Removed: tri 27941 cells (ci −302, cj 83…91) and (ci −301, cj 91…97); tri 27904 (ci −300, cj 98) and
+  (ci −299, cj 98).
+- **A crate corner**, tri 7599 (ci −301, cj 83): the NW corner cell of the z −80 crate at B (x −2400…−2364, y 620…668) had
+  a 512-unit prism on it.
+
+The manifest's `validation.notAllowedByNav` rises from 35 to 1,267: the van top is now reachable and the nav doesn't
+cover it, which is the point. The same pattern, left alone because it needs more than a one-line patch or is a real
+wall top: tri 27606's floor cells at (−2412…−2404, 596…612) (prisms 8–24 and 384 units tall beside the crate's west
+side), tri 4049's cells at y 753…760 under the z −46 box's lid (6–20 units tall; they only fill the gap), tri 27682's
+two cells at z −70 (6 units). Browser check: `npm run build:3d && npx tsx tools/browser-check3d-c1.ts`; unit test:
+`tests/c1-van-clip.test.ts`. The 2020 map's real player clips (`origin/x1b-mirage2020`) replace this for that package.
 
 ## Track snapping (G3, `tools/snap-tracks.ts`)
 
