@@ -61,15 +61,18 @@ describe('CS2 view (H1)', () => {
     expect(c.pitch).toBeCloseTo(3.2, 12);
   });
 
-  it('the eye eases from 64 to 46 over a 0.4 s duck and back over 0.2 s (SimpleSpline)', () => {
+  it('the eye eases from 64 to 46 at CS2 m_flDuckSpeed 6.0234375 (0.166 s) both ways (SimpleSpline; M2)', () => {
     expect(eyeHeightFor(0)).toBe(EYE_STAND);
     expect(eyeHeightFor(1)).toBe(EYE_DUCK);
     expect(eyeHeightFor(0.5)).toBeCloseTo(55, 12);
     let d = 0;
-    for (let i = 0; i < 12; i++) d = duckStep(d, true, 1 / 60);
-    expect(d).toBeCloseTo(0.5, 9);
-    for (let i = 0; i < 6; i++) d = duckStep(d, false, 1 / 60);
-    expect(d).toBeCloseTo(0, 9);
+    for (let i = 0; i < 5; i++) d = duckStep(d, true, 1 / 60);
+    expect(d).toBeCloseTo(5 * (6.0234375 / 60), 9);
+    let ticks = 0;
+    for (d = 0; d < 1; ticks++) d = duckStep(d, true, 1 / 64);
+    expect(ticks).toBe(11); // 10.6 ticks = 0.166 s
+    for (ticks = 0; d > 0; ticks++) d = duckStep(d, false, 1 / 64);
+    expect(ticks).toBe(11);
   });
 
   it('WASD is view-relative; the input carries the angles rounded to 6 decimals', () => {

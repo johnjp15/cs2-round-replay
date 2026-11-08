@@ -9,8 +9,10 @@
  *    `cl_pitchdown 89`, `zoom_sensitivity_ratio 1 (min 0.01, max 3)`, `viewmodel_fov 60 (min 60, max 68)`.
  *  - [SDK] Source SDK 2013 (ValveSoftware/source-sdk-2013): `in_mouse.cpp` CInput::ScaleMouse / ApplyMouse (x, y ×=
  *    sensitivity; yaw −= m_yaw × x; pitch += m_pitch × y), `view.cpp` ScaleFOVByWidthRatio (hor+ from a 4:3 FOV) and
- *    the zoomed sensitivity (`(localFOV / defaultFOV) × zoom_sensitivity_ratio × sensitivity`), `shareddefs.h`
- *    TIME_TO_DUCK 0.4 / TIME_TO_UNDUCK 0.2, `gamemovement.cpp` SetDuckedEyeOffset (SimpleSpline of the duck time).
+ *    the zoomed sensitivity (`(localFOV / defaultFOV) × zoom_sensitivity_ratio × sensitivity`), `gamemovement.cpp`
+ *    SetDuckedEyeOffset (SimpleSpline of the duck progress).
+ *  - [KZ] KZGlobalTeam/cs2kz-metamod `src/kz/mode/kz_mode_ckz.h` (commit 317449df): CS2's `m_flDuckSpeed`, 8 rested
+ *    and 6.0234375 "if you just ducked/unducked for the first time in a while" (M2: the duck speed below).
  */
 import type { WeaponId } from '../contracts/index';
 
@@ -128,9 +130,13 @@ export function cameraAngles(view: Angles, aimPunch: Angles = ZERO_PUNCH): Angle
 /** Source view offsets (units above the feet): standing 64, ducked 46 (`damage.eyeHeight` / `crouchEyeHeight`). */
 export const EYE_STAND = 64;
 export const EYE_DUCK = 46;
-/** [SDK] shareddefs.h: seconds to duck fully and to stand up (Source 1; CS2's duck speed is unverified). */
-export const TIME_TO_DUCK = 0.4;
-export const TIME_TO_UNDUCK = 0.2;
+/**
+ * [KZ] CS2's `m_flDuckSpeed` for a fresh duck or unduck (6.0234375; 8 rested), read as duck amount per second: a
+ * full duck or stand-up takes 1 / 6.0234375 = 0.166 s (10.6 ticks), both ways. The per-second unit is an assumption
+ * (the field's name and the 0..1 `m_flDuckAmount` it drives; CS2's code is not public), and the slower speed after
+ * spamming duck is not modelled. Before M2 the view used Source 1's (HL2) TIME_TO_DUCK 0.4 / TIME_TO_UNDUCK 0.2 s.
+ */
+export const DUCK_SPEED = 6.0234375;
 
 /** [SDK] SimpleSpline: 3x² − 2x³. */
 export function simpleSpline(x: number): number {
@@ -139,15 +145,68 @@ export function simpleSpline(x: number): number {
 }
 
 /**
- * The camera's duck amount (0 standing .. 1 ducked) advanced by `dt` seconds toward the pawn's posture, and the eye
- * height for it ([SDK] SetDuckedEyeOffset: the spline of the duck progress between the two view offsets). The
- * shared movement (src/sim2d/movement.ts) switches the hull and the sim's eye (sight, bullets) at once; this is the
- * view's transition only, so the camera doesn't jump (M1 decides whether the sim gets a duck amount too).
+ * The camera's duck amount (0 standing .. 1 ducked) advanced by `dt` seconds toward the pawn's posture at
+ * DUCK_SPEED, and the eye height for it ([SDK] SetDuckedEyeOffset: the spline of the duck progress between the two
+ * view offsets). The shared movement (src/sim2d/movement.ts) switches the hull and the sim's eye (sight, bullets) at
+ * once; this is the view's transition only, so the camera doesn't jump.
  */
 export function duckStep(amount: number, crouching: boolean, dt: number): number {
-  return crouching ? Math.min(1, amount + dt / TIME_TO_DUCK) : Math.max(0, amount - dt / TIME_TO_UNDUCK);
+  return crouching ? Math.min(1, amount + dt * DUCK_SPEED) : Math.max(0, amount - dt * DUCK_SPEED);
 }
 
 export function eyeHeightFor(amount: number): number {
   return EYE_STAND + (EYE_DUCK - EYE_STAND) * simpleSpline(amount);
+}
+
+/** A pawn at one end of the interval a frame is drawn in: an observe, or the human's predicted next tick (M2). */
+export interface EyeEnd {
+  readonly tick: number;
+  readonly crouching: boolean;
+  readonly onGround: boolean;
+}
+
+/**
+ * M2: the camera's eye height above the drawn feet, frame by frame. The duck eases as `duckStep` / `eyeHeightFor`.
+ * In the air the shared movement tucks the feet up by `movement.airDuckLift` (9) on the tick DUCK is pressed and
+ * lowers them again on an unduck, at once (src/sim2d/movement.ts); the drawn feet follow within that tick, so the
+ * plain eased offset made the eye jump 9 units up and then sink 18 over the duck. `step` cancels the feet's jump
+ * (ramped in with the interpolation over the tick that has it) and lets the correction run out with the duck's
+ * spline, so through an in-air duck the eye sinks 9 smoothly, as CS2's gradual duck. Two ticks run within one frame
+ * (below 64 fps) can hide a stance change from it; that frame then jumps as before.
+ */
+export class ViewEye {
+  /** Duck amount, 0 standing .. 1 ducked. */
+  duck = 0;
+  /** Correction (units) of past stance changes in the air, running out with the duck. */
+  private tuck = 0;
+  /** Correction of the interval drawn last frame (in full, at its end) and that interval's end tick. */
+  private flip = 0;
+  private flipEnd = Number.NaN;
+
+  /** At once in posture (a new viewed pawn, an exact render). */
+  reset(crouching: boolean): void {
+    this.duck = crouching ? 1 : 0;
+    this.tuck = 0;
+    this.flip = 0;
+    this.flipEnd = Number.NaN;
+  }
+
+  /**
+   * One frame drawn `alpha` of the way from `a` (null: nothing earlier) to `b`, `dt` seconds after the last one;
+   * `lift` = `movement.airDuckLift`. Returns the eye height above the drawn (interpolated) feet.
+   */
+  step(a: EyeEnd | null, b: EyeEnd, alpha: number, dt: number, lift: number): number {
+    if (b.tick !== this.flipEnd) {
+      this.tuck += this.flip;
+      this.flipEnd = b.tick;
+    }
+    // Recomputed every frame: the human's predicted end can change within its tick.
+    this.flip = a !== null && a.tick < b.tick && !a.onGround && a.crouching !== b.crouching ? (b.crouching ? -lift : lift) : 0;
+    const target = b.crouching ? 1 : 0;
+    const left = target - simpleSpline(this.duck);
+    this.duck = duckStep(this.duck, b.crouching, dt);
+    if (this.duck === target) this.tuck = 0;
+    else if (left !== 0) this.tuck *= (target - simpleSpline(this.duck)) / left;
+    return eyeHeightFor(this.duck) + this.tuck + this.flip * Math.min(1, Math.max(0, alpha));
+  }
 }
