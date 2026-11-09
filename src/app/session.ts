@@ -74,7 +74,7 @@ import {
   type Sim2DOptions,
   type Sim2DVision,
 } from '../sim2d/index';
-import { Cs2Smokes } from '../sim3d/smokes';
+import { Cs2Grenades } from '../sim3d/grenades';
 import type { MapNav } from '../sim2d/map-nav';
 import { weaponForSlot, type WeaponSlot } from './input';
 import type { SightQuery } from './scene';
@@ -171,9 +171,9 @@ export type HostFactory = (parts: HostParts) => SessionHost;
 /** The host every session uses unless told otherwise: the 2D app's Sim2DHost. */
 export function defaultHost(p: HostParts): SessionHost {
   if (!(p.nav instanceof NavMesh)) throw new Error('Sim2DHost: the 2D host runs on the Mirage nav grid only (H3: other maps play in the 3D host)');
-  // S1: with the CS2 mesh, smokes fly and bloom on the CS2 grenade engine (src/sim3d/smokes.ts), as in the 3D app.
+  // S1 / V5: with the CS2 mesh, every grenade flies on the CS2 grenade engine (src/sim3d/grenades.ts), as in the 3D app.
   const g = p.world ?? p.geometry;
-  const smokes = g === null ? null : new Cs2Smokes(g, p.tuning.grenades.cs2, p.tuning.damage.eyeHeight, p.tuning.damage.crouchEyeHeight);
+  const smokes = g === null ? null : new Cs2Grenades(g, p.tuning.grenades.cs2, p.tuning.damage.eyeHeight, p.tuning.damage.crouchEyeHeight);
   return new Sim2DHost(p.nav, p.tuning, p.roster, p.options, p.vision, p.geometry, null, smokes);
 }
 

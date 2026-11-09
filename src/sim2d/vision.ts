@@ -550,6 +550,8 @@ export interface SeePawn {
   readonly blind: boolean;
   /** Planting or defusing (head down at the bomb): like a crouched pawn, it doesn't look over cover. */
   readonly busy?: boolean;
+  /** V5: this pawn's horizontal FOV (a scoped sniper's), instead of `SeesOptions.fovDeg`. */
+  readonly fovDeg?: number;
 }
 
 /** Eye heights and FOV for `sees` (the eye heights are the sight model's own since G6; kept for callers). */
@@ -603,7 +605,7 @@ export function angleOff(yaw: number, from: NavPoint, to: NavPoint): number {
  * other, and smoke is tested before any trace.
  */
 export function computeSees(pawns: readonly SeePawn[], sight: PairSight, smoke: SmokeQuery, o: SeesOptions): PlayerId[][] {
-  const half = o.fovDeg / 2;
+  const halfOf = (p: SeePawn): number => (p.fovDeg ?? o.fovDeg) / 2;
   const out: PlayerId[][] = pawns.map(() => []);
   for (let i = 0; i < pawns.length; i++) {
     const a = pawns[i] as SeePawn;
@@ -611,8 +613,8 @@ export function computeSees(pawns: readonly SeePawn[], sight: PairSight, smoke: 
     for (let j = i + 1; j < pawns.length; j++) {
       const b = pawns[j] as SeePawn;
       if (!b.alive) continue;
-      const ab = !a.blind && angleOff(a.yaw, a.pos, b.pos) <= half;
-      const ba = !b.blind && angleOff(b.yaw, b.pos, a.pos) <= half;
+      const ab = !a.blind && angleOff(a.yaw, a.pos, b.pos) <= halfOf(a);
+      const ba = !b.blind && angleOff(b.yaw, b.pos, a.pos) <= halfOf(b);
       if (!ab && !ba) continue;
       if (smoke.smokeBlocks(a.pos, b.pos)) continue;
       const seen = sight.pairSight(a, b, ab, ba, i * pawns.length + j);

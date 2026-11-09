@@ -24,6 +24,9 @@ export interface Effect {
   /** S1: a volumetric smoke's voxels (centres, density 0–1) and their size; absent for a disc smoke. */
   readonly cells?: readonly { readonly x: number; readonly y: number; readonly z: number; readonly d: number }[];
   readonly cellSize?: number;
+  /** V5: a CS2-engine fire's burning flames (floor points) and their radius; absent for a disc fire. */
+  readonly flames?: readonly { readonly x: number; readonly y: number; readonly z: number }[];
+  readonly flameRadius?: number;
 }
 
 /** Anything that lists the active effects for the current tick (Sim2DHost does). */

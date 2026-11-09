@@ -5,9 +5,9 @@ the projectile with bounces and rest, the detonation rules, and the effects (a v
 holes, flash blindness, spreading fire, HE blast damage, the decoy's fake fire). Hosts call it once per 64 Hz tick.
 It imports only `src/contracts` (ESLint zone `src/engine`) and touches the world only through the `GrenadeWorld`
 interface, which the hosts implement on their collision. The tests run it on the real CS2 de_mirage mesh
-(`src/sim2d/geometry.ts`, docs/geometry.md) through a test-only adapter. The 2D sim keeps its own simplified
-grenades (`src/sim2d/grenades.ts`, docs/combat.md) for flashes, HE and molotovs; **smokes run on this engine in both
-hosts** (S1, below: "Smokes in the hosts"). The rest of the integration is H4's.
+(`src/sim2d/geometry.ts`, docs/geometry.md) through a test-only adapter. **Every grenade runs on this engine in both
+hosts** (S1 smokes, V5 flashes, HE and molotovs; below: "Grenades in the hosts"); the 2D sim's simplified grenades
+(`src/sim2d/grenades.ts`, docs/combat.md) remain only for a host without the CS2 mesh.
 
 Constants live in `data/tuning.json` → `grenades.cs2` (validated by `parseTuning`, `GrenadeCs2Tuning` in
 `src/contracts/tuning.ts`; additive: the 2D keys are unchanged).
@@ -24,13 +24,14 @@ Constants live in `data/tuning.json` → `grenades.cs2` (validated by `parseTuni
 | S6 | [counterstrikewiki.com Decoy](https://counterstrikewiki.com/Decoy_Grenade) | "A Decoy lasts for 15 seconds and it will explode after that time" | community |
 | S7 | [GGRecon on CS2 smokes](https://www.ggrecon.com/guides/counter-strike-2-smokes/) (Valve's March 2023 reveal) | Smokes fill the space around them and stop at walls; bullets punch see-through holes; an HE "disintegrates a section of the smoke" | qualitative |
 | S8 | [cs2util.com Mirage lineups](https://www.cs2util.com/mirage/smoke), [csnades.gg](https://astro.csnades.gg/guides/mirage-instant-window-smokes) | `setpos … ;setang …` commands and throw types for the lineup tests | community |
+| S10 | Smoke lifetime (V5): [swap.gg](https://swap.gg/blog/how-long-does-smoke-last-in-cs2) "lasts for 18 seconds from the moment it detonates", thinning at the edges in the final 2–3 s, "CS2 kept the same 18-second duration from CS:GO"; [Counter-Strike Wiki](https://counterstrike.fandom.com/wiki/Smoke_Grenade) (CS:GO) "lasts for 18 seconds after the fuse expires"; against them S5's "roughly 20 s" and [Sportskeeda](https://sportskeeda.com/esports/all-utility-changes-counter-strike-2-cs-go) "based on TheWarOwl's tests, smokes in CS 2 lasts 3.5 seconds longer". GameTracking-CS2 has no duration field (`CSmokeGrenadeProjectile`: `m_nSmokeEffectTickBegin`, `m_flLastBounce`, …; no convar) | **18 s, thinning from 15 s** (V5's tuning); community, conflicting |
 | S9 | [Dexerto, 20 Aug 2024](https://www.dexerto.com/counter-strike-2/cs2-pros-furious-after-valve-rules-jump-throw-binds-as-cheating-2869622/) | Valve removed binds that combine movement and attack (jump-throw binds) on 19 Aug 2024; jump throws are done by hand since | context |
 
 **Unverified** (no primary source found; Source/CS:GO structure or fits; all tunable): the 1.5 s HE / flash fuse,
 the smoke and decoy rest check (first at 1.5 s, then every 0.2 s), the 0.3 player elasticity, the 128-unit
 molotov air-burst floor limit, every flash constant (radius 1500, the band factors and dot thresholds, the probes,
-the overall scale), the Gaussian HE falloff (σ = r / 3, CS:GO), the smoke's voxel budget / radius / growth / 18 + 2 s
-life / opacity length, the bullet holes, the fire placement details (growth 1.22, climb 24, drop 64, flame contact
+the overall scale), the Gaussian HE falloff (σ = r / 3, CS:GO), the smoke's voxel budget / radius / growth / 15 + 3 s
+life (S10) / opacity length, the bullet holes, the fire placement details (growth 1.22, climb 24, drop 64, flame contact
 30 × 80, lifetime jitter 1 s), whether armor reduces fire damage (`fireUsesArmor`, default true from the vdata
 armor ratios), and the decoy's burst pattern, 5 damage and 75 radius.
 
@@ -78,7 +79,8 @@ allowed only if the segment between the two voxel centres is clear of the world,
 through doorways and down stairs but never through a wall or floor. It stops at `smokeMaxVoxels` (750) voxels or
 cost 300. In the open that is a dome about 170 wide-radius and 140 high (750 voxels ≈ a hemisphere of radius
 142); in a corridor the same volume runs further (test: > 250 units down a 80-wide corridor). Voxels appear by
-cost distance over 1.2 s, hold full density for 18 s, then fade linearly over 2 s (total ~20 s, S5).
+cost distance over 1.2 s, hold full density for 15 s, then thin out linearly over 3 s (total 18 s, S10; H5 had 18 + 2 s
+after S5; V5 #88).
 
 - `smokeBlocks(state, a, b, tick, t)`: march the segment every 4 units, accumulate density × length; blocked at
   `smokeOpaqueLength` (40 units of full smoke, two voxels). `smokeOpticalLength` returns the amount.
@@ -225,6 +227,8 @@ physics, all land in their callouts.
 
 ## The recorded round's utility (plausible aim)
 
+*H5's illustration on the bare engine (tests/grenades). What the hosts throw since V5 is in "Grenades in the hosts" below.*
+
 `data/round.json` has the thrower and the spot at the radio call, and since V0 (#39) a measured `landing` for the one throw the video shows (cart's B-site smoke; below). Recorded spots are often inside walls
 (docs/geometry.md (b)), so each throw starts from the nearest free standing spot within 64 units; the yaw points at
 a plausible target and the pitch is the one in −45…+10° (5° steps) that lands nearest it. These are assumptions,
@@ -247,26 +251,70 @@ door is the full-height gap at x −2356…−2292. cart's B-site smoke is aimed
 lands 26 from it; the test asserts that it blocks the clear line from a CT in Market (−1921, −330, −104) out through
 the window to (−1921, −100, −104) 3 s after the pop and not after 21 s, and the cloud fills the opening.
 
-## Smokes in the hosts (S1)
+## Grenades in the hosts (S1, V5)
 
-`src/sim3d/smokes.ts` (`Cs2Smokes`, the `SmokeEngine` interface of `src/sim2d/grenades.ts`) runs every smoke grenade of
+`src/sim3d/grenades.ts` (`Cs2Grenades`, the `GrenadeEngine` interface of `src/sim2d/grenades.ts`) runs every grenade of
 Sim3DHost and of Sim2DHost with the CS2 mesh (the 2D app; `defaultHost` injects it, since `src/sim2d` may not import the
 engine) on this module: released on ATTACK's release from the eye with the view angles and the thrower's velocity
-(full strength), flying and bouncing on the world mesh without player clips (`SessionData.world`), detonating at the
-rest check, and blooming as the flood-filled cloud (growth 1.2 s, 18 s full, 2 s fade). `sees` uses `smokeBlocks` eye to
-eye (standing eyes); a cloud popping over a 2D-model fire puts it out, a molotov bursting in one is smothered, and a
-flash through one doesn't blind (`smokeBlocksFlash`). The 3D renderer draws the voxels (`activeEffects()[].cells`), the
-2D one a disc with the cloud's footprint area. Snapshots keep each cloud's inputs only (seq, thrower, centre, pop tick:
-the hosts make no bullet or HE holes) and rebuild it on restore, so checkpoints stay small.
+(full strength), flying and bouncing on the world mesh without player clips (`SessionData.world`) and off the pawns, and
+detonating by the engine's rules. S1 moved the smokes (growth 1.2 s, V5: 15 s full, 3 s thinning); **V5 (#91) the
+flashes, HE and molotovs**, which had the 2D model's flat throw along the yaw that lands on the thrower's floor (donk's
+19.2 s molotov burst on the Balcony in front of cart). The host applies what `step` returns, in event order:
 
-**Scripted throws with a measured landing** are released with solved angles: `tools/utility-aim.ts` (run by
-`tools/snap-tracks.ts`) puts the thrower at his snapped track at the release tick with the track's velocity capped at
-the grenade's run speed, solves `aimAtLanding` at full strength, and writes `{tick, thrower, pitch, yaw, landing,
-error}` into `data/geometry/mirage-tracks.json` `utility`; `applyTracks3d` sets `utility[].aim` and the Core
-(`ScriptPlan`) looks there during the pin-pull window instead of the track yaw and `throwPitchDeg`. cart's 25.8 s smoke:
-pitch −7.5°, yaw −77.2°, solved landing 15 u from the measured spot; in the hosts (his puppet's actual release) it pops
-at (−1911, −613, −166) at 29.1 s (tick 1864), 34 u from it. The other smokes have no landing and keep the default throw
-(track yaw, −10° pitch) on the engine.
+- `pop` for every detonation (the grenade sound; the 2D renderer's flare for a flash or HE);
+- `hurt` for HE and fire: raw damage and `armorPen`, through the host's armor rule, blocked pairs (puppets never hurt
+  each other or themselves, docs/core.md) and team damage (3D, W3: the engine reports full team damage,
+  `rawTeamDamage`, and the host applies `ff_damage_reduction_*`; 2D: the engine's own rule without friendly fire);
+- `blind` for a flash: the host's `blindUntilTick` is the first tick the engine's whiteness is under
+  `flashBlindAlpha` 0.7 (`blindUntil`), so `sees` and the AI go blind exactly while CS2 counts a blind kill.
+
+`sees` uses `smokeBlocks` eye to eye (standing eyes); the engine puts a fire out under a smoke and smothers a molotov
+that bursts in one. The 3D renderer draws the smoke voxels (`activeEffects()[].cells`) and **one flickering patch per
+burning flame** (`flames`, `flameRadius`), the 2D one a disc with the cloud's footprint area or around the flames.
+Snapshots keep each cloud's inputs only (seq, thrower, centre, pop tick; HE holes are kept apart) and rebuild it on
+restore; fires, decoys and projectiles are rounded like a snapshot after every step, so a restored run goes on exactly
+like the live one (tests). A projectile lost over the map edge (no skybox clip) is dropped after 30 s or below z −3000.
+
+**Scripted throws** are released with solved angles: `tools/utility-aim.ts` (run by `tools/snap-tracks.ts`) puts the
+thrower at his snapped track at the release tick with the track's velocity capped at the grenade's run speed, solves
+`aimAtLanding` at full strength with the other players where their tracks have them during the flight (V5: a grenade
+bounces off them, a molotov bursts on them), and writes `{tick, thrower, pitch, yaw, landing, error, sec, assumed}` into
+`data/geometry/mirage-tracks.json` `utility`; `applyTracks3d` sets `utility[].aim` and the Core (`ScriptPlan`) looks there
+during the pin-pull window instead of the track yaw and `throwPitchDeg`. The target is the measured landing
+(`utility[].landing`) or, for the four throws the video doesn't show, an assumption (`ASSUMED_TARGETS`, docs/round-data.md
+"Grenade landings": no T blinded, nothing in a POV the video shows). The 4.8, 5.6 and 29.8 s smokes have neither and keep
+the default throw (track yaw, −10° pitch) on the engine.
+
+| t | thrower | kind | target | solve: pitch, yaw → detonation, error | in the hosts |
+| ---: | --- | --- | --- | --- | --- |
+| 7.8 | snarlbot | flash | assumed (400, −1690, 300) | −57.5°, −118.9° → (396, −1672, 310), 21 u | pops at 9.28 s at (351, −1661, 290); blinds nobody |
+| 8.8 | donk | flash | assumed (−650, 470, −220) | −15°, −150° → (−668, 474, −182), 42 u | pops at 10.28 s down the Tunnel Stairs; only donk (0.37 s) |
+| 17.8 | barely | HE | assumed (−1920, 600, −160) | −5°, −152.5° → (−1893, 621, −65), 101 u (it is in the air at 1.5 s) | 19.28 s just past the Balcony railing; hurts nobody |
+| 19.2 | donk | molotov | assumed (−2330, 800, −125) | −8.75°, −171.3° → (−2259, 702, −65), 136 u | bursts at 20.94 s at (−2385, 774, −126), the Truck platform by the van; 16 flames to 27 s, nobody in them |
+| 25.8 | cart | smoke | measured (−1890, −585, −166) ± 40, pops 28.1 s | 0°, −83.4° → (−1841, −578, −166), 49 u, 2.31 s | pops at **28.09 s** (was 29.13 s) at (−1840, −578), 50 u east of the spot |
+
+**cart's Shop smoke, pop time and fade (V5, #88).** S1's aim landed it 15 u from the measured spot, but by a high throw
+that hits the Shop's far wall at 26.5 s, a counter at 27.0 s and reaches the floor at 27.85 s, then bounces (×0.45) for
+another 1.2 s: rest after the 3.3 s check, a pop at 29.13 s where the video's first puff is 28.1 s. The rest rule is
+H5's (post-bounce speed < 20 on a floor, the check at 1.5 s and every 0.2 s; CS2's own is unpublished, S4), so V5 fixes
+the throw: `aimAtLanding` takes the measured pop time (`landing.t`, `targetSec`) and minimises `error + 200 u/s × |Δt|`,
+on a fine grid, counting a rest less than 4 ticks before its check as the next check (a puppet's release differs from
+the solve by a few units, `restSlackTicks`). The flatter throw lands directly and pops 2.31 s after the release, 28.09 s
+in both hosts, 49 u from the spot (the spot's own uncertainty is 40 u). The cloud then holds 15 s and thins out to
+nothing over 3 s (S10): dense until 43.1 s, gone at 46.1 s (was 47.1 → 49.1 s).
+
+What the video shows (cart's POV, 60 fps): the cloud already fills the middle of his view at 28.217 s; he faces walls
+32.2–40.8 s; at **41.0–41.4 s** he looks across Shop and the cloud is a **thin, translucent haze** by the freezer, with the
+counter visible through it; at **44.4 s** the same spot is clear, and so at 45.5, 46.0 and 48.0 s. So the recording's
+(CS:GO's) cloud was thinning ~12.9 s after its puff and gone by ≤ 16.3 s, about 2 s ahead of CS2's 15 + 3 s here: at
+41.0 s the game's cloud is still dense, at 44.4 s it is at 57 % density and at 45.5 s at 20 %; from 46.1 s both are
+clear. Matching the video closer would mean CS:GO's lifetime, not CS2's (the tuning's `smokeFullSec` / `smokeFadeSec`).
+
+![cart in Shop at 41.0, 44.4 and 45.5 s: video | game (V5)](img/parity-v5-shop-smoke.jpg)
+
+*The video's haze at 41.0 s (right of the shelves) is gone at 44.4 s; the game's cloud is dense at 41.0 s and thinning at
+44.4 and 45.5 s (the 3D renderer shrinks the puffs with the density, still white and opaque: #64). The cameras are V2's
+fitted views on CS2 Mirage, so the rooms don't line up exactly.*
 
 ![cart's Market smoke: video | before (main) | after (S1), cart's fitted views at 29.5, 30.0, 31.0 s; then the B side at 35 s](img/s1-market-smoke.jpg)
 

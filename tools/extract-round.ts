@@ -42,6 +42,7 @@ import {
   type WeaponId,
   type WeaponTimelinePoint,
   type YawSample,
+  type ScopeSample,
 } from '../src/contracts/index';
 
 /**
@@ -54,8 +55,64 @@ const MEASURED_LANDINGS: Readonly<Record<string, GrenadeLanding>> = {
   // 28.1 s). The point is where cart's trajectory-line end (his POV 29.5 and 30.0 s) and the freezer (44.5 s) meet on
   // the CS2 mesh from V2's fitted cameras: three rays cross within 2 u at (-1882...-1901, -581...-585, -129). The window
   // stays clear (cart climbs in through it at 28.2-28.5 s with no cloud in it). docs/round-data.md "Grenade landings".
-  '25.8 cart smoke': { x: -1890, y: -585, z: -166, uncertainty: 40 },
+  // V5 (#88): the pop time too: the trajectory line is drawn to its end hook by 28.2 s and the cloud already fills the
+  // middle of cart's view at 28.2 s (frames 1692-1702); his view at 28.0 s shows the room clear; S1's first puff 28.1 s.
+  '25.8 cart smoke': { x: -1890, y: -585, z: -166, uncertainty: 40, t: 28.1 },
 };
+
+/**
+ * V5 (#90): scope changes read off the recording, per player (`tracks.<id>.scope`, docs/round-data.md "Scope"). The page
+ * has no scope data; V2's fit (data/source/view-fit.json `vfov`: 30.54 deg = the AWP's zoom 1, 7.51 = zoom 2) found which
+ * frames are scoped and these are the frames where the overlay appears or drops (60 fps). Checked against the fit below
+ * (`checkScopes`): every scoped / unscoped fitted frame of the player agrees, except `FIT_NOT_THE_PLAYER`.
+ */
+const SCOPES: Readonly<Partial<Record<PlayerId, readonly { readonly t: number; readonly zoom: number; readonly confidence: Confidence; readonly why: string }[]>>> = {
+  donk: [
+    { t: 33.35, zoom: 1, confidence: 'observed', why: 'frame 2001, the first of his 33.35-37.217 s camera segment: the AWP scope at zoom 1 (ammo 10/30); scoped on every frame of it' },
+    {
+      t: 47.6,
+      zoom: 0,
+      confidence: 'inferred',
+      why: 'off camera (37.233-49.383 s): the radar has him walk at <= 81 u/s while he holds (under the AWP scoped 100) and then 120-228 u/s from 47.7 s, which only unscoped allows',
+    },
+    { t: 49.4, zoom: 1, confidence: 'observed', why: 'frame 2964, the first of his 49.4 s camera segment: scoped (ammo 9/30: one shot off camera)' },
+    { t: 49.833, zoom: 0, confidence: 'observed', why: "frame 2990: the scope drops the frame before his shot's muzzle flash (frame 2991, 49.85 s, ammo 9 -> 8): the AWP's unzoom on the shot (shots CSV 49.85 s)" },
+  ],
+};
+
+/** V2's fit labelled these frames as the player's, but the video's camera had already switched (frame 2234, 37.233 s, is cart's). */
+const FIT_NOT_THE_PLAYER: readonly string[] = ['donk 37.3'];
+
+/** The fit's vertical FOV of a frame → the zoom level (CS:GO default_fov 90 at 4:3 = 73.74 deg; AWP 40 / 10 at 4:3). */
+function zoomOfVfov(vfov: number): number {
+  if (Math.abs(vfov - 73.74) < 0.5) return 0;
+  if (Math.abs(vfov - 30.537) < 0.5) return 1;
+  if (Math.abs(vfov - 7.51) < 0.5) return 2;
+  throw new Error(`view fit: unknown vfov ${vfov}`);
+}
+
+/** Attach SCOPES to the tracks; with a view fit, check every fitted (not inferred) frame of those players against them. */
+function applyScopes(tracks: Record<PlayerId, Track>, fit: ViewFitFile | null): Record<PlayerId, Track> {
+  const out = { ...tracks };
+  for (const id of Object.keys(SCOPES) as PlayerId[]) {
+    const list = SCOPES[id] ?? [];
+    const tr = out[id];
+    if (tr === undefined) throw new Error(`SCOPES: no track for ${id}`);
+    const scope: ScopeSample[] = list.map((q) => ({ t: q.t, tick: toTick(q.t), zoom: q.zoom, confidence: q.confidence }));
+    out[id] = { ...tr, scope };
+    if (fit === null) continue;
+    const zoomAt = (t: number): number => {
+      let z = 0;
+      for (const q of scope) if (q.t <= t + 1e-9) z = q.zoom;
+      return z;
+    };
+    for (const v of fit.views[id] ?? []) {
+      if (v.confidence === 'inferred' || v.vfov === null || v.vfov === undefined || FIT_NOT_THE_PLAYER.includes(`${id} ${v.t}`)) continue;
+      if (zoomOfVfov(v.vfov) !== zoomAt(v.t)) throw new Error(`SCOPES: ${id} at ${v.t} s: the fit has zoom ${zoomOfVfov(v.vfov)}, the timeline ${zoomAt(v.t)}`);
+    }
+  }
+  return out;
+}
 
 /**
  * V4 (second video review, docs/parity/review-2-2026-11-07.md): HUD facts the page's data has wrong, read off the
@@ -578,7 +635,7 @@ export const VIEW_FIT_PATH = 'data/source/view-fit.json';
 export interface ViewFitFile {
   readonly format: string;
   /** Per player, by time: the fitted (or radar fallback) view of every fitted frame. */
-  readonly views: Record<string, readonly { t: number; yaw: number; pitch: number | null; source: ViewSource; confidence: Confidence }[]>;
+  readonly views: Record<string, readonly { t: number; yaw: number; pitch: number | null; source: ViewSource; confidence: Confidence; vfov?: number | null }[]>;
   /** Track samples moved to where the video frames put the player. `from` must match the source sample. */
   readonly positions: readonly { player: string; t: number; from: Vec3; to: Vec3 }[];
 }
@@ -643,7 +700,7 @@ export function buildRound(inp: ExtractInputs): ExtractOutputs {
 
   const builtTracks = sortedRecord(byId(src.tracks).map(([id, rows]): [PlayerId, Track] => [id, buildTrack(rows, yawBy.get(id) ?? [])]));
   const viewFit = inp.viewFit === undefined || inp.viewFit === null ? null : (JSON.parse(inp.viewFit) as ViewFitFile);
-  const tracks = applyRadarShifts(viewFit === null ? builtTracks : applyViewFit(builtTracks, viewFit), src.bomb);
+  const tracks = applyScopes(applyRadarShifts(viewFit === null ? builtTracks : applyViewFit(builtTracks, viewFit), src.bomb), viewFit);
 
   const players = src.players
     .map((p): Player => {

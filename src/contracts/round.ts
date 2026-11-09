@@ -5,8 +5,9 @@
  * No file I/O here: callers read the file and pass the parsed JSON (or its text).
  * Portable style (docs/port-notes.md): readonly plain data. The only optional
  * fields in the repo are `TrackSample.uncertainty` and `TrackSample.resampled`,
- * because the generated file omits them, and (G3) `TrackSample.jump`, which only
- * `applyTracks3d` (src/contracts/tracks3d.ts) sets; read them as nullable.
+ * because the generated file omits them, (G3) `TrackSample.jump`, which only
+ * `applyTracks3d` (src/contracts/tracks3d.ts) sets, and (V5) `Track.scope` and
+ * `GrenadeLanding.t`, present only where the video shows them; read them as nullable.
  */
 import { PLAYER_IDS, TEAMS, WEAPON_IDS, isPlayerId, type PlayerId, type Team, type Vec3, type WeaponId } from './types';
 
@@ -164,6 +165,19 @@ export interface YawSample {
   readonly deg: number;
 }
 
+/**
+ * V5 (#90): a change of the player's scope (zoom level of a sniper rifle; 0 = unscoped), read off the video's first-person
+ * frames (`observed`: the scope overlay appears / drops on that frame) or assumed off camera (`inferred`, with the
+ * reason in docs/round-data.md "Scope"). The level holds until the next change; before the first, unscoped.
+ */
+export interface ScopeSample {
+  readonly t: number;
+  readonly tick: number;
+  /** 0 unscoped, 1 or 2 (CS2's AWP: 40 and 10 degrees at 4:3). */
+  readonly zoom: number;
+  readonly confidence: Confidence;
+}
+
 export interface Track {
   /** 10 Hz samples on the exact 0.1 s grid from t = 0. */
   readonly samples: readonly TrackSample[];
@@ -172,6 +186,8 @@ export interface Track {
   readonly yaw: readonly YawSample[];
   /** V2: the fitted first-person view while the camera watches this player (empty for the others), by time. */
   readonly view: readonly ViewSample[];
+  /** V5: scope changes by time (absent: never scoped). */
+  readonly scope?: readonly ScopeSample[];
   readonly endT: number;
   readonly endTick: number;
 }
@@ -250,6 +266,11 @@ export interface GrenadeLanding {
   readonly y: number;
   readonly z: number;
   readonly uncertainty: number;
+  /**
+   * V5: the video time (s) the grenade detonates (the smoke's first puff, the flash or fire), when the recording shows
+   * it; absent otherwise. `tools/utility-aim.ts` solves the throw for this time as well as the spot.
+   */
+  readonly t?: number;
 }
 
 export interface Radio {
@@ -521,6 +542,19 @@ function checkTrack(value: unknown, path: string): void {
     if (!(t > prevView)) fail(`${p}.t`, 'view samples not strictly increasing');
     prevView = t;
   });
+  if (tr['scope'] !== undefined) {
+    let prevScope = Number.NEGATIVE_INFINITY;
+    arr(tr['scope'], `${path}.scope`).forEach((v, i) => {
+      const p = `${path}.scope[${i}]`;
+      const o = timedObj(v, p);
+      const z = num(o['zoom'], `${p}.zoom`);
+      if (!(z === 0 || z === 1 || z === 2)) fail(`${p}.zoom`, 'expected 0, 1 or 2');
+      oneOf(o['confidence'], CONFIDENCES, `${p}.confidence`);
+      const t = o['t'] as number;
+      if (!(t > prevScope)) fail(`${p}.t`, 'scope samples not strictly increasing');
+      prevScope = t;
+    });
+  }
   timed(tr, 'endT', 'endTick', path);
 }
 
@@ -582,7 +616,9 @@ function checkUtility(value: unknown, path: string): void {
   vec3(u['throwPos'], `${path}.throwPos`);
   nullable(u['landing'], `${path}.landing`, (v, p) => {
     vec3(v, p);
-    num((v as Record<string, unknown>)['uncertainty'], `${p}.uncertainty`);
+    const l = v as Record<string, unknown>;
+    num(l['uncertainty'], `${p}.uncertainty`);
+    if (l['t'] !== undefined && !(num(l['t'], `${p}.t`) > (u['t'] as number))) fail(`${p}.t`, 'detonation before the throw');
   });
   str(u['radio'], `${path}.radio`);
 }

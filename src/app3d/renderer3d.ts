@@ -10,7 +10,7 @@
  *   size) over the human's teammates (all of them while watching).
  * - Effects: W3's bullet tracers and impacts (src/app3d/effects/shot-fx.ts: CS2-style tracers for 1 in N bullets
  *   from the muzzle, bullet holes, dust, sparks and blood from the host's shot results), muzzle flash on the
- *   viewmodel, smokes (grey spheres), fires (orange discs), grenades in flight, the bomb (red box, blinking while
+ *   viewmodel, smokes (grey spheres), fires (orange patches, one per burning flame of a CS2-engine fire; V5), grenades in flight, the bomb (red box, blinking while
  *   planted), W2: dropped guns (the viewmodel geometry at world scale, on its side).
  * - First person: the camera at the eye with the view angles; the weapon's viewmodel (A1, src/app3d/viewmodels)
  *   drawn in a second pass (it never clips into walls); the other players' weapons in their hands. Frames: src/app3d/coords.ts (Source x, y, z → Three x, z, −y).
@@ -379,7 +379,7 @@ export class Renderer3D {
     for (const e of effects) {
       if (e.phase === 'smoke' && e.cells !== undefined) nc += e.cells.length;
       else if (e.phase === 'smoke') ns++;
-      else if (e.phase === 'fire') nf++;
+      else if (e.phase === 'fire') nf += e.flames === undefined ? 1 : e.flames.length;
       else if (e.phase === 'flying') nn++;
     }
     this.pool(this.smokes, () => new Mesh(new SphereGeometry(1, 16, 10), new MeshBasicMaterial({ color: 0xc9cfd4, transparent: true, opacity: 0.93 })), ns);
@@ -395,6 +395,16 @@ export class Renderer3D {
         const m = this.smokes[is++] as Mesh;
         m.position.set(e.pos.x, e.pos.z + e.radius * 0.45, -e.pos.y);
         m.scale.set(e.radius, e.radius * 0.75, e.radius);
+      } else if (e.phase === 'fire' && e.flames !== undefined) {
+        // V5: the CS2 engine's fire: one flickering patch per burning flame (fire cells ~42 apart, flameRadius wide).
+        const r = e.flameRadius ?? 30;
+        for (const f of e.flames) {
+          const i = fi++;
+          const m = this.fires[i] as Mesh;
+          m.position.set(f.x, f.z + 3, -f.y);
+          const flicker = 1 + 0.12 * Math.sin(nowMs / 60 + i * 1.7);
+          m.scale.set(r * flicker, 2 + 6 * Math.abs(Math.sin(nowMs / 90 + i * 2.3)), r * flicker);
+        }
       } else if (e.phase === 'fire') {
         const i = fi++;
         const m = this.fires[i] as Mesh;

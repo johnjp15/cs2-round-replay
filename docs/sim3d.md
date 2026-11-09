@@ -15,7 +15,9 @@ factory (`SessionConfig.host`, default `defaultHost` = Sim2DHost; `SessionHost` 
 | View angles | per pawn `yaw` and `pitch` (MoveState; Source: pitch positive = down) from the Core's, the AI's or the human's input | as 2D (2D used pitch only to pick a band) |
 | Bullets | **3D hitscan**: a ray from the eye along the view direction, nearest of the world mesh and the hitboxes; hitgroup = the hitbox's; CS damage (`bulletDamage`) | new: `src/sim3d/hitscan.ts`, `src/engine/hitboxes.ts` |
 | Sight (`sees`), guard spot, grenade effects | G6's `MeshSight` on the CS2 **world** mesh (no player clips): eye → the target's head, chest, both sides, legs; FOV, flash, smoke (`computeSees`) | `src/sim2d/mesh-sight.ts`, `vision.ts`: the same implementation as Sim2DHost (H1's `MeshSight3` was removed with G6) |
-| Weapons, grenades, bomb, round rules, hearing | unchanged | `src/sim2d/weapons.ts`, `grenades.ts`, `bomb.ts`, `round.ts` |
+| Weapons, bomb, round rules, hearing | unchanged | `src/sim2d/weapons.ts`, `bomb.ts`, `round.ts` |
+| Grenades | **every grenade on H5's CS2 engine** (S1 smokes, V5 flashes, HE, molotovs): the CS2 throw, bounces on the world mesh and off pawns, detonation rules, the volumetric smoke, flash blindness by exposure / angle / distance, the HE blast, the molotov's spreading flames (drawn per flame); the scripted throws aimed at measured or assumed landings | `src/sim3d/grenades.ts` (`Cs2Grenades`), `docs/grenades.md` "Grenades in the hosts" |
+| Scope (V5) | ATTACK2 steps a sniper's zoom (the weapon mechanics, and `src/sim2d/scope.ts` as in Sim2DHost): a scoped pawn's `sees` FOV is its scope's (AWP zoom 1: 51.8° at 16:9), a scoped puppet walks at most the scoped speed (AWP 100); donk's recorded scope comes as the Core's ATTACK2 presses, and spectating him in first person shows the scope overlay | `src/sim2d/scope.ts`, `docs/round-data.md` "Scope" |
 | LIVE AI | the 2D AI on the Mirage 2D nav (`sees` and its guard-spot test on MeshSight, as in 2D) | `src/sim2d/ai.ts` (H3 makes it generic on the CS2 nav) |
 | Puppets, scripted damage, snaps, teleports | unchanged (the same snapped tracks, input plans and snaps) | the Core |
 

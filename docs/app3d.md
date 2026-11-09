@@ -23,7 +23,7 @@ npm run check:browser:3d  # after build:3d: headless Chromium, screenshots, fps,
   over an enemy only while the viewer sees it (`sees`: never through walls). The viewer is the human, else the
   spectated player.
 - **Effects**: bullet tracers and impacts (W3, "Tracers and impacts" below), the muzzle flash on the viewmodel,
-  smokes (grey domes), molotov fires (orange discs), grenades in flight, the bomb (red, blinking when planted).
+  smokes (grey domes), molotov fires (V5: one flickering orange patch per burning flame of the CS2 engine's fire, else a disc), grenades in flight, the bomb (red, blinking when planted).
 - **First person**: the camera at the eye, the held weapon's low-poly viewmodel with hands (A1, "Viewmodels" below)
   drawn in its own pass and camera (viewmodel_fov), crosshair, hit marker (white; red for a headshot), the scope
   overlay while zoomed (the viewmodel hidden, as in CS2).

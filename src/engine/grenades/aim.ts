@@ -6,7 +6,7 @@
  */
 import type { Vec3 } from '../../contracts/index';
 import { simulateThrow } from './step';
-import type { GrenadeConfig, GrenadeWorld, ThrowRequest } from './types';
+import type { GrenadeConfig, GrenadePawn, GrenadeWorld, ThrowRequest } from './types';
 
 export interface AimOptions {
   /** Strengths to try (1 = ATTACK, 0.5 = both, 0 = ATTACK2). Default all three. */
@@ -23,6 +23,21 @@ export interface AimOptions {
   readonly refine?: number;
   /** Give up on a throw that has not detonated after this long (s). Default 12. */
   readonly maxSec?: number;
+  /**
+   * V5: the detonation time to aim for too (seconds from the release; a smoke's pop seen on the video): the search
+   * minimises `error + secWeight × |sec − targetSec|` instead of the error alone. Default none.
+   */
+  readonly targetSec?: number;
+  /** Units of landing error one second of detonation time is worth. Default 200 (0.2 s ≈ 40 units). */
+  readonly secWeight?: number;
+  /**
+   * V5: with `targetSec`, a smoke or decoy that comes to rest fewer than this many ticks before the rest check it
+   * detonates at counts as detonating one check later (a host's release differs from the solve's by a few units, enough
+   * to miss that check). Default 0.
+   */
+  readonly restSlackTicks?: number;
+  /** V5: the other players k ticks after the release (a grenade bounces off them; a molotov bursts on them). Default none. */
+  readonly pawnsAt?: (k: number) => readonly GrenadePawn[];
 }
 
 export interface AimSolution {
@@ -37,6 +52,8 @@ export interface AimSolution {
   readonly sec: number;
   /** Throws simulated. */
   readonly evaluated: number;
+  /** What the search minimised: `error`, plus the time term with `targetSec`. */
+  readonly cost: number;
 }
 
 export function aimAtLanding(
@@ -55,7 +72,8 @@ export function aimAtLanding(
   const maxSec = opts.maxSec ?? 12;
   const yaw0 = (Math.atan2(target.y - base.eye.y, target.x - base.eye.x) * 180) / Math.PI;
   let evaluated = 0;
-  let best: AimSolution = { pitch: 0, yaw: yaw0, strength: strengths[0] ?? 1, landing: null, error: Infinity, sec: 0, evaluated: 0 };
+  const timeCost = (sec: number): number => (opts.targetSec === undefined ? 0 : (opts.secWeight ?? 200) * Math.abs(sec - opts.targetSec));
+  let best: AimSolution = { pitch: 0, yaw: yaw0, strength: strengths[0] ?? 1, landing: null, error: Infinity, sec: 0, evaluated: 0, cost: Infinity };
   const seen = new Set<string>();
   const tryThrow = (pitch: number, yaw: number, strength: number): void => {
     if (pitch < pMin || pitch > pMax) return;
@@ -63,11 +81,15 @@ export function aimAtLanding(
     if (seen.has(key)) return;
     seen.add(key);
     evaluated++;
-    const r = simulateThrow({ ...base, pitch, yaw, strength }, world, cfg, { maxSec });
+    const r = simulateThrow({ ...base, pitch, yaw, strength }, world, cfg, opts.pawnsAt === undefined ? { maxSec } : { maxSec, pawnsAt: opts.pawnsAt });
     if (r.detonation === null) return;
     const p = r.detonation.pos;
     const error = Math.hypot(p.x - target.x, p.y - target.y, p.z - target.z);
-    if (error < best.error) best = { pitch, yaw, strength, landing: p, error, sec: r.ticks / 64, evaluated: 0 };
+    const sec = r.ticks / 64;
+    const rest = r.events.find((e) => e.type === 'rest');
+    const late = opts.targetSec !== undefined && rest !== undefined && r.detonation.tick - rest.tick < (opts.restSlackTicks ?? 0) ? cfg.tuning.restCheckSec : 0;
+    const cost = error + timeCost(sec + late);
+    if (cost < best.cost) best = { pitch, yaw, strength, landing: p, error, sec, evaluated: 0, cost };
   };
   for (const s of strengths) {
     for (let dy = -span; dy <= span + 1e-9; dy += yStep) {

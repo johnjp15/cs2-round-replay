@@ -309,6 +309,17 @@ tested (no WebKit here).
 
 ## History
 
+- V5 (#88, #90, #91: every grenade on the CS2 engine aimed at its measured or assumed landing, the Shop smoke solved for
+  the video's 28.1 s pop, donk's recorded scope; docs/grenades.md "Grenades in the hosts", docs/round-data.md "Scope"):
+  no-human `46a352d7` → `fb700ba6` (walk oracle `fca9c138` → `18dafaf0`), cart-idle `bd0f9623` → `5eca3613`, cart-takeover
+  `e4fa9352` → `62d0dfe7`; never-peeks without rejoin `ae7af1f6` → `c61bbffc`. `tools/fixture-diff.ts`, no-human: Core acts
+  from tick 482 (the solved look of snarlbot's 7.8 s flash during its pin pull; then the other throws' looks) in
+  input.yaw / pitch / forward / side, and input.buttons on 4 lines (donk's ATTACK2 presses, ticks 2133, 3040, 3045,
+  3161); observes: pos (donk up to 17 u at 37.3 s, his scoped walk; everyone else ≤ 1e-5, the stick's rounding),
+  yaw / pitch, `sees` on 26 lines (from 47.7 s: donk's scoped FOV and walk), `sound` (grenade pops at their new ticks and spots,
+  footsteps), observe.round only in the carried bomb's position at 1e-6; **no shot, damage, death, bomb or round event
+  differs**, 2D = 3D in every act and field, "Played it like the tape: CT defuse, 0.72 s left".
+
 - V2 (`docs/viewfit.md`: every watched player's yaw and pitch fitted to the video, puppets follow them; scoped rifles
   slower than a walk hold their angle; the window duel's positions as on main, see "Engagement positions"): no-human
   `cf57c99a` → `f4129248`, cart-idle → `8beda596`, cart-takeover → `6bd4b304` (manifest); never-peeks without rejoin

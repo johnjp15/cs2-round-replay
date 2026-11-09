@@ -149,7 +149,7 @@ export function simulateThrow(
   req: ThrowRequest,
   world: GrenadeWorld,
   cfg: GrenadeConfig,
-  opts: { seed?: number; maxSec?: number; pawns?: StepInput['pawns'] } = {},
+  opts: { seed?: number; maxSec?: number; pawns?: StepInput['pawns']; pawnsAt?: (k: number) => StepInput['pawns'] } = {},
 ): { detonation: Extract<GrenadeEvent, { type: 'detonate' }> | null; path: { x: number; y: number; z: number }[]; events: GrenadeEvent[]; ticks: number } {
   const state = createGrenadeState(opts.seed ?? 1);
   const { seq, event } = throwGrenade(state, req, world, cfg);
@@ -157,7 +157,8 @@ export function simulateThrow(
   const events: GrenadeEvent[] = [event];
   const limit = secToTicks(opts.maxSec ?? 30);
   for (let k = 0; k < limit; k++) {
-    const ev = stepGrenades(state, world, { pawns: opts.pawns ?? [], friendlyFire: false }, cfg);
+    // V5: `pawnsAt(k)`, the pawns k ticks after the release (moving players a throw may hit), else the static `pawns`.
+    const ev = stepGrenades(state, world, { pawns: opts.pawnsAt === undefined ? (opts.pawns ?? []) : opts.pawnsAt(k), friendlyFire: false }, cfg);
     events.push(...ev);
     const det = ev.find((e): e is Extract<GrenadeEvent, { type: 'detonate' }> => e.type === 'detonate' && e.seq === seq);
     if (det !== undefined) return { detonation: det, path: proj.path, events, ticks: k + 1 };

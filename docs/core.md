@@ -349,6 +349,11 @@ C3's docs and tests (`docs/combat.md`, `tests/bomb.test.ts`) count an event at t
 - **Bursts** (count only, no exact ticks). With a related kill (the shooter's first kill in the window, of the burst's target if it names one): an automatic gun holds a spray whose last shot lands on the kill tick; a semi-automatic one taps `count` times one cycle apart, the last on the kill tick. Without one: `count` taps evenly through the window (tap k at tick0 + ⌊(k + ½) × span / count + ½⌋). barely: 7 shots ending on the 44.20 s kill of Zwomp (hold 2789–2828), then 11 taps through 49.40–50.83 s; donk: one AWP shot in the middle of 37.25–49.40 s.
 - **Implied shots.** A kill with no recorded shot or burst of that killer at that victim (kill feed only: snarlbot ×2, sp4rtan's deagle kill of snarlbot, the post-round kill of cart) gets one tap landing on the kill tick, so the kill has its shot and sound.
 - While the script has a grenade or the c4 out, only the grenade's own `ATTACK` is pressed.
+- **Scope (V5, #90).** `ScriptPlan.scope`: one-tick `ATTACK2` presses that put a puppet's scope through its recorded
+  changes (`tracks.<id>.scope`, docs/round-data.md "Scope"), the last on the change's tick − the input latency, as many as
+  the gun's zoom cycle needs (AWP 1 → 0: two presses 5 ticks apart, through zoom 2); none for an unscope within 3 ticks of
+  the player's recorded shot (the AWP drops its scope on firing) or while he holds no scoped gun. donk: 2133, 3040, 3045,
+  3161. The hosts step the zoom (`src/sim2d/scope.ts`), so both see and walk alike.
 
 All 33 recorded exact-time shots land within a tick (20 exactly), and every gun fires exactly the rounds the HUD shows (cart 30 → 6, barely 30 → 12, donk's AWP 10 → 8).
 
@@ -388,7 +393,7 @@ A fire item or engagement is decided once, on the first tick it is active (`Scri
 
 ### Utility
 
-For each `utility` entry (throw tick U): `set_weapon <grenade>` at U − latency − `throwHoldSec` − the grenade deploy (`grenades.deploySec`); `ATTACK` held for `throwHoldSec` (0.25 s, the pin pull); released at U − latency, which throws; then `set_weapon` back to the weapon the recording shows (if the pawn holds something else, e.g. cart's second smoke). During the hold and the release the pitch is `throwPitchDeg` (−10°, slightly up) and the yaw is the puppet's current facing. **The landing spots are not in the data, so this is a guess and purely cosmetic**: several 2D grenades hit a wall a few units in front of the thrower.
+For each `utility` entry (throw tick U): `set_weapon <grenade>` at U − latency − `throwHoldSec` − the grenade deploy (`grenades.deploySec`); `ATTACK` held for `throwHoldSec` (0.25 s, the pin pull); released at U − latency, which throws; then `set_weapon` back to the weapon the recording shows (if the pawn holds something else, e.g. cart's second smoke). During the hold and the release the pitch is `throwPitchDeg` (−10°, slightly up) and the yaw is the puppet's current facing, unless the throw has an aim (`utility[].aim`, S1/V5: solved on the CS2 grenade engine for a measured or assumed landing, docs/grenades.md "Grenades in the hosts"; today the 7.8, 8.8, 17.8, 19.2 and 25.8 s throws).
 
 ### Plant and defuse
 

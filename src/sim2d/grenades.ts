@@ -92,11 +92,17 @@ export interface GrenadeEffect {
   /** Tick the effect ends (pop tick while flying). */
   readonly untilTick: number;
   /**
-   * S1: a volumetric smoke (the CS2 engine's, `SmokeEngine`): its voxels at this tick, centres and density 0–1 (0 = not
+   * S1: a volumetric smoke (the CS2 engine's, `GrenadeEngine`): its voxels at this tick, centres and density 0–1 (0 = not
    * grown in yet or faded), each `cellSize` units on a side. Absent for the 2D model's disc smokes.
    */
   readonly cells?: readonly SmokeCellView[];
   readonly cellSize?: number;
+  /**
+   * V5: a fire of the CS2 engine (`GrenadeEngine`): its burning flames at this tick (the floor point of each fire cell),
+   * each `flameRadius` units across its middle. Absent for the 2D model's disc fires.
+   */
+  readonly flames?: readonly Vec3[];
+  readonly flameRadius?: number;
 }
 
 /** One voxel of a volumetric smoke for the renderer. */
@@ -107,8 +113,8 @@ export interface SmokeCellView {
   readonly d: number;
 }
 
-/** What a smoke engine needs to know about a pawn (bounces off players). */
-export interface SmokePawn {
+/** What the grenade engine needs to know about a pawn (bounces off players, flash exposure, blast and fire damage). */
+export interface EnginePawn {
   readonly id: PlayerId;
   readonly team: Team;
   readonly alive: boolean;
@@ -119,37 +125,43 @@ export interface SmokePawn {
   readonly pitch: number;
 }
 
-/** A smoke that popped this tick (host seq). */
-export interface SmokePop {
-  readonly seq: number;
-  readonly thrower: PlayerId;
-  readonly pos: Vec3;
+/** How a host steps the grenade engine. */
+export interface GrenadeStepOptions {
+  /** mp_friendlyfire: grenades may hurt the thrower's teammates (default false; the thrower is always hurt). */
+  readonly friendlyFire?: boolean;
+  /** Report full damage to the thrower and teammates: the host applies its own team-damage ratios (3D, W3). */
+  readonly rawTeamDamage?: boolean;
 }
 
 /**
- * S1: the smoke grenades of a host with the CS2 world mesh, on a real grenade engine (src/sim3d/smokes.ts: H5's
+ * S1 / V5: the grenades of a host with the CS2 world mesh, on a real grenade engine (src/sim3d/grenades.ts: H5's
  * `src/engine/grenades`, docs/grenades.md): the CS2 throw law (eye, view angles, 1.25 × the thrower's velocity),
- * bounces on the mesh, the rest check, and the flood-filled volumetric cloud. The host keeps the 2D model
- * (`throwGrenade` here) for flashes, HE and molotovs. Hosts call it in tick order: `throwSmoke` during the tick's
- * shots, `step` once per tick after them. Its state is plain JSON (`snapshot` / `restore`).
+ * bounces on the mesh, the detonation rules, the flood-filled volumetric smoke, flash blindness, the HE blast and the
+ * molotov's spreading fire. A host without one keeps the 2D model (`throwGrenade` here). Hosts call it in tick order:
+ * `throwGrenade` during the tick's shots, `step` once per tick after them. Its state is plain JSON (`snapshot` /
+ * `restore`).
  */
-export interface SmokeEngine {
-  /** Release a smoke at host tick `tick` (full strength, ATTACK). `seq`: the host's grenade seq (effects carry it). */
-  throwSmoke(tick: number, seq: number, thrower: PlayerId, team: Team, eye: Vec3, pitch: number, yaw: number, velocity: Vec3): void;
-  /** Simulate host tick `tick`: flight, bounces, pops (returned, in seq order), clouds growing and running out. */
-  step(tick: number, pawns: readonly SmokePawn[]): SmokePop[];
+export interface GrenadeEngine {
+  /** Release a grenade at host tick `tick` (full strength, ATTACK). `seq`: the host's grenade seq (effects carry it). */
+  throwGrenade(kind: GrenadeKind, tick: number, seq: number, thrower: PlayerId, team: Team, eye: Vec3, pitch: number, yaw: number, velocity: Vec3): void;
+  /**
+   * Simulate host tick `tick`: flight, bounces, detonations, clouds growing and running out, fires spreading and
+   * burning. Returns what the host applies, in order: `pop` (every detonation: the sound), `hurt` (HE, fire: raw
+   * damage before armor), `blind` (flashes).
+   */
+  step(tick: number, pawns: readonly EnginePawn[], opts?: GrenadeStepOptions): GrenadeOutcome[];
   /** The eye-to-eye line a–b is blocked by smoke at `tick` (the tick just stepped). */
   blocks(a: Vec3, b: Vec3, tick: number): boolean;
-  /** Smoke density 0–1 at `p` (fire smothering). */
+  /** Smoke density 0–1 at `p`. */
   densityAt(p: Vec3, tick: number): number;
-  /** Flying smokes and clouds at `tick`, by seq (for the renderers). */
+  /** Flying grenades, clouds and fires at `tick`, by seq (for the renderers). */
   effects(tick: number): GrenadeEffect[];
-  /** True while a smoke is in flight or a cloud is up. */
+  /** True while a grenade is in flight or a cloud or fire is up. */
   active(): boolean;
   /** Plain-JSON state (null when idle). */
   snapshot(): unknown;
   restore(s: unknown): void;
-  /** Drop every smoke (B5 `set_round`: grenades and clouds don't survive a resync). */
+  /** Drop every grenade (B5 `set_round`: grenades, clouds and fires don't survive a resync). */
   clear(): void;
 }
 
@@ -325,7 +337,7 @@ export interface GrenadeWorld {
   readonly damage: Pick<DamageTuning, 'friendlyFire' | 'bandHeights' | 'eyeHeight' | 'crouchEyeHeight'>;
   readonly ai: Pick<AiTuning, 'fovDeg'>;
   /**
-   * S1: the host's other smokes (a `SmokeEngine`'s volumetric clouds): `smokeBlocks` stops a flash through them (with
+   * S1: the host's other smokes (a `GrenadeEngine`'s volumetric clouds; V5: a host with one throws everything on it): `smokeBlocks` stops a flash through them (with
    * `smokeBlocksFlash`; eye to the flash), `smokeCovers` smothers a molotov that bursts in one and puts out a fire
    * when a cloud pops over it (`smokePops`, this tick's).
    */

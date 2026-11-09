@@ -91,8 +91,9 @@ import type { MapNav } from '../sim2d/map-nav';
 import { applyBombAction, bombFromObs, freshBomb, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from '../sim2d/bomb';
 import { collideMove, type CollisionNav, type Obstacle } from '../sim2d/collision';
 import type { MapGeometry } from '../sim2d/geometry';
-import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeOutcome, type SmokeEngine } from '../sim2d/grenades';
-import { Cs2Smokes } from './smokes';
+import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeEngine, type GrenadeOutcome } from '../sim2d/grenades';
+import { Cs2Grenades } from './grenades';
+import { freshScope, scopeShot, scopedFovDeg, scopedSpeed, stepScope } from '../sim2d/scope';
 import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove3d, type MoveOptions, type MoveState, type MoveStep } from '../sim2d/movement';
 import { NavMesh, type NavPoint } from '../sim2d/nav';
 import { checkRoundEnd, endRound, freshRound, isOver, roundPhase, timeLeftSec, type RoundEnd, type RoundState, type TeamCounts } from '../sim2d/round';
@@ -154,7 +155,7 @@ interface HostState {
   /** Flying grenades, smoke clouds and fires, by seq. */
   readonly grenades: readonly Grenade[];
   readonly nextGrenadeSeq: number;
-  /** S1: the smoke engine's state (CS2 volumetric smokes), null when idle or without one. */
+  /** S1 / V5: the grenade engine's state (CS2 grenades: smokes, flashes, HE, fires), null when idle or without one. */
   readonly smokes?: unknown;
   /** Sorted by attacker, then victim. */
   readonly blocked: readonly BlockedPair[];
@@ -211,8 +212,8 @@ export class Sim3DHost implements IHost {
   /** Sorted by id. */
   private pawns: PawnState[];
   private grenades: Grenade[] = [];
-  /** S1: smokes on the CS2 grenade engine (the world mesh); flashes, HE and molotovs on the 2D model. */
-  private readonly smokes: SmokeEngine;
+  /** S1 / V5: every grenade on the CS2 grenade engine (the world mesh); `grenades` (the 2D model) stays empty. */
+  private readonly smokes: GrenadeEngine;
   private nextGrenadeSeq = 1;
   private blocked: BlockedPair[] = [];
   private pendingDamage: DamageAction[] = [];
@@ -267,7 +268,7 @@ export class Sim3DHost implements IHost {
     this.nav = nav instanceof NavMesh ? legacyMapNav(nav) : nav;
     this.geometry = world.movement;
     this.tuning = tuning;
-    this.smokes = new Cs2Smokes(world.world, tuning.grenades.cs2, tuning.damage.eyeHeight, tuning.damage.crouchEyeHeight);
+    this.smokes = new Cs2Grenades(world.world, tuning.grenades.cs2, tuning.damage.eyeHeight, tuning.damage.crouchEyeHeight);
     this.sight = new Sight(vision?.mask ?? null, this.nav, sightOptionsFromTuning(tuning));
     this.grenadeSight = new GrenadeSight(this.sight, this.nav);
     this.meshSight = new MeshSight(world.world, meshSightOptionsFromTuning(tuning));
@@ -627,7 +628,11 @@ export class Sim3DHost implements IHost {
     if (this.seesCache === null) {
       const d = this.tuning.damage;
       this.seesCache = computeSees(
-        this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick, busy: this.bomb.plant?.id === p.id || this.bomb.defuse?.id === p.id })),
+        this.pawns.map((p) => {
+          // V5: a scoped sniper sees through its scope's FOV (scope.ts, as Sim2DHost).
+          const fov = scopedFovDeg(p.scope);
+          return { id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick, busy: this.bomb.plant?.id === p.id || this.bomb.defuse?.id === p.id, ...(fov === null ? {} : { fovDeg: fov }) };
+        }),
         this.meshSight,
         this,
         { fovDeg: this.tuning.ai.fovDeg, eyeHeight: d.eyeHeight, crouchEyeHeight: d.crouchEyeHeight },
@@ -830,7 +835,14 @@ export class Sim3DHost implements IHost {
    */
   private moveOptionsFor(p: PawnState, input: PawnInput | null): MoveOptions {
     const ctx = this.armsCtx;
-    if (ctx === null || !this.mechanical(p)) return Sim3DHost.NO_MOVE_OPTIONS;
+    if (!this.mechanical(p)) {
+      // V5 (#90): a scoped puppet walks no faster than its gun's scoped speed (CS2 m_flMaxSpeed[1]: AWP 100; the
+      // pawn's scope.ts state, as in Sim2DHost); unscoped, the table's run speed as before.
+      const scoped = scopedSpeed(p.scope);
+      const base = this.tuning.movement.runSpeedByWeapon[p.weapon];
+      return scoped !== null && base !== undefined && scoped < base ? { runSpeed: scoped } : Sim3DHost.NO_MOVE_OPTIONS;
+    }
+    if (ctx === null) return Sim3DHost.NO_MOVE_OPTIONS;
     const a = this.arms[this.pawnIndex(p.id)];
     if (a === undefined) return Sim3DHost.NO_MOVE_OPTIONS;
     const run = roundNumber(maxSpeedOf(ctx, { ...a, velocityModifier: 1 }, input !== null && input.buttons.includes('ATTACK')));
@@ -891,6 +903,8 @@ export class Sim3DHost implements IHost {
     const ai = this.pawnIndex(p.id);
     const ctx = this.armsCtx;
     const motion: Motion = { velocity: p.move.vel, onGround: p.move.onGround, crouched: p.move.crouching, onLadder: false, walking: buttons.includes('WALK') };
+    // V5 (#90): the scope as Sim2DHost steps it (scope.ts: sees and the puppets' walk); the arms below keep their own.
+    p.scope = stepScope(p.scope ?? freshScope(p.weapon), { tick: t, weapon: p.weapon, attack2: buttons.includes('ATTACK2'), reloading: p.wpn.reloadEndTick !== null, nextAttackTick: p.wpn.nextAttackTick });
     if (ctx !== null && ai >= 0) {
       this.arms[ai] = trackArms(ctx, this.arms[ai] as ArmsState, {
         tick: t,
@@ -916,6 +930,7 @@ export class Sim3DHost implements IHost {
     if (step.ammo !== null) this.setAmmo(p, p.weapon, step.ammo);
     if (step.reloadStarted) this.sound(p, 'reload');
     if (step.fired && gun !== null) {
+      p.scope = scopeShot(p.scope);
       this.outbox.push({ type: 'shot', shooter: p.id, weapon: p.weapon });
       this.sound(p, 'shot');
       // H2: the bullet leaves along view + aim punch × recoilScale + the inaccuracy / spread cone (seeded per shooter
@@ -1005,11 +1020,11 @@ export class Sim3DHost implements IHost {
   private throwHeld(p: PawnState, t: number): void {
     const kind = p.weapon;
     if (!isGrenade(kind)) return;
-    if (kind === 'smoke' && this.smokes !== null) {
-      // S1: smokes fly on the CS2 grenade engine (eye, view angles, the thrower's velocity).
+    if (this.smokes !== null) {
+      // S1 / V5: every grenade flies on the CS2 grenade engine (eye, view angles, the thrower's velocity).
       const m = p.move;
       const eye = { x: m.pos.x, y: m.pos.y, z: m.pos.z + (m.crouching ? this.tuning.damage.crouchEyeHeight : this.tuning.damage.eyeHeight) };
-      this.smokes.throwSmoke(t, this.nextGrenadeSeq, p.id, p.team, eye, m.pitch, m.yaw, m.vel);
+      this.smokes.throwGrenade(kind, t, this.nextGrenadeSeq, p.id, p.team, eye, m.pitch, m.yaw, m.vel);
       this.nextGrenadeSeq++;
     } else {
       const g = throwGrenade(kind, { id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, pitch: p.move.pitch, crouching: p.move.crouching }, t, this.nextGrenadeSeq, this.grenadeSight, this.tuning.grenades, this.tuning.damage);
@@ -1137,27 +1152,23 @@ export class Sim3DHost implements IHost {
 
   private stepGrenades(t: number): void {
     const sm = this.smokes;
-    let pops: readonly Vec3[] = [];
+    // W3: with mp_friendlyfire the step reports teammates too (full damage: applyGrenadeOutcome applies the team-damage
+    // ratio and keeps a puppet's off them).
+    const ff = this.tuning.damage.mpFriendlyfire || this.tuning.damage.friendlyFire;
     if (sm !== null && sm.active()) {
-      const popped = sm.step(
+      const out = sm.step(
         t,
         this.pawns.map((p) => ({ id: p.id, team: p.team, alive: p.alive, pos: p.move.pos, crouching: p.move.crouching, yaw: p.move.yaw, pitch: p.move.pitch })),
+        { friendlyFire: ff, rawTeamDamage: true },
       );
-      for (const o of popped) this.outbox.push({ type: 'sound', source: o.thrower, pos: { ...o.pos }, kind: 'grenade' });
-      pops = popped.map((o) => o.pos);
+      for (const o of out) this.applyGrenadeOutcome(o);
     }
     if (this.grenades.length === 0) return;
-    const smoke =
-      sm === null || !sm.active()
-        ? undefined
-        : { smokeBlocks: (a: Vec3, b: Vec3) => sm.blocks(a, b, t), smokeCovers: (q: Vec3) => sm.densityAt(q, t) > 0, pops };
     const r = stepGrenades(this.grenades, t, {
-      ...(smoke === undefined ? {} : { smoke }),
       nav: this.grenadeNav,
       pawns: this.pawns.map((p) => ({ id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, alive: p.alive })),
       grenades: this.tuning.grenades,
-      // W3: with mp_friendlyfire the step reports teammates too; applyGrenadeOutcome keeps a puppet's off them.
-      damage: this.tuning.damage.mpFriendlyfire && !this.tuning.damage.friendlyFire ? { ...this.tuning.damage, friendlyFire: true } : this.tuning.damage,
+      damage: ff ? { ...this.tuning.damage, friendlyFire: true } : this.tuning.damage,
       ai: this.tuning.ai,
     });
     this.grenades = r.grenades;
