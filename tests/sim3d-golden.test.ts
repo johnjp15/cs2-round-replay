@@ -79,7 +79,9 @@ describe('Sim3DHost, nobody plays (H1)', () => {
     // arrives on time and barely stands in the arch opening).
     const lines = host3d(watching).combatLog();
     expect(lines.every((l) => l.text.startsWith('blocked ') || l.text.startsWith('script: scripted hit through geometry: '))).toBe(true);
-    expect(lines.filter((l) => l.text.startsWith('script: ')).map((l) => l.tick)).toEqual([32, 816, 1142, 1184, 1203, 3194, 3206]);
+    // V5: donk walks scoped (AWP 100 u/s) at 49.4-49.84 s and stands ~2 u off where he stood before at 50.00 s: sp4rtan's
+    // second hit on him is audited too (the recorded damage still lands).
+    expect(lines.filter((l) => l.text.startsWith('script: ')).map((l) => l.tick)).toEqual([32, 816, 1142, 1184, 1203, 3194, 3200, 3206]);
   });
 });
 

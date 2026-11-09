@@ -238,16 +238,16 @@ describe("John's case: cart never peeks (never-peeks), the rest of the round pla
     }
   });
 
-  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; W2 pistols: b861137b; K1: 7ce7345e, sp4rtan\'s route on time; G8: 6d705c2e, survivors LIVE for good and G8\'s LIVE movement; S1: 64ad6d38, smokes on the CS2 engine); V2: fc6f7bda, the fitted views; F1: 7a4ab5fe, eased fight aim and pre-aim; V4: 0ad76dc0, the HUD data from the video (armor, the AK draw); P3: ae7af1f6, the measured plant and defuse spots', () => {
-    expect(logDigest(before.log)).toBe('ae7af1f6');
+  it('with rejoin off ({rejoin: false}) the run is B4 byte for byte (main: b424522f; G3, 3D on CS2 Mirage: 7ca637e5; M1: 4dc88459; G6: 32f58ff5; G7: 93e0dc15, the on-script drift and the holder\'s reaction; W2 pistols: b861137b; K1: 7ce7345e, sp4rtan\'s route on time; G8: 6d705c2e, survivors LIVE for good and G8\'s LIVE movement; S1: 64ad6d38, smokes on the CS2 engine); V2: fc6f7bda, the fitted views; F1: 7a4ab5fe, eased fight aim and pre-aim; V4: 0ad76dc0, the HUD data from the video (armor, the AK draw); P3: ae7af1f6, the measured plant and defuse spots; V5: c61bbffc, every grenade on the CS2 engine (aims at the assumed landings), donk\'s scope', () => {
+    expect(logDigest(before.log)).toBe('c61bbffc');
     expect(rejoins(before.entries)).toEqual([]);
   });
 });
 
 describe('nobody leaves the tape: rejoin never runs', () => {
-  it('golden no-human round: no rejoin line, no path query, digest 46a352d7 (P3: the measured plant and defuse spots, every event tick unchanged; V4: a0976e1c, eradicate\'s 89 armor, donk\'s armor hits, cart\'s AK at 61.40 s, every event tick unchanged; F1: 4b0286da, eased fight aim and pre-aim, every event tick unchanged; V2: f4129248, the fitted views; T2: cf57c99a, cart into Shop by the window, out by the Shop door; S1: fe9750d5, smokes on the CS2 engine; K1: 9a994b97; W2 pistols: 9f07df0b; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
+  it('golden no-human round: no rejoin line, no path query, digest fb700ba6 (V5: every grenade on the CS2 engine, the Shop smoke at 28.09 s, donk\'s scope, every event tick unchanged; P3: 46a352d7, the measured plant and defuse spots, every event tick unchanged; V4: a0976e1c, eradicate\'s 89 armor, donk\'s armor hits, cart\'s AK at 61.40 s, every event tick unchanged; F1: 4b0286da, eased fight aim and pre-aim, every event tick unchanged; V2: f4129248, the fitted views; T2: cf57c99a, cart into Shop by the window, out by the Shop door; S1: fe9750d5, smokes on the CS2 engine; K1: 9a994b97; W2 pistols: 9f07df0b; T1: 7168c0a5; G6: 150f77b4; M1: 63bd3d86; G3: 72b58704; main: e9a228d9)', () => {
     const g = runHarness(data, { ...NO_HUMAN, recordWalk: true });
-    expect(logDigest(g.log)).toBe('46a352d7');
+    expect(logDigest(g.log)).toBe('fb700ba6');
     expect(g.paths).toEqual([]);
     expect(coreLogs(g.entries).some((l) => / (rejoin|REPLAY): /.test(l.text))).toBe(false);
   });

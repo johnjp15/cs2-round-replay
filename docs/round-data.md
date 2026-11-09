@@ -80,6 +80,7 @@ Kits at t = 0:
 | `offGridSamples[]` | source rows whose `t` is not a multiple of 0.1 (event anchors such as kills at 17.85 s), kept verbatim |
 | `yaw[] {t, tick, deg}` | page `yaw` rows `[t, id, deg]` for this player (20 Hz where present; Ts only, while they were on camera): the radar's view cone |
 | `view[] {t, tick, yaw, pitch, source, confidence}` | **V2**, `data/source/view-fit.json` (`tools/fit-view-angles.ts`, `docs/viewfit.md`): the first-person view fitted to the video frame while the camera watches this player (10 Hz, 30–60 fps around key moments; empty for the others). `source: 'video'` with `confidence` `observed` (clear fit) or `estimated` (ambiguous), `'radar'` (the fit failed: smoke, flash, blur; `yaw` = the radar yaw, `pitch: null`), and `inferred` = a segment's first view held back up to 0.8 s across the camera switch. `yaw` degrees CCW from +x, `pitch` Source's (+ = down, ±89). |
+| `scope[] {t, tick, zoom, confidence}` | **V5** (#90), `SCOPES` in `tools/extract-round.ts`, checked against V2's fitted FOV (`view-fit.json` `vfov`): the player's scope changes (0 unscoped, 1 / 2 = the AWP's 40° / 10° at 4:3), `observed` on the frame the overlay appears or drops, `inferred` off camera. Absent for a player never scoped (only donk). See "Scope" below |
 | `endT/endTick` | last source sample (death time, or 70.3 s for Sp4rtaN) |
 
 Track `flag`, worked out from the data and the round breakdown:
@@ -123,7 +124,7 @@ CSV columns: `t_video_s, round_clock, shooter, weapon, event, target, damage, he
 | --- | --- | --- |
 | `kills[] {t, tick, killer, victim, weapon, hs, assist, postRound, kpos, vpos, kplace, vplace}` | page `kills` | 69.4 s (Sp4rtaN → cart) has `postRound: true` |
 | `damage[] {t, tick, attacker, victim, amount, armor, weapon, note, apos, vpos, source}` | page `damage` (`source: "damage"`) plus CSV rows with a damage figure that the page lacks (`source: "shots_csv"`: Sp4rtaN's 13-damage kill shot on donk at 50.3 s, with `apos/vpos` `null`) | `armor` only where the CSV gives it (7 at 18.5 s), else `null` |
-| `utility[] {t, tick, thrower, kind, place, throwPos, landing, radio}` | page `util`; `landing` from `MEASURED_LANDINGS` in `tools/extract-round.ts` (V0, measured on the video) | `throwPos` matches the thrower's track at the throw time (where it was thrown from). `landing {x, y, z, uncertainty}` is where it comes to rest and pops (smoke bloom, flash/HE detonation, fire), `uncertainty` a radius in units; `null` where the recording never shows it. See "Grenade landings" below |
+| `utility[] {t, tick, thrower, kind, place, throwPos, landing, radio}` | page `util`; `landing` from `MEASURED_LANDINGS` in `tools/extract-round.ts` (V0, measured on the video) | `throwPos` matches the thrower's track at the throw time (where it was thrown from). `landing {x, y, z, uncertainty, t?}` is where it comes to rest and pops (smoke bloom, flash/HE detonation, fire), `uncertainty` a radius in units, `t` (V5) the video time it pops when the video shows that; `null` where the recording never shows it. See "Grenade landings" below |
 | `radio[] {t, tick, who, place, text, kind}` | page `events` texts of the form `who @ place (RADIO): text` (`kind: "radio"`), plus the plant call-out without `(RADIO)` at 24.4 s (`kind: "callout"`) | |
 | `chat[] {t, tick, who, dead, text}` | page `events` of kind `chat` (all `*DEAD*` all-chat) | |
 | `sightings[] {who, t0, tick0, t1, tick1, place, by}` | page `sightings` | when a CT was seen, and by whom |
@@ -141,7 +142,7 @@ Not copied: the page's `nav` and `places` (the nav mesh is task A3's `data/mirag
 - **CT weapons:** Incredibad, Snakelore and Zwomp were never seen holding a weapon; `m4a4` is assumed (`kit.assumed: true`). CT grenades and secondaries are unknown (empty / `null`), as are the Ts' pistols except donk's Glock.
 - **CT HP and armor:** never shown; 100/100 with helmet is assumed. CT money is unknown (`startMoney: null`).
 - **CT routes:** outside sightings the CT tracks are `inferred` reconstructions with an `uncertainty` radius of 110–450 units. Treat them as plausible, not recorded.
-- **Grenade landings:** only the throw position and time are known; where each smoke, flash, HE and molotov landed is not in the data.
+- **Grenade landings:** only the throw position and time are known; where each smoke, flash, HE and molotov landed is not in the data, except cart's 25.8 s smoke (measured, V0/S1/V5). The hosts' aims for the 7.8, 8.8, 17.8 and 19.2 s throws are assumptions (V5, below).
 - **Yaw / view:** only for Ts while on camera (eradicate, cart, donk, barely). There is no CT yaw, and most players have no yaw at t = 0. V2's fitted view (`view[]`) adds the pitch and corrects the radar yaw (median 13–22° off in the spectator segments); 21 of 856 frames fall back to the radar yaw.
 - **Shots:** exact times only for shots seen on the ammo HUD of the spectated player, plus a few audio-confirmed first shots. Off-camera sprays are counts over a time window, and kill-feed-only kills don't say how many shots were fired.
 - **Resampled samples:** a few tens of grid samples per affected track are interpolated (see above), so they can differ by a few units from where the player really was.
@@ -160,10 +161,23 @@ first-person view that shows it. The demo draws grenade trajectories as yellow l
 | 5.6 | snarlbot | smoke | `null` | | not on camera (Palace Alley; the camera is eradicate's) |
 | 7.8 | snarlbot | flash | `null` | | not on camera; eradicate is not blinded |
 | 8.8 | donk | flash | `null` | | not on camera (pops behind eradicate; he is not blinded) |
-| 17.8 | barely | HE | `null` | | not resolved: cart's POV 17.8-20.3 s looks out of the Apartments window at B; no detonation in view, no damage row |
-| 19.2 | donk | molotov | `null` | | not resolved: no fire in cart's views of B 19.4-22.5 s; trajectory lines in view at 20.0 s but no end point |
-| 25.8 | cart | smoke | (−1890, −585, −166) | 40 | **S1 (backlog 45), re-measured: deep inside Shop, not in the window.** cart throws from the B side (−2059, 88) through the Market window; the grenade flies on and comes to rest by the white freezer counter ~320 u south of the window, where it blooms (first puff 28.1 s). Measured with V2's fitted cameras (`docs/viewfit.md`): the end of the trajectory line in cart's POV at 29.5 s and 30.0 s and the freezer seen at 44.5 s (a camera 350 u away) give three rays that cross within 2 u at (−1882…−1901, −581…−585, −129); the floor below is the landing. At 29.5–31 s the cloud is ahead of cart in the room (to his right at 29.5–30 s, left at 31 s), and he climbs in through the window at 28.2–28.5 s with no cloud in it. John: "it doesn't land blocking the window of market. it lands deeper inside market." V0b's spot just inside the window ((−1885, −320), #44) read the trajectory as coming down behind the jamb and the 29.6–30.2 s cloud as filling the window; the fitted views put that cloud 250–350 u south of it. The hosts throw it with the aim `tools/utility-aim.ts` solves (`docs/grenades.md`); it pops at (−1911, −613) at 29.1 s in both hosts (34 u from the spot) |
+| 17.8 | barely | HE | `null` | | not resolved: cart's POV 17.8-20.3 s looks out of the Apartments window at B; no detonation in view (19.17-19.5 s at 60 fps), no damage row. V5 assumes it (below) |
+| 19.2 | donk | molotov | `null` | | not resolved: no fire in cart's views of B 19.4-22.5 s; the burning bottle flies past cart's right out of the Apartments doorway at 19.23-19.33 s, and at 20.0-20.2 s (cart on the Balcony) the yellow trajectory lines go down over the railing and end at the white van (Truck) on B. V5 assumes it (below) |
+| 25.8 | cart | smoke | (−1890, −585, −166) | 40 | **S1 (backlog 45), re-measured: deep inside Shop, not in the window.** cart throws from the B side (−2059, 88) through the Market window; the grenade flies on and comes to rest by the white freezer counter ~320 u south of the window, where it blooms (first puff 28.1 s). Measured with V2's fitted cameras (`docs/viewfit.md`): the end of the trajectory line in cart's POV at 29.5 s and 30.0 s and the freezer seen at 44.5 s (a camera 350 u away) give three rays that cross within 2 u at (−1882…−1901, −581…−585, −129); the floor below is the landing. At 29.5–31 s the cloud is ahead of cart in the room (to his right at 29.5–30 s, left at 31 s), and he climbs in through the window at 28.2–28.5 s with no cloud in it. John: "it doesn't land blocking the window of market. it lands deeper inside market." V0b's spot just inside the window ((−1885, −320), #44) read the trajectory as coming down behind the jamb and the 29.6–30.2 s cloud as filling the window; the fitted views put that cloud 250–350 u south of it. **V5 (#88): `t` 28.1 s**, the first puff: the trajectory line has its end hook by 28.2 s and the cloud already fills the middle of cart's view at 28.217 s (frame 1693), while his view at 28.0 s shows the room clear. The hosts throw it with the aim `tools/utility-aim.ts` solves for the spot and the time (`docs/grenades.md`); it pops at (−1840, −578) at 28.09 s in both hosts (50 u east of the spot; S1's aim popped it 34 u from the spot but at 29.13 s, a second late) |
 | 29.8 | barely | smoke | `null` | | not resolved: its trajectory line is in barely's POV 32.2-33.4 s, but without his view angles (V2) the end point can't be placed |
+
+**V5 (#91): assumed landings for the four throws the video doesn't show** (`ASSUMED_TARGETS` in `tools/utility-aim.ts`;
+the hosts throw every grenade on the CS2 engine since V5, so each needs an aim, and the 2D model's flat throw along the
+yaw had donk's molotov burst on the Balcony in front of cart). Each is chosen so the throw does what the frames allow and
+no more: no T is blinded (the video's eradicate is not; the other Ts' frames show no flash), and nothing bursts where a
+POV the video shows would see it. Where the hosts' throws go (solved from the snapped tracks, the other players included):
+
+| t | thrower | kind | assumed target | the hosts' detonation | why |
+| ---: | --- | --- | --- | --- | --- |
+| 7.8 | snarlbot | flash | (400, −1690, 300) | (351, −1661, 290), 9.28 s, in the air over the Palace roofs | Palace Alley is open to the south; a flash popped high toward A blinds nobody and no POV the video shows has it |
+| 8.8 | donk | flash | (−650, 470, −220) | (−665, 444, −175), 10.28 s, down the Tunnel Stairs | the clear way from his spot (south-west); below the Back Alley floor, out of every T's sight (eradicate's view 8.8–10 s shows no pop, he is not blinded); only donk himself sees it, white for 0.37 s |
+| 17.8 | barely | HE | (−1920, 600, −160) | (−1888, 616, −63), 19.28 s, in the air just past the Balcony railing | out of the Apartments window toward B; cart's view over the Balcony at 19.17–19.5 s shows no explosion; no damage row (it hurts nobody: barely is a puppet) |
+| 19.2 | donk | molotov | (−2330, 800, −125) | (−2385, 774, −126), 20.94 s, on the Truck platform by the van | out of the Apartments window over cart's head (the solve includes the players: the first aim hit cart and burst on the Balcony) and down by the van, where the trajectory lines end; west of cart's way down to B and behind all his views of 19.4–22.5 s, which show no fire |
 
 **The Market window is the same in 2020 and on the CS2 mesh** (V0b, after H5 #41 found the first landing unreachable).
 On the CS2 mesh the wall between B and Shop has its face at y −264, with the window open over x −1946…−1890 (sill z −126,
@@ -238,6 +252,25 @@ Red: the page's (−1982, 311), where the radar put it; green: (−1882, 243), 3
 *Cart's snapped positions at 65.0–66.8 s (blue) and his sight of the defuser (MeshSight on the 2020 package, sp4rtan
 crouched): before, at the radar spot, 7 of 19 clear (red); after, behind the stack, 0 of 19. In the 3D harness (the
 engine's own `sees`, ticks 4160–4275) cart saw sp4rtan on 58 of 116 ticks before and 0 after.*
+
+## Scope (V5, #90)
+
+donk carries the AWP all round; the video shows him scoped every frame it watches him from 33.35 s (V4 #4). Read at 60 fps
+(frame n = video time n / 60; the frames are decoded with `ffmpeg -ss (n / 60 − 0.002)`, which returns frame n):
+
+| t | frame | zoom | confidence | evidence |
+| ---: | ---: | ---: | --- | --- |
+| 33.35 | 2001 | 1 | observed | the first frame of his 33.35–37.217 s camera segment (frame 2000 is barely's): the AWP scope, ammo 10/30; scoped on every frame of the segment. V2 fits zoom 1 (vfov 30.54°) |
+| 47.6 | – | 0 | inferred | off camera (37.233–49.383 s): the radar has him at ≤ 81 u/s while he holds the angle (under the AWP's scoped 100) and then 120–228 u/s from 47.7 s, which only unscoped allows. His one off-camera AWP shot (shots CSV, 37.25–49.4 s) unscopes him until the bolt has cycled |
+| 49.4 | 2964 | 1 | observed | the first frame of his 49.4 s camera segment (2963 is still barely's): scoped, ammo 9/30 |
+| 49.833 | 2990 | 0 | observed | the scope drops the frame before his shot's muzzle flash (frame 2991, 49.85 s, ammo 9 → 8): the AWP's unzoom on the shot. The shot itself was scoped (49.817 s, frame 2989, still in the scope, sp4rtan's muzzle flash in it) |
+
+V2's fit agrees on every fitted frame except the one it labelled donk's at 37.3 s, which is cart's (the camera switched at
+37.233 s): `FIT_NOT_THE_PLAYER` in `tools/extract-round.ts`. The Core presses ATTACK2 for each change (`ScriptPlan.scope`,
+`docs/core.md`), the hosts step the zoom like CS2 (`src/sim2d/scope.ts`; the 3D host's weapon mechanics), and a scoped
+puppet sees through the scope's FOV and walks at most at the scoped speed (`docs/sim3d.md`).
+
+![donk at 34.0 and 49.6 s: video | game (V5): scoped (zoom 1), sp4rtan in the scope at 49.6 s](img/parity-v5-donk-scope.jpg)
 
 ## sp4rtan's kill on barely, 58.85 s (K1)
 

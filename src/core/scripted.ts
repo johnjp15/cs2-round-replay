@@ -295,6 +295,46 @@ export interface UtilityItem {
   readonly aim: { readonly pitch: number; readonly yaw: number } | null;
 }
 
+/** V5 (#90): one ATTACK2 press of a puppet's scope change (held on `tick` only, act ticks). */
+export interface ScopePress {
+  readonly id: PlayerId;
+  readonly tick: number;
+}
+
+/** Zoom levels of the round's scoped guns (CS2 weapons.vdata `m_nZoomLevels`, data/weapons.json; ATTACK2 steps 0 → 1 → … → 0). */
+const ZOOM_LEVELS: Readonly<Partial<Record<WeaponId, number>>> = { awp: 2, ssg08: 2 };
+/** Ticks between two presses of one change (the AWP's m_flZoomTime 0.05 s = 3.2 ticks, plus the release tick). */
+const SCOPE_PRESS_GAP = 5;
+/** An unscope this close to the player's recorded shot is the shot's own unzoom (AWP, SSG 08): no press. */
+const SHOT_UNZOOM_TICKS = 3;
+
+/**
+ * V5 (#90): the ATTACK2 presses that put each puppet's scope through its recorded changes (`tracks.<id>.scope`,
+ * docs/round-data.md "Scope"): from the level before to the new one in as many presses as the gun's cycle needs (zoom 1
+ * → 0 on a two-level gun is two, through zoom 2), the last one landing on the change's tick (− the input latency). An
+ * unscope at a recorded shot of a gun that unzooms on firing needs none; a change while not holding a scoped gun is
+ * skipped (a weapon switch drops the scope by itself).
+ */
+function buildScopePresses(model: RoundModel, schedule: EventSchedule, li: number): ScopePress[] {
+  const out: ScopePress[] = [];
+  const shots = schedule.ofType('shot');
+  for (const id of PLAYER_IDS) {
+    let zoom = 0;
+    for (const s of model.scopeTrack(id)) {
+      const levels = ZOOM_LEVELS[recordedWeaponAt(model, schedule, id, s.tick)];
+      if (levels === undefined) {
+        zoom = 0;
+        continue;
+      }
+      let n = (((s.zoom - zoom) % (levels + 1)) + levels + 1) % (levels + 1);
+      if (s.zoom === 0 && shots.some((q) => q.shooter === id && Math.abs(q.tick - s.tick) <= SHOT_UNZOOM_TICKS)) n = 0;
+      for (let k = 0; k < n; k++) out.push({ id, tick: s.tick - li - (n - 1 - k) * SCOPE_PRESS_GAP });
+      zoom = s.zoom;
+    }
+  }
+  return out;
+}
+
 /** The bomb plant (act ticks). */
 export interface PlantItem {
   readonly id: PlayerId;
@@ -335,6 +375,8 @@ export class ScriptPlan {
   readonly damage: readonly DamageItem[];
   readonly inventory: readonly InventoryItem[];
   readonly utility: readonly UtilityItem[];
+  /** V5: the puppets' scope presses, by player then tick. */
+  readonly scope: readonly ScopePress[];
   readonly plant: PlantItem | null;
   readonly defuse: DefuseItem | null;
   /** Fire items and engagements per player, PLAYER_IDS order (lookups). */
@@ -382,6 +424,8 @@ export class ScriptPlan {
         aim: u.aim,
       };
     });
+
+    this.scope = buildScopePresses(model, schedule, li);
 
     const plant = schedule.ofType('plant')[0] ?? null;
     if (plant === null) {
@@ -999,6 +1043,7 @@ export class ScriptedEvents {
    *   with `withLook`, so the pawn keeps moving the same way.
    * - ATTACK: the grenade's pin window during a throw; none while a grenade or the c4 is out for the
    *   script; otherwise every fire item that is on at this tick.
+   * - ATTACK2: V5's scope presses (`ScriptPlan.scope`).
    * - Plant / defuse: USE and no stick (WALK / DUCK dropped) inside the USE window until the engine
    *   reports the plant / the end of the defuse.
    * The caller writes the returned yaw back to the puppet state, so the turn limit continues from it.
@@ -1053,6 +1098,8 @@ export class ScriptedEvents {
     } else if (!(planting && tick >= pl.selectTick && tick <= pl.useTo) && this.attacking(p.id, tick)) {
       buttons.push('ATTACK');
     }
+    // V5 (#90): the recorded scope changes (one-tick ATTACK2 presses; the host's weapon mechanics step the zoom).
+    if (this.plan.scope.some((q) => q.id === p.id && q.tick === tick) && !buttons.includes('ATTACK2')) buttons.push('ATTACK2');
     input = { ...input, buttons: sortButtons(buttons) };
 
     if ((planting && tick >= pl.useFrom && tick <= pl.useTo) || (defusing && tick >= df.useFrom && tick <= df.useTo)) {

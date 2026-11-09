@@ -198,7 +198,7 @@ describe('projectile', () => {
 });
 
 describe('smoke', () => {
-  it('fills a ~140-unit dome in the open (750 voxels of 20 units) and lasts 18 s + 2 s fade', () => {
+  it('fills a ~140-unit dome in the open (750 voxels of 20 units) and lasts 18 s: full for 15 s, then thins out over 3 s (V5)', () => {
     const s = smokeAt(flat, 0, 0);
     const smoke = s.smokes[0];
     if (smoke === undefined) throw new Error('no smoke');
@@ -215,8 +215,12 @@ describe('smoke', () => {
     const b = { x: 400, y: 0, z: 60 };
     expect(smokeBlocks(s, a, b, 0, t)).toBe(false);
     expect(smokeBlocks(s, a, b, 64 * 2, t)).toBe(true);
-    expect(smokeBlocks(s, a, b, 64 * 18 - 1, t)).toBe(true);
-    expect(smokeBlocks(s, a, b, 64 * 20, t)).toBe(false);
+    expect(smokeBlocks(s, a, b, 64 * 15 - 1, t)).toBe(true);
+    // Thinning: half density at 16.5 s; gone at 18 s.
+    expect(smokeDensityAt(s, { x: 0, y: 0, z: 30 }, 64 * 15 - 1, t)).toBe(1);
+    expect(smokeDensityAt(s, { x: 0, y: 0, z: 30 }, Math.round(64 * 16.5), t)).toBeCloseTo(0.5, 1);
+    expect(smokeBlocks(s, a, b, 64 * 18, t)).toBe(false);
+    expect(smokeDensityAt(s, { x: 0, y: 0, z: 30 }, 64 * 18, t)).toBe(0);
     expect(smokeBlocks(s, { x: -400, y: 300, z: 60 }, { x: 400, y: 300, z: 60 }, 64 * 2, t)).toBe(false);
   });
   it('grows from the centre over 1.2 s', () => {

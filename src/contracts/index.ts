@@ -121,6 +121,7 @@ export type {
   TrackSample,
   YawSample,
   ViewSample,
+  ScopeSample,
   ViewSource,
   Track,
   Shot,

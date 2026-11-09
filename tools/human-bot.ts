@@ -59,7 +59,7 @@ import {
 } from '../src/core/index';
 import { gunStats, throwElevation, type MapGeometry, type NavMesh } from '../src/sim2d/index';
 import { aimAtLanding } from '../src/engine/grenades/index';
-import { MeshGrenadeWorld } from '../src/sim3d/smokes';
+import { MeshGrenadeWorld } from '../src/sim3d/grenades';
 import { walkQueryOf } from '../src/app/index';
 import type { Session, SessionData } from '../src/app/index';
 import { FollowAim } from './follow-aim';
@@ -223,7 +223,7 @@ interface Running {
   pullTick: number | null;
   releaseTick: number | null;
   previous: WeaponId | null;
-  /** throw (S1): a smoke's look solved on the CS2 grenade engine (the hosts' smokes), or null. */
+  /** throw (S1 / V5): the grenade's look solved on the CS2 grenade engine (the hosts' grenades), or null. */
   aim: Look | null;
 }
 
@@ -238,7 +238,7 @@ export class HumanBot implements HumanDriver {
   readonly trace: string[] = [];
   private readonly nav: NavMesh;
   private readonly tuning: Tuning;
-  /** S1: the world mesh smokes fly through, or null (2D). */
+  /** S1 / V5: the world mesh grenades fly through, or null (2D). */
   private readonly world: MapGeometry | null;
   private readonly model: RoundModel;
   /** Shadow puppet for followRecording: a ReplayCore without divergence that sees the human as a puppet; never snaps. */
@@ -491,12 +491,12 @@ export class HumanBot implements HumanDriver {
           cur.previous = me.weapon;
           return { input: this.idle(o, me), weapon: step.kind, done: false };
         }
-        // S1: a smoke flies on the CS2 grenade engine in the hosts (src/sim3d/smokes.ts): aim it on the world mesh from
-        // where he stands (once; flat throws, -10...+20 deg, which stay under ceilings); other grenades and runs without the
-        // mesh: the 2D model's flat-ground pitch.
-        if (step.kind === 'smoke' && this.world !== null && cur.aim === null) {
+        // S1 / V5: every grenade flies on the CS2 grenade engine in the hosts (src/sim3d/grenades.ts): aim it on the world
+        // mesh from where he stands (once; flat throws, -10...+20 deg, which stay under ceilings); runs without the mesh:
+        // the 2D model's flat-ground pitch.
+        if (this.world !== null && cur.aim === null) {
           const eye = { x: me.pos.x, y: me.pos.y, z: me.pos.z + (me.crouching ? this.tuning.damage.crouchEyeHeight : this.tuning.damage.eyeHeight) };
-          const a = aimAtLanding({ type: 'smoke', thrower: this.id, team: me.team, eye, velocity: { x: 0, y: 0, z: 0 } }, at, new MeshGrenadeWorld(this.world), { tuning: this.tuning.grenades.cs2 }, { strengths: [1], pitchMin: -10, pitchMax: 20 });
+          const a = aimAtLanding({ type: step.kind, thrower: this.id, team: me.team, eye, velocity: { x: 0, y: 0, z: 0 } }, at, new MeshGrenadeWorld(this.world), { tuning: this.tuning.grenades.cs2 }, { strengths: [1], pitchMin: -10, pitchMax: 20 });
           cur.aim = { yaw: Math.round(a.yaw * 1000) / 1000, pitch: Math.round(a.pitch * 1000) / 1000 };
         }
         const want: Look = cur.aim ?? { yaw: bearing(me.pos, at), pitch: this.throwPitch(dist2(me.pos, at), me.crouching) };

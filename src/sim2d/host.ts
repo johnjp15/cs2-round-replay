@@ -55,7 +55,8 @@ import type { MapNav } from './map-nav';
 import { applyBombAction, bombFromObs, freshBomb, isTicking, lockedPawns, stepBomb, type BombAction, type BombData, type BombOutcome, type BombPawn } from './bomb';
 import { collideMove, type CollisionNav, type Obstacle } from './collision';
 import type { MapGeometry } from './geometry';
-import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeNav, type GrenadeOutcome, type SmokeEngine } from './grenades';
+import { freshScope, scopeShot, scopedFovDeg, scopedSpeed, stepScope, type ScopeState } from './scope';
+import { activeEffects, smokeBlocks, stepGrenades, throwGrenade, type Grenade, type GrenadeEffect, type GrenadeNav, type GrenadeOutcome, type GrenadeEngine } from './grenades';
 import { traceShot, type LosQuery, type ScanPawn } from './hitscan';
 import { MeshGrenadeNav, MeshShotSight, MeshSight, meshSightOptionsFromTuning, scriptedHitThroughGeometry } from './mesh-sight';
 import { TICKS_PER_SEC, TICK_DT, hullOf, restingState, settle, stepMove, stepMove3d, type MoveState, type MoveStep } from './movement';
@@ -122,6 +123,8 @@ export interface PawnState {
   nextFootstepTick: number;
   /** The solid pawn that cut this pawn's last move short (collision), or null. Debug hint for body blocks. */
   blockedBy: PlayerId | null;
+  /** V5: the sniper scope (scope.ts; absent: never stepped, unscoped). Narrows `sees` and slows the walk. */
+  scope?: ScopeState;
 }
 
 /** Something the host received but did not (fully) apply. */
@@ -211,7 +214,7 @@ interface HostState {
   /** Flying grenades, smoke clouds and fires, by seq. */
   readonly grenades: readonly Grenade[];
   readonly nextGrenadeSeq: number;
-  /** S1: the smoke engine's state (CS2 volumetric smokes), null when idle or without one. */
+  /** S1 / V5: the grenade engine's state (CS2 grenades), null when idle or without one. */
   readonly smokes?: unknown;
   /** Sorted by attacker, then victim. */
   readonly blocked: readonly BlockedPair[];
@@ -254,8 +257,8 @@ export class Sim2DHost implements IHost {
   /** Sorted by id. */
   private pawns: PawnState[];
   private grenades: Grenade[] = [];
-  /** S1: smokes on the CS2 grenade engine, or null (the 2D model's smokes). */
-  private readonly smokes: SmokeEngine | null;
+  /** S1 / V5: every grenade on the CS2 grenade engine, or null (the 2D model). */
+  private readonly smokes: GrenadeEngine | null;
   private nextGrenadeSeq = 1;
   private blocked: BlockedPair[] = [];
   private pendingDamage: DamageAction[] = [];
@@ -274,11 +277,11 @@ export class Sim2DHost implements IHost {
    * @param vision the sight mask and the AI seed (C4); default no mask (the nav mesh's line of sight) and seed 0.
    * @param geometry G3: the collision mesh (world merged with the player clips, docs/geometry.md) for 3D movement
    *   (`stepMove3d`: jumps, falls, steps); null = the nav's ground-only movement (`stepMove`).
-   * @param smokes S1: smoke grenades on the CS2 engine (src/sim3d/smokes.ts `Cs2Smokes` on the world mesh); null = the
-   *   2D model's disc smokes.
+   * @param smokes S1 / V5: grenades on the CS2 engine (src/sim3d/grenades.ts `Cs2Grenades` on the world mesh); null = the
+   *   2D model's grenades.
    */
   /** @param aiNav H3: the LIVE AI's nav and the plant rule's sites (a CS2 nav in free play); default the 2020 grid's (`legacyMapNav`). */
-  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null = null, vision: Sim2DVision | null = null, geometry: MapGeometry | null = null, aiNav: MapNav | null = null, smokes: SmokeEngine | null = null) {
+  constructor(nav: NavMesh, tuning: Tuning, roster: readonly RosterEntry[], options: Sim2DOptions | null = null, vision: Sim2DVision | null = null, geometry: MapGeometry | null = null, aiNav: MapNav | null = null, smokes: GrenadeEngine | null = null) {
     if (roster.length === 0) throw new Error('Sim2DHost: empty roster');
     const seen = new Set<string>();
     for (const r of roster) {
@@ -584,7 +587,11 @@ export class Sim2DHost implements IHost {
     if (this.seesCache === null) {
       const d = this.tuning.damage;
       this.seesCache = computeSees(
-        this.pawns.map((p) => ({ id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick, busy: this.busyAtBomb(p.id) })),
+        this.pawns.map((p) => {
+          // V5: a scoped sniper sees through its scope's FOV (scope.ts).
+          const fov = scopedFovDeg(p.scope);
+          return { id: p.id, pos: p.move.pos, yaw: p.move.yaw, crouching: p.move.crouching, alive: p.alive, blind: this.tickNo < p.blindUntilTick, busy: this.busyAtBomb(p.id), ...(fov === null ? {} : { fovDeg: fov }) };
+        }),
         this.meshSight ?? this.sight,
         this,
         { fovDeg: this.tuning.ai.fovDeg, eyeHeight: d.eyeHeight, crouchEyeHeight: d.crouchEyeHeight },
@@ -673,7 +680,11 @@ export class Sim2DHost implements IHost {
       const from = p.move.pos;
       const lockedInput = input === null ? null : { ...input, forward: 0, side: 0, buttons: input.buttons.filter((b) => b !== 'JUMP') };
       const base: MoveState = isLocked ? { ...p.move, vel: { x: 0, y: 0, z: p.move.onGround ? 0 : p.move.vel.z } } : p.move;
-      const step: MoveStep = g === null ? stepMove(base, isLocked ? lockedInput : input, p.weapon, this.nav, m, TICK_DT) : stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT);
+      // V5 (#90): a scoped sniper walks no faster than its scoped speed (CS2 m_flMaxSpeed[1]: AWP 100).
+      const sc = scopedSpeed(p.scope);
+      const run = this.tuning.movement.runSpeedByWeapon[p.weapon];
+      const opts = sc !== null && run !== undefined && sc < run ? { runSpeed: sc } : undefined;
+      const step: MoveStep = g === null ? stepMove(base, isLocked ? lockedInput : input, p.weapon, this.nav, m, TICK_DT, opts) : stepMove3d(base, isLocked ? lockedInput : input, p.weapon, g, m, TICK_DT, opts);
       let next = step.state;
       if (!isLocked) {
         const obstacles = this.solidFor(p, next);
@@ -713,6 +724,8 @@ export class Sim2DHost implements IHost {
     const buttons = input === null ? [] : input.buttons;
     const held = p.inventory.find((q) => q.item === p.weapon) ?? null;
     const gun = gunStats(p.weapon, this.tuning);
+    // V5 (#90): the scope (ATTACK2), before the fire step as the 3D host's weapon mechanics do.
+    p.scope = stepScope(p.scope ?? freshScope(p.weapon), { tick: t, weapon: p.weapon, attack2: buttons.includes('ATTACK2'), reloading: p.wpn.reloadEndTick !== null, nextAttackTick: p.wpn.nextAttackTick });
     const step = stepWeapon(p.wpn, {
       tick: t,
       item: p.weapon,
@@ -726,6 +739,7 @@ export class Sim2DHost implements IHost {
     if (step.ammo !== null) this.setAmmo(p, p.weapon, step.ammo);
     if (step.reloadStarted) this.sound(p, 'reload');
     if (step.fired && gun !== null) {
+      p.scope = scopeShot(p.scope);
       this.outbox.push({ type: 'shot', shooter: p.id, weapon: p.weapon });
       this.sound(p, 'shot');
       const hit = traceShot(scanPawn(p, this.busyAtBomb(p.id)), this.pawns.map((q) => scanPawn(q, this.busyAtBomb(q.id))), this.shotSight, this.tuning.damage);
@@ -743,11 +757,11 @@ export class Sim2DHost implements IHost {
   private throwHeld(p: PawnState, t: number): void {
     const kind = p.weapon;
     if (!isGrenade(kind)) return;
-    if (kind === 'smoke' && this.smokes !== null) {
-      // S1: smokes fly on the CS2 grenade engine (eye, view angles, the thrower's velocity).
+    if (this.smokes !== null) {
+      // S1 / V5: every grenade flies on the CS2 grenade engine (eye, view angles, the thrower's velocity).
       const m = p.move;
       const eye = { x: m.pos.x, y: m.pos.y, z: m.pos.z + (m.crouching ? this.tuning.damage.crouchEyeHeight : this.tuning.damage.eyeHeight) };
-      this.smokes.throwSmoke(t, this.nextGrenadeSeq, p.id, p.team, eye, m.pitch, m.yaw, m.vel);
+      this.smokes.throwGrenade(kind, t, this.nextGrenadeSeq, p.id, p.team, eye, m.pitch, m.yaw, m.vel);
       this.nextGrenadeSeq++;
     } else {
       const g = throwGrenade(kind, { id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, pitch: p.move.pitch, crouching: p.move.crouching }, t, this.nextGrenadeSeq, this.grenadeSight, this.tuning.grenades, this.tuning.damage);
@@ -764,22 +778,16 @@ export class Sim2DHost implements IHost {
 
   private stepGrenades(t: number): void {
     const sm = this.smokes;
-    let pops: readonly Vec3[] = [];
     if (sm !== null && sm.active()) {
-      const popped = sm.step(
+      const out = sm.step(
         t,
         this.pawns.map((p) => ({ id: p.id, team: p.team, alive: p.alive, pos: p.move.pos, crouching: p.move.crouching, yaw: p.move.yaw, pitch: p.move.pitch })),
+        { friendlyFire: this.tuning.damage.friendlyFire },
       );
-      for (const o of popped) this.outbox.push({ type: 'sound', source: o.thrower, pos: { ...o.pos }, kind: 'grenade' });
-      pops = popped.map((o) => o.pos);
+      for (const o of out) this.applyGrenadeOutcome(o);
     }
     if (this.grenades.length === 0) return;
-    const smoke =
-      sm === null || !sm.active()
-        ? undefined
-        : { smokeBlocks: (a: Vec3, b: Vec3) => sm.blocks(a, b, t), smokeCovers: (q: Vec3) => sm.densityAt(q, t) > 0, pops };
     const r = stepGrenades(this.grenades, t, {
-      ...(smoke === undefined ? {} : { smoke }),
       nav: this.grenadeNav,
       pawns: this.pawns.map((p) => ({ id: p.id, team: p.team, pos: p.move.pos, yaw: p.move.yaw, alive: p.alive, crouching: p.move.crouching })),
       grenades: this.tuning.grenades,

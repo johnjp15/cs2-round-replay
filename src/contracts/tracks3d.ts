@@ -25,7 +25,7 @@ export interface Tracks3dJump {
 
 /**
  * S1: the view angles a scripted throw is released with so that the CS2 grenade engine (src/engine/grenades) lands it
- * on the measured spot (`utility[].landing`), from the thrower's snapped position and velocity at the release; solved
+ * on the measured spot (`utility[].landing`; V5: or an assumed one, `assumed`), from the thrower's snapped position and velocity at the release; solved
  * by `aimAtLanding` (tools/utility-aim.ts). `landing` is where that throw comes to rest in the solve, `error` its
  * distance from the target (units). Full strength (ATTACK) only: the hosts don't throw underhand.
  */
@@ -37,6 +37,13 @@ export interface Tracks3dUtilityAim {
   readonly yaw: number;
   readonly landing: readonly number[];
   readonly error: number;
+  /** V5: seconds from the release to the detonation in the solve (absent in older files). */
+  readonly sec?: number;
+  /**
+   * V5: the target is an assumption (`tools/utility-aim.ts` ASSUMED_TARGETS: the recording never shows where it went,
+   * docs/round-data.md), not `utility[].landing`.
+   */
+  readonly assumed?: boolean;
 }
 
 export interface Tracks3d {
@@ -48,7 +55,7 @@ export interface Tracks3d {
   /** Per player, one [x, y, z] per sample of `round.tracks[id].samples`, in order. */
   readonly tracks: Readonly<Partial<Record<PlayerId, readonly (readonly number[])[]>>>;
   readonly jumps: readonly Tracks3dJump[];
-  /** S1: aims of the scripted throws with a measured landing (absent in older files). */
+  /** S1: aims of the scripted throws with a measured (V5: or assumed) landing (absent in older files). */
   readonly utility?: readonly Tracks3dUtilityAim[];
 }
 

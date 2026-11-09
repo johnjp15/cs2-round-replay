@@ -150,7 +150,7 @@ function smokeTiming(): string {
   const hostBlocked = seesAt.filter((x) => x.t >= 0 && !x.sees).map((x) => x.t);
   const preSees = seesAt.filter((x) => x.t < 0).some((x) => x.sees);
   return [
-    `Flat range, smoke thrown 20° down toward a CT 1,200 u away. CS2 engine: pops ${f(pop / 64, 2)} s after the throw at ${popPos === null ? '–' : v(popPos)}; the eye line is blocked ${span(blockedAt)} (CS2: ~1 s bloom, ~18 s full, fades to ~20 s; docs/grenades.md S4/S5).`,
+    `Flat range, smoke thrown 20° down toward a CT 1,200 u away. CS2 engine: pops ${f(pop / 64, 2)} s after the throw at ${popPos === null ? '–' : v(popPos)}; the eye line is blocked ${span(blockedAt)} (CS2: ~1 s bloom, ~15 s full, thins out to 18 s; docs/grenades.md S4/S10).`,
     `3D host (the player): pops at ${hostPos === null ? '–' : v(hostPos)}; cart sees sp4rtan before the pop: ${preSees ? 'yes' : '**no**'}; \`sees\` false ${span(hostBlocked)}.`,
   ].join('\n\n');
 }

@@ -73,7 +73,7 @@ brushes and prop hulls are wound outward, the CS2 mesh isn't, so `mirage-cs2` is
 | no-human round, 2D and 3D harness | Played it like the tape: CT defuse, 0.72 s left | **the same**, every kill / plant / defuse tick unchanged (32, 794, 816, 1142, 1203, 2829, 3222, 3766, 4442; plant 1761; defuse 3955 → 4275) |
 | harness snaps (puppet teleports) | 7: snarlbot@633 cart@920 sp4rtan@1171/1229/1245 donk@1344 cart@1392 | 9: snarlbot@333 lokier@851 cart@920 donk@921 sp4rtan@1169/1229/1245 donk@1344 cart@1395 |
 | snapped track pairs not in a clear hull line | 3 | 4 |
-| scripted hits through geometry (`scenario-outcomes.ts --map …`, docs/vision.md) | 7: 32, 816, 1142, 1184, 1203, 3194, 3206 | **5**: 32, 816, 1142, 1184, 3206 (cart's 1203 headshot and sp4rtan's 3194 hit are in sight) |
+| scripted hits through geometry (`scenario-outcomes.ts --map …`, docs/vision.md) | 8: 32, 816, 1142, 1184, 1203, 3194, 3200, 3206 (V5: donk's scoped walk) | **5**: 32, 816, 1142, 1184, 3206 (cart's 1203 headshot and sp4rtan's 3194 hit are in sight) |
 
 The new snaps are 2020 geometry the inferred / estimated positions don't fit: Lokier's start in the barrel clip
 (lokier@851), snarlbot's 5.1 s recording gap at T spawn (a clip edge), donk lagging his 13.4–14.4 s samples. The ones

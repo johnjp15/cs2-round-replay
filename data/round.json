@@ -26376,7 +26376,33 @@
         }
       ],
       "endT": 50.3,
-      "endTick": 3219
+      "endTick": 3219,
+      "scope": [
+        {
+          "t": 33.35,
+          "tick": 2134,
+          "zoom": 1,
+          "confidence": "observed"
+        },
+        {
+          "t": 47.6,
+          "tick": 3046,
+          "zoom": 0,
+          "confidence": "inferred"
+        },
+        {
+          "t": 49.4,
+          "tick": 3162,
+          "zoom": 1,
+          "confidence": "observed"
+        },
+        {
+          "t": 49.833,
+          "tick": 3189,
+          "zoom": 0,
+          "confidence": "observed"
+        }
+      ]
     },
     "eradicate": {
       "samples": [
@@ -47169,7 +47195,8 @@
         "x": -1890,
         "y": -585,
         "z": -166,
-        "uncertainty": 40
+        "uncertainty": 40,
+        "t": 28.1
       },
       "radio": "Smoke Out!"
     },
