@@ -145,17 +145,15 @@ describe('a takeover at T (G4)', () => {
     // window from 1.5 s before the recorded sighting (15.95 s), so he sees the puppet there at 1138 again, and taken
     // over at 17.6 s the idle cart at 1146 (+0.5 s, on course: the hit is due on the recorded tick); but his recorded peek
     // takes him out of sight of that spot before it (1183): no hit, he goes LIVE holding and barely kills him at 1303.
-    // X1d: on the 2020 mesh (the default package) he sees the idle cart at 1132 (+0.2 s, on course) and keeps him in
-    // sight through his peek: the hit lands on its recorded tick (1184), and taken over at 18.0 s he was seen from 1132.
     expect(logsAt(run(5), 320)).toContain('encounter lokier -> cart: active from the takeover at tick 320, waiting for lokier to see cart at the spot');
     expect(logsAt(run(17.6), 1126)).toEqual([
       'takeover: cart is the human from tick 1126 (100 hp, ak47); 11 damage blocks lifted',
       'encounter lokier -> cart: active from the takeover at tick 1126, waiting for lokier to see cart at the spot',
     ]);
-    expect(logsAt(run(17.6), 1132)).toContain('encounter lokier -> cart: cart in sight at the spot at tick 1132 (+0.2 s against the recording), scripted hit due at tick 1184 (on course: the recorded tick)');
-    expect(logsAt(run(17.6), 1183)).toContain('encounter lokier -> cart: scripted hit 73 hp / 7 armor lands at tick 1184 (recorded 1184)');
-    expect(hitOnCart(run(17.6))).toEqual([{ tick: 1184, amount: 73, scripted: true }]);
-    expect(logsAt(run(18), 1152)).toContain('encounter lokier -> cart: cart in sight at the spot since tick 1132 (+0.2 s against the recording), before the takeover at tick 1152; scripted hit due at tick 1184 (on course: the recorded tick)');
+    expect(logsAt(run(17.6), 1146)).toContain('encounter lokier -> cart: cart in sight at the spot at tick 1146 (+0.5 s against the recording), scripted hit due at tick 1184 (on course: the recorded tick)');
+    expect(logsAt(run(17.6), 1183).some((l) => l.startsWith('lokier LIVE: encounter lokier -> cart at tick 1183: cart not in sight'))).toBe(true);
+    expect(hitOnCart(run(17.6))).toEqual([]);
+    expect(logsAt(run(18), 1152)).toContain('encounter lokier -> cart: cart in sight at the spot since tick 1138 (+0.3 s against the recording), before the takeover at tick 1152; scripted hit due at tick 1184 (on course: the recorded tick)');
     expect(hitOnCart(run(18))).toEqual([{ tick: 1184, amount: 73, scripted: true }]);
     // B3's recorded hit (1184) is skipped once he is the human; it is the encounter's.
     for (const t of [0, 5, 17.6, 18]) expect(coreLogs(run(t).entries).some((l) => l.text.startsWith('script: no scripted damage lokier -> cart (73 hp at tick 1184)'))).toBe(true);
@@ -164,8 +162,8 @@ describe('a takeover at T (G4)', () => {
     expect(hitOnCart(run(18.6))).toEqual([{ tick: 1184, amount: 73, scripted: true }]);
     expect(line(run(18.6), 1190).observe.pawns.find((p) => p.id === 'cart')?.hp).toBe(27);
     expect(coreLogs(run(18.6).entries).some((l) => l.text.startsWith('script: no scripted damage cart -> lokier (lethal at tick 1203)'))).toBe(true);
-    // Lokier outlives his recording (no human kill) in every idle run from before 18.80 s (X1d: 17.6 s too on 2020).
-    for (const t of [0, 5, 17.6, 18, 18.6]) expect(coreLogs(run(t).entries).some((l) => l.tick === 1395 && l.text.startsWith('lokier LIVE: outlived recording (+3.0 s)'))).toBe(true);
+    // Lokier outlives his recording (no human kill) in every idle run from before 18.80 s (17.6 s: LIVE earlier, above).
+    for (const t of [0, 5, 18, 18.6]) expect(coreLogs(run(t).entries).some((l) => l.tick === 1395 && l.text.startsWith('lokier LIVE: outlived recording (+3.0 s)'))).toBe(true);
     // After his death (18.80 s): nothing to activate.
     for (const t of [30, 45, 60, 68]) expect(logsAt(run(t), tickOf(t))).toContain(`encounter lokier -> cart: none after the takeover at tick ${tickOf(t)}, lokier is dead`);
   }, 120_000);
@@ -193,10 +191,7 @@ describe('a takeover at T (G4)', () => {
     // G8: plant 6 ticks late (1767: his LIVE leg jumps onto the Balcony's sill), and with G8's LIVE movement barely
     // doesn't catch Zwomp before he is back on his tape: the tape's kill (2829).
     // P3: the plant spot is the corridor's east mouth (-1882, 243), ~110 u further on barely's way: 1792 instead of 1767.
-    // X1d: on the 2020 mesh barely rejoins 213 u from his track (205 on CS2): plant 1795. Cart idle in Back Alley (0, 5 s):
-    // sp4rtan sees him 1.1 s later (41.20 s), so barely, LIVE again from 41.47 s, has Zwomp in sight up Catwalk: a real
-    // kill at 2682 (41.91 s), as in never-peeks (tests/rejoin.test.ts).
-    const late = [1795, 2682, 3222, 3766, 4275];
+    const late = [1792, 2829, 3222, 3766, 4275];
     expect(got).toEqual({
       '0': { end: defuse, events: late },
       '5': { end: defuse, events: late },
@@ -207,13 +202,10 @@ describe('a takeover at T (G4)', () => {
       // plants on the tape's tick. P3: barely's re-snapped walk to B changes the chain after it: sp4rtan, LIVE from his
       // fight with cart in the Apartments, is still LIVE at 58.8 s, so his scripted kill on barely is dropped and LIVE
       // barely kills him at 59.88 s: Ts win by elimination (docs/core.md "Results: idle after the takeover").
-      // X1d: on 2020 Lokier's hit lands (above) and he outlives his recording as at 18 s; sp4rtan, LIVE on and off from
-      // 47.94 s for the idle cart in the Apartments, kills donk 9 ticks late (3231) and cart, rejoins: CT defuse.
-      '17.6': { end: defuse, events: [1795, 2829, 3231, 3766, 4275] },
-      // X1d (18, 18.6): the same chain, donk 17 and 3 ticks early on 2020 (CS2: 29 and 9).
-      '18': { end: defuse, events: [1795, 2829, 3205, 3766, 4275] },
+      '17.6': { end: 'T elimination 11-16 @3832', events: [1761, 2829, 3190, null, null] },
+      '18': { end: defuse, events: [1792, 2829, 3193, 3766, 4275] },
       // F1 (18.6): sp4rtan's lead-in for donk changes when he sees cart and goes LIVE; LIVE, he kills donk 7 ticks sooner.
-      '18.6': { end: defuse, events: [1795, 2829, 3219, 3766, 4275] },
+      '18.6': { end: defuse, events: [1792, 2829, 3213, 3766, 4275] },
       '30': { end: defuse, events: tape },
       '45': { end: defuse, events: tape },
       '60': { end: defuse, events: tape },

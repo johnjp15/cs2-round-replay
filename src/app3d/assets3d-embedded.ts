@@ -35,7 +35,7 @@ export async function loadAssets3d(map: MapId = DEFAULT_MAP): Promise<PageAssets
   if (map !== DEFAULT_MAP) throw new Error(`this page embeds only the ${DEFAULT_MAP} map package, not "${map}"`);
   const text = (v: string): Promise<string> => gunzip(v).text();
   const bytes = async (v: string): Promise<Uint8Array> => new Uint8Array(await gunzip(v).arrayBuffer());
-  const [round, nav, vision, geometry, clips, tracks, radar, render] = await Promise.all([
+  const [round, nav, vision, geometry, clips, tracks, radar] = await Promise.all([
     text(embedded.round),
     text(embedded.nav),
     text(embedded.vision),
@@ -43,7 +43,6 @@ export async function loadAssets3d(map: MapId = DEFAULT_MAP): Promise<PageAssets
     bytes(embedded.clips),
     text(embedded.tracks),
     loadImage(embedded.radar),
-    bytes(embedded.render),
   ]);
-  return { round, nav, vision, world3d: { geometry, clips, tracks }, radar, render };
+  return { round, nav, vision, world3d: { geometry, clips, tracks }, radar, render: null };
 }

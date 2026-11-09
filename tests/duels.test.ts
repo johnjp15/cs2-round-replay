@@ -85,9 +85,8 @@ describe('tape-identical input (fixtures/scripts/cart-follows-recording.json): t
     // V2: from 1163 (main 1138): Lokier (SSG 08, slower than a walk) holds his angle instead of spinning to his
     // jiggle's heading, so he first sees cart when his aim turns to him. F1: 1138 again: he holds the window from 1.5 s
     // before the recorded sighting (the encounter's lead-in), so he sees cart the moment he is in sight there.
-    // X1d: 1135 on the 2020 mesh (the default package): Lokier sees him at the window 3 ticks sooner.
-    expect(logs.map((l) => l.tick)).toEqual([1135, FOLLOW_KILL]);
-    expect(logs[0]?.text).toBe('duel cart -> lokier: in the recorded duel from tick 1135 (+0.0 s against the recording, to tick 1215); his shots on lokier are real (the tape: kill (ak47, head) at tick 1203)');
+    expect(logs.map((l) => l.tick)).toEqual([1138, FOLLOW_KILL]);
+    expect(logs[0]?.text).toBe('duel cart -> lokier: in the recorded duel from tick 1138 (+0.0 s against the recording, to tick 1215); his shots on lokier are real (the tape: kill (ak47, head) at tick 1203)');
     expect(logs[1]?.text).toBe("duel cart -> lokier: over at tick 1191, lokier is dead (cart's kill, -0.2 s against the tape's kill at tick 1203); 1 hit on lokier in it");
   });
 

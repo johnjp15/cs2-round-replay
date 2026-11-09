@@ -95,29 +95,6 @@ function lineToHead(from: number, to: number, open: boolean): number {
   throw new Error(`no tick in [${from}, ${to}) with the line ${open ? 'open' : 'blocked'}`);
 }
 
-/**
- * X1d: the first tick in [from, to) where the line to Lokier's head is blocked and cart's AK-47 still goes through the
- * wall to him (the session left on that tick). On the 2020 mesh (the default package) the first blocked line, at 1173,
- * meets a wall the bullet doesn't pass (stopped 119 u out); one tick later (1174) it goes through one surface to him.
- */
-function penetrableToHead(from: number, to: number): { tick: number; s: Session; h: Sim3DHost } {
-  const { s, h } = playTo(from);
-  const drv = new ScriptDriver(script, 'cart');
-  for (let k = from; k < to; k++) {
-    const c = pawn(s, 'cart');
-    const l = pawn(s, 'lokier');
-    if (l.alive && !h.world().clear(eye(c), head(l))) {
-      const { shot, snap } = fireAtHead(s, h);
-      s.restore(snap);
-      if (shot.victim === 'lokier' && (shot.surfaces ?? 0) >= 1) return { tick: k, s, h };
-    }
-    const cmd = drv.command(k, s);
-    if (cmd.input !== null) s.setHumanInput(cmd.input);
-    s.step();
-  }
-  throw new Error(`no tick in [${from}, ${to}) with the line blocked by a wall the AK-47 passes`);
-}
-
 describe('3D aim (H1)', () => {
   const OPEN = lineToHead(1150, 1400, true);
   const run = playTo(OPEN);
@@ -154,7 +131,8 @@ describe('3D aim (H1)', () => {
   });
 
   it('a shot at Lokier’s head through the wall goes through it (H2b penetration) and, inside the duel too (D1), does its reduced damage', () => {
-    const { tick: BLOCKED, s, h } = penetrableToHead(1140, 1260);
+    const BLOCKED = lineToHead(1140, 1260, false);
+    const { s, h } = playTo(BLOCKED);
     const before = s.pawnState('lokier');
     const { shot, events } = fireAtHead(s, h);
     console.log(`tick ${BLOCKED}: through ${shot.surfaces ?? 0} surface(s) to ${shot.victim} at ${shot.distance.toFixed(1)} u (${shot.penDamage?.toFixed(1)} damage left), Lokier's head ${Math.hypot(head(pawn(s, 'lokier')).x - shot.from.x, head(pawn(s, 'lokier')).y - shot.from.y).toFixed(1)} u`);

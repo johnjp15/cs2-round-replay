@@ -1,6 +1,6 @@
 {
   "name": "kill-lokier-early",
-  "description": "G7: cart runs ahead of his recording (from 6 s) through the Apartments to the window and fights Lokier there about 4 s before the recorded duel: Lokier, scoped on the corridor from Truck, sees him in it first, goes LIVE and shoots (a real hit); cart's real headshot kills him (X1d: he fires from (-1700, 740), at the window's east edge, as soon as he is there: on the 2020 mesh Lokier sees him only near the window, at 12.66 s, and eradicate, LIVE from 12.77 s, would take Lokier's head at 14.67 s before cart reached the CS2-tuned (-1712, 700)). Lokier's recorded kill of eradicate (12.75 s) is dropped. Then cart plays his recording again: the survivors rejoin their tape where it still makes sense, the Ts' push and plant go on, donk and barely carry on.",
+  "description": "G7: cart runs ahead of his recording (from 6 s) through the Apartments to the window and fights Lokier there about 4 s before the recorded duel: Lokier, scoped on the corridor from Truck, sees him in it first, goes LIVE and shoots (a real hit); cart's real headshot kills him. Lokier's recorded kill of eradicate (12.75 s) is dropped. Then cart plays his recording again: the survivors rejoin their tape where it still makes sense, the Ts' push and plant go on, donk and barely carry on.",
   "human": "cart",
   "seed": 1,
   "until": "end",
@@ -128,8 +128,8 @@
     {
       "do": "walkTo",
       "pos": [
-        -1700,
-        740
+        -1712,
+        700
       ]
     },
     {

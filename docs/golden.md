@@ -14,8 +14,7 @@ the C# port (F3) must reproduce byte for byte. Three pieces:
 ```sh
 npm run harness -- [--human none|cart] [--takeover <t>] [--script <path>] [--until <t|end>] [--seed <n>] [--out <dir>]
 npm run harness -- --scenario fixtures/scenarios/lokier-late.json   # B4: a human-bot scenario, prints its timeline
-npm run harness -- --until end                     # the golden master: 4,517 ticks, digest 138b0c70 on mirage-2020 (X1d; 46a352d7 on mirage-cs2 at P3)
-npm run harness -- --until end --map mirage-cs2    # X1: the same round on CS2's Mirage package
+npm run harness -- --until end                     # the golden master: 4,517 ticks, digest f4129248 (V2's fitted views; cf57c99a at T2)
 npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until 20 --out logs/idle
 npm run harness -- --takeover 18.6                 # G4: watch to 18.6 s, then cart is the human (no input: he stands still)
 ```
@@ -148,7 +147,7 @@ entries), and the generator checks that playing the file reproduces the generati
 | Plant / defuse | `planted` once by barely at 1761 ± 1 with USE held from the planned tick until then; `defuse_start` 3955 ± 1, `defused` 4275 ± 1 by sp4rtan; no `defuse_stop`, no explosion. |
 | Round end | Once, CT `bomb_defused` at 4275 ± 1; the final round state is `over`, CT 12 – T 15; no `end_round` action; the post-round kill on cart at 4442 still happens. |
 | Drift | Every T's observed samples RMS < 24 u; every CT's inferred samples RMS < that CT's smallest uncertainty radius. |
-| Teleports | Exactly the documented snaps (X1d, on mirage-2020: snarlbot 333, cart 920, donk 921, sp4rtan 1169 / 1229 / 1245, donk 1344, cart 1395; B2's were cart 922, donk 923, sp4rtan 1165 and 1248, cart 1350, barely 2879), each inside a teleport window and logged once; no other teleport after the setup. |
+| Teleports | Exactly B2's six documented snaps (cart 922, donk 923, sp4rtan 1165 and 1248, cart 1350, barely 2879), each inside a teleport window and logged once; no other teleport after the setup. |
 | Modes | No pawn ever goes LIVE: each is REPLAY until DEAD (sp4rtan REPLAY throughout); no `set_mode`. |
 | Fallbacks | No `plant` / `defuse_start` action, no `script:` log, no action the host leaves unhandled, no harness warning. |
 | Collision | No body block at any tick. |
@@ -165,15 +164,15 @@ its first 20 s, plays back byte for byte and keeps cart within 30 u RMS with no 
 
 | File | Content | Size (gzip) | Raw | Digest |
 | --- | --- | ---: | ---: | --- |
-| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines); X1d: on mirage-2020, the default package | 991,874 | (see manifest) | `138b0c70` |
-| `round-nohuman.walk.jsonl.gz` | Its walk oracle: 29,630 calls | 436,161 | | `fc2e2709` |
-| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 598,570 | (see manifest) | `d803f5ab` |
-| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 20,126 calls, and barely's rejoin path queries | 272,095 | | `ecb20b33` |
-| `round-cart-takeover.jsonl.gz` | G4: watching until 15 s, then cart is the human and stands still (`--takeover 15 --until 24`), ticks 0–1536 (1,537 lines): lines 0–959 are the golden master's; line 960 has `human: cart`, the 11 `unblock_damage` and the takeover log; Lokier outlives (21.80 s), barely kills him and rejoins (23.14 s) | 378,378 | (see manifest) | `a92fb84c` |
-| `round-cart-takeover.walk.jsonl.gz` | Its walk oracle: 15,594 calls, and barely's rejoin path queries | 168,526 | | `faed9b39` |
+| `round-nohuman.jsonl.gz` | The golden master: no human, ticks 0–4516 (4,517 lines) | 979,292 | (see manifest) | `f4129248` |
+| `round-nohuman.walk.jsonl.gz` | Its walk oracle: 25,789 calls | 433,118 | | `72d1547f` |
+| `round-cart-idle.jsonl.gz` | Human cart, `cart-idle.json`, ticks 0–2880 (45 s; G1: Lokier outlives, barely and sp4rtan go LIVE and rejoin) | 607,618 | (see manifest) | `fb19a2fa` |
+| `round-cart-idle.walk.jsonl.gz` | Its walk oracle: 16,857 calls, and barely's rejoin path queries | 269,556 | | `6cd197f2` |
+| `round-cart-takeover.jsonl.gz` | G4: watching until 15 s, then cart is the human and stands still (`--takeover 15 --until 24`), ticks 0–1536 (1,537 lines): lines 0–959 are the golden master's; line 960 has `human: cart`, the 11 `unblock_damage` and the takeover log; Lokier outlives (21.80 s), barely kills him and rejoins (23.17 s) | 376,829 | (see manifest) | `e1131654` |
+| `round-cart-takeover.walk.jsonl.gz` | Its walk oracle: 15,042 calls, and barely's rejoin path queries | 173,793 | | `2eea8a21` |
 | `manifest.json` | One entry per fixture | 2,111 | | |
 
-The golden files total 2.85 MB gzipped (G4's fixture added 0.55 MB); `tests/fixtures.test.ts` keeps them under 3 MB. **Nothing is strided**: every line is a complete SessionLog line (`{act, controls, observe}`) for
+The golden files total 2.83 MB gzipped (G4's fixture added 0.55 MB); `tests/fixtures.test.ts` keeps them under 3 MB. **Nothing is strided**: every line is a complete SessionLog line (`{act, controls, observe}`) for
 every tick. A trimmed "observe + act only" variant would save nothing (`controls` is `[]` on every line but the
 first), so there is none.
 
@@ -310,16 +309,6 @@ tested (no WebKit here).
 
 ## History
 
-- X1d (`mirage-2020` is the default map package, docs/maps.md "The default"): every fixture moves (no-human
-  `46a352d7` → `138b0c70`, cart-idle `bd0f9623` → `d803f5ab`, cart-takeover `e4fa9352` → `a92fb84c`; walk oracles
-  `fca9c138` → `fc2e2709`, `3833a5f8` → `ecb20b33`, `312d45f2` → `faed9b39`; never-peeks without rejoin `ae7af1f6` →
-  `a60ad2e1`; the follow script regenerated, 4,236 entries, run `390f1ec0`). `tools/fixture-diff.ts` against main: the
-  acts and every pawn field differ from tick 0/1 (another collision mesh, another snapped track for every pawn); the
-  no-human round's deaths, plant, defuse and round end are on the same ticks (32, 794, 816, 1142, 1203, 2829, 3222,
-  3766, 4442; plant 1761; defuse 3955 → 4275; CT defuse, 0.72 s left), the bomb lies on the 2020 floor (z −159.97,
-  CS2 −149.99); the snaps are 8 (snarlbot 333, cart 920, donk 921, sp4rtan 1169 / 1229 / 1245, donk 1344, cart 1395).
-  cart-takeover: the same deaths / plant ticks. cart-idle: plant 1795 (1792), sp4rtan kills cart at 2674 (2601) and
-  barely, LIVE again, kills Zwomp for real at 2682 (2829): sp4rtan sees the idle cart 1.1 s later on the 2020 mesh.
 - V2 (`docs/viewfit.md`: every watched player's yaw and pitch fitted to the video, puppets follow them; scoped rifles
   slower than a walk hold their angle; the window duel's positions as on main, see "Engagement positions"): no-human
   `cf57c99a` → `f4129248`, cart-idle → `8beda596`, cart-takeover → `6bd4b304` (manifest); never-peeks without rejoin

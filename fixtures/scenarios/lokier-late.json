@@ -1,6 +1,6 @@
 {
   "name": "lokier-late",
-  "description": "cart plays his recording into the Apartments, holds back out of Lokier's sight (at the back of the room: on CS2 Mirage the window's sill hides him there), then peeks the window about 2.5 s late: Lokier's scripted hit lands about 1 s after he sees cart, and cart kills him for real about 2.6 s after the recorded kill. Then he walks his recorded way (the Balcony drop, B site; X1d: by (-2090, 315), clear of the solid block at about x -2161...-2122, y 345...429, larger on the 2020 mesh, whose corner he otherwise sticks on) to Shop, in by the Shop door (T2: on CS2 the recording's way in is a jump through the Market window, which a late walker can't time), and plays his recording again.",
+  "description": "cart plays his recording into the Apartments, holds back out of Lokier's sight (at the back of the room: on CS2 Mirage the window's sill hides him there), then peeks the window about 2.5 s late: Lokier's scripted hit lands about 1 s after he sees cart, and cart kills him for real about 2.6 s after the recorded kill. Then he walks his recorded way (the Balcony drop, B site) to Shop, in by the Shop door (T2: on CS2 the recording's way in is a jump through the Market window, which a late walker can't time), and plays his recording again.",
   "human": "cart",
   "seed": 1,
   "until": "end",
@@ -19,7 +19,6 @@
     {"do": "walkTo", "pos": [-2109, 644]},
     {"do": "walkTo", "pos": [-2100, 621]},
     {"do": "walkTo", "pos": [-2075, 559]},
-    {"do": "walkTo", "pos": [-2090, 315]},
     {"do": "walkTo", "pos": [-2220, 249]},
     {"do": "walkTo", "pos": [-2026, 56]},
     {"do": "walkTo", "pos": [-2318, -200]},

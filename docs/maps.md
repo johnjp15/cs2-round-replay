@@ -6,8 +6,8 @@ package, because they all use Mirage's one coordinate frame (`docs/conventions.m
 
 | id | what | files |
 | --- | --- | --- |
-| `mirage-cs2` | CS2's collision mesh (awpy-data, decimated to 8 units, no clips) with player clips rebuilt from the CS2 nav; rendered from the collision mesh and the radar | `data/geometry/mirage-{geometry,clips}.bin`, `mirage-tracks.json` (`docs/geometry.md`) |
-| `mirage-2020` (default, X1d) | the March 2020 CS:GO `de_mirage.bsp` the round was played on: its brushes, displacements, props and **its own player clips**, rendered with its materials and lightmaps | `data/maps/mirage-2020/` (below; built, X1c). Rebuilt from John's files in `data/source/csgo-2020/` (`docs/csgo-2020-files.md`) |
+| `mirage-cs2` (default) | CS2's collision mesh (awpy-data, decimated to 8 units, no clips) with player clips rebuilt from the CS2 nav; rendered from the collision mesh and the radar | `data/geometry/mirage-{geometry,clips}.bin`, `mirage-tracks.json` (`docs/geometry.md`) |
+| `mirage-2020` | the March 2020 CS:GO `de_mirage.bsp` the round was played on: its brushes, displacements, props and **its own player clips**, rendered with its materials and lightmaps | `data/maps/mirage-2020/` (below; built, X1c). Rebuilt from John's files in `data/source/csgo-2020/` (`docs/csgo-2020-files.md`) |
 | `de_dust2` (H3) | CS2's Dust II from awpy-data, built by `tools/build-map.ts` like any awpy-data map: collision mesh, clips from its CS2 nav, its nav and facts. Free play only (no recording) | `data/maps/de_dust2/` (below) |
 
 H3: every package also has the map's **CS2 nav** (`nav.json`, the LIVE AI's in free play) and **facts** (`map.json`:
@@ -17,54 +17,16 @@ radar transform, bomb sites, spawns). Mirage's two packages share `data/maps/mir
 
 | where | how |
 | --- | --- |
-| 2D app, 3D app | `?map=mirage-cs2` (unknown ids fail with the list of known ones; a package that isn't built fails naming the missing file); no `?map=`: the default, `mirage-2020` |
-| `npm run harness` / `harness3d` | `--map mirage-cs2`; without it the scenario's map, else the default |
-| a scenario (`fixtures/scenarios/*.json`) | `"map": "mirage-2020"`; `--map` overrides it (`data/scenarios/mirage-sp4rtan-1v3.json`, the recorded round, says `mirage-2020`) |
-| track snapping | `npx tsx tools/snap-tracks.ts [--map mirage-cs2] [--check]` → the package's `tracks.json` (no `--map`: the default) |
-| scenario outcomes | `npx tsx tools/scenario-outcomes.ts [--map mirage-cs2]` |
+| 2D app, 3D app | `?map=mirage-2020` (unknown ids fail with the list of known ones; a package that isn't built fails naming the missing file) |
+| `npm run harness` / `harness3d` | `--map mirage-2020` |
+| a scenario (`fixtures/scenarios/*.json`) | `"map": "mirage-2020"`; `--map` overrides it |
+| track snapping | `npx tsx tools/snap-tracks.ts --map mirage-2020 [--check]` → `data/maps/mirage-2020/tracks.json` |
 | code | `src/contracts/maps.ts`: `MAP_IDS`, `DEFAULT_MAP`, `parseMapId`, `mapPackagePaths` |
 
 The normal builds find the other packages' files at build time (`src/app/map-packages.ts`, a Vite glob over
 `data/maps/*/`). The **single-file (locked) builds embed only the default package**, and `?map=` with another id says
-so: since X1d that is `mirage-2020` (collision, clips, tracks; the 3D page also its render mesh). The 2D app's height
-layer stays CS2's (`mirage-height.png`) on every package. Free play on Mirage (`mirage-5v5`) keeps `mirage-cs2`.
-
-### The default (X1d, John 2026-11-08: "yes, the 2020 map should be default")
-
-`DEFAULT_MAP` is `mirage-2020`: both apps, both harnesses, the golden fixtures, the tests and the locked pages run the
-recorded round on the BSP it was played on. `mirage-cs2` stays selectable and byte-identical (`npm run map:check`).
-
-| locked page | main before X1d (`mirage-cs2`) | X1d (`mirage-2020`) | X1d encrypted (`cs2/tools/encrypt.cjs`) |
-| --- | ---: | ---: | ---: |
-| `dist-single/index.html` (2D, `build:single`) | 1,267,400 B | 1,256,715 B | 1,681,959 B |
-| `dist-single-3d/index.html` (3D, `build:single:3d`) | 1,947,144 B | 7,122,813 B (gzip 4.66 MB; the render mesh is 3.9 MB of it gzipped) | 9,503,423 B |
-
-Measured 2026-11-08 (`tools/stage-web-apps.sh` into a scratch copy of the web-apps `cs2/`, then `encrypt.cjs` there with a
-throwaway password): the 3D page is under a tenth of GitHub's 100 MB file limit.
-
-What moved on 2020 and how the tests follow it (each with a one-line reason in the test or the scenario's description):
-
-- **Lokier's Truck spot** (`STAND_FIXES` in tools/snap-tracks.ts): his radar spot to 13.2 s, (−2387, 815), is inside
-  the 2020 barrel's player clip; its nearest stand, (−2419, 825) behind the van, saw neither the Apartments window nor
-  the corridor, and his track then jumped 97 u east at 13.3 s (snap lokier@851). He now holds his 13.3 s spot
-  (−2322, 806), about where CS2's mesh has him (−2325, 811): the window and the Apartments to x ≈ −1450 are in his
-  sight (the deeper corridor, where eradicate dies at 12.75 s, is out of his sight on the 2020 mesh; the recorded kill is a scripted
-  hit through geometry on both packages).
-- **barely's plant** after a LIVE leg (never-peeks, cart-dies, cart-goes-a, miss-lokier-shop, the idle takeovers):
-  1795, 3 ticks after CS2's 1792 (he rejoins 213 u from his track, 205 on CS2); 1.25 s left at the defuse.
-- **never-peeks / cart idle in Back Alley**: sp4rtan sees cart 1.1 s later (41.20 s), so barely, LIVE again from
-  41.47 s, has Zwomp in sight up Catwalk and kills him for real at 2682 (41.91 s; the tape's 2829), as T1 had it.
-- **Scenario re-tunes** (the 2020 mesh, not the Core): lokier-late walks round the B-site block's corner by
-  (−2090, 315); smoke-window throws at 15 s at (−1740, 680) (from the Apartments door at 14 s the smoke hits the corridor
-  wall); cart-goes-a teleports cart to the foot of A main at 12 s (walking there by House he stuck at a 27 u ledge on
-  both meshes, so sp4rtan met him near T spawn, and on 2020 sp4rtan's catch-up after that fight stuck on the lower level under his track at (161, 664) and never defused); in
-  peek-before-eradicate cart goes on west to (−1480, 730), into Lokier's 2020 line, at 12.6 s; kill-lokier-early fires
-  from (−1700, 740) at once (else eradicate, LIVE from 12.77 s, takes Lokier's head first).
-- **Re-baselined numbers**: the golden snaps (below), scripted hits through geometry (5), the window duel from 1135
-  (CS2 1138), window-2s-early's hit at 1146, the takeover table (17.6 s: Lokier sees the idle cart at 1132 and his hit
-  lands; CT defuse), digests (no-human `138b0c70`, never-peeks without rejoin `a60ad2e1`). The CS2-mesh checks of
-  tests/sight3d.test.ts load `mirage-cs2` explicitly; tests/sim3d-aim.test.ts's wall-penetration shot takes the first
-  blocked tick whose wall the AK-47 passes (1174: at 1173 the 2020 wall stops it).
+so. Embedding the 2020 package there is a later, size-budgeted step. The 2D app's height layer stays CS2's
+(`mirage-height.png`) on every package.
 
 ## The 2020 package (X1c)
 
@@ -99,7 +61,7 @@ brushes and prop hulls are wound outward, the CS2 mesh isn't, so `mirage-cs2` is
 | Apartments window over B (cart ↔ Lokier, 17.45–18.8 s) | opening x −1816…−1752 (y 646–664), z −20…52 plus the arch | **the same**: `du_window_88x80.mdl` frame (static prop, solid) in the same wall, opening x −1816…−1752, z −20…52 plus the arch; the elevations of both meshes match at 4 u | the eye-to-eye line cart → Lokier is blocked on 0/7 samples 18.2–18.8 s **on both**, at the recorded positions and at V2's fitted ones (+22, −11 / +10, −10), on the same wall at (−1856…−1888, 660, −30). So `WINDOW_DUEL_AS_FITTED` stays off. V2's "the 2020 opening reaches ~60 u further west" is not in the BSP |
 | window bars | the east Apartments window (x −1678…−1600) is an open hole in the render; flooded clip | `rusted_fence_b.mdl` iron bars (drawn; not solid, as in the game) and a real player clip (brush 571, z −28…120) closing that window | drawn now (#66) |
 | Shop doorway beside the Market window | none (the window over a 40 u sill) | **none either**: Shop's north wall is one solid brush x −2080…−1956, y −272…−264, z −168…96 (brush 1896); the Market window has the same sill (brushes 2240/2241, top z −128) and a breakable shutter (health 1, placed broken) | T2's ways round (cart in over the sill at 28.4 s, out by the Shop door at 64.5 s) apply to both packages: on the 2020 mesh a hull walking south at x −2000 hits a world triangle at y −263 (z −168…−102), and the 1/8-unit triangle tests find no opening in x −2025…−1950. The 2020 nav's floor-level gap there (S1 / T2) is stale |
-| B van | a "Truck" box x −2400…−2176, y 784…850 with clip prisms flooded from the CS2 nav (C1 patched 19 pieces) | `props_vehicles/van.mdl` at (−2328, 706) yawed 79.5° (its `.phy` hulls) and a 44 u player-clip box round a rusty barrel at (−2356, 798) (brush 291, z −160…−84) | no invisible nav clips; Lokier's recorded spot (−2387, 815, −127) is inside the barrel's clip; X1d: his track holds (−2322, 806) east of it to 13.3 s (`STAND_FIXES`; the nearest stand west of it, (−2419, 825), is blind behind the van) |
+| B van | a "Truck" box x −2400…−2176, y 784…850 with clip prisms flooded from the CS2 nav (C1 patched 19 pieces) | `props_vehicles/van.mdl` at (−2328, 706) yawed 79.5° (its `.phy` hulls) and a 44 u player-clip box round a rusty barrel at (−2356, 798) (brush 291, z −160…−84) | no invisible nav clips; Lokier's recorded spot (−2387, 815, −127) is inside the barrel's clip, so his track starts 32 u west of it (−2419, 825) |
 | B-site brick pier | the block x −1970…−1880, y 350…440 | the same block plus a brick pier x −1880…−1848, y 356…472 and x −1948…−1848, y 440…472 (brushes 6725–6730, z −168…−8) | barely's recorded 22.9–23.1 s samples are inside it: the inside-solid rule re-routes him round it |
 | B tarps | not in the CS2 mesh's render | `bomb_site_tarp.mdl` (prop_dynamic at (−2252, 472, −158)) and `tarp_a.mdl` ((−2414, 150, 56)): drawn from their meshes, not solid (solid 0, as in the game) | drawn |
 | cylinder stack / bomb spot | the stack (`bomb_tanks.mdl` on an ammo pallet) x −1978…−1878, y 75…226, top z −36; the shorter north stack x −1970…−1888, y 348…435 | the same two stacks (`bomb_tanks.mdl` at (−1928, 200), a shell pallet at (−1928, 389)); `func_bomb_target` "B site" is x −2216…−1880, y 72…440, z −159…−143 | P3: the C4 is at (−1882, 243), the corridor's east mouth north of the stack, where barely's POV shows its light (the radar's (−1982, 311) is open floor at the corridor's west end); `docs/round-data.md` "The plant spot" |
@@ -109,12 +71,12 @@ brushes and prop hulls are wound outward, the CS2 mesh isn't, so `mirage-cs2` is
 | | `mirage-cs2` | `mirage-2020` |
 | --- | --- | --- |
 | no-human round, 2D and 3D harness | Played it like the tape: CT defuse, 0.72 s left | **the same**, every kill / plant / defuse tick unchanged (32, 794, 816, 1142, 1203, 2829, 3222, 3766, 4442; plant 1761; defuse 3955 → 4275) |
-| harness snaps (puppet teleports) | 7: snarlbot@633 cart@920 sp4rtan@1171/1229/1245 donk@1344 cart@1392 | 8: snarlbot@333 cart@920 donk@921 sp4rtan@1169/1229/1245 donk@1344 cart@1395 (X1d: lokier@851 gone, `STAND_FIXES`) |
+| harness snaps (puppet teleports) | 7: snarlbot@633 cart@920 sp4rtan@1171/1229/1245 donk@1344 cart@1392 | 9: snarlbot@333 lokier@851 cart@920 donk@921 sp4rtan@1169/1229/1245 donk@1344 cart@1395 |
 | snapped track pairs not in a clear hull line | 3 | 4 |
 | scripted hits through geometry (`scenario-outcomes.ts --map …`, docs/vision.md) | 7: 32, 816, 1142, 1184, 1203, 3194, 3206 | **5**: 32, 816, 1142, 1184, 3206 (cart's 1203 headshot and sp4rtan's 3194 hit are in sight) |
 
 The new snaps are 2020 geometry the inferred / estimated positions don't fit: Lokier's start in the barrel clip
-(lokier@851, until X1d's `STAND_FIXES`), snarlbot's 5.1 s recording gap at T spawn (a clip edge), donk lagging his 13.4–14.4 s samples. The ones
+(lokier@851), snarlbot's 5.1 s recording gap at T spawn (a clip edge), donk lagging his 13.4–14.4 s samples. The ones
 the two maps share (cart@920/1392, sp4rtan, donk@1344) are the recording's, not the map's.
 
 ## Building a map package from awpy-data (H3, `tools/build-map.ts`)

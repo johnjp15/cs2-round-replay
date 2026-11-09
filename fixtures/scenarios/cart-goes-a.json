@@ -1,12 +1,14 @@
 {
   "name": "cart-goes-a",
-  "description": "cart takes A instead of B and never fires: he holds Back Alley to 12 s, is then teleported to the foot of A main (T Ramp; this tests Core logic, not pathing: walked out by House he got stuck on both meshes at the 27 u ledge (z -258 to -231) on the way up to T spawn at about (1150, 380), which needs a jump the human-bot doesn't make), walks up it and waits there looking toward A site. Lokier outlives his recording on B, as in never-peeks; sp4rtan's flank comes down A main.",
+  "description": "cart takes A instead of B and never fires: from Back Alley he runs out through House and T spawn, down past Palace Alley and up A main (T Ramp), and waits there looking toward A site. Lokier outlives his recording on B, as in never-peeks; sp4rtan's flank comes down A main.",
   "human": "cart",
   "seed": 1,
   "until": "end",
   "steps": [
-    {"do": "holdStill", "until": 12.0},
-    {"do": "teleport", "pos": [560, -1600], "yaw": 180},
+    {"do": "holdStill", "sec": 0.1},
+    {"do": "walkTo", "pos": [130, 830]},
+    {"do": "walkTo", "pos": [1180, -260]},
+    {"do": "walkTo", "pos": [560, -1600]},
     {"do": "walkTo", "pos": [323, -1561]},
     {"do": "holdStill", "until": 70.6}
   ]
