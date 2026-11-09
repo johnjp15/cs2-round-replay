@@ -16,6 +16,7 @@ name: Stage the sim in web-apps
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '**/*.md', 'NOTES.md', 'tests/**', 'fixtures/**']
   workflow_dispatch:
 
 permissions:
