@@ -46,7 +46,7 @@ The handful of metrics Leetify also publishes (counter-strafing, crosshair place
 5. **Determinism.** `src/coach` uses no `Date` and no `Math.random`. The same `RawDemo` gives a byte-identical report in Node and in the browser.
 6. **Tunables in `data/coach/tuning.json`** (thresholds, windows, weights). Code never hard-codes one.
 7. **Map data from awpy-data** through the existing builder: radar, radar transform and collision mesh per map. Mirage and Dust II first (both already built here), then the rest of Active Duty, which since 8 July 2026 is Ancient, Anubis, Cache, Dust II, Inferno, Mirage and Nuke.
-8. **The locked page stays small.** Map packs (radar, sight mesh) are fetched on demand from this public repo's raw files at the build's commit and cached in the browser. `raw.githubusercontent.com` sends `access-control-allow-origin: *` (checked). If the repo goes private again, the packs get embedded or shipped as side assets instead.
+8. **The locked page stays small; map packs are separate files.** The page carries the app and the parser; each map pack (radar, sight mesh, 0.3–1.4 MB) is fetched on demand and cached in the browser. Where the packs are served from is K7's decision with John, because the repo is public only "for now" (11-16) and the sim pages' deploy is moving into this repo's CI (PR #76, from another session): the default is to publish each pack next to the page as its own locked file, encrypted once and left alone while unchanged, so nothing depends on the repo staying public. Fetching from this repo's raw files (`raw.githubusercontent.com` sends `access-control-allow-origin: *`, checked) stays as the development path.
 9. **At most three or four agents at a time** (John's usage rule of 11-07).
 10. **Built so it can go live later.** The game-sense part (`src/coach/sense`) reads only what the player's team could know at that moment (the radar, the kill feed, the clock, the bomb), never the demo's ground truth, and only the past: it is a reducer over a stream of observations with no look-ahead and a bounded cost per update. On a demo the stream is replayed from the file; later the same code is fed by a screen reader.
 
@@ -57,8 +57,10 @@ Checked on 2026-11-16 with `@laihoe/demoparser2` 0.42.3 on a Valve matchmaking G
 | | Present | Missing or caveat |
 | --- | --- | --- |
 | **Per tick, per player** | position, view pitch/yaw, velocity, health, armor, helmet, kit, money, equipment value, inventory, active weapon and clip, scoped, walking, duck amount, airborne, flash duration, `spotted`, place name (callout), `shots_fired`, **aim punch**, **`accuracy_penalty`**, recoil index, reloading, movement buttons (forward/back/left/right/fire/…), Premier rank fields, crosshair code | `usercmd_*` (mouse deltas, sub-tick moves) are empty in GOTV demos; `ducking`/`ducked` are empty (use `duck_amount`); velocity is null on a few ticks |
-| **Events** | `weapon_fire`, **`fire_bullets`** (per bullet: inaccuracy, spread, recoil index, seed, firing angles, origin), `player_hurt` (hit group, damage), `player_death` (headshot, wallbang, through smoke, attacker blind, no-scope, assister, flash assist), `player_blind` (thrower, duration), grenade detonations and expiries, bomb events, round events, `player_footstep`, `player_jump`, `weapon_reload`, `weapon_zoom`, `item_pickup`, `item_equip`, `rank_update` | no purchase event (buys come from inventory at freeze end and `cash_spent_this_round`) |
-| **Grenades** | a position per tick for every projectile | some ticks have null coordinates |
+| **Events** | `weapon_fire`, **`fire_bullets`** (per bullet: inaccuracy, spread, recoil index, seed, firing angles, origin), `player_hurt` (hit group, damage), `player_death` (headshot, wallbang, through smoke, attacker blind, no-scope, assister, flash assist), `player_blind` (thrower, duration), grenade detonations and expiries, bomb events, round events, `item_purchase` (item, cost), `player_jump`, `weapon_reload`, `weapon_zoom`, `item_equip`, `rank_update` | `player_footstep` and `item_pickup` stop at exactly 512 records a match, so neither is a complete record; `player_hurt.dmg_health` is not the health removed (use health before minus after); `fire_bullets` has no usable in-air or scoped flag (use the tick's) |
+| **Grenades** | a position per tick for every projectile | some ticks have null coordinates; entity ids are reused between throws |
+
+K0 added the corrections in the right-hand column after ingesting the whole demo (`docs/coach/contracts.md`, "What the test demo showed"): with them, kills, deaths, assists, damage, headshot kills and utility damage computed from events equal the demo's own totals for all ten players.
 
 Two things follow. The server's own inaccuracy for every bullet is in the demo, so "you shot while moving" can be stated in the game's own numbers and needs no simulation. And line of sight is not in the demo in a usable form (`spotted` is a radar flag that lags), so sight has to be computed against the map mesh.
 
@@ -151,6 +153,28 @@ interface Finding {
 
 `Annotation` is a small drawing vocabulary in world coordinates with a time range (line, circle, cone, path, zone, label), so any detector can point at things in the 2D replay without the viewer knowing the detector. `MatchReport` holds the match facts, the user's slot, all metrics for all ten players, all findings, the chosen top fixes and strengths, per-round summaries and compact replay tracks (positions at 16 Hz as int16, about 3 MB a match). It is the only thing stored in IndexedDB and the only thing the page reads.
 
+### Contract 3: the analysis framework (K2 writes it first)
+
+```ts
+// src/coach/analyze/context.ts
+interface AnalysisContext {
+  raw: RawDemo; match: Match; tuning: CoachTuning; weapons: WeaponTable;   // weapons: data/weapons.json through src/engine
+  los: LosWorld | null;                 // null when the map pack is not loaded; detectors that need it declare so
+  table<T>(def: TableDef<T>): T;        // derived tables, built once on first use, in a fixed order
+}
+interface TableDef<T> { id: string; build(ctx: AnalysisContext): T }
+// src/coach/metrics/types.ts
+interface MetricDef { id: string; label: string; unit: string; better: 'higher' | 'lower'; area: FindingArea;
+                      compute(ctx: AnalysisContext, slot: number): { value: number; n: number } | null }
+// src/coach/detect/types.ts
+interface Detector { id: string; area: FindingArea; scope: FindingScope; needs?: ('los' | 'knowledge')[];
+                     run(ctx: AnalysisContext, slot: number, metric: (id: string) => MetricValue | null): Finding[] }
+// src/coach/analyze/index.ts
+function analyze(raw: RawDemo, match: Match, opts: { user: number; los?: LosWorld }): MatchReport
+```
+
+One folder per area under `derive/`, `metrics/` and `detect/` (`aim`, `movement`, `utility`, `positioning`, `economy`; later `strategy`, `sense`), each with an `index.ts` that exports its list; the top-level index joins them in a fixed order, so two cards never edit the same list. Metrics are computed for every slot (that gives the lobby ranks); detectors run for the user. A finding's sentences are built in the detector from templates, with numbers formatted by shared helpers in `src/coach/report/format.ts`: one sentence, the numbers in it, no hedging.
+
 ## What it analyzes
 
 Tier 1 ships in the first usable report. Tier 2 needs line of sight or map knowledge. Tier 3 comes later. Every row is computed for all ten players.
@@ -168,7 +192,7 @@ Tier 1 ships in the first usable report. Tier 2 needs line of sight or map knowl
 | `aim.habits` | Jumping shots, shooting while flashed, crouch-spraying into a miss, scoped-in walking, re-peeking after a missed AWP shot | flags, events | 2 | counted moments |
 | `move.reload` | Reloads with an enemy close or half a magazine left; deaths while reloading | reload events, clip, deaths | 1 | replay moments |
 | `move.caught_out` | Deaths with the knife or a grenade in hand | active weapon at death | 1 | replay moments |
-| `move.noise` | Running within earshot when silence mattered (lurk, clutch, retake) | footsteps, distances | 3 | replay moments |
+| `move.noise` | Running within earshot when silence mattered (lurk, clutch, retake) | speed, walk flag, distances (the footstep event is capped at 512 a match, so it can't be the source) | 3 | replay moments |
 | `move.peek` | Wide swings into an AWP, re-peeking the angle you were just tagged from | sightings, damage | 2–3 | replay moments |
 
 ### Utility
@@ -301,7 +325,9 @@ Every card: one branch, one PR, `npm test`, `npm run lint`, `npm run build` gree
 
 Test demo for everyone: `https://raw.githubusercontent.com/LaihoE/demoparser/8035c3d9c61e00fb6634f76541e535f64f0f4d3f/src/parser/test_demo.dem` (60,601,900 bytes, SHA-256 `84a1a4191302bdd2a3bbb5a727842093744b1fb1a228aeec630369e44b622cb2`), fetched to `local/demos/`, never committed.
 
-### Wave 1 (running)
+### Wave 1
+
+Status 11-16: **K0 merged (#78)**, **KM merged (#77)**, K1 running. What they found is in `docs/coach/contracts.md` and `docs/coach/maps.md`: the test demo ingests to 10 rounds, 8–2, with a scoreboard that reconciles exactly; all ten map packs build from awpy-data 2000943 inside the size budget; line of sight sees 54 of 54 clean bullet kills in the test demo and runs at about 0.9 million segment tests a second on Mirage (about 0.2–0.3 million on Inferno, Ancient and Train with adversarial points, measured in review).
 
 **K0 · Contracts, scaffold, Node ingest** (`k0-coach-contracts`)
 - `src/coach/model/`: `RawDemo`, `Match`, `Finding`, `Annotation`, `MatchReport` as above; `docs/coach/contracts.md`.
@@ -327,17 +353,37 @@ Test demo for everyone: `https://raw.githubusercontent.com/LaihoE/demoparser/803
 - `tools/coach/places-report.ts`: the place names a demo uses, with counts and centroids (the awpy-data navs carry none, so demos are the source of the callout vocabulary).
 - Done when: packs exist for every pool map in the release, the sight check passes on Mirage, and the benchmark meets the target.
 
-### Wave 2 (after K0 merges)
+### Wave 2 (running from 11-16)
 
-- **K2 · Combat derive and mechanics.** Shots joined to bullets and hits; bursts and sprays; state at each shot; `aim.counter_strafe`, `aim.spray`, `aim.range_discipline`, `aim.first_bullet`, `move.reload`, `move.caught_out`; metrics for all ten players with lobby ranks.
-- **K3 · Page shell and 2D replay.** Worker pipeline, IndexedDB library, player picker, the radar replay with timeline, annotations and deep links from findings.
-- **K4 · Utility, trades, deaths, economy.** `util.*` tier 1, `pos.untradeable`, `trade.missed`, `pos.opening`, `eco.*` tier 1.
+**K2 · Analysis framework, combat tables, mechanics** (`k2-coach-mechanics`)
+- **First commit within 40 minutes:** the framework of Contract 3 (`src/coach/analyze/`, `metrics/types.ts`, `detect/types.ts`, the per-area `index.ts` files, empty for the areas K4 fills), `analyze()` returning a valid `MatchReport` with a first prioritizer (fixes ordered by impact × confidence, top three, no two from the same detector family), `src/coach/report/format.ts`, and `coach report <demo> --user <name|slot>` in the CLI (prints the fixes with their numbers, writes the JSON under `local/`). K4 and K3 build on this commit.
+- **Combat tables** (`src/coach/derive/aim/`): shots joined to bullets and to the shooter's tick row (speed, airborne, duck, scoped, penalty, aim punch, recoil index, buttons in the 300 ms before); bullets joined to the hits they caused; bursts and sprays (gap ≤ 1.6 × the weapon's cycle time); the intended target of each bullet (the enemy it hurt, else the living enemy nearest the bullet's zero-spread direction inside a tolerance, with line of sight when a map pack is loaded).
+- **Check the physics on the real demo first** and write it down in `docs/coach/mechanics.md`: does `fire_bullets.inaccuracy` equal the engine's model (`src/engine/weapons/accuracy.ts`) for the shooter's speed, stance and penalty? Do the bullet's angles already include the aim punch? How does the recoil index follow the bullet number in a spray? The detectors rest on these answers.
+- **Detectors and metrics:** `aim.counter_strafe`, `aim.spray`, `aim.range_discipline`, `aim.first_bullet`, `move.reload`, `move.caught_out` as in "What it analyzes", for all ten players, each with synthetic unit tests and evidence (`duel`, `spray`, `replay`) carrying annotations.
+- Done when: `coach report` on the test demo, for two different players, prints fixes that hold up when you look at the moments they point to; the lobby table of every metric is in the doc; tests pass.
+
+**K3 · Page shell and 2D replay** (`k3-coach-page`)
+- **Pipeline in a worker:** file → `RawDemo` → `Match` → report and replay data. Until K1's parser is merged the page accepts a `.craw` or `.craw.gz` file (what `npm run coach -- parse` writes); it calls K1's `parseDemo` for `.dem` files as soon as `src/coach-parser` exists, and K2's `analyze()` as soon as that exists (a stub report with the match facts before).
+- **Library:** analyzed matches in IndexedDB (the report and the replay data, never the demo), a list with map, score, date added, and delete.
+- **Player picker:** the ten players by team; the choice is remembered by Steam ID in the browser and applied to the next demo.
+- **Replay data** (`src/coach/report/replay.ts`, pure, tested in Node): per round, positions, yaw, health and weapon at 16 Hz as small typed arrays; kills, shots, grenade paths, smokes, fires, flashes and bomb events with ticks.
+- **2D replay:** the map pack's radar (lower level on Nuke, Train and Vertigo by height), players with name, health, weapon and view cone, grenade paths and effects, kill lines, the bomb, a timeline with round, event and finding markers, play/pause, speed, scrub, round switcher; an annotation layer that draws every `Annotation` kind; deep links (`#/m/<id>/r/<round>?t=<tick>`) so a finding's "Watch" opens five seconds before its moment.
+- **Match page skeleton:** header (map, score, sides), the round strip, a place for the fixes and the skill areas (K5 fills them), the replay.
+- `tools/coach/browser-check.ts`: headless Chrome loads the test demo's `.craw`, picks a player, opens a round, and saves screenshots under `logs/` for the PR.
+- Done when: the test demo's rounds play back correctly in the browser (positions on the radar agree with place names, kills on their ticks), the page works after a reload from the library, and the check script passes.
+
+**K4 · Utility, trades, deaths, economy** (`k4-coach-utility`)
+- **Tables** (`src/coach/derive/{utility,positioning,economy}/`): throws (projectile joined to its detonation and to what it did: who was blinded and for how long, enemies and teammates and the thrower; damage from health before and after, never `dmg_health`; kills on a blinded enemy inside the window); trades (5 s window, tunable; each death traded once); deaths (weapon in hand, reloading, grenades still carried, distance to each living teammate, killer's distance, alive counts, round clock, traded or not); opening duels; buys per player and round from `item_purchase`, inventories and money.
+- **Detectors and metrics:** `util.flash`, `util.unused`, `util.buy`, `util.damage`, `pos.untradeable`, `trade.missed`, `pos.opening`, `eco.sync`, `eco.kit_armor`, for all ten players, with synthetic tests and `replay` evidence (the trade-distance ring, the killer's line, the flash and who it blinded).
+- Reconcile where the demo has a total (utility damage exactly, enemies flashed approximately: see `docs/coach/contracts.md`).
+- Builds on K2's framework commit; until it lands, the tables are built and tested alone.
+- Done when: the detectors run through `analyze()` on the test demo and every instance they report is checked against the events by a test or a listed spot check in `docs/coach/utility.md`.
 
 ### Wave 3
 
 - **K5 · Report.** Prioritizer, the three-fixes cards, skill-area pages, duel view, spray plot, rank strips, golden report test.
-- **K6 · Sight-based analysis.** Sightings and duels from `los.ts`; `aim.placement`, `aim.time_to_damage`, `aim.habits`, `pos.death_context`, placement scatter.
-- **K7 · Publish.** Single-file build, lazy map packs from the repo's raw files, staging into web-apps as `cs2/coach/`, the locked-page check.
+- **K6 · Sight-based analysis.** Sightings and duels from `los.ts`; `aim.placement`, `aim.time_to_damage`, `aim.habits`, `pos.death_context`, placement scatter. Budget the sighting pass (coarse steps refined to the tick at changes, early exit, head and chest first): a full match is millions of segment tests and the big maps run at a quarter of Mirage's speed. Fold `data/coach/los-tuning.json` into `data/coach/tuning.json`.
+- **K7 · Publish.** Single-file build of the page with the parser inside; `cs2/coach/` added to the deploy that PR #76 moves into this repo's CI (`tools/pages/deploy.sh`), after that PR is merged by its own session; map packs published as separate files per decision 8; the locked-page check extended to the coach.
 
 ### Wave 4 and later
 
@@ -372,7 +418,7 @@ Test demo for everyone: `https://raw.githubusercontent.com/LaihoE/demoparser/803
 1. **Three to five of your recent demos**, ideally at least one Dust II and one Mirage (Valve `.dem.bz2` or FACEIT `.dem.zst`). Put them in a folder on the Mac and add that folder to the chat, or attach them. They are the acceptance test and the only way to check current-format demos and the callouts of maps other than Mirage.
 2. Your in-game name in those demos (the page will ask too).
 3. If you use Leetify: your aim numbers for the same matches, to cross-check ours.
-4. Say so if you'd rather have a separate repo, an unlocked page, or map packs embedded instead of fetched from the public repo.
+4. Say so if you'd rather have a separate repo or an unlocked page. For K7: whether the map packs (radars and sight meshes derived from Valve's files, already in awpy-data's public releases) are published locked like the page (the default) or as plain files.
 5. Later, for the live coach: a screen recording of one match whose demo you also keep, and your radar settings (`cl_radar_scale`, `cl_radar_rotate`, `cl_radar_always_centered`, `cl_hud_radar_scale`).
 
 ## Sources
