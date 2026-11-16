@@ -1,0 +1,11 @@
+{
+  "_note": "KM: line-of-sight tunables (src/coach/derive/los.ts, docs/coach/maps.md). Eye heights and the smoke model's numbers come from data/tuning.json (damage.eyeHeight / crouchEyeHeight, grenades.cs2). Fold this `los` section into data/coach/tuning.json once that file exists.",
+  "los": {
+    "_fov": "CS2's fov is horizontal at 4:3 (90), widened for wider screens (Hor+): tan(h/2) = tan(fovDeg/2) * aspect / fovAspect. 16:9 is the default screen; stretched 4:3 players see the 4:3 frustum.",
+    "fovDeg": 90,
+    "fovAspect": 1.3333333333333333,
+    "aspect": 1.7777777777777777,
+    "_smoke": "Smokes use the engine's voxel flood (src/engine/grenades/smoke.ts), built per smoke on first use. A smoke whose expiry is unknown lasts grenades.cs2's smokeFullSec + smokeFadeSec. queryRadius: a segment farther than this from the detonation never meets that smoke (the flood's cost radius plus a voxel).",
+    "smokeQueryRadius": 340
+  }
+}

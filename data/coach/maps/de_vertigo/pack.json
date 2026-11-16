@@ -1,0 +1,183 @@
+{
+  "format": "coach-map@1",
+  "map": "de_vertigo",
+  "source": {
+    "release": "2000943",
+    "client_version": "2000943",
+    "patch_version": "1.41.9.7",
+    "buildid": "26598758",
+    "generated_at": "2026-11-12T08:22:47.776138+00:00",
+    "assets": [
+      {
+        "asset": "geometry.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/geometry.zip",
+        "sha256": "7451a538a6447217d190c4e80f0270dfd19588852afd8c5213936ab2ef85633b",
+        "member": "de_vertigo.mesh",
+        "crc32": "adc57f0c",
+        "bytes": 1285516
+      },
+      {
+        "asset": "images.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/images.zip",
+        "sha256": "b1c463c2d3566d77d60247424c756f6e8198473b19e5006268d74b682599e052",
+        "member": "radars/de_vertigo.png",
+        "crc32": "b3bac196",
+        "bytes": 97762
+      },
+      {
+        "asset": "images.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/images.zip",
+        "sha256": "b1c463c2d3566d77d60247424c756f6e8198473b19e5006268d74b682599e052",
+        "member": "radars/de_vertigo_lower.png",
+        "crc32": "9aefdae4",
+        "bytes": 123826
+      },
+      {
+        "asset": "navs.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/navs.zip",
+        "sha256": "b6c429d0cc295857ea0d8d6896aba7bbac61cf6189c74755480b98b2a1e6bf7f",
+        "member": "de_vertigo.nav",
+        "crc32": "d8f2f20f",
+        "bytes": 423950
+      },
+      {
+        "asset": "map_data.json",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/map_data.json",
+        "sha256": "b0c8e7e95839b283f311e01c7d7022e5fe701bcfbb44134e7cedccec0f916e67",
+        "member": "de_vertigo",
+        "crc32": "",
+        "bytes": 2903
+      }
+    ],
+    "mapData": {
+      "pos_x": -3168,
+      "pos_y": 1762,
+      "rotate": null,
+      "scale": 4,
+      "verticalsections": {
+        "default": {
+          "AltitudeMax": "20000",
+          "AltitudeMin": "11700"
+        },
+        "lower": {
+          "AltitudeMax": "11700",
+          "AltitudeMin": "-10000"
+        }
+      },
+      "zoom": null
+    }
+  },
+  "radar": {
+    "pos_x": -3168,
+    "pos_y": 1762,
+    "scale": 4,
+    "width": 1024,
+    "height": 1024,
+    "lowerBelowZ": 11700,
+    "files": {
+      "default": "radar.png",
+      "lower": "radar_lower.png"
+    }
+  },
+  "los": {
+    "file": "los.bin.gz",
+    "quant": 2,
+    "vertices": 31587,
+    "triangles": 53774,
+    "bounds": {
+      "minX": -2654.5,
+      "minY": -1746.5,
+      "minZ": 11072,
+      "maxX": 96,
+      "maxY": 1234.5,
+      "maxZ": 14416
+    },
+    "cull": {
+      "hullMargin": 64,
+      "zBelow": 64,
+      "zAbove": 200,
+      "zMin": 11428,
+      "zMax": 12112,
+      "hull": [
+        [
+          -2650,
+          156
+        ],
+        [
+          -2560,
+          -1481
+        ],
+        [
+          -2459,
+          -1535
+        ],
+        [
+          -1445,
+          -1597
+        ],
+        [
+          -1420,
+          -1597
+        ],
+        [
+          -157,
+          -1535
+        ],
+        [
+          93,
+          -1372
+        ],
+        [
+          93,
+          49
+        ],
+        [
+          -693,
+          937
+        ],
+        [
+          -859,
+          1015
+        ],
+        [
+          -1355,
+          1086
+        ],
+        [
+          -1693,
+          1117
+        ],
+        [
+          -2593,
+          1095
+        ],
+        [
+          -2631,
+          1057
+        ]
+      ],
+      "sourceTriangles": 66048,
+      "culledTriangles": 12073
+    }
+  },
+  "files": [
+    {
+      "name": "los.bin.gz",
+      "bytes": 149808,
+      "sha256": "410cd56a320a69cd6ac6175860d7ab499767eaf5ef63abd0af4ab1abc35738e6",
+      "rawBytes": 293199,
+      "rawSha256": "c802bd4b10cb600277a23cadf083e7e2ec65d430b39f91a7c83f69f542cf60d8"
+    },
+    {
+      "name": "radar.png",
+      "bytes": 97762,
+      "sha256": "d2e2e18668f951f7d3b7c6a4fe4580632d5de253d0991f4b9639f9eca73264bf"
+    },
+    {
+      "name": "radar_lower.png",
+      "bytes": 123826,
+      "sha256": "61639197f940d9702f6cb5476a38ae932a821170cdb6405f14733a5b83e32723"
+    }
+  ],
+  "fetchBytes": 371396
+}
