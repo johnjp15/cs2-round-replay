@@ -1,0 +1,52 @@
+/* Demo coach design tokens: dark, calm, numbers first. CT blue and T amber as in the sims, one accent, system fonts. */
+:root {
+  --bg: #0f1115;
+  --surface: #171a21;
+  --surface-2: #1f232c;
+  --border: #2a2f3a;
+  --text: #e6e8ec;
+  --text-dim: #9aa1ad;
+  --ct: #5b9bd5;
+  --t: #e0a63b;
+  --accent: #7bd88f;
+  --good: #7bd88f;
+  --bad: #e5685d;
+  --radius: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 40px;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.page { max-width: 880px; margin: 0 auto; padding: var(--space-5) var(--space-3); }
+.title { margin: 0 0 var(--space-1); font-size: 24px; font-weight: 600; letter-spacing: 0.01em; }
+.title .ct { color: var(--ct); }
+.title .t { color: var(--t); }
+.lede { margin: 0 0 var(--space-4); color: var(--text-dim); }
+
+.drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: 220px; padding: var(--space-4);
+  border: 1.5px dashed var(--border); border-radius: var(--radius); background: var(--surface);
+  color: var(--text-dim); text-align: center; cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+.drop:focus-visible, .drop.over { outline: none; border-color: var(--accent); background: var(--surface-2); color: var(--text); }
+.drop strong { color: var(--text); font-weight: 600; }
+.file { margin-top: var(--space-3); font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+.note { margin-top: var(--space-4); font-size: 13px; color: var(--text-dim); }
