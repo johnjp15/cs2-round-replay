@@ -384,10 +384,9 @@ single-file page embeds the default scenario only (its pickers list just it); fr
 Normal build: the JSON and binary files are fetched next to the page (assets3d.ts). Single file
 (vite.single.3d.config.ts): `./assets3d` is redirected to `assets3d-embedded.ts`; the round, nav, sight mask, tracks,
 movement mesh and clips are gzip + base64, the radar a data: URI, Three.js (0.187) bundled into the inlined script;
-the build fails if anything but index.html is written. **Sizes**: dist-single-3d/index.html 1,488 KB (gzip 739 KB),
-locked by cs2/tools/encrypt.cjs ≈ 1,990 KB (budget 3 MB; the 2D locked page is ≈ 1.5 MB). `tools/stage-web-apps.sh`
-stages both pages (`cs2/sim/`, `cs2/sim3d/`) and adds the sim3d card and README row once; the web-apps workflow
-(`git add -A cs2`) needs no change.
+the build fails if anything but index.html is written. **Sizes** (2026-11-16): dist-single-3d/index.html 1,907 KB
+(gzip 862 KB), locked by tools/pages/encrypt.cjs 2,548 KB (budget 3 MB; the 2D locked page is 1,663 KB). CI's
+`deploy` job publishes both pages (`cs2/sim/`, `cs2/sim3d/`) on every push to main (docs/deploy.md).
 
 ## Test API
 

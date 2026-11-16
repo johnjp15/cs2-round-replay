@@ -95,8 +95,13 @@ Zip `~/cs2-sounds` and attach it to a Claude session (or put it at `/home/claude
 
 ```sh
 npx tsx tools/pack-sounds.ts /home/claude/cs2-sounds            # → local/cs2-sound-bank.json (gitignored)
-npm run build:single:3d && npm run stage:web-apps -- <web-apps checkout>
+npm run build:single:3d    # then lock and publish it: tools/pages/deploy.sh (docs/deploy.md)
 ```
+
+**Open since 2026-11-16:** this repo is public and CI builds and publishes `sim3d/` from it, without the gitignored
+bank, so the next CI deploy would replace a page built with the bank by a page without it. Before the sounds go out,
+decide where the bank lives that CI can read but the public can't (e.g. web-apps, with a read-only token), or deploy
+`sim3d/` by hand only (backlog #17).
 
 `pack-sounds` trims each file to its `keepSec` (fire 1.6 s, music 4 s, default 2 s), encodes mono Opus at 32 kbps in
 Ogg (ffmpeg), keeps one file per event first and adds variants (footsteps 4, others 2) while the total stays under

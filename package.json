@@ -40,7 +40,6 @@
     "clips:extract": "tsx tools/extract-clips.ts",
     "tracks:snap": "tsx tools/snap-tracks.ts",
     "vision": "tsx tools/vision-labels.ts",
-    "stage:web-apps": "bash tools/stage-web-apps.sh",
     "check:locked": "tsx tools/e2e-locked.ts",
     "parity": "tsx tools/video-parity.ts",
     "parity:2d": "npm run build && tsx tools/video-parity.ts --app 2d --times \"every 0.5\" --runs watch,follow --out logs/parity-2d --baseline docs/parity/baseline-2d.json",
