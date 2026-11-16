@@ -22,7 +22,7 @@ describe('coach RawDemo codec', () => {
       expect(Array.from(back.ticks[k])).toEqual(Array.from(raw.ticks[k]));
     }
     expect(Array.from(back.ticks.tick)).toEqual(Array.from(raw.ticks.tick));
-    expect(Array.from(back.projectiles[0]!.path)).toEqual([1, 2, 3, -32768, -32768, -32768, 7, 8, 9]);
+    expect(Array.from(back.projectiles[0]?.path ?? [])).toEqual([1, 2, 3, -32768, -32768, -32768, 7, 8, 9]);
     expect(encodeRawDemo(back).length).toBe(a.length);
   });
 

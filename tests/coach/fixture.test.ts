@@ -24,7 +24,7 @@ describe('coach fixture: the public test demo', () => {
     expect(m.meta.score).toEqual({ A: 8, B: 2 });
     expect(m.meta.gameScore).toEqual({ A: 8, B: 2 });
     expect(m.meta.surrendered).toBe('B');
-    const last = m.rounds[9]!;
+    const last = m.rounds[9];
     expect(last).toMatchObject({ number: 10, played: false, freezeEndTick: null, officialEndTick: null, reasonName: 'ct_surrender', winner: 'A' });
     expect(m.rounds.filter((r) => r.played).length).toBe(9);
     expect(m.rounds.map((r) => r.winnerSide).join(' ')).toBe('T CT T T CT T T T T T');

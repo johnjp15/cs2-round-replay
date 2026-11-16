@@ -56,7 +56,7 @@ describe('coach ingest: rounds', () => {
   });
 
   it('detects a knife round and does not count it', () => {
-    const rounds = [{ ...roundsFrom(100, 1)[0]!, items: ['knife'] }, ...roundsFrom(1100, 2)];
+    const rounds = [{ start: 100, freezeEnd: 200, end: 1000, items: ['knife'] }, ...roundsFrom(1100, 2)];
     const m = ingestMatch(synthDemo({ ...fourPlayers(), matchStart: 100, rounds }));
     expect(m.rounds[0]?.kind).toBe('knife');
     expect(m.rounds[0]?.played).toBe(false);
@@ -109,7 +109,8 @@ describe('coach ingest: rounds', () => {
   it('alive timeline and round lookup', () => {
     const raw = synthDemo({ ...fourPlayers(), matchStart: 100, rounds: roundsFrom(100, 2) });
     const m = ingestMatch(raw);
-    const r = m.rounds[0]!;
+    const r = m.rounds[0];
+    if (!r) throw new Error('no round');
     const tl = aliveTimeline(raw, m, r);
     expect(tl.tick.length).toBe(r.rowEnd - r.rowStart);
     expect(tl.alive.A[0]).toBe(2);
