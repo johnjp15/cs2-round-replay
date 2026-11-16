@@ -1,0 +1,70 @@
+{
+  "_note": "K2: aim tunables (src/coach/derive/aim, src/coach/metrics/aim, src/coach/detect/aim). Distances in Source units, angles in degrees, times in ms. docs/coach/mechanics.md explains each.",
+  "shots": {
+    "_": "Buttons are read over buttonWindowMs before each shot. A burst is consecutive bullets of one player and weapon with gaps ≤ burstGapCycles × the weapon's cycle time; a spray is sprayMin bullets or more.",
+    "buttonWindowMs": 300,
+    "burstGapCycles": 1.6,
+    "sprayMin": 3
+  },
+  "target": {
+    "_": "A bullet that hurt nobody is meant for the living enemy whose body (head, chest, pelvis) is nearest its zero-spread direction, inside max(baseDeg, atan(bodyRadius / distance)) + baseDeg, capped at maxDeg; with a map pack the enemy must be visible. The pick is clear when the runner-up is at least clearRatio times farther.",
+    "baseDeg": 1.5,
+    "bodyRadius": 24,
+    "maxDeg": 8,
+    "clearRatio": 1.6,
+    "maxDistance": 4000
+  },
+  "body": {
+    "_": "The target silhouette for 'on target': half-width and the vertical extent above the feet, standing (scaled by the crouch like the hitboxes).",
+    "halfWidth": 14,
+    "top": 71,
+    "bottom": 8,
+    "centre": 48.5
+  },
+  "bands": {
+    "_": "Distance bands (units) for the first-bullet and spray splits: below the first edge 'close', between 'mid', above the last 'long'.",
+    "edges": [700, 1500],
+    "names": ["close", "mid", "long"]
+  },
+  "counterStrafe": {
+    "_": "First bullets (first of a burst, on the ground, target assigned). The Leetify-comparable figure counts rifles (kinds) and excludes crouched shots (duck ≥ crouchDuck). A shot is early above moveFraction × the weapon's max speed. lateCapMs: the longest look-ahead for the speed to drop. Finding: a fix when the share is ≥ fixShare and in the lobby's bottom half; costHit = how much less likely a moving first bullet hits (fights per early shot); precision before K11 measures it.",
+    "kinds": ["rifle"],
+    "crouchDuck": 0.5,
+    "moveFraction": 0.34,
+    "lateCapMs": 500,
+    "fixShare": 0.2,
+    "minN": 8,
+    "nScale": 20,
+    "precision": 0.9,
+    "costHit": 0.3
+  },
+  "spray": {
+    "_": "Bullets from bulletFrom on in sprays of sprayMin+ with a target. Offsets (degrees) of the zero-spread direction from the target's chest, up and right positive. A bucket of bullets is 'off' when its median offset is beyond the body silhouette's angular half-size and at least offDeg. Finding: a fix when the on-target share is in the bottom half and ≥ minBullets bullets; costPerSpray fights per drifting spray.",
+    "bulletFrom": 2,
+    "maxBullet": 20,
+    "offDeg": 0.6,
+    "minBullets": 20,
+    "minBucket": 3,
+    "nScale": 40,
+    "precision": 0.85,
+    "costPerSpray": 0.2
+  },
+  "rangeDiscipline": {
+    "_": "Sprays of minBullets+ at a target beyond longUnits that hit nothing after bullet afterBullet.",
+    "longUnits": 1200,
+    "minBullets": 6,
+    "afterBullet": 4,
+    "minInstances": 2,
+    "nScale": 4,
+    "precision": 0.9,
+    "costPerSpray": 0.25
+  },
+  "firstBullet": {
+    "_": "First bullets with a target: hit rate overall, standing against moving (moving = above the counter-strafe threshold), per band. A fix when in the lobby's bottom half with gapToMedian below the lobby median; costPerMiss fights per extra miss.",
+    "minN": 10,
+    "nScale": 30,
+    "precision": 0.8,
+    "gapToMedian": 0.08,
+    "costPerMiss": 0.25
+  }
+}

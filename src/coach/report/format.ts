@@ -3,6 +3,7 @@
  * report in Node and in every browser. Conventions: a space before `%` and units, none before `°` and `×`; en dash
  * for ranges; thousands with a comma.
  */
+import { ITEM_DEFS } from '../model/items';
 import type { Match } from '../model/match';
 import { REPORT_TUNING, type ReportTuning } from '../analyze/report-tuning';
 
@@ -112,4 +113,13 @@ export function playerLabel(match: Match, slot: number): string {
   if (pl === undefined) return `#${slot}`;
   const k = match.players.filter((q) => q.team === pl.team && q.slot <= slot).length;
   return `${pl.team}${k}`;
+}
+
+/** The display name of a coach item name: `ak47` → "AK-47", `m4a1` → "M4A4"; unknown names as given. */
+export function weaponName(item: string): string {
+  for (const k of Object.keys(ITEM_DEFS).map(Number).sort((a, b) => a - b)) {
+    const d = ITEM_DEFS[k];
+    if (d !== undefined && d[0] === item && item !== 'knife') return d[1];
+  }
+  return item === 'knife' ? 'knife' : item;
 }
