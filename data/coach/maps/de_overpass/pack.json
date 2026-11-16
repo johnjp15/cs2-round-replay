@@ -1,0 +1,184 @@
+{
+  "format": "coach-map@1",
+  "map": "de_overpass",
+  "source": {
+    "release": "2000943",
+    "client_version": "2000943",
+    "patch_version": "1.41.9.7",
+    "buildid": "26598758",
+    "generated_at": "2026-11-12T08:22:47.776138+00:00",
+    "assets": [
+      {
+        "asset": "geometry.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/geometry.zip",
+        "sha256": "7451a538a6447217d190c4e80f0270dfd19588852afd8c5213936ab2ef85633b",
+        "member": "de_overpass.mesh",
+        "crc32": "8f114d0f",
+        "bytes": 4522756
+      },
+      {
+        "asset": "images.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/images.zip",
+        "sha256": "b1c463c2d3566d77d60247424c756f6e8198473b19e5006268d74b682599e052",
+        "member": "radars/de_overpass.png",
+        "crc32": "a072d4cc",
+        "bytes": 290940
+      },
+      {
+        "asset": "navs.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/navs.zip",
+        "sha256": "b6c429d0cc295857ea0d8d6896aba7bbac61cf6189c74755480b98b2a1e6bf7f",
+        "member": "de_overpass.nav",
+        "crc32": "1b219efb",
+        "bytes": 809919
+      },
+      {
+        "asset": "map_data.json",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/map_data.json",
+        "sha256": "b0c8e7e95839b283f311e01c7d7022e5fe701bcfbb44134e7cedccec0f916e67",
+        "member": "de_overpass",
+        "crc32": "",
+        "bytes": 2903
+      }
+    ],
+    "mapData": {
+      "pos_x": -4831,
+      "pos_y": 1781,
+      "rotate": 0,
+      "scale": 5.2,
+      "zoom": 0
+    }
+  },
+  "radar": {
+    "pos_x": -4831,
+    "pos_y": 1781,
+    "scale": 5.2,
+    "width": 1024,
+    "height": 1024,
+    "lowerBelowZ": null,
+    "files": {
+      "default": "radar.png",
+      "lower": null
+    }
+  },
+  "los": {
+    "file": "los.bin.gz",
+    "quant": 2,
+    "vertices": 113151,
+    "triangles": 213403,
+    "bounds": {
+      "minX": -4160,
+      "minY": -4200,
+      "minZ": -20,
+      "maxX": 798,
+      "maxY": 1832,
+      "maxZ": 1447
+    },
+    "cull": {
+      "hullMargin": 64,
+      "zBelow": 64,
+      "zAbove": 200,
+      "zMin": -72,
+      "zMax": 806,
+      "hull": [
+        [
+          -3956,
+          -1472
+        ],
+        [
+          -3955,
+          -1688
+        ],
+        [
+          -3639,
+          -2356
+        ],
+        [
+          -3553,
+          -2515
+        ],
+        [
+          -2857,
+          -2992
+        ],
+        [
+          -2854,
+          -2993
+        ],
+        [
+          -1446,
+          -3491
+        ],
+        [
+          -1417,
+          -3496
+        ],
+        [
+          -435,
+          -2680
+        ],
+        [
+          -19,
+          -2093
+        ],
+        [
+          12,
+          -1993
+        ],
+        [
+          14,
+          -1879
+        ],
+        [
+          -79,
+          278
+        ],
+        [
+          -111,
+          299
+        ],
+        [
+          -2291,
+          1618
+        ],
+        [
+          -2641,
+          1666
+        ],
+        [
+          -2656,
+          1668
+        ],
+        [
+          -2697,
+          1668
+        ],
+        [
+          -3942,
+          -257
+        ],
+        [
+          -3956,
+          -289
+        ]
+      ],
+      "sourceTriangles": 243902,
+      "culledTriangles": 29964
+    }
+  },
+  "files": [
+    {
+      "name": "los.bin.gz",
+      "bytes": 652289,
+      "sha256": "71a541a33c38db7891a63054c1e48a91576daccd376613d69bed4be68538727e",
+      "rawBytes": 1092537,
+      "rawSha256": "f1ec76a5f739e0caf07b1d6e8d2c7b5100d63590497b12ef81dc804670822299"
+    },
+    {
+      "name": "radar.png",
+      "bytes": 290940,
+      "sha256": "2a59b62668e80037b5a88e980f56af360269f5ea581d52eb0669d78a981f0d96"
+    }
+  ],
+  "fetchBytes": 943229
+}

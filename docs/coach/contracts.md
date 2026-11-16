@@ -27,6 +27,8 @@ changelog at the end of this file.
   (class names in events, display names such as `AK-47` in tick fields, definition indexes in `fire_bullets`);
   `items.ts` (`canonicalItem`, `itemFromDefIndex`) maps all three and both parsers must use it.
 - **Order.** Event lists are sorted by tick, ties in the order the demo emitted them.
+- **Name tables** (`names.weapons`, `names.places`) start with `''` and are otherwise sorted, so both parsers produce
+  the same ids.
 
 ### The tick grid
 
@@ -103,6 +105,92 @@ a Uint32 header length, the JSON header (everything except the typed arrays, wit
 `{ "$buf": index }`), zero padding to 8 bytes, then the buffers back to back, each padded to 8 bytes. The JSON
 records each buffer's type, offset and length. Used for `local/coach-cache/`, fixtures (gzipped) and worker transfer.
 
+### Sizes on the test demo
+
+56,625 rows × 10 players: 40.4 MB of typed arrays in memory (~71 bytes per player-tick), 41.3 MB as a `.craw` file,
+6.1 MB gzipped. Native parse: 10.6 s, peak RSS 533 MB for the `.dem` (about 20–28 s and 650 MB for `.gz`, `.zst`,
+`.bz2`, which are decompressed in memory first).
+
+## `Match` (`coach-match@1`, `match.ts`)
+
+Built by `ingestMatch(raw)` (`src/coach/ingest/ingest.ts`). It holds facts, not per-tick data:
+
+- `meta`: map, source, server, patch, tick rate, demo hash, `score` by team (from round ends), `gameScore` (the
+  game's `team_rounds_total` on the last row, to cross-check), `winner`, `surrendered`, `startedMidMatch`,
+  `regulationRounds`, and `notes` (anything unusual ingest saw: dropped restarts, knife rounds, players who left).
+- `players`: slot, name, bot, `team` (`A` | `B`) and the round numbers the player was present in. **Team `A` is the
+  team on the T side in the first round of the demo**; teams stay with their players across the half-time swap and
+  overtime swaps. A late arrival (a bot that takes over, a reconnect under a new slot) joins the team of the side it
+  appears on.
+- `rounds[]`: `number` (the game's: `total_rounds_played` at the start + 1), `played`, `kind` (`regulation`,
+  `overtime` above `regulationRounds`, `knife`), `startTick`, `freezeEndTick`, `endTick`, `officialEndTick`, the row
+  range `[rowStart, rowEnd)` into `RawDemo.ticks`, `refRow` (freeze end, or the end when there is none: sides,
+  rosters and economy are read there), `sides` (`{ T: team, CT: team }`), `winnerSide`, `winner`, `reason` and
+  `reasonName`, `scoreAfter`, `bomb` (plant tick, site entity, planter, defuse tick, defuser, explode tick), `economy`
+  per team (equipment value at freeze end, money at the start, players, buy type), `roster` per team.
+
+Round rules (`src/coach/ingest/rounds.ts`, each pinned by `tests/coach/rounds.test.ts`):
+
+| Case | Rule |
+| --- | --- |
+| Warmup | Everything before the live start (`liveRange`) is ignored, and so are events flagged warmup. |
+| Knife round / restart before the match | `begin_new_match` fires again when the real match starts; the last one is the live start. A knife round after it (every player holding only a knife at freeze end) is kept as `kind: 'knife'`, not played, not scored. |
+| Restart mid-round | A `round_start` while the round has a freeze end but no end drops that round (noted). |
+| Surrender | A round that ends with no freeze end is kept with `played: false`; its result counts (the test demo's round 10, CT surrender during freeze time, so the score is 8–2 over 9 played rounds). |
+| Cut-off demo | A last round with no end is kept, not played, no winner. |
+| Overtime | Numbers continue past `regulationRounds` (24) and are `kind: 'overtime'`; sides come from the players' team per round, so swaps need no rule. |
+| Mid-match demo | No `begin_new_match`: numbering from `total_rounds_played`, score carried in from `team_rounds_total` on the first row. |
+| Disconnect / bot | The leaver keeps his slot and drops out of later rosters (noted); a bot gets its own slot (`BOT-<name>`) and the team of its side. |
+
+Buy types (tuning `economy`): pistol for rounds 1 and 13 (regulation only); otherwise equipment value per present
+player at freeze end below 1,500 is `eco`, from 3,900 `full`, in between `force`.
+
+Accessors (`src/coach/ingest/access.ts`): `roundRows(raw, round, live?)`, `roundAtTick(match, tick)`,
+`isAlive(raw, row, slot)`, `aliveTimeline(raw, match, round)` (per-row alive counts per team), `playedRounds(match)`.
+
+## Report types (`coach-report@1`, `report.ts`)
+
+Types only; detectors (K2+) and the prioritizer (K5) fill them. `Finding` is the plan's Contract 2 field for field.
+`Annotation` is a union on `kind`: `line` (from, to), `circle` (center, radius), `cone` (apex, yaw, half-angle,
+length), `path` (points, optional per-point ticks), `zone` (x/y polygon), `label` (at, text); each has
+`tick0`/`tick1` and a colour `role` (`user`, `teammate`, `enemy`, `ct`, `t`, `accent`, `good`, `bad`, `neutral`)
+the viewer maps to the theme. `Evidence`, `MetricValue` (value, unit, n, lobby rank, the lobby's values by slot,
+optional history), `RoundSummary`, `ReplayTrack` (positions at `hz` as Int16) and `MatchReport` (match facts, user
+slot, metrics, findings, top fixes, strengths, rounds, replay tracks, coach version).
+
+## Reconciliation (`src/coach/ingest/validate.ts`)
+
+`reconcile(raw, match)` recomputes each player's scoreboard from the events between the live start and the
+scoreboard tick (the last round's end) and compares it with the demo's totals. On the test demo **kills, deaths,
+assists, damage, headshot kills and utility damage match exactly for all ten players.** The rules that make it match:
+
+- Read the demo totals at the last round's end, not at the demo's last tick: after the match every player's
+  `deaths_total` goes up by one and `score` drops (the server kills everyone when the match ends).
+- Damage is the victim's health before the hit minus after it (`player_hurt.health`), team damage excluded.
+  `dmg_health` is not usable: uncapped it overcounts (a 100+ headshot on a 30-HP player), capped at the remaining
+  health it still undercounts by 2–24 per player, because it is sometimes a point below the health actually removed.
+- Kills: +1 per enemy, −1 per teammate; assists only on enemies (flash assists included).
+- Utility damage: the same health rule for `hegrenade` and `inferno` (molotov and incendiary).
+
+**Enemies flashed is approximate** and not part of `ok`: we count `player_blind` on a living enemy longer than
+1.1 s (tuning `validate.blindMinSec`, Leetify's floor). The game's counter follows a rule the events do not expose:
+no duration threshold reproduces it (per player the fitting threshold ranges from below 0.3 s to above 3.6 s; one
+flash that blinded four enemies for 0.8–3.8 s counts 2). On the test demo 3 of 10 players differ, each by one.
+
+## What the test demo showed that differs from the plan
+
+| Plan ("What a demo gives us") | Seen in the test demo |
+| --- | --- |
+| "no purchase event" | `item_purchase` is there (509 records: item, cost, sold-back); kept as `events.purchases` |
+| footsteps are an event | `player_footstep` has exactly 512 records for the whole match, and `item_pickup` also exactly 512: they look capped, so neither is a complete record (matters for `move.noise`) |
+| 57,970 ticks | the ticks are not contiguous (10 gaps); rows carry their tick |
+| `player_hurt` damage | `dmg_health` is not the health removed (see Reconciliation) |
+| grenade positions per tick | `parseGrenades` by default also returns every held grenade and weapon (517k rows, 1.5 GB RSS); `grenades=false` gives the 87k projectile rows. Entity ids are reused, so a gap of more than 16 ticks starts a new projectile |
+| `fire_bullets` | `player_inair` and `player_scoped` are always null; use the tick grid's `airborne` / `scoped` flags |
+| round flow | the first `round_start` (tick 65) is still warmup; `begin_new_match` (67) starts round 1. The last round ends by surrender in freeze time with no `round_freeze_end` and no `round_officially_ended` |
+| a player who leaves | his rows keep coming with team null and `is_connected` = 8 |
+
 ## Changelog
 
-- `coach-raw@1` (K0, 2026-11-16): first version.
+- `coach-raw@1` (K0, 2026-11-16): first version. Name tables are sorted (`''` first) so they do not depend on the order
+  the parser met the names.

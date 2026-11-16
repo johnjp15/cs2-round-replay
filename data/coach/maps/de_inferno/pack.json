@@ -1,0 +1,216 @@
+{
+  "format": "coach-map@1",
+  "map": "de_inferno",
+  "source": {
+    "release": "2000943",
+    "client_version": "2000943",
+    "patch_version": "1.41.9.7",
+    "buildid": "26598758",
+    "generated_at": "2026-11-12T08:22:47.776138+00:00",
+    "assets": [
+      {
+        "asset": "geometry.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/geometry.zip",
+        "sha256": "7451a538a6447217d190c4e80f0270dfd19588852afd8c5213936ab2ef85633b",
+        "member": "de_inferno.mesh",
+        "crc32": "0ff91792",
+        "bytes": 10004548
+      },
+      {
+        "asset": "images.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/images.zip",
+        "sha256": "b1c463c2d3566d77d60247424c756f6e8198473b19e5006268d74b682599e052",
+        "member": "radars/de_inferno.png",
+        "crc32": "09bd897f",
+        "bytes": 136914
+      },
+      {
+        "asset": "navs.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/navs.zip",
+        "sha256": "b6c429d0cc295857ea0d8d6896aba7bbac61cf6189c74755480b98b2a1e6bf7f",
+        "member": "de_inferno.nav",
+        "crc32": "da300d45",
+        "bytes": 496368
+      },
+      {
+        "asset": "map_data.json",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/map_data.json",
+        "sha256": "b0c8e7e95839b283f311e01c7d7022e5fe701bcfbb44134e7cedccec0f916e67",
+        "member": "de_inferno",
+        "crc32": "",
+        "bytes": 2903
+      }
+    ],
+    "mapData": {
+      "pos_x": -2087,
+      "pos_y": 3870,
+      "rotate": null,
+      "scale": 4.9,
+      "zoom": null
+    }
+  },
+  "radar": {
+    "pos_x": -2087,
+    "pos_y": 3870,
+    "scale": 4.9,
+    "width": 1024,
+    "height": 1024,
+    "lowerBelowZ": null,
+    "files": {
+      "default": "radar.png",
+      "lower": null
+    }
+  },
+  "los": {
+    "file": "los.bin.gz",
+    "quant": 2,
+    "vertices": 207851,
+    "triangles": 404075,
+    "bounds": {
+      "minX": -2076,
+      "minY": -1072,
+      "minZ": -280,
+      "maxX": 3072,
+      "maxY": 4264,
+      "maxZ": 712
+    },
+    "cull": {
+      "hullMargin": 64,
+      "zBelow": 64,
+      "zAbove": 200,
+      "zMin": -133,
+      "zMax": 504,
+      "hull": [
+        [
+          -1727,
+          68
+        ],
+        [
+          -1709,
+          -76
+        ],
+        [
+          -1295,
+          -410
+        ],
+        [
+          -1120,
+          -472
+        ],
+        [
+          -409,
+          -607
+        ],
+        [
+          282,
+          -712
+        ],
+        [
+          832,
+          -763
+        ],
+        [
+          836,
+          -763
+        ],
+        [
+          943,
+          -761
+        ],
+        [
+          2462,
+          -520
+        ],
+        [
+          2493,
+          -491
+        ],
+        [
+          2500,
+          -484
+        ],
+        [
+          2521,
+          -457
+        ],
+        [
+          2557,
+          -410
+        ],
+        [
+          2571,
+          -391
+        ],
+        [
+          2630,
+          -314
+        ],
+        [
+          2642,
+          -269
+        ],
+        [
+          2662,
+          1066
+        ],
+        [
+          2662,
+          1208
+        ],
+        [
+          2551,
+          2398
+        ],
+        [
+          2540,
+          2467
+        ],
+        [
+          2251,
+          2913
+        ],
+        [
+          2248,
+          2917
+        ],
+        [
+          1055,
+          3485
+        ],
+        [
+          793,
+          3511
+        ],
+        [
+          384,
+          3511
+        ],
+        [
+          3,
+          3242
+        ],
+        [
+          -1727,
+          649
+        ]
+      ],
+      "sourceTriangles": 547966,
+      "culledTriangles": 142496
+    }
+  },
+  "files": [
+    {
+      "name": "los.bin.gz",
+      "bytes": 1287553,
+      "sha256": "b0dd1fb754d3922d85a780bf9f16648e522f095d5f21ffae75fa119ef177e516",
+      "rawBytes": 2109954,
+      "rawSha256": "a2179c4eb4397fb3964c22f62822d98606bf0d01749455d0627cf270dd58491f"
+    },
+    {
+      "name": "radar.png",
+      "bytes": 136914,
+      "sha256": "53e1d660d5e61a9b876cc56725c2e891c56efcb788657520fa9c10fec321dce3"
+    }
+  ],
+  "fetchBytes": 1424467
+}

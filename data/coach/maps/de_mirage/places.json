@@ -1,0 +1,407 @@
+{
+ "format": "coach-places@1",
+ "map": "de_mirage",
+ "note": "Callout names (last_place_name) seen in demos, with living-player ticks during live play, centroid and bounding box (Source units, feet origins). Built by tools/coach/places-report.ts.",
+ "sources": [
+  {
+   "demoSha256": "84a1a4191302bdd2a3bbb5a727842093744b1fb1a228aeec630369e44b622cb2",
+   "bytes": 60601900,
+   "ticks": 40374,
+   "every": 1,
+   "playerTicks": 287236
+  }
+ ],
+ "places": [
+  {
+   "name": "Apartments",
+   "playerTicks": 12294,
+   "centroid": {
+    "x": -1639,
+    "y": 738,
+    "z": -53
+   },
+   "bounds": {
+    "minX": -2110,
+    "minY": 461,
+    "minZ": -168,
+    "maxX": -1023,
+    "maxY": 864,
+    "maxZ": 16
+   }
+  },
+  {
+   "name": "BackAlley",
+   "playerTicks": 9078,
+   "centroid": {
+    "x": -393,
+    "y": 575,
+    "z": -86
+   },
+   "bounds": {
+    "minX": -1022,
+    "minY": 375,
+    "minZ": -311,
+    "maxX": -127,
+    "maxY": 812,
+    "maxZ": -14
+   }
+  },
+  {
+   "name": "BombsiteA",
+   "playerTicks": 32136,
+   "centroid": {
+    "x": -471,
+    "y": -1832,
+    "z": -164
+   },
+   "bounds": {
+    "minX": -1054,
+    "minY": -2498,
+    "minZ": -180,
+    "maxX": 176,
+    "maxY": -1281,
+    "maxZ": 18
+   }
+  },
+  {
+   "name": "BombsiteB",
+   "playerTicks": 20634,
+   "centroid": {
+    "x": -2077,
+    "y": 236,
+    "z": -160
+   },
+   "bounds": {
+    "minX": -2656,
+    "minY": -299,
+    "minZ": -171,
+    "maxX": -1098,
+    "maxY": 631,
+    "maxZ": -13
+   }
+  },
+  {
+   "name": "CTSpawn",
+   "playerTicks": 51322,
+   "centroid": {
+    "x": -1295,
+    "y": -1731,
+    "z": -191
+   },
+   "bounds": {
+    "minX": -2032,
+    "minY": -2600,
+    "minZ": -295,
+    "maxX": -776,
+    "maxY": -705,
+    "maxZ": -34
+   }
+  },
+  {
+   "name": "Catwalk",
+   "playerTicks": 10150,
+   "centroid": {
+    "x": -749,
+    "y": -128,
+    "z": -164
+   },
+   "bounds": {
+    "minX": -1278,
+    "minY": -519,
+    "minZ": -176,
+    "maxX": 23,
+    "maxY": 311,
+    "maxZ": -59
+   }
+  },
+  {
+   "name": "Connector",
+   "playerTicks": 9482,
+   "centroid": {
+    "x": -660,
+    "y": -1083,
+    "z": -175
+   },
+   "bounds": {
+    "minX": -808,
+    "minY": -1319,
+    "minZ": -264,
+    "maxX": -520,
+    "maxY": -824,
+    "maxZ": -110
+   }
+  },
+  {
+   "name": "House",
+   "playerTicks": 5795,
+   "centroid": {
+    "x": 349,
+    "y": 771,
+    "z": -134
+   },
+   "bounds": {
+    "minX": -127,
+    "minY": 502,
+    "minZ": -136,
+    "maxX": 721,
+    "maxY": 844,
+    "maxZ": -81
+   }
+  },
+  {
+   "name": "Jungle",
+   "playerTicks": 7732,
+   "centroid": {
+    "x": -999,
+    "y": -1420,
+    "z": -164
+   },
+   "bounds": {
+    "minX": -1249,
+    "minY": -1586,
+    "minZ": -170,
+    "maxX": -756,
+    "maxY": -1239,
+    "maxZ": -106
+   }
+  },
+  {
+   "name": "Ladder",
+   "playerTicks": 1327,
+   "centroid": {
+    "x": -1154,
+    "y": -301,
+    "z": -60
+   },
+   "bounds": {
+    "minX": -1248,
+    "minY": -552,
+    "minZ": -168,
+    "maxX": -975,
+    "maxY": -81,
+    "maxZ": -28
+   }
+  },
+  {
+   "name": "Middle",
+   "playerTicks": 21829,
+   "centroid": {
+    "x": -558,
+    "y": -783,
+    "z": -219
+   },
+   "bounds": {
+    "minX": -1126,
+    "minY": -951,
+    "minZ": -291,
+    "maxX": 50,
+    "maxY": -489,
+    "maxZ": -51
+   }
+  },
+  {
+   "name": "PalaceAlley",
+   "playerTicks": 3464,
+   "centroid": {
+    "x": 824,
+    "y": -1261,
+    "z": -252
+   },
+   "bounds": {
+    "minX": 538,
+    "minY": -1689,
+    "minZ": -264,
+    "maxX": 1204,
+    "maxY": -700,
+    "maxZ": -54
+   }
+  },
+  {
+   "name": "PalaceInterior",
+   "playerTicks": 22045,
+   "centroid": {
+    "x": 367,
+    "y": -2013,
+    "z": -72
+   },
+   "bounds": {
+    "minX": 16,
+    "minY": -2376,
+    "minZ": -204,
+    "maxX": 1370,
+    "maxY": -1249,
+    "maxZ": 15
+   }
+  },
+  {
+   "name": "Scaffolding",
+   "playerTicks": 809,
+   "centroid": {
+    "x": -1,
+    "y": -2114,
+    "z": -39
+   },
+   "bounds": {
+    "minX": -140,
+    "minY": -2319,
+    "minZ": -82,
+    "maxX": 67,
+    "maxY": -1937,
+    "maxZ": 15
+   }
+  },
+  {
+   "name": "Shop",
+   "playerTicks": 8912,
+   "centroid": {
+    "x": -2007,
+    "y": -498,
+    "z": -160
+   },
+   "bounds": {
+    "minX": -2368,
+    "minY": -748,
+    "minZ": -168,
+    "maxX": -1572,
+    "maxY": -257,
+    "maxZ": -80
+   }
+  },
+  {
+   "name": "SideAlley",
+   "playerTicks": 10071,
+   "centroid": {
+    "x": 646,
+    "y": 415,
+    "z": -234
+   },
+   "bounds": {
+    "minX": 198,
+    "minY": 7,
+    "minZ": -265,
+    "maxX": 1081,
+    "maxY": 680,
+    "maxZ": -69
+   }
+  },
+  {
+   "name": "SnipersNest",
+   "playerTicks": 7112,
+   "centroid": {
+    "x": -1201,
+    "y": -862,
+    "z": -164
+   },
+   "bounds": {
+    "minX": -1326,
+    "minY": -1176,
+    "minZ": -168,
+    "maxX": -1059,
+    "maxY": -462,
+    "maxZ": -97
+   }
+  },
+  {
+   "name": "Stairs",
+   "playerTicks": 6477,
+   "centroid": {
+    "x": -481,
+    "y": -1489,
+    "z": -66
+   },
+   "bounds": {
+    "minX": -624,
+    "minY": -1857,
+    "minZ": -168,
+    "maxX": 23,
+    "maxY": -1309,
+    "maxZ": 15
+   }
+  },
+  {
+   "name": "TRamp",
+   "playerTicks": 3033,
+   "centroid": {
+    "x": 363,
+    "y": -1604,
+    "z": -189
+   },
+   "bounds": {
+    "minX": 208,
+    "minY": -1712,
+    "minZ": -264,
+    "maxX": 566,
+    "maxY": -1447,
+    "maxZ": -92
+   }
+  },
+  {
+   "name": "TSpawn",
+   "playerTicks": 12150,
+   "centroid": {
+    "x": 1234,
+    "y": -190,
+    "z": -180
+   },
+   "bounds": {
+    "minX": 1081,
+    "minY": -1287,
+    "minZ": -264,
+    "maxX": 1423,
+    "maxY": 528,
+    "maxZ": -93
+   }
+  },
+  {
+   "name": "TopofMid",
+   "playerTicks": 17221,
+   "centroid": {
+    "x": 351,
+    "y": -426,
+    "z": -162
+   },
+   "bounds": {
+    "minX": 23,
+    "minY": -936,
+    "minZ": -207,
+    "maxX": 528,
+    "maxY": 16,
+    "maxZ": -24
+   }
+  },
+  {
+   "name": "Truck",
+   "playerTicks": 2626,
+   "centroid": {
+    "x": -2238,
+    "y": 743,
+    "z": -97
+   },
+   "bounds": {
+    "minX": -2387,
+    "minY": 626,
+    "minZ": -153,
+    "maxX": -2076,
+    "maxY": 832,
+    "maxZ": 15
+   }
+  },
+  {
+   "name": "Underpass",
+   "playerTicks": 11537,
+   "centroid": {
+    "x": -934,
+    "y": -105,
+    "z": -278
+   },
+   "bounds": {
+    "minX": -1055,
+    "minY": -614,
+    "minZ": -368,
+    "maxX": -516,
+    "maxY": 480,
+    "maxZ": 7
+   }
+  }
+ ]
+}
