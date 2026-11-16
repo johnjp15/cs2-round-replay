@@ -337,6 +337,8 @@ fn sort_id(k: &Key) -> String {
 struct Slots {
     by_key: AHashMap<Key, u16>,
     by_sid: AHashMap<u64, u16>,
+    /// player name -> slot (the last slot with that name), the fallback of event fields
+    by_name: AHashMap<String, u16>,
 }
 impl Slots {
     fn of(&self, sid: u64, name: Option<&str>) -> Option<u16> {
@@ -345,6 +347,11 @@ impl Slots {
         } else {
             self.by_key.get(&key(0, name.unwrap_or(""))).copied()
         }
+    }
+    /// As the Node adapter's `slotOf`: by Steam ID (or bot name), else by player name.
+    fn of_event(&self, sid: Option<u64>, name: Option<&str>) -> Option<u16> {
+        sid.and_then(|s| self.of(s, name))
+            .or_else(|| name.filter(|n| !n.is_empty()).and_then(|n| self.by_name.get(n).copied()))
     }
 }
 
@@ -487,13 +494,16 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     let mut keys: Vec<(i32, String, Key)> = first_team.iter().map(|(k, &(_, team))| (team, sort_id(k), k.clone())).collect();
     keys.sort();
     let mut players = Vec::new();
-    let mut slots = Slots { by_key: AHashMap::default(), by_sid: AHashMap::default() };
+    let mut slots = Slots { by_key: AHashMap::default(), by_sid: AHashMap::default(), by_name: AHashMap::default() };
     for (i, (_, _, k)) in keys.iter().enumerate() {
         slots.by_key.insert(k.clone(), i as u16);
         if k.0 != 0 {
             slots.by_sid.insert(k.0, i as u16);
         }
         players.push(Player { steamid: k.0, name: last_name.get(k).cloned().unwrap_or_default(), bot: k.0 == 0 });
+    }
+    for (i, p) in players.iter().enumerate() {
+        slots.by_name.insert(p.name.clone(), i as u16);
     }
     let np = players.len();
     if np > 16 {
@@ -583,7 +593,8 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     let mut take = |name: &str| -> Option<PropColumn> { id_of.get(name).and_then(|id| df.remove(id)) };
 
     let f32n = |c: Option<&PropColumn>, r: usize| col_f32(c, r).unwrap_or(f32::NAN);
-    let f32z = |c: Option<&PropColumn>, r: usize| col_f32(c, r).unwrap_or(0.0);
+    // columns the Node adapter reads with num(): non-finite -> 0
+    let f32z = |c: Option<&PropColumn>, r: usize| col_f32(c, r).filter(|v| v.is_finite()).unwrap_or(0.0);
     let u8c = |c: Option<&PropColumn>, r: usize| clamp_u8(col_f32(c, r));
     let u16c = |c: Option<&PropColumn>, r: usize| clamp_u16(col_f32(c, r));
     let mut present = vec![0u8; n];
@@ -668,8 +679,8 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
             for (r, &i) in dense.iter().enumerate() {
                 if i != u32::MAX {
                     if let Some(v) = col_xyz(Some(&c), r) {
-                        a[i as usize] = v[0];
-                        b[i as usize] = v[1];
+                        a[i as usize] = if v[0].is_finite() { v[0] } else { 0.0 };
+                        b[i as usize] = if v[1].is_finite() { v[1] } else { 0.0 };
                     }
                 }
             }
@@ -706,7 +717,7 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     let projectiles = projectiles(&pr, &slots);
     drop(pr);
 
-    progress("events", 0.97);
+    progress("tables", 0.97);
     let events = event_tables(&game_events, &slots);
     progress("done", 1.0);
     Ok(Output { header, players, weapons, places, ticks, events, projectiles, inventories, score_tick: end, scoreboard })
@@ -838,10 +849,7 @@ fn event_tables(events: &[GameEvent], slots: &Slots) -> Vec<EventTable> {
                                     Some(Variant::String(s)) => Some(s.as_str()),
                                     _ => None,
                                 };
-                                match sid {
-                                    Some(s) => slots.of(s, nm).map(|q| q as i16).unwrap_or(-1),
-                                    None => -1,
-                                }
+                                slots.of_event(sid, nm).map(|q| q as i16).unwrap_or(-1)
                             })
                             .collect(),
                     )
@@ -920,7 +928,8 @@ fn projectiles(pr: &DemoOutput, slots: &Slots) -> Vec<Projectile> {
                 }
                 let k = ((t - t0) / PATH_STEP) as usize;
                 for d in 0..3 {
-                    path[k * 3 + d] = p[d].round().clamp(-32767.0, 32767.0) as i16;
+                    // JS Math.round (half up), as the Node adapter
+                    path[k * 3 + d] = (p[d] + 0.5).floor().clamp(-32767.0, 32767.0) as i16;
                 }
             }
             Projectile { kind: a.kind, thrower: a.thrower, entity: a.entity, t0, t1, path }
