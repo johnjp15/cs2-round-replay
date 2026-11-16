@@ -3,6 +3,10 @@
  *
  *   npm run coach -- parse <demo> [--out file]   parse with the native parser, write the RawDemo cache
  *   npm run coach -- inspect <demo|cache> [--fresh]   header, rounds, scoreboard and reconciliation
+ *   npm run coach -- report <demo|cache> --user <name|slot|A1…B5> [--no-los] [--fresh]
+ *        analyze for one player: prints the top fixes (numbers, lobby ranks, evidence moments), strengths and the
+ *        lobby table of every metric; writes the report JSON to local/coach-reports/. Loads the map pack's sight
+ *        mesh (data/coach/maps/<map>/los.bin.gz) when it exists.
  *
  * The cache lives in local/coach-cache/<sha256 of the demo>.craw (gitignored). `inspect` uses it when present unless
  * `--fresh` is given; a `.craw` or `.craw.gz` path is read directly.
@@ -15,6 +19,11 @@ import { gunzipSync } from 'node:zlib';
 import { decodeRawDemo, encodeRawDemo } from '../../src/coach/model/raw-codec';
 import type { RawDemo } from '../../src/coach/model/raw';
 import { ingestMatch, reconcile, STAT_KEYS } from '../../src/coach/ingest/index';
+import { analyze, reportJson } from '../../src/coach/analyze/index';
+import { LosWorld } from '../../src/coach/derive/los';
+import type { Match } from '../../src/coach/model/match';
+import type { MatchReport } from '../../src/coach/model/report';
+import { playerLabel, rankOf, roundClock } from '../../src/coach/report/format';
 import { parseDemoNode } from './parse-node';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -108,11 +117,88 @@ function inspect(raw: RawDemo): boolean {
   return recon.ok;
 }
 
+/** A slot from a slot number, an anonymous label (A1…B5) or a (case-insensitive, unique) part of a name. */
+function resolveUser(match: Match, who: string): number {
+  if (/^\d+$/.test(who)) return Number(who);
+  const byLabel = match.players.find((p) => playerLabel(match, p.slot) === who.toUpperCase());
+  if (byLabel) return byLabel.slot;
+  const hits = match.players.filter((p) => p.name.toLowerCase().includes(who.toLowerCase()));
+  if (hits.length === 1 && hits[0]) return hits[0].slot;
+  throw new Error(`--user ${who}: ${hits.length === 0 ? 'no player matches' : `${hits.length} players match`}`);
+}
+
+function loadLos(map: string): LosWorld | null {
+  const f = resolve(ROOT, `data/coach/maps/${map}/los.bin.gz`);
+  if (!existsSync(f)) return null;
+  return LosWorld.fromBytes(new Uint8Array(gunzipSync(readFileSync(f))));
+}
+
+function fmtValue(v: number, unit: string): string {
+  if (!Number.isFinite(v)) return '–';
+  if (unit === '%') return `${(v * 100).toFixed(1)} %`;
+  if (unit === 'deg') return `${v.toFixed(2)}°`;
+  if (unit === 'x') return `${v.toFixed(2)}×`;
+  if (unit === 'ms') return `${v.toFixed(0)} ms`;
+  return Number.isInteger(v) ? `${v}` : v.toFixed(2);
+}
+
+function printReport(rep: MatchReport, match: Match): void {
+  const lobbyN = (l: number[]): number => l.filter((x) => Number.isFinite(x)).length;
+  const byId = new Map(rep.findings.map((f) => [f.id, f]));
+  const show = (id: string, k: number, kind: string): void => {
+    const f = byId.get(id);
+    if (!f) return;
+    console.log(`\n${kind} ${k}. ${f.title}   [${f.id}; impact ${f.impact.toFixed(2)} × confidence ${f.confidence.toFixed(2)} = ${f.priority.toFixed(2)}]`);
+    console.log(`   ${f.summary}`);
+    if (f.why) console.log(`   why: ${f.why}`);
+    for (const m of f.metrics) console.log(`   · ${m.id} = ${fmtValue(m.value, m.unit)} (n ${m.n}), ${m.lobbyRank > 0 ? rankOf(m.lobbyRank, lobbyN(m.lobby)) : 'unranked'} in the lobby`);
+    for (const a of f.advice) console.log(`   → ${a.text}${a.drill ? ` Drill: ${a.drill}` : ''}`);
+    for (const e of f.evidence) console.log(`   ▶ ${e.kind} ${roundClock(match, e.focus)} (ticks ${e.tick0}–${e.tick1}, focus ${e.focus}): ${e.caption}`);
+  };
+  console.log(`\nreport for ${playerLabel(match, rep.user)} (slot ${rep.user}): ${rep.findings.length} findings, ${rep.metrics.length} metrics`);
+  rep.topFixes.forEach((id, k) => show(id, k + 1, 'FIX'));
+  rep.strengths.forEach((id, k) => show(id, k + 1, 'STRENGTH'));
+  const others = rep.findings.filter((f) => !rep.topFixes.includes(f.id) && !rep.strengths.includes(f.id));
+  if (others.length > 0) console.log(`\nother findings: ${others.map((f) => `${f.id} (${f.polarity}, ${f.priority.toFixed(2)})`).join(', ')}`);
+  const slots = match.players.map((p) => p.slot).sort((a, b) => playerLabel(match, a).localeCompare(playerLabel(match, b)));
+  console.log(`\nlobby (value / rank):\n${pad('metric', 40)}${slots.map((s) => lpad(playerLabel(match, s), 13)).join('')}`);
+  for (const m of rep.metrics) {
+    console.log(`${pad(m.id, 40)}${slots.map((s) => lpad(fmtValue(m.lobby[s] ?? NaN, m.unit), 13)).join('')}`);
+  }
+}
+
+function report(raw: RawDemo, who: string, useLos: boolean): void {
+  const t0 = performance.now();
+  const match = ingestMatch(raw);
+  const user = resolveUser(match, who);
+  const los = useLos ? loadLos(raw.header.map) : null;
+  const t1 = performance.now();
+  const rep = analyze(raw, match, { user, los });
+  const t2 = performance.now();
+  printReport(rep, match);
+  const dir = resolve(ROOT, 'local/coach-reports');
+  mkdirSync(dir, { recursive: true });
+  const out = resolve(dir, `${raw.header.demoSha256.slice(0, 12)}-${playerLabel(match, user)}.json`);
+  writeFileSync(out, reportJson(rep, 1));
+  console.log(`\ningest + map pack ${(t1 - t0).toFixed(0)} ms (sight mesh ${los ? 'loaded' : 'not loaded'}); analyze ${(t2 - t1).toFixed(0)} ms; peak RSS ${mb(process.resourceUsage().maxRSS * 1024)}`);
+  console.log(`report JSON → ${out}`);
+}
+
 function main(): void {
   const [cmd, input, ...rest] = process.argv.slice(2);
-  if (!cmd || !input || !['parse', 'inspect'].includes(cmd)) {
-    console.error('usage: coach parse <demo> [--out file] | coach inspect <demo|file.craw> [--fresh]');
+  if (!cmd || !input || !['parse', 'inspect', 'report'].includes(cmd)) {
+    console.error('usage: coach parse <demo> [--out file] | coach inspect <demo|file.craw> [--fresh] | coach report <demo|file.craw> --user <name|slot|A1…B5> [--no-los]');
     process.exit(2);
+  }
+  if (cmd === 'report') {
+    const k = rest.indexOf('--user');
+    const who = k >= 0 ? rest[k + 1] : undefined;
+    if (who === undefined) {
+      console.error('coach report: --user <name|slot|A1…B5> is required');
+      process.exit(2);
+    }
+    report(load(input, rest.includes('--fresh')), who, !rest.includes('--no-los'));
+    return;
   }
   if (cmd === 'parse') {
     const k = rest.indexOf('--out');

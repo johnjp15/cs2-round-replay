@@ -1,0 +1,19 @@
+{
+  "_note": "K2: the framework's tunables (src/coach/analyze, src/coach/report/format.ts, src/coach/detect/common.ts). docs/coach/mechanics.md, 'Framework'.",
+  "prioritizer": {
+    "_": "First prioritizer (K5 replaces it): priority = impact × confidence. At most maxFixes fixes, never two of one detector family (the id up to the second dot); up to maxStrengths strengths. A finding below minConfidence is not chosen.",
+    "maxFixes": 3,
+    "maxStrengths": 2,
+    "minConfidence": 0.2
+  },
+  "confidence": {
+    "_": "Sample-size factor: 1 − exp(−n / nScale), where each detector gives its own nScale in its area file; strengths also need rank ≤ strengthMaxRank among at least strengthMinLobby players with a value.",
+    "strengthMaxRank": 2,
+    "strengthMinLobby": 6
+  },
+  "clock": {
+    "_": "Round clock for finding texts: roundSec from the freeze end; after the plant the bomb timer (bombSec).",
+    "roundSec": 115,
+    "bombSec": 40
+  }
+}
