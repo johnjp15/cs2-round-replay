@@ -17,6 +17,8 @@ import { lobbyMedian, rowFeet } from './util';
 const ID = 'aim.counter_strafe';
 const t = AIM_TUNING.counterStrafe;
 
+const times1 = (n: number): string => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
+
 const STOP_WORDS: Record<string, string> = {
   opposite: 'tapped the opposite key',
   coast: 'released the key and coasted',
@@ -43,7 +45,7 @@ function duelEvidence(ctx: AnalysisContext, f: FirstBullet, slot: number): Findi
     path(pts, ticks, s.tick - before, s.tick + after, 'user', 'your last 300 ms'),
     line(s.eye, [target[0], target[1], target[2] + 48], s.tick - 8, s.tick + after, s.hitEnemy ? 'good' : 'bad', 'first bullet'),
     label(s.eye, tag, s.tick - 8, s.tick + after, 'bad'),
-  ], `${roundClock(ctx.match, s.tick)}: first ${weaponName(s.weapon)} bullet at ${units(s.speed)}/s, ${ms(s.msToStop)} before you had stopped (${STOP_WORDS[s.stop] ?? s.stop}); ${times(ratio)} the standing inaccuracy, ${s.hitEnemy ? 'hit' : 'missed'}`);
+  ], `${roundClock(ctx.match, s.tick)}: first ${weaponName(s.weapon)} bullet at ${units(s.speed)}/s, ${s.msToStop >= t.lateCapMs ? `still moving ${ms(t.lateCapMs)} later` : `${ms(s.msToStop)} before you had stopped`} (you ${STOP_WORDS[s.stop] ?? s.stop}); ${times(ratio)} the standing inaccuracy, ${s.hitEnemy ? 'hit' : 'missed'}`);
 }
 
 export const COUNTER_STRAFE: Detector = {
@@ -66,7 +68,7 @@ export const COUNTER_STRAFE: Detector = {
     const conf = confidence(t.precision, fb.length, t.nScale);
     const metrics = [head, metric(`${ID}.late_ms`), metric(`${ID}.cost_x`), metric(`${ID}.opposite_share`)].filter((m): m is MetricValue => m !== null);
     const set = useRifle ? 'first rifle bullets' : 'first bullets';
-    const stopText = stops.length === 0 ? '' : ` Of ${plural(stops.length, 'stop')} before a first bullet you ${STOP_WORDS.opposite} ${byStop('opposite')} times, ${STOP_WORDS.coast} ${byStop('coast')}, ${STOP_WORDS.crouch} ${byStop('crouch')} and ${STOP_WORDS.holding} ${byStop('holding')}.`;
+    const stopText = stops.length === 0 ? '' : ` Of ${plural(stops.length, 'stop')} before a first bullet you ${STOP_WORDS.opposite} ${times1(byStop('opposite'))}, ${STOP_WORDS.coast} ${times1(byStop('coast'))}, ${STOP_WORDS.crouch} ${times1(byStop('crouch'))} and ${STOP_WORDS.holding} ${times1(byStop('holding'))}.`;
     const out: Finding[] = [];
     const med = lobbyMedian(head);
     if (head.value >= t.fixShare && isBelowMedian(head) && early.length > 0) {

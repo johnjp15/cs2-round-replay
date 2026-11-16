@@ -93,7 +93,7 @@ export function segments(profile: readonly Bucket[]): Segment[] {
 /** "on target for bullets 1–3, 1.8° high over bullets 4–10, 1.2° right from bullet 11". */
 export function describe(segs: readonly Segment[]): string {
   return segs.map((s) => {
-    const range = `bullets ${span(s.from, s.to)}`;
+    const range = s.from === s.to ? `bullet ${s.from}` : `bullets ${span(s.from, s.to)}`;
     if (s.verdict === 'on') return `on target for ${range}`;
     const parts: string[] = [];
     if (s.verdict.startsWith('high')) parts.push(`${deg(s.up)} high`);
@@ -134,7 +134,15 @@ function sprayEvidence(ctx: AnalysisContext, s: SprayRow, seg: Segment | null, s
   const t0 = first?.tick ?? 0;
   const t1 = last?.tick ?? t0;
   const eye = shots.shots[first?.shot ?? 0]?.eye ?? [0, 0, 0];
-  const segText = seg === null ? `${s.hits} of ${s.bullets.length} hit` : describe([seg]);
+  let segText = `${s.hits} of ${s.bullets.length} hit`;
+  if (seg !== null) {
+    const own = s.bullets.filter((b) => b.n >= seg.from && b.n <= seg.to);
+    const up = median(own.map((b) => b.up));
+    const right = median(own.map((b) => b.right));
+    const from = own[0]?.n ?? seg.from;
+    const to = own[own.length - 1]?.n ?? seg.to;
+    segText = describe([{ from, to, verdict: verdictOf(up, right, median(own.map((b) => b.dist))), up, right }]);
+  }
   const end = tgtPts[tgtPts.length - 1] ?? eye;
   return evidence('spray', s.round, t0, rate, t1 - t0 + rate, [slot, s.target], [
     line(eye, tgtPts[0] ?? eye, t0 - rate, t1 + rate, 'neutral', `${units(s.dist)}`, true),
@@ -174,7 +182,8 @@ export const SPRAY: Detector = {
     const bullets = count(group);
     const prof = sprayProfile(group);
     const segs = segments(prof);
-    const off = segs.filter((s) => s.verdict !== 'on');
+    // Only drift from bullet `bulletFrom` on that reaches bullet 4 is spray control; bullet 1 is placement.
+    const off = segs.filter((s) => s.verdict !== 'on' && s.from >= t.bulletFrom && s.to >= 4 && s.to > s.from);
     const rounds = roundsPlayedBy(ctx, slot);
     const metrics = [mv, metric(`${ID}.vertical_drift_deg`), metric(`${ID}.horizontal_drift_deg`), metric(`${ID}.hit_share`)].filter((m): m is MetricValue => m !== null);
     const conf = confidence(t.precision, bullets, t.nScale);

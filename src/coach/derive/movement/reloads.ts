@@ -4,7 +4,9 @@
  * - A reload's clip and weapon are read on the event's row (the tick row still shows the clip before the reload; the
  *   reloading flag is set from that row on). Nearest living enemy by 3D distance from the eye; with a map pack,
  *   `nearVisible` says whether any body point of an enemy within nearUnits was in sight of the eye.
- * - A death's weapon in hand and reloading flag are read on the row before the death.
+ * - A death's weapon in hand and reloading flag are read on the row before the death. A death counts as "while
+ *   reloading" only while the magazine is not refilled yet: the clip jumps to full about a second before the
+ *   reloading flag clears (test demo: AK-47 refilled 1.4 s into a 2.47 s reload), and a death after that is not one.
  */
 import type { TableDef } from '../../analyze/context';
 import { FLAG, rowAtOrAfter } from '../../model/raw';
@@ -80,9 +82,12 @@ export const DEATHS_IN_HAND: TableDef<DeathInHand[]> = {
           if (d <= co.throwAimDeg) throwing = true;
         }
       }
+      // Reloading = the flag is on and the magazine is not refilled yet (the clip jumps to full well before the flag clears).
+      const clip = T.clip[i] ?? 255;
+      const size = ctx.weapon(weapon)?.clip ?? 0;
+      const reloading = ((T.flags[i] ?? 0) & FLAG.reloading) !== 0 && clip !== 255 && clip < size;
       out.push({
-        k: idx, tick: k.tick, victim: k.victim, attacker: k.attacker, round, weapon,
-        reloading: ((T.flags[i] ?? 0) & FLAG.reloading) !== 0, clip: T.clip[i] ?? 255, throwingAtKiller: throwing,
+        k: idx, tick: k.tick, victim: k.victim, attacker: k.attacker, round, weapon, reloading, clip, throwingAtKiller: throwing,
       });
     });
     return out;

@@ -60,7 +60,9 @@ export const RELOAD: Detector = {
     return [makeFinding({
       id: `${ID}.exposed`, area: 'movement', scope: 'micro', polarity: 'fix',
       title: 'Reload behind cover, not by habit',
-      summary: `You started ${exposed.length} of ${plural(reloads.length, 'reload')} with an enemy within ${units(t.nearUnits)}${ctx.los !== null ? ' in sight' : ''} (${near}) or more than half a magazine left (${full})${deaths.length > 0 ? `, and died ${deaths.length === 1 ? 'once' : `${deaths.length} times`} while reloading` : ''}.`,
+      summary: exposed.length === 0
+        ? `You died ${deaths.length === 1 ? 'once' : `${deaths.length} times`} while reloading (${plural(reloads.length, 'reload')} in the match).`
+        : `You started ${exposed.length} of ${plural(reloads.length, 'reload')} with an enemy within ${units(t.nearUnits)}${ctx.los !== null ? ' in sight' : ''} (${near}) or more than half a magazine left (${full})${deaths.length > 0 ? `, and died ${deaths.length === 1 ? 'once' : `${deaths.length} times`} while reloading` : ''}.`,
       why: `A reload takes 2–3 s in which you cannot shoot${share !== null && Number.isFinite(share.value) ? `; ${pct(share.value)} of your reloads were exposed` : ''}.`,
       advice: [{ text: 'After a kill, check the magazine: with more than half left, swap to the pistol or reposition first; reload only behind cover and with no enemy close.' }],
       metrics, evidence: picked.map((x) => ev(ctx, x, slot)),
