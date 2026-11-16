@@ -4,7 +4,7 @@
  * (vite.single.config.ts): main.ts's `./assets3d` is redirected to `./assets3d-embedded`, which reads
  * `virtual:cs2-embedded-assets-3d` (every data file gzipped + base64, the radar a data: URI); Three.js is bundled
  * into the one inlined script; the build fails if anything but index.html is written or the page still points at
- * another file, and prints the sizes (raw, gzip, and the page once locked by cs2/tools/encrypt.cjs).
+ * another file, and prints the sizes (raw, gzip, and the page once locked by tools/pages/encrypt.cjs).
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -19,7 +19,7 @@ const VIRTUAL = 'virtual:cs2-embedded-assets-3d';
 const RESOLVED_VIRTUAL = '\0' + VIRTUAL;
 const MAIN = resolve(ROOT, 'src/app3d/main.ts');
 const EMBEDDED_LOADER = resolve(ROOT, 'src/app3d/assets3d-embedded.ts');
-/** Bytes of cs2/tools/lock.html around the payload, plus the payload's JSON fields (salt, iv, ...). */
+/** Bytes of tools/pages/lock.html around the payload, plus the payload's JSON fields (salt, iv, ...). */
 const LOCK_OVERHEAD = 6_400;
 
 function kb(n: number): string {
@@ -72,7 +72,7 @@ function checkSingleFile(): Plugin {
       const raw = Buffer.byteLength(html);
       const gzBytes = gzipSync(html, { level: 9 }).length;
       const locked = LOCK_OVERHEAD + Math.ceil((raw + 16) / 3) * 4;
-      this.info(`dist-single-3d/index.html: ${kb(raw)} (gzip ${kb(gzBytes)}); locked by cs2/tools/encrypt.cjs ≈ ${kb(locked)}`);
+      this.info(`dist-single-3d/index.html: ${kb(raw)} (gzip ${kb(gzBytes)}); locked by tools/pages/encrypt.cjs ≈ ${kb(locked)}`);
     },
   };
 }

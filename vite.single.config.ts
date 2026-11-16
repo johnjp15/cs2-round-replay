@@ -28,7 +28,7 @@ const MAIN = resolve(ROOT, 'src/app/main.ts');
 const EMBEDDED_LOADER = resolve(ROOT, 'src/app/assets-embedded.ts');
 const RAW = process.env['CS2_SINGLE_RAW'] === '1';
 
-/** Bytes of tools/lock.html around the payload, plus the payload's JSON fields (salt, iv, ...). */
+/** Bytes of tools/pages/lock.html around the payload, plus the payload's JSON fields (salt, iv, ...). */
 const LOCK_OVERHEAD = 6_400;
 
 function kb(n: number): string {
@@ -87,7 +87,7 @@ function checkSingleFile(): Plugin {
       const raw = Buffer.byteLength(html);
       const gz = gzipSync(html, { level: 9 }).length;
       const locked = LOCK_OVERHEAD + Math.ceil((raw + 16) / 3) * 4;
-      this.info(`${OUT_DIR}/index.html: ${kb(raw)} (gzip ${kb(gz)}); locked by cs2/tools/encrypt.cjs ≈ ${kb(locked)}; JSON ${RAW ? 'as text' : 'gzip + base64'}`);
+      this.info(`${OUT_DIR}/index.html: ${kb(raw)} (gzip ${kb(gz)}); locked by tools/pages/encrypt.cjs ≈ ${kb(locked)}; JSON ${RAW ? 'as text' : 'gzip + base64'}`);
     },
   };
 }

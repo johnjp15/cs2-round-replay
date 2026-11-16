@@ -1,21 +1,19 @@
 name: CI
-
-# Actions minutes are limited (private repo): docs-only changes don't run CI, and a newer push to the
-# same PR or branch cancels the run still in progress.
+# The repo is public (since 2026-11-16), so Actions minutes are free. Docs-only changes still don't run CI, and a newer
+# push to the same PR or branch cancels the run still in progress, so only the newest main commit deploys.
 on:
   pull_request:
     paths-ignore: ['docs/**', '**/*.md', 'NOTES.md']
   push:
     branches: [main]
     paths-ignore: ['docs/**', '**/*.md', 'NOTES.md']
-
+  # Actions → CI → Run workflow on main: check and deploy without a push (e.g. after changing a secret).
+  workflow_dispatch:
 permissions:
   contents: read
-
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -32,3 +30,58 @@ jobs:
       - run: npm run map:check
       - run: npm run build
       - run: npm run build:single
+
+  # Publishes the two sim pages, locked, at https://johnjp15.github.io/cs2/sim/ and /cs2/sim3d/ (docs/deploy.md).
+  # Secrets: CS2_PASSWORD (the cs2 page password) and PAGES_TOKEN (fine-grained token: johnjp15/johnjp15.github.io
+  # only, Contents: Read and write). Never runs for pull requests or forks.
+  deploy:
+    needs: check
+    if: github.repository == 'johnjp15/cs2-round-replay' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the secrets
+        env:
+          CS2_PASSWORD: ${{ secrets.CS2_PASSWORD }}
+          PAGES_TOKEN: ${{ secrets.PAGES_TOKEN }}
+        run: |
+          missing=0
+          [ -n "$CS2_PASSWORD" ] || { echo "::error::Add the repository secret CS2_PASSWORD, the cs2 page password (docs/deploy.md)."; missing=1; }
+          [ -n "$PAGES_TOKEN" ] || { echo "::error::Add the repository secret PAGES_TOKEN, a fine-grained token for johnjp15/johnjp15.github.io with Contents: Read and write (docs/deploy.md)."; missing=1; }
+          exit "$missing"
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: johnjp15/johnjp15.github.io
+          ref: master
+          path: pages
+          token: ${{ secrets.PAGES_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: repo/package-lock.json
+      - run: npm ci
+        working-directory: repo
+      - name: Lock cs2/sim and cs2/sim3d into the Pages checkout
+        env:
+          CS2_PASSWORD: ${{ secrets.CS2_PASSWORD }}
+        run: repo/tools/pages/deploy.sh "$GITHUB_WORKSPACE/pages"
+      - name: Push to johnjp15.github.io
+        working-directory: pages
+        run: |
+          git add -A cs2/sim cs2/sim3d
+          if git diff --cached --quiet; then echo "The published pages are already this build."; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -q -m "cs2: deploy cs2-round-replay@${GITHUB_SHA::7}"
+          # web-apps deploys the other cs2 pages to the same branch; its commits never touch cs2/sim or cs2/sim3d.
+          for attempt in 1 2 3; do
+            if git push -q origin HEAD:master; then exit 0; fi
+            sleep 10
+            git pull -q --rebase origin master
+          done
+          echo "::error::Could not push to johnjp15.github.io master."
+          exit 1

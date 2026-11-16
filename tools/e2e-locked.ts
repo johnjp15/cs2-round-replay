@@ -1,19 +1,23 @@
 /**
- * End-to-end check of the sim page behind the cs2 lock, with a throwaway password (docs/deploy.md).
+ * End-to-end check of the whole cs2 site behind its lock, with a throwaway password (docs/deploy.md).
  *
  *   npm run check:locked [-- --web-apps <path>] [--tmp <dir>] [--out logs/locked-check] [--no-build]
  *
- * The web-apps checkout is only read: `--web-apps`, else $WEB_APPS_DIR, else a `web-apps` folder next to this
- * repo (or next to its main checkout, from a git worktree). Everything is written to a temp copy (default
- * <os tmpdir>/cs2-e2e, which is /tmp/cs2-e2e on Linux) and the screenshots to `--out`. The check:
+ * The cs2 site is web-apps' cs2 pages (index, mirage-round-replay) plus this repo's two sim pages, which this repo's
+ * CI deploys itself (tools/pages/deploy.sh). The web-apps checkout is only read: `--web-apps`, else $WEB_APPS_DIR,
+ * else a `web-apps` folder next to this repo (or next to its main checkout, from a git worktree). Everything is
+ * written to a temp copy (default <os tmpdir>/cs2-e2e, which is /tmp/cs2-e2e on Linux) and the screenshots to
+ * `--out`. The check:
  *
- *  1. copies <web-apps>/cs2 to <tmp>/cs2 and runs tools/stage-web-apps.sh against <tmp> twice: the second run must
- *     change nothing; the diff of cs2/index.html and cs2/README.md goes to <out>/stage.diff;
+ *  1. tools/pages/{encrypt.cjs,lock.html,lock.json} must be byte for byte web-apps' cs2/tools copies (one password
+ *     and one salt for every cs2 page); copies <web-apps>/cs2, without any sim/ or sim3d/ of its own, to <tmp>/cs2
+ *     and adds dist-single/index.html and dist-single-3d/index.html as sim/ and sim3d/ (built first unless
+ *     --no-build), with tools/pages' encrypt.cjs and lock.html;
  *  2. deletes <tmp>/cs2/tools/lock.json (so a fresh salt and verifier are made) and runs
  *     CS2_PASSWORD=test-only-password CS2_NEW_PASSWORD=1 node <tmp>/cs2/tools/encrypt.cjs <tmp>/cs2 <tmp>/out;
- *  3. the plaintext guard: deploy.sh's own grep (its pattern is read from deploy.sh) must find nothing in <tmp>/out,
- *     and must match the staged plaintext sim page (so it would catch that page published unencrypted); every
- *     output page must decrypt, in Node, to its source byte for byte;
+ *  3. the plaintext guard: tools/pages/deploy.sh's own grep (its pattern is read from the script) must find nothing
+ *     in <tmp>/out, and must match the plaintext sim page (so it would catch that page published unencrypted);
+ *     every output page must decrypt, in Node, to its source byte for byte;
  *  4. serves <tmp>/out at http://localhost:<port>/ and, in headless Chromium (playwright-core):
  *     - desktop 1280×860: /sim/ shows the lock screen, a wrong password is refused, the throwaway one opens the
  *       game: the canvas shows the radar, the clock reads 1:39, Start runs ticks; no console or page errors, and
@@ -123,12 +127,6 @@ function freshTemp(dir: string, webApps: string): void {
   }
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, MARKER), 'Made by cs2-round-replay tools/e2e-locked.ts; safe to delete.\n');
-}
-
-function diff(a: string, b: string, label: string): string {
-  const r = spawnSync('diff', ['-u', '-L', `a/${label}`, '-L', `b/${label}`, a, b], { encoding: 'utf8' });
-  if (r.status !== 0 && r.status !== 1) throw new Error(`diff ${label} failed: ${r.stderr}`);
-  return r.stdout;
 }
 
 interface Payload {
@@ -487,20 +485,27 @@ async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
   const cs2 = join(TMP, 'cs2');
   const out = join(TMP, 'out');
-  cpSync(join(webApps, 'cs2'), cs2, { recursive: true, filter: (src) => !src.split(sep).includes('node_modules') });
-
-  // 1. Stage, twice.
-  const stage = join(REPO, 'tools', 'stage-web-apps.sh');
-  console.log(run('bash', [stage, TMP, ...(NO_BUILD ? ['--no-build'] : [])]).trim());
-  const once = ['index.html', 'README.md'].map((f) => readFileSync(join(cs2, f), 'utf8'));
-  run('bash', [stage, TMP, '--no-build']);
-  const twice = ['index.html', 'README.md'].map((f) => readFileSync(join(cs2, f), 'utf8'));
-  check(once[0] === twice[0] && once[1] === twice[1], 'stage-web-apps.sh: a second run changes nothing');
+  // 1. The site as published: web-apps' cs2 pages, plus this repo's two builds as sim/ and sim3d/.
+  const pagesTools = join(REPO, 'tools', 'pages');
+  for (const f of ['encrypt.cjs', 'lock.html', 'lock.json']) {
+    check(readFileSync(join(pagesTools, f)).equals(readFileSync(join(webApps, 'cs2', 'tools', f))), `tools/pages/${f} is byte for byte web-apps' cs2/tools/${f}`);
+  }
+  const ownPage = (src: string): boolean => {
+    const top = relative(join(webApps, 'cs2'), src).split(sep)[0];
+    return top === 'sim' || top === 'sim3d';
+  };
+  cpSync(join(webApps, 'cs2'), cs2, { recursive: true, filter: (src) => !src.split(sep).includes('node_modules') && !ownPage(src) });
+  if (!NO_BUILD) {
+    run('npm', ['run', '--silent', 'build:single']);
+    run('npm', ['run', '--silent', 'build:single:3d']);
+  }
+  for (const [page, dist] of [['sim', 'dist-single'], ['sim3d', 'dist-single-3d']] as const) {
+    mkdirSync(join(cs2, page), { recursive: true });
+    cpSync(join(REPO, dist, 'index.html'), join(cs2, page, 'index.html'));
+  }
+  for (const f of ['encrypt.cjs', 'lock.html']) cpSync(join(pagesTools, f), join(cs2, 'tools', f));
   const plain = readFileSync(join(cs2, 'sim', 'index.html'));
-  check(plain.equals(readFileSync(join(REPO, 'dist-single', 'index.html'))), `stage-web-apps.sh: cs2/sim/index.html is dist-single/index.html (${kb(plain.length)}, gzip ${kb(gzipSync(plain, { level: 9 }).length)})`);
-  const stageDiff = diff(join(webApps, 'cs2', 'index.html'), join(cs2, 'index.html'), 'cs2/index.html') + diff(join(webApps, 'cs2', 'README.md'), join(cs2, 'README.md'), 'cs2/README.md');
-  writeFileSync(join(OUT, 'stage.diff'), stageDiff);
-  console.log(`stage diff (${join(OUT, 'stage.diff')}):\n${stageDiff}`);
+  console.log(`sim page: dist-single/index.html (${kb(plain.length)}, gzip ${kb(gzipSync(plain, { level: 9 }).length)})`);
 
   // 2. Encrypt the temp copy with a fresh salt and the throwaway password.
   const lockJson = join(cs2, 'tools', 'lock.json');
@@ -512,7 +517,7 @@ async function main(): Promise<void> {
   check(cfg.salt !== realSalt && typeof cfg.verifier === 'string', 'encrypt.cjs: made a fresh salt and verifier in the temp copy');
 
   // 3. Plaintext guard and decryption.
-  const deploySh = readFileSync(join(cs2, 'tools', 'deploy.sh'), 'utf8');
+  const deploySh = readFileSync(join(pagesTools, 'deploy.sh'), 'utf8');
   const pattern = /grep -rlE '([^']+)'/.exec(deploySh)?.[1] ?? FALLBACK_GUARD;
   const guard = spawnSync('grep', ['-rlE', pattern, out], { encoding: 'utf8' });
   check(guard.status === 1, `plaintext guard: deploy.sh's grep -rlE '${pattern}' finds nothing in the encrypted output${guard.status === 0 ? `: ${guard.stdout.trim()}` : ''}`);
@@ -522,7 +527,7 @@ async function main(): Promise<void> {
     .filter((d) => d.isFile())
     .map((d) => relative(out, join(d.parentPath, d.name)))
     .sort();
-  check(pages.join(' ') === ['index.html', join('mirage-round-replay', 'index.html'), join('sim', 'index.html')].sort().join(' '), `encrypted output: ${pages.join(', ')}`);
+  check(pages.join(' ') === ['index.html', join('mirage-round-replay', 'index.html'), join('sim', 'index.html'), join('sim3d', 'index.html')].sort().join(' '), `encrypted output: ${pages.join(', ')}`);
   const key = pbkdf2Sync(PASSWORD.normalize('NFC'), Buffer.from(cfg.salt, 'base64'), cfg.iterations, 32, 'sha256');
   for (const rel of pages) {
     const locked = readFileSync(join(out, rel), 'utf8');
@@ -570,7 +575,6 @@ async function main(): Promise<void> {
     plaintext: { bytes: plain.length, gzip: gzipSync(plain, { level: 9 }).length },
     locked: { bytes: lockedSim, gzip: lockedGz },
     pages,
-    stageDiff: join(OUT, 'stage.diff'),
     screenshots: readdirSync(OUT).filter((f) => f.endsWith('.png')).map((f) => join(OUT, f)),
     notes,
     problems,

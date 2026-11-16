@@ -22,7 +22,8 @@ const boundaryZones = [
 const nondeterminism = 'Non-deterministic: use the seeded PRNG in src/contracts/rng.ts and integer ticks.';
 
 export default tseslint.config(
-  { ignores: ['dist/', 'dist-single/', 'dist-3d/', 'dist-single-3d/', 'node_modules/', 'logs/', 'coverage/'] },
+  // tools/pages/encrypt.cjs is a byte-for-byte copy of web-apps' cs2/tools/encrypt.cjs (docs/deploy.md): not ours to restyle.
+  { ignores: ['dist/', 'dist-single/', 'dist-3d/', 'dist-single-3d/', 'node_modules/', 'logs/', 'coverage/', 'tools/pages/encrypt.cjs'] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {

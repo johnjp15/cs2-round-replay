@@ -65,8 +65,8 @@ npm run lint           # ESLint, incl. import boundaries
 npm run typecheck
 npm run build          # static build to dist/ (npm run preview to serve it)
 npm run build:single   # one self-contained page, dist-single/index.html, for johnjp15.github.io/cs2/sim/ (docs/deploy.md)
-tools/stage-web-apps.sh ~/path/to/web-apps   # build:single, copy it to web-apps/cs2/sim/ and list it there (no password, no deploy)
-npm run check:locked -- --web-apps ~/path/to/web-apps   # the locked page end to end with a throwaway password, in a temp copy
+tools/pages/deploy.sh ~/path/to/johnjp15.github.io   # lock both sim pages into a Pages checkout (needs CS2_PASSWORD; CI's deploy job does this on main)
+npm run check:locked -- --web-apps ~/path/to/web-apps   # the whole locked cs2 site end to end with a throwaway password, in a temp copy
 npm run bench:session  # cost of one Session.step() over a full round (docs/app.md)
 npm run check:browser  # after build: headless Chromium screenshots, fps and ticks/s (docs/app.md)
 npm run ghost          # whole round with no human: logs/ghost-round.jsonl + logs/ghost-trace.json, prints the tracking table
