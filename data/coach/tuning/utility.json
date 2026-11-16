@@ -1,0 +1,58 @@
+{
+  "_note": "K4: utility tables and detectors (src/coach/derive/utility, src/coach/metrics/utility, src/coach/detect/utility; docs/coach/utility.md).",
+  "throws": {
+    "_match": "A projectile is joined to a detonation of its kind by the same thrower whose tick lies in [first sample, last sample + matchSlackTicks] and whose position is within matchRadius of some path sample; a detonation with the projectile's entity id wins over one without. Entity ids are reused, so the id alone never decides.",
+    "matchSlackTicks": 32,
+    "matchRadius": 200,
+    "_he": "HE damage: player_hurt with weapon hegrenade by the thrower within heDamageTicks of the detonation.",
+    "heDamageTicks": 4,
+    "_fire": "Fire damage: player_hurt with weapon inferno by the thrower from startburn to expiry + fireEndSlackTicks; with two fires of one thrower burning, the nearer one to the victim. An enemy 'stands in' a fire when within fireRadius (horizontal) and fireHeight (vertical) of the startburn point.",
+    "fireEndSlackTicks": 16,
+    "fireRadius": 160,
+    "fireHeight": 96,
+    "fireDefaultSec": 7,
+    "smokeDefaultSec": 22,
+    "_place": "Landing place: the place name of the nearest player sample (every placeSampleRows rows) within placeRadius.",
+    "placeSampleRows": 16,
+    "placeRadius": 400,
+    "_near": "Fire 'came near': a living enemy within fireNearRadius (horizontal) of the startburn point at some row of its life; a fire with no enemy damage, no enemy inside and none near was thrown where nobody was or came.",
+    "fireNearRadius": 500
+  },
+  "flash": {
+    "_blind": "Blinds at or above minBlindSec count (Leetify's floor). A blinded enemy 'led to a kill' when the thrower's team kills him within min(duration, killWindowCapSec) of the blind.",
+    "minBlindSec": 1.1,
+    "killWindowCapSec": 3,
+    "_detector": "Fix 'flashes that blind nobody': at least minFlashes flashes and a share of flashes blinding no enemy at or above noEnemyShare. Fix 'team flashes': at least minTeamFlashFights teammates blinded >= minBlindSec who died or took damage inside the window. Strength: at least minFlashes and enemies blinded per flash >= strengthEnemiesPerFlash.",
+    "minFlashes": 4,
+    "noEnemyShare": 0.6,
+    "minTeamFlashFights": 2,
+    "strengthEnemiesPerFlash": 1.2
+  },
+  "unused": {
+    "_detector": "Deaths with at least minGrenades grenades left in rounds the team lost; a finding needs at least minDeaths of them.",
+    "minGrenades": 2,
+    "minDeaths": 2
+  },
+  "buy": {
+    "_detector": "Rifle rounds (primary of kind rifle or sniper) where the player bought no grenade, carried none after the buy, and had at least the cheapest of flashbang and smoke left. A finding needs minRounds.",
+    "minRounds": 2
+  },
+  "damage": {
+    "_detector": "Fix: at least minFires fires that touched no enemy (no enemy damage and no enemy inside) for their whole life and a share of fires >= wastedFireShare. Strength: at least minGrenades HE and fire grenades and damage per grenade >= strengthDamagePerGrenade.",
+    "minFires": 2,
+    "wastedFireShare": 0.5,
+    "minGrenades": 4,
+    "strengthDamagePerGrenade": 20
+  },
+  "scoring": {
+    "_confidence": "confidence = precision × (1 − exp(−n / nScale)) (src/coach/detect/common.ts), n = the finding's opportunities. Precision is a constant until K11 measures it.",
+    "nScale": 6,
+    "precision": 0.85,
+    "_impact": "impact = fights decided against the player per instance, scaled to 24 rounds (K2's scale): a flash that blinds nobody 0.15 of a fight (it still clears or delays now and then), a teammate flashed into his fight half, a death with two grenades left in a lost round a third, a rifle round with no utility a quarter, a wasted fire a quarter.",
+    "impactWastedFlash": 0.15,
+    "impactTeamFlash": 0.5,
+    "impactUnusedDeath": 0.33,
+    "impactNoUtilRound": 0.25,
+    "impactWastedFire": 0.25
+  }
+}
