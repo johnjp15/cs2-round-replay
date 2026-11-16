@@ -1,0 +1,176 @@
+{
+  "format": "coach-map@1",
+  "map": "de_cache",
+  "source": {
+    "release": "2000943",
+    "client_version": "2000943",
+    "patch_version": "1.41.9.7",
+    "buildid": "26598758",
+    "generated_at": "2026-11-12T08:22:47.776138+00:00",
+    "assets": [
+      {
+        "asset": "geometry.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/geometry.zip",
+        "sha256": "7451a538a6447217d190c4e80f0270dfd19588852afd8c5213936ab2ef85633b",
+        "member": "de_cache.mesh",
+        "crc32": "746ccbe1",
+        "bytes": 6237892
+      },
+      {
+        "asset": "images.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/images.zip",
+        "sha256": "b1c463c2d3566d77d60247424c756f6e8198473b19e5006268d74b682599e052",
+        "member": "radars/de_cache.png",
+        "crc32": "ae369f21",
+        "bytes": 93413
+      },
+      {
+        "asset": "navs.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/navs.zip",
+        "sha256": "b6c429d0cc295857ea0d8d6896aba7bbac61cf6189c74755480b98b2a1e6bf7f",
+        "member": "de_cache.nav",
+        "crc32": "37839ea5",
+        "bytes": 433020
+      },
+      {
+        "asset": "map_data.json",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/map_data.json",
+        "sha256": "b0c8e7e95839b283f311e01c7d7022e5fe701bcfbb44134e7cedccec0f916e67",
+        "member": "de_cache",
+        "crc32": "",
+        "bytes": 2903
+      }
+    ],
+    "mapData": {
+      "pos_x": -2000,
+      "pos_y": 3250,
+      "rotate": null,
+      "scale": 5.5,
+      "zoom": null
+    }
+  },
+  "radar": {
+    "pos_x": -2000,
+    "pos_y": 3250,
+    "scale": 5.5,
+    "width": 1024,
+    "height": 1024,
+    "lowerBelowZ": null,
+    "files": {
+      "default": "radar.png",
+      "lower": null
+    }
+  },
+  "los": {
+    "file": "los.bin.gz",
+    "quant": 2,
+    "vertices": 137292,
+    "triangles": 261560,
+    "bounds": {
+      "minX": -2388,
+      "minY": -2624,
+      "minZ": 1524,
+      "maxX": 3840,
+      "maxY": 3797,
+      "maxZ": 2340
+    },
+    "cull": {
+      "hullMargin": 64,
+      "zBelow": 64,
+      "zAbove": 200,
+      "zMin": 1521,
+      "zMax": 2106,
+      "hull": [
+        [
+          -1825,
+          434
+        ],
+        [
+          -1740,
+          -243
+        ],
+        [
+          -1074,
+          -991
+        ],
+        [
+          -1021,
+          -1042
+        ],
+        [
+          -415,
+          -1523
+        ],
+        [
+          204,
+          -1523
+        ],
+        [
+          1163,
+          -1433
+        ],
+        [
+          2501,
+          -1118
+        ],
+        [
+          3303,
+          -420
+        ],
+        [
+          3305,
+          -385
+        ],
+        [
+          3305,
+          364
+        ],
+        [
+          1322,
+          2017
+        ],
+        [
+          1020,
+          2255
+        ],
+        [
+          473,
+          2314
+        ],
+        [
+          329,
+          2314
+        ],
+        [
+          165,
+          2302
+        ],
+        [
+          -421,
+          2243
+        ],
+        [
+          -1825,
+          1042
+        ]
+      ],
+      "sourceTriangles": 338375,
+      "culledTriangles": 75736
+    }
+  },
+  "files": [
+    {
+      "name": "los.bin.gz",
+      "bytes": 760577,
+      "sha256": "b552fee72746cb0f8e85c9351c646dd18eba118add58d7938f6070092177974a",
+      "rawBytes": 1345929,
+      "rawSha256": "c4db93bf9eb0db7a850c036a9b6f18dafa00bbc437aef2149b4137d31481d3c7"
+    },
+    {
+      "name": "radar.png",
+      "bytes": 93413,
+      "sha256": "94c058b3deaa5cc24be81006322da3af1ef0bbded116160a3fcdea6d87227967"
+    }
+  ],
+  "fetchBytes": 853990
+}

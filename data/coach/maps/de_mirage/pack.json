@@ -1,0 +1,192 @@
+{
+  "format": "coach-map@1",
+  "map": "de_mirage",
+  "source": {
+    "release": "2000943",
+    "client_version": "2000943",
+    "patch_version": "1.41.9.7",
+    "buildid": "26598758",
+    "generated_at": "2026-11-12T08:22:47.776138+00:00",
+    "assets": [
+      {
+        "asset": "geometry.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/geometry.zip",
+        "sha256": "7451a538a6447217d190c4e80f0270dfd19588852afd8c5213936ab2ef85633b",
+        "member": "de_mirage.mesh",
+        "crc32": "112f9209",
+        "bytes": 1409404
+      },
+      {
+        "asset": "images.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/images.zip",
+        "sha256": "b1c463c2d3566d77d60247424c756f6e8198473b19e5006268d74b682599e052",
+        "member": "radars/de_mirage.png",
+        "crc32": "739fde88",
+        "bytes": 143685
+      },
+      {
+        "asset": "navs.zip",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/navs.zip",
+        "sha256": "b6c429d0cc295857ea0d8d6896aba7bbac61cf6189c74755480b98b2a1e6bf7f",
+        "member": "de_mirage.nav",
+        "crc32": "d93ad855",
+        "bytes": 469296
+      },
+      {
+        "asset": "map_data.json",
+        "url": "https://github.com/pnxenopoulos/awpy-data/releases/download/2000943/map_data.json",
+        "sha256": "b0c8e7e95839b283f311e01c7d7022e5fe701bcfbb44134e7cedccec0f916e67",
+        "member": "de_mirage",
+        "crc32": "",
+        "bytes": 2903
+      }
+    ],
+    "mapData": {
+      "pos_x": -3230,
+      "pos_y": 1713,
+      "rotate": 0,
+      "scale": 5,
+      "zoom": 0
+    }
+  },
+  "radar": {
+    "pos_x": -3230,
+    "pos_y": 1713,
+    "scale": 5,
+    "width": 1024,
+    "height": 1024,
+    "lowerBelowZ": null,
+    "files": {
+      "default": "radar.png",
+      "lower": null
+    }
+  },
+  "los": {
+    "file": "los.bin.gz",
+    "quant": 2,
+    "vertices": 35023,
+    "triangles": 57767,
+    "bounds": {
+      "minX": -3279,
+      "minY": -3440,
+      "minZ": -448,
+      "maxX": 1824,
+      "maxY": 2048,
+      "maxZ": 528
+    },
+    "cull": {
+      "hullMargin": 64,
+      "zBelow": 64,
+      "zAbove": 200,
+      "zMin": -428,
+      "zMax": 216,
+      "hull": [
+        [
+          -2653,
+          224
+        ],
+        [
+          -2633,
+          107
+        ],
+        [
+          -2025,
+          -2027
+        ],
+        [
+          -1552,
+          -2405
+        ],
+        [
+          -904,
+          -2602
+        ],
+        [
+          1037,
+          -2372
+        ],
+        [
+          1070,
+          -2357
+        ],
+        [
+          1382,
+          -1477
+        ],
+        [
+          1397,
+          -1253
+        ],
+        [
+          1453,
+          -196
+        ],
+        [
+          1453,
+          -109
+        ],
+        [
+          1357,
+          517
+        ],
+        [
+          1133,
+          649
+        ],
+        [
+          644,
+          886
+        ],
+        [
+          638,
+          887
+        ],
+        [
+          -461,
+          886
+        ],
+        [
+          -1548,
+          868
+        ],
+        [
+          -1741,
+          862
+        ],
+        [
+          -2049,
+          847
+        ],
+        [
+          -2364,
+          808
+        ],
+        [
+          -2645,
+          494
+        ],
+        [
+          -2653,
+          451
+        ]
+      ],
+      "sourceTriangles": 73290,
+      "culledTriangles": 15380
+    }
+  },
+  "files": [
+    {
+      "name": "los.bin.gz",
+      "bytes": 178302,
+      "sha256": "035ade3e910fd79cd508e4b99045b32f8ba5636658b7c1c253f646365f20e131",
+      "rawBytes": 320411,
+      "rawSha256": "01e91be8aa72a4cc0f655cc2e29c9082e17f2405d434d2410ab1bf2b767913b5"
+    },
+    {
+      "name": "radar.png",
+      "bytes": 143685,
+      "sha256": "c8032f6c83ffca63c0a20ebdcc598a0e1aa618efd746e381e2db26f33a4a964f"
+    }
+  ],
+  "fetchBytes": 321987
+}
