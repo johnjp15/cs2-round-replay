@@ -3,6 +3,7 @@ dist/
 dist-single/
 dist-3d/
 dist-single-3d/
+dist-coach/
 coverage/
 logs/
 *.log

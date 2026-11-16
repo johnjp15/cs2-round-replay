@@ -16,13 +16,17 @@ const boundaryZones = [
   { target: './src/engine', from: './src', except: ['./engine', './contracts'], message: 'src/engine may import only src/contracts.' },
   // H1: src/sim3d (the 3D host) may import src/contracts, src/engine and src/sim2d.
   { target: './src/sim3d', from: './src', except: ['./sim3d', './engine', './sim2d', './contracts'], message: 'src/sim3d may import only src/contracts, src/engine and src/sim2d.' },
-  // src/app and src/app3d may import anything.
+  // Demo coach: src/coach (analysis, no DOM) may import src/contracts, src/engine and src/sim2d (MapGeometry).
+  { target: './src/coach', from: './src', except: ['./coach', './contracts', './engine', './sim2d'], message: 'src/coach may import only src/contracts, src/engine and src/sim2d.' },
+  // The browser parser (K1) may import only the coach model (the RawDemo contract).
+  { target: './src/coach-parser', from: './src', except: ['./coach-parser', './coach/model'], message: 'src/coach-parser may import only src/coach/model.' },
+  // src/app, src/app3d and src/coach-app may import anything.
 ];
 
 const nondeterminism = 'Non-deterministic: use the seeded PRNG in src/contracts/rng.ts and integer ticks.';
 
 export default tseslint.config(
-  { ignores: ['dist/', 'dist-single/', 'dist-3d/', 'dist-single-3d/', 'node_modules/', 'logs/', 'coverage/'] },
+  { ignores: ['dist/', 'dist-single/', 'dist-3d/', 'dist-single-3d/', 'dist-coach/', 'local/', 'node_modules/', 'logs/', 'coverage/'] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {
@@ -33,7 +37,7 @@ export default tseslint.config(
     },
     plugins: { 'import-x': importX },
     settings: {
-      'import-x/resolver': { node: { extensions: ['.ts', '.js', '.json'] } },
+      'import-x/resolver': { node: { extensions: ['.ts', '.tsx', '.js', '.json'] } },
     },
     rules: {
       'import-x/no-restricted-paths': ['error', { zones: boundaryZones }],
@@ -41,7 +45,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/core/**/*.ts', 'src/contracts/**/*.ts', 'src/engine/**/*.ts', 'src/sim3d/**/*.ts'],
+    files: ['src/core/**/*.ts', 'src/contracts/**/*.ts', 'src/engine/**/*.ts', 'src/sim3d/**/*.ts', 'src/coach/**/*.ts'],
     rules: {
       'no-restricted-properties': [
         'error',

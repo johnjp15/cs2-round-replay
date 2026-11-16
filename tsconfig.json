@@ -17,7 +17,9 @@
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "noEmit": true
   },
-  "include": ["src", "tests", "tools", "vite.config.ts", "vite.single.config.ts", "vite.3d.config.ts", "vite.single.3d.config.ts", "eslint.config.js"]
+  "include": ["src", "tests", "tools", "vite.config.ts", "vite.single.config.ts", "vite.3d.config.ts", "vite.single.3d.config.ts", "vite.coach.config.ts", "eslint.config.js"]
 }
