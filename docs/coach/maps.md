@@ -111,8 +111,8 @@ not reachable for that repo from the workspace; the release download URLs are).
 **Body points**, from the hitbox table (`HITBOXES`, src/engine/hitboxes.ts), posed like `poseHitboxes` (forward along
 the yaw, left of it) with the crouch scale continuous in `duck` (z × (1 − duck · (1 − 46/64)), never below the box's
 radius): head (0, 0, 63), upper chest (0, 0, 48.5), pelvis (0, 0, 29), shoulders (0, ±11, 52), knees (0, ±4.25,
-16.75), standing, in mask bits 0–6. Knees rather than feet: the feet points (z 4.5) sit in the floor's own decimation
-error. The target's yaw is its view yaw (no animation). A point counts as visible when the eye-to-point segment
+16.75), standing, in mask bits 0–6. Knees rather than feet: points 4.5 units above the feet are hidden by any curb
+or floor lip, which says little about whether the player can be seen. The target's yaw is its view yaw (no animation). A point counts as visible when the eye-to-point segment
 crosses no sight triangle and, with a smoke field, no opaque smoke.
 
 **Field of view.** CS2's `fov` is 90° horizontal at 4:3 and Hor+ for wider screens: the vertical field stays at
