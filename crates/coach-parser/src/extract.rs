@@ -10,13 +10,13 @@
 //!   4. grenade projectiles.
 
 use ahash::AHashMap;
-use parser::first_pass::parser_settings::{rm_user_friendly_names, ParserInputs};
+use parser::first_pass::parser_settings::{rm_user_friendly_names, FirstPassParser, ParserInputs};
 use parser::first_pass::prop_controller::{
     ENTITY_ID_ID, GRENADE_TYPE_ID, GRENADE_X, GRENADE_Y, GRENADE_Z, NAME_ID, STEAMID_ID, TICK_ID,
 };
 use parser::parse_demo::{DemoOutput, Parser, ParsingMode};
 use parser::second_pass::game_events::GameEvent;
-use parser::second_pass::parser_settings::create_huffman_lookup_table;
+use parser::second_pass::parser_settings::{create_huffman_lookup_table, SecondPassParser};
 use parser::second_pass::variants::{PropColumn, VarVec, Variant};
 use std::collections::BTreeMap;
 
@@ -421,18 +421,6 @@ fn live_range(events: &[GameEvent], first: i32, last: i32) -> (i32, i32) {
 
 pub type Progress<'a> = &'a mut dyn FnMut(&str, f64);
 
-fn fill<T: Copy>(n: usize, dense: &[u32], src: Option<PropColumn>, f: impl Fn(Option<&PropColumn>, usize) -> T, zero: T) -> Vec<T> {
-    let mut v = vec![zero; n];
-    if let Some(c) = src.as_ref() {
-        for (r, &i) in dense.iter().enumerate() {
-            if i != u32::MAX {
-                v[i as usize] = f(Some(c), r);
-            }
-        }
-    }
-    v
-}
-
 pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     let huf = create_huffman_lookup_table();
 
@@ -442,270 +430,9 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     let header: BTreeMap<String, String> = ev_out.header.clone().unwrap_or_default().into_iter().collect();
     let game_events = ev_out.game_events;
 
-    // Pass 2: per-tick player props. Converted column by column; each source column is dropped once
-    // converted, so the peak is upstream's row table plus one dense column.
-    progress("ticks", 0.12);
-    let mut tk = run(bytes, settings(&huf, TICK_PROPS, &[], vec![], false))?;
-    progress("columns", 0.7);
-    let id_of: AHashMap<String, u32> =
-        tk.prop_controller.prop_infos.iter().map(|p| (p.prop_friendly_name.clone(), p.id)).collect();
-    let df = &mut tk.df;
-    let col = |df: &AHashMap<u32, PropColumn>, name: &str| -> Option<u32> { id_of.get(name).copied().filter(|id| df.contains_key(id)) };
-    let rows = col_len(df.get(&TICK_ID));
-
-    let row_tick: Vec<i32> = (0..rows).map(|r| col_i32(df.get(&TICK_ID), r).unwrap_or(i32::MIN)).collect();
-    let (first, last) = row_tick.iter().filter(|&&t| t != i32::MIN).fold((i32::MAX, i32::MIN), |a, &t| (a.0.min(t), a.1.max(t)));
-    let (start, end) = if first > last { (0, -1) } else { live_range(&game_events, first, last) };
-    let in_range = |t: i32| t != i32::MIN && t >= start && t <= end;
-
-    // A row is "present" when the controller has team 2/3 and a pawn (X not null).
-    let present_row: Vec<bool> = {
-        let cx = col(df, "X").and_then(|i| df.get(&i));
-        let cteam = col(df, "team_num").and_then(|i| df.get(&i));
-        (0..rows)
-            .map(|r| in_range(row_tick[r]) && col_f32(cx, r).is_some() && matches!(col_i32(cteam, r), Some(2) | Some(3)))
-            .collect()
-    };
-
-    // Players: present at some tick of the live range; sorted by the team of their first present
-    // tick (T first), then by Steam ID (bots: BOT-<name>). The name is the one of the first present row.
-    let mut first_team: BTreeMap<Key, (i32, i32)> = BTreeMap::new(); // key -> (first tick, team)
-    let mut last_name: AHashMap<Key, String> = AHashMap::default();
-    {
-        let (cs, cn) = (df.get(&STEAMID_ID), df.get(&NAME_ID));
-        let ct = col(df, "team_num").and_then(|i| df.get(&i));
-        for r in 0..rows {
-            if !present_row[r] {
-                continue;
-            }
-            let name = col_str(cn, r).unwrap_or("");
-            let k = key(col_u64(cs, r).unwrap_or(0), name);
-            let t = row_tick[r];
-            let team = col_i32(ct, r).unwrap_or(0);
-            let e = first_team.entry(k.clone()).or_insert((t, team));
-            if t < e.0 {
-                *e = (t, team);
-                last_name.insert(k, name.to_string());
-            } else if !last_name.contains_key(&k) {
-                last_name.insert(k, name.to_string());
-            }
-        }
-    }
-    let mut keys: Vec<(i32, String, Key)> = first_team.iter().map(|(k, &(_, team))| (team, sort_id(k), k.clone())).collect();
-    keys.sort();
-    let mut players = Vec::new();
-    let mut slots = Slots { by_key: AHashMap::default(), by_sid: AHashMap::default(), by_name: AHashMap::default() };
-    for (i, (_, _, k)) in keys.iter().enumerate() {
-        slots.by_key.insert(k.clone(), i as u16);
-        if k.0 != 0 {
-            slots.by_sid.insert(k.0, i as u16);
-        }
-        players.push(Player { steamid: k.0, name: last_name.get(k).cloned().unwrap_or_default(), bot: k.0 == 0 });
-    }
-    for (i, p) in players.iter().enumerate() {
-        slots.by_name.insert(p.name.clone(), i as u16);
-    }
-    let np = players.len();
-    if np > 16 {
-        return Err(format!("{np} players in the demo; the columns hold at most 16"));
-    }
-
-    // Tick grid: every tick with any row inside the live range.
-    let mut tick_list: Vec<i32> = row_tick.iter().copied().filter(|&t| in_range(t)).collect();
-    tick_list.sort_unstable();
-    tick_list.dedup();
-    let tc = tick_list.len();
-    let n = tc * np;
-    let row_ti: Vec<u32> = row_tick
-        .iter()
-        .map(|&t| if in_range(t) { tick_list.binary_search(&t).map(|i| i as u32).unwrap_or(u32::MAX) } else { u32::MAX })
-        .collect();
-    let dense: Vec<u32> = {
-        let (cs, cn) = (df.get(&STEAMID_ID), df.get(&NAME_ID));
-        (0..rows)
-            .map(|r| {
-                if !present_row[r] {
-                    return u32::MAX;
-                }
-                match slots.of(col_u64(cs, r).unwrap_or(0), col_str(cn, r)) {
-                    Some(p) => row_ti[r] * np as u32 + p as u32,
-                    None => u32::MAX,
-                }
-            })
-            .collect()
-    };
-    drop(present_row);
-
-    // [T] columns (same value for every row of a tick).
-    let mut game = vec![0u8; tc];
-    let mut rounds_played = vec![0u8; tc];
-    let mut score_t = vec![255u8; tc];
-    let mut score_ct = vec![255u8; tc];
-    let row_slot: Vec<bool> = {
-        let (cs, cn) = (df.get(&STEAMID_ID), df.get(&NAME_ID));
-        (0..rows).map(|r| slots.of(col_u64(cs, r).unwrap_or(0), col_str(cn, r)).is_some()).collect()
-    };
-    {
-        let gcols: Vec<Option<&PropColumn>> = GAME_PROPS.iter().map(|p| col(df, p).and_then(|i| df.get(&i))).collect();
-        let crp = col(df, "total_rounds_played").and_then(|i| df.get(&i));
-        let cscore = col(df, "team_rounds_total").and_then(|i| df.get(&i));
-        let cteam = col(df, "team_num").and_then(|i| df.get(&i));
-        let mut seen_tick = vec![false; tc];
-        for r in 0..rows {
-            let ti = row_ti[r];
-            if ti == u32::MAX {
-                continue;
-            }
-            let ti = ti as usize;
-            let mut g = 0u8;
-            for (b, c) in gcols.iter().enumerate() {
-                if col_bool(*c, r) {
-                    g |= 1 << b;
-                }
-            }
-            // the tick's first row sets the game columns (as the Node adapter)
-            if !seen_tick[ti] {
-                seen_tick[ti] = true;
-                game[ti] = g;
-                rounds_played[ti] = clamp_u8(col_f32(crp, r));
-            }
-            if row_slot[r] {
-                if let Some(sc) = col_f32(cscore, r) {
-                    match col_i32(cteam, r) {
-                        Some(2) => score_t[ti] = clamp_u8(Some(sc)),
-                        Some(3) => score_ct[ti] = clamp_u8(Some(sc)),
-                        _ => {}
-                    }
-                }
-            }
-        }
-    }
-    drop(row_ti);
-    drop(row_slot);
-    for id in [TICK_ID, STEAMID_ID, NAME_ID] {
-        df.remove(&id);
-    }
-    for p in GAME_PROPS.iter().chain(["total_rounds_played", "team_rounds_total"].iter()) {
-        if let Some(id) = col(df, p) {
-            df.remove(&id);
-        }
-    }
-    let mut take = |name: &str| -> Option<PropColumn> { id_of.get(name).and_then(|id| df.remove(id)) };
-
-    let f32n = |c: Option<&PropColumn>, r: usize| col_f32(c, r).unwrap_or(f32::NAN);
-    // columns the Node adapter reads with num(): non-finite -> 0
-    let f32z = |c: Option<&PropColumn>, r: usize| col_f32(c, r).filter(|v| v.is_finite()).unwrap_or(0.0);
-    let u8c = |c: Option<&PropColumn>, r: usize| clamp_u8(col_f32(c, r));
-    let u16c = |c: Option<&PropColumn>, r: usize| clamp_u16(col_f32(c, r));
-    let mut present = vec![0u8; n];
-    for &i in &dense {
-        if i != u32::MAX {
-            present[i as usize] = 1;
-        }
-    }
-    let x = fill(n, &dense, take("X"), f32n, 0.0);
-    let y = fill(n, &dense, take("Y"), f32n, 0.0);
-    let z = fill(n, &dense, take("Z"), f32n, 0.0);
-    let pitch = fill(n, &dense, take("pitch"), f32n, 0.0);
-    let yaw = fill(n, &dense, take("yaw"), f32n, 0.0);
-    let vx = fill(n, &dense, take("velocity_X"), f32n, 0.0);
-    let vy = fill(n, &dense, take("velocity_Y"), f32n, 0.0);
-    let vz = fill(n, &dense, take("velocity_Z"), f32n, 0.0);
-    let health = fill(n, &dense, take("health"), u8c, 0);
-    let armor = fill(n, &dense, take("armor_value"), u8c, 0);
-    let duck = fill(n, &dense, take("duck_amount"), |c, r| clamp_u8(col_f32(c, r).map(|d| d * 255.0)), 0);
-    let clip = fill(n, &dense, take("active_weapon_ammo"), |c, r| col_f32(c, r).map(|v| v.round().clamp(0.0, 255.0) as u8).unwrap_or(CLIP_NONE), 0);
-    let team = fill(n, &dense, take("team_num"), u8c, 0);
-    let mut weapon_names = Names::new();
-    let mut weapon = vec![0u8; n];
-    if let Some(c) = take("active_weapon_name") {
-        for (r, &i) in dense.iter().enumerate() {
-            if i != u32::MAX {
-                weapon[i as usize] = weapon_names.id(col_str(Some(&c), r));
-            }
-        }
-    }
-    let mut place_names = Names::new();
-    let mut place = vec![0u8; n];
-    if let Some(c) = take("last_place_name") {
-        for (r, &i) in dense.iter().enumerate() {
-            if i != u32::MAX {
-                place[i as usize] = place_names.id(col_str(Some(&c), r));
-            }
-        }
-    }
-    let mut flags = vec![0u16; n];
-    for (b, name) in FLAG_PROPS.iter().enumerate() {
-        if let Some(c) = take(name) {
-            for (r, &i) in dense.iter().enumerate() {
-                if i == u32::MAX {
-                    continue;
-                }
-                let on = if b == FLAG_CONNECTED {
-                    col_i32(Some(&c), r) == Some(0) // m_iConnected: 0 = connected
-                } else {
-                    col_bool(Some(&c), r)
-                };
-                if on {
-                    flags[i as usize] |= 1 << b;
-                }
-            }
-        }
-    }
-    let buttons = fill(n, &dense, take("buttons"), |c, r| col_u64(c, r).unwrap_or(0) as u32, 0);
-    let spotted_by = {
-        let by_sid = &slots.by_sid;
-        fill(
-            n,
-            &dense,
-            take("approximate_spotted_by"),
-            |c, r| {
-                let mut m = 0u16;
-                for s in col_u64s(c, r).unwrap_or(&[]) {
-                    if let Some(&q) = by_sid.get(s) {
-                        m |= 1 << q;
-                    }
-                }
-                m
-            },
-            0,
-        )
-    };
-    let flash = fill(n, &dense, take("flash_duration"), f32z, 0.0);
-    let penalty = fill(n, &dense, take("accuracy_penalty"), f32z, 0.0);
-    let (punch_pitch, punch_yaw) = {
-        let (mut a, mut b) = (vec![0.0f32; n], vec![0.0f32; n]);
-        if let Some(c) = take("aim_punch_angle") {
-            for (r, &i) in dense.iter().enumerate() {
-                if i != u32::MAX {
-                    if let Some(v) = col_xyz(Some(&c), r) {
-                        a[i as usize] = if v[0].is_finite() { v[0] } else { 0.0 };
-                        b[i as usize] = if v[1].is_finite() { v[1] } else { 0.0 };
-                    }
-                }
-            }
-        }
-        (a, b)
-    };
-    let recoil_index = fill(n, &dense, take("fl_recoil_idx"), f32z, 0.0);
-    let shots_fired = fill(n, &dense, take("shots_fired"), u16c, 0);
-    let money = fill(n, &dense, take("balance"), u16c, 0);
-    let equip = fill(n, &dense, take("current_equip_value"), u16c, 0);
-    drop(dense);
-    drop(tk);
-    let (weapons, wmap) = weapon_names.sorted();
-    let (places, pmap) = place_names.sorted();
-    for w in weapon.iter_mut() {
-        *w = wmap[*w as usize];
-    }
-    for w in place.iter_mut() {
-        *w = pmap[*w as usize];
-    }
-    let ticks = TickCols {
-        count: tc, players: np, tick: tick_list, game, rounds_played, score_t, score_ct, present, x, y, z, pitch,
-        yaw, vx, vy, vz, health, armor, duck, weapon, clip, team, place, flags, buttons, spotted_by, flash, penalty,
-        punch_pitch, punch_yaw, recoil_index, shots_fired, money, equip,
-    };
+    // Pass 2: the tick grid, one full-packet segment at a time (see `tick_grid`).
+    let g = tick_grid(bytes, &huf, &game_events, progress)?;
+    let TickGrid { players, slots, ticks, weapons, places, start, end } = g;
 
     // Pass 3: inventories and scoreboard totals on the ticks that need them.
     progress("inventories", 0.8);
@@ -721,6 +448,413 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     let events = event_tables(&game_events, &slots);
     progress("done", 1.0);
     Ok(Output { header, players, weapons, places, ticks, events, projectiles, inventories, score_tick: end, scoreboard })
+}
+
+// ---- pass 2: the tick grid -------------------------------------------------------------------
+
+/// Player rows kept from the segments, compact (about 80 bytes a row) until the player set is known.
+#[derive(Default)]
+struct Rows {
+    tick: Vec<i32>,
+    key: Vec<u16>,
+    present: Vec<u8>,
+    /// team_num (0 when null)
+    team: Vec<u8>,
+    game: Vec<u8>,
+    rounds_played: Vec<u8>,
+    /// team_rounds_total, 255 when null
+    score: Vec<u8>,
+    x: Vec<f32>,
+    y: Vec<f32>,
+    z: Vec<f32>,
+    pitch: Vec<f32>,
+    yaw: Vec<f32>,
+    vx: Vec<f32>,
+    vy: Vec<f32>,
+    vz: Vec<f32>,
+    health: Vec<u8>,
+    armor: Vec<u8>,
+    duck: Vec<u8>,
+    weapon: Vec<u8>,
+    clip: Vec<u8>,
+    place: Vec<u8>,
+    flags: Vec<u16>,
+    buttons: Vec<u32>,
+    /// bit k = key k (k < 64) is in approximate_spotted_by
+    spotted_by: Vec<u64>,
+    flash: Vec<f32>,
+    penalty: Vec<f32>,
+    punch_pitch: Vec<f32>,
+    punch_yaw: Vec<f32>,
+    recoil_index: Vec<f32>,
+    shots_fired: Vec<u16>,
+    money: Vec<u16>,
+    equip: Vec<u16>,
+}
+
+struct TickGrid {
+    players: Vec<Player>,
+    slots: Slots,
+    ticks: TickCols,
+    weapons: Vec<String>,
+    places: Vec<String>,
+    start: i32,
+    end: i32,
+}
+
+/// Keys (SteamID or bot name) in first-seen order.
+#[derive(Default)]
+struct Keys {
+    list: Vec<(Key, String)>,
+    idx: AHashMap<Key, u16>,
+    by_sid: AHashMap<u64, u16>,
+}
+impl Keys {
+    fn id(&mut self, sid: u64, name: &str) -> u16 {
+        if sid != 0 {
+            if let Some(&k) = self.by_sid.get(&sid) {
+                return k;
+            }
+        }
+        let k = key(sid, name);
+        if let Some(&i) = self.idx.get(&k) {
+            return i;
+        }
+        let i = self.list.len() as u16;
+        self.list.push((k.clone(), name.to_string()));
+        self.idx.insert(k, i);
+        if sid != 0 {
+            self.by_sid.insert(sid, i);
+        }
+        i
+    }
+}
+
+/// Upstream's multi-threaded mode parses the demo in segments that start at each full packet (every 3840 ticks in
+/// Valve demos); we run the same segments one after another, so only one segment's row table exists at a time, the
+/// rows are kept compact, and progress can be reported per segment. Same rows as the native adapter (which runs
+/// upstream multi-threaded): velocity, derived from the previous ticks of a segment, starts NaN in each segment as
+/// there.
+fn tick_grid(bytes: &[u8], huf: &Vec<(u8, u8)>, events: &[GameEvent], progress: Progress) -> Result<TickGrid, String> {
+    let s = settings(huf, TICK_PROPS, &[], vec![], false);
+    let mut fp = FirstPassParser::new(&s);
+    let fpo = fp.parse_demo(bytes, false).map_err(|e| format!("parse: {e}"))?;
+    let id_of: AHashMap<String, u32> =
+        fpo.prop_controller.prop_infos.iter().map(|p| (p.prop_friendly_name.clone(), p.id)).collect();
+    let (start, end) = live_range(events, i32::MIN, i32::MAX);
+    let in_range = |t: i32| t != i32::MIN && t >= start && t <= end;
+    let mut rows = Rows::default();
+    let mut keys = Keys::default();
+    let mut weapon_names = Names::new();
+    let mut place_names = Names::new();
+    let offsets = fpo.fullpacket_offsets.clone();
+    let nseg = offsets.len().max(1);
+    for (si, off) in offsets.iter().enumerate() {
+        let mut sp = SecondPassParser::new(fpo.clone(), *off, false, None).map_err(|e| format!("parse: {e}"))?;
+        sp.start(bytes).map_err(|e| format!("parse: {e}"))?;
+        let df = sp.create_output().df;
+        append_rows(&df, &id_of, &in_range, &mut rows, &mut keys, &mut weapon_names, &mut place_names);
+        drop(df);
+        progress("ticks", 0.12 + 0.66 * (si + 1) as f64 / nseg as f64);
+    }
+    drop(fpo);
+    progress("columns", 0.78);
+
+    let n_rows = rows.tick.len();
+    let first = rows.tick.iter().copied().min().unwrap_or(0);
+    let last = rows.tick.iter().copied().max().unwrap_or(-1);
+    let (start, end) = (start.max(first), end.min(last));
+
+    // Players: present at some tick of the live range; sorted by the team of their first present row (T first),
+    // then by Steam ID (bots: BOT-<name>); the name is the one of that first row.
+    let mut first_row: AHashMap<u16, (i32, usize)> = AHashMap::default();
+    for r in 0..n_rows {
+        if rows.present[r] == 0 {
+            continue;
+        }
+        let k = rows.key[r];
+        let t = rows.tick[r];
+        match first_row.get(&k) {
+            Some(&(t0, _)) if t0 <= t => {}
+            _ => {
+                first_row.insert(k, (t, r));
+            }
+        }
+    }
+    let mut order: Vec<(u8, String, u16, usize)> = first_row
+        .iter()
+        .map(|(&k, &(_, r))| (rows.team[r], sort_id(&keys.list[k as usize].0), k, r))
+        .collect();
+    order.sort();
+    let mut players = Vec::new();
+    let mut slots = Slots { by_key: AHashMap::default(), by_sid: AHashMap::default(), by_name: AHashMap::default() };
+    let mut slot_of_key = vec![u16::MAX; keys.list.len()];
+    for (i, (_, _, k, _)) in order.iter().enumerate() {
+        let (key, _) = &keys.list[*k as usize];
+        slots.by_key.insert(key.clone(), i as u16);
+        if key.0 != 0 {
+            slots.by_sid.insert(key.0, i as u16);
+        }
+        slot_of_key[*k as usize] = i as u16;
+    }
+    for (_, _, k, _) in &order {
+        let (key, name) = &keys.list[*k as usize];
+        players.push(Player { steamid: key.0, name: name.clone(), bot: key.0 == 0 });
+    }
+    for (i, p) in players.iter().enumerate() {
+        slots.by_name.insert(p.name.clone(), i as u16);
+    }
+    let np = players.len();
+    if np > 16 {
+        return Err(format!("{np} players in the demo; the columns hold at most 16"));
+    }
+
+    // Tick list and the dense index of each row (u32::MAX = not a present player row).
+    let mut tick_list: Vec<i32> = rows.tick.clone();
+    tick_list.sort_unstable();
+    tick_list.dedup();
+    let tc = tick_list.len();
+    let n = tc * np;
+    let row_ti: Vec<u32> = rows.tick.iter().map(|t| tick_list.binary_search(t).map(|i| i as u32).unwrap_or(u32::MAX)).collect();
+    let dense: Vec<u32> = (0..n_rows)
+        .map(|r| {
+            let p = slot_of_key[rows.key[r] as usize];
+            if rows.present[r] == 0 || p == u16::MAX {
+                u32::MAX
+            } else {
+                row_ti[r] * np as u32 + p as u32
+            }
+        })
+        .collect();
+
+    // [T] columns: the first row of a tick sets game/roundsPlayed; scores come from player rows by team.
+    let mut game = vec![0u8; tc];
+    let mut rounds_played = vec![0u8; tc];
+    let mut score_t = vec![255u8; tc];
+    let mut score_ct = vec![255u8; tc];
+    let mut seen = vec![false; tc];
+    for r in 0..n_rows {
+        let ti = row_ti[r] as usize;
+        if !seen[ti] {
+            seen[ti] = true;
+            game[ti] = rows.game[r];
+            rounds_played[ti] = rows.rounds_played[r];
+        }
+        if slot_of_key[rows.key[r] as usize] != u16::MAX && rows.score[r] != 255 {
+            match rows.team[r] {
+                2 => score_t[ti] = rows.score[r],
+                3 => score_ct[ti] = rows.score[r],
+                _ => {}
+            }
+        }
+    }
+    drop(seen);
+    drop(row_ti);
+
+    // scatter each row column into its dense column, freeing the row column right away
+    fn scatter<T: Copy>(n: usize, dense: &[u32], src: Vec<T>, zero: T) -> Vec<T> {
+        let mut v = vec![zero; n];
+        for (r, &i) in dense.iter().enumerate() {
+            if i != u32::MAX {
+                v[i as usize] = src[r];
+            }
+        }
+        v
+    }
+    let mut present = vec![0u8; n];
+    for &i in &dense {
+        if i != u32::MAX {
+            present[i as usize] = 1;
+        }
+    }
+    let Rows {
+        x, y, z, pitch, yaw, vx, vy, vz, health, armor, duck, weapon, clip, team, place, flags, buttons, spotted_by,
+        flash, penalty, punch_pitch, punch_yaw, recoil_index, shots_fired, money, equip, ..
+    } = rows;
+    let x = scatter(n, &dense, x, 0.0);
+    let y = scatter(n, &dense, y, 0.0);
+    let z = scatter(n, &dense, z, 0.0);
+    let pitch = scatter(n, &dense, pitch, 0.0);
+    let yaw = scatter(n, &dense, yaw, 0.0);
+    let vx = scatter(n, &dense, vx, 0.0);
+    let vy = scatter(n, &dense, vy, 0.0);
+    let vz = scatter(n, &dense, vz, 0.0);
+    let health = scatter(n, &dense, health, 0);
+    let armor = scatter(n, &dense, armor, 0);
+    let duck = scatter(n, &dense, duck, 0);
+    let mut weapon = scatter(n, &dense, weapon, 0);
+    let clip = scatter(n, &dense, clip, 0);
+    let team = scatter(n, &dense, team, 0);
+    let mut place = scatter(n, &dense, place, 0);
+    let flags = scatter(n, &dense, flags, 0);
+    let buttons = scatter(n, &dense, buttons, 0);
+    // key bit masks -> slot bit masks
+    let spotted_by: Vec<u16> = {
+        let raw = scatter(n, &dense, spotted_by, 0u64);
+        raw.iter()
+            .map(|&m| {
+                let mut out = 0u16;
+                let mut b = m;
+                while b != 0 {
+                    let k = b.trailing_zeros() as usize;
+                    b &= b - 1;
+                    if let Some(&s) = slot_of_key.get(k) {
+                        if s != u16::MAX && s < 16 {
+                            out |= 1 << s;
+                        }
+                    }
+                }
+                out
+            })
+            .collect()
+    };
+    let flash = scatter(n, &dense, flash, 0.0);
+    let penalty = scatter(n, &dense, penalty, 0.0);
+    let punch_pitch = scatter(n, &dense, punch_pitch, 0.0);
+    let punch_yaw = scatter(n, &dense, punch_yaw, 0.0);
+    let recoil_index = scatter(n, &dense, recoil_index, 0.0);
+    let shots_fired = scatter(n, &dense, shots_fired, 0);
+    let money = scatter(n, &dense, money, 0);
+    let equip = scatter(n, &dense, equip, 0);
+    drop(dense);
+    let (weapons, wmap) = weapon_names.sorted();
+    let (places, pmap) = place_names.sorted();
+    for w in weapon.iter_mut() {
+        *w = wmap[*w as usize];
+    }
+    for w in place.iter_mut() {
+        *w = pmap[*w as usize];
+    }
+    let ticks = TickCols {
+        count: tc, players: np, tick: tick_list, game, rounds_played, score_t, score_ct, present, x, y, z, pitch,
+        yaw, vx, vy, vz, health, armor, duck, weapon, clip, team, place, flags, buttons, spotted_by, flash, penalty,
+        punch_pitch, punch_yaw, recoil_index, shots_fired, money, equip,
+    };
+    Ok(TickGrid { players, slots, ticks, weapons, places, start, end })
+}
+
+/// Appends one segment's rows (inside the live range) to `rows`.
+fn append_rows(
+    df: &AHashMap<u32, PropColumn>,
+    id_of: &AHashMap<String, u32>,
+    in_range: &dyn Fn(i32) -> bool,
+    rows: &mut Rows,
+    keys: &mut Keys,
+    weapons: &mut Names,
+    places: &mut Names,
+) {
+    let c = |name: &str| id_of.get(name).and_then(|id| df.get(id));
+    let (ct, cs, cn) = (df.get(&TICK_ID), df.get(&STEAMID_ID), df.get(&NAME_ID));
+    let n = col_len(ct);
+    let (cx, cy, cz, cpi, cya) = (c("X"), c("Y"), c("Z"), c("pitch"), c("yaw"));
+    let (cvx, cvy, cvz) = (c("velocity_X"), c("velocity_Y"), c("velocity_Z"));
+    let (chp, car, cdu, cwe, ccl) = (c("health"), c("armor_value"), c("duck_amount"), c("active_weapon_name"), c("active_weapon_ammo"));
+    let (cte, cpl, cbu, csb, cfl) = (c("team_num"), c("last_place_name"), c("buttons"), c("approximate_spotted_by"), c("flash_duration"));
+    let (cpe, cpu, cre, csf, cmo, ceq) =
+        (c("accuracy_penalty"), c("aim_punch_angle"), c("fl_recoil_idx"), c("shots_fired"), c("balance"), c("current_equip_value"));
+    let (crp, csc) = (c("total_rounds_played"), c("team_rounds_total"));
+    let gcols: Vec<Option<&PropColumn>> = GAME_PROPS.iter().map(|p| c(p)).collect();
+    let fcols: Vec<Option<&PropColumn>> = FLAG_PROPS.iter().map(|p| c(p)).collect();
+    // Non-finite -> 0 where the Node adapter reads with num(); NaN kept where it reads with f32().
+    let fz = |col: Option<&PropColumn>, r: usize| col_f32(col, r).filter(|v| v.is_finite()).unwrap_or(0.0);
+    let fnan = |col: Option<&PropColumn>, r: usize| col_f32(col, r).unwrap_or(f32::NAN);
+    for r in 0..n {
+        let Some(t) = col_i32(ct, r) else { continue };
+        if !in_range(t) {
+            continue;
+        }
+        let sid = col_u64(cs, r).unwrap_or(0);
+        let name = col_str(cn, r).unwrap_or("");
+        let k = keys.id(sid, name);
+        let team = col_i32(cte, r);
+        let xv = col_f32(cx, r);
+        let present = xv.is_some() && matches!(team, Some(2) | Some(3));
+        rows.tick.push(t);
+        rows.key.push(k);
+        rows.present.push(present as u8);
+        rows.team.push(team.map(|v| v.clamp(0, 255) as u8).unwrap_or(0));
+        let mut g = 0u8;
+        for (b, gc) in gcols.iter().enumerate() {
+            if col_bool(*gc, r) {
+                g |= 1 << b;
+            }
+        }
+        rows.game.push(g);
+        rows.rounds_played.push(clamp_u8(col_f32(crp, r)));
+        rows.score.push(col_f32(csc, r).map(|v| clamp_u8(Some(v))).unwrap_or(255));
+        if !present {
+            // only the tick, key, team and game columns matter for a row that is not a present player
+            rows.x.push(0.0);
+            rows.y.push(0.0);
+            rows.z.push(0.0);
+            rows.pitch.push(0.0);
+            rows.yaw.push(0.0);
+            rows.vx.push(0.0);
+            rows.vy.push(0.0);
+            rows.vz.push(0.0);
+            rows.health.push(0);
+            rows.armor.push(0);
+            rows.duck.push(0);
+            rows.weapon.push(0);
+            rows.clip.push(0);
+            rows.place.push(0);
+            rows.flags.push(0);
+            rows.buttons.push(0);
+            rows.spotted_by.push(0);
+            rows.flash.push(0.0);
+            rows.penalty.push(0.0);
+            rows.punch_pitch.push(0.0);
+            rows.punch_yaw.push(0.0);
+            rows.recoil_index.push(0.0);
+            rows.shots_fired.push(0);
+            rows.money.push(0);
+            rows.equip.push(0);
+            continue;
+        }
+        rows.x.push(xv.unwrap_or(f32::NAN));
+        rows.y.push(fnan(cy, r));
+        rows.z.push(fnan(cz, r));
+        rows.pitch.push(fnan(cpi, r));
+        rows.yaw.push(fnan(cya, r));
+        rows.vx.push(fnan(cvx, r));
+        rows.vy.push(fnan(cvy, r));
+        rows.vz.push(fnan(cvz, r));
+        rows.health.push(clamp_u8(col_f32(chp, r)));
+        rows.armor.push(clamp_u8(col_f32(car, r)));
+        rows.duck.push(clamp_u8(col_f32(cdu, r).map(|d| d * 255.0)));
+        rows.weapon.push(weapons.id(col_str(cwe, r)));
+        rows.clip.push(col_f32(ccl, r).map(|v| clamp_u8(Some(v))).unwrap_or(CLIP_NONE));
+        rows.place.push(places.id(col_str(cpl, r)));
+        let mut f = 0u16;
+        for (b, fc) in fcols.iter().enumerate() {
+            let on = if b == FLAG_CONNECTED { col_i32(*fc, r) == Some(0) } else { col_bool(*fc, r) };
+            if on {
+                f |= 1 << b;
+            }
+        }
+        rows.flags.push(f);
+        rows.buttons.push(col_u64(cbu, r).unwrap_or(0) as u32);
+        let mut m = 0u64;
+        for s in col_u64s(csb, r).unwrap_or(&[]) {
+            let q = keys.id(*s, "");
+            if q < 64 {
+                m |= 1 << q;
+            }
+        }
+        rows.spotted_by.push(m);
+        rows.flash.push(fz(cfl, r));
+        rows.penalty.push(fz(cpe, r));
+        let (pp, py) = match col_xyz(cpu, r) {
+            Some(v) => (if v[0].is_finite() { v[0] } else { 0.0 }, if v[1].is_finite() { v[1] } else { 0.0 }),
+            None => (0.0, 0.0),
+        };
+        rows.punch_pitch.push(pp);
+        rows.punch_yaw.push(py);
+        rows.recoil_index.push(fz(cre, r));
+        rows.shots_fired.push(clamp_u16(col_f32(csf, r)));
+        rows.money.push(clamp_u16(col_f32(cmo, r)));
+        rows.equip.push(clamp_u16(col_f32(ceq, r)));
+    }
 }
 
 // ---- pass 3 ---------------------------------------------------------------------------------

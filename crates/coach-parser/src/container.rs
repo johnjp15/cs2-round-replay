@@ -88,14 +88,40 @@ fn gunzip(b: &[u8]) -> Result<Vec<u8>, String> {
     if p >= b.len() {
         return Err("gzip: truncated header".into());
     }
+    // ISIZE (the trailer) is the exact size for files under 4 GB: inflate straight into a buffer of that size.
     let isize = u32::from_le_bytes([b[b.len() - 4], b[b.len() - 3], b[b.len() - 2], b[b.len() - 1]]) as usize;
-    let mut out = miniz_oxide::inflate::decompress_to_vec_with_limit(&b[p..], usize::MAX)
+    let mut out = vec![0u8; isize];
+    let n = miniz_oxide::inflate::decompress_slice_iter_to_slice(&mut out, std::iter::once(&b[p..b.len() - 8]), false, true)
         .map_err(|e| format!("gzip: {e:?}"))?;
-    if isize != 0 && (out.len() as u64 % (1u64 << 32)) as usize != isize {
+    if n != isize {
         return Err("gzip: size mismatch".into());
     }
-    out.shrink_to_fit();
     Ok(out)
+}
+
+/// Frame_Content_Size of the first zstd frame, when the header carries it (RFC 8878, 3.1.1.1).
+fn zstd_content_size(b: &[u8]) -> Option<usize> {
+    let fhd = *b.get(4)?;
+    let fcs_flag = fhd >> 6;
+    let single = (fhd >> 5) & 1 == 1;
+    let did = [0usize, 1, 2, 4][(fhd & 3) as usize];
+    let mut p = 5 + if single { 0 } else { 1 } + did;
+    let n = match fcs_flag {
+        0 => if single { 1 } else { return None },
+        1 => 2,
+        2 => 4,
+        _ => 8,
+    };
+    let mut v: u64 = 0;
+    for i in 0..n {
+        v |= (*b.get(p + i)? as u64) << (8 * i);
+    }
+    p += n;
+    let _ = p;
+    if n == 2 {
+        v += 256;
+    }
+    usize::try_from(v).ok()
 }
 
 /// Decompresses `input` if needed. Takes ownership so the compressed bytes are freed as soon as
@@ -104,10 +130,12 @@ pub fn open(input: Vec<u8>) -> Result<(Container, Vec<u8>), String> {
     let c = detect(&input);
     let out = match c {
         Container::Dem => return Ok((c, input)),
-        Container::Bzip2 => read_all(bzip2_rs::DecoderReader::new(&input[..]), input.len() * 3)?,
+        // bzip2 has no size field; CS2 demos compress to about 75-80 %, so reserve 1.35x and grow by quarters
+        Container::Bzip2 => read_all(bzip2_rs::DecoderReader::new(&input[..]), input.len() / 20 * 27)?,
         Container::Zstd => {
+            let hint = zstd_content_size(&input).unwrap_or(input.len() / 20 * 27);
             let dec = ruzstd::decoding::StreamingDecoder::new(&input[..]).map_err(|e| format!("zstd: {e}"))?;
-            read_all(dec, input.len() * 3)?
+            read_all(dec, hint)?
         }
         Container::Gzip => gunzip(&input)?,
         Container::Unknown => return Err("not a CS2 demo (no PBDEMS2, bz2, zstd or gzip magic)".into()),
