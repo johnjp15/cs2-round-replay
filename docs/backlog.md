@@ -2,7 +2,25 @@
 
 The orchestrator (Fable 5.1) adds every request here the moment it arrives, before anything else, and updates the status when a PR merges. Opus 5.5 agents do the work. If the server restarts, this file plus `docs/sim3d-plan.md` are what the next session reads first. Status: **live** (deployed), **in review** (PR open), **in progress** (agent running), **queued** (not started), **needs John** (blocked on him).
 
-Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.github.io/cs2/sim3d/` (same password). Both tokens that publish them expire **2027-02-04**.
+Live pages: 2D `https://johnjp15.github.io/cs2/sim/`, 3D `https://johnjp15.github.io/cs2/sim3d/` (same password). Both tokens that publish them expire **2027-02-04**. Planned: the demo coach at `https://johnjp15.github.io/cs2/coach/`.
+
+## Demo Coach (from 11-16; plan and task board: `docs/coach-plan.md`)
+
+A third app in this repo: drop a CS2 demo, get three things to fix with watchable evidence. Orchestrator: Fable 5.2. A new session reads `docs/coach-plan.md` first.
+
+| # | When (PT) | Request (John's words, shortened) | Status | Where |
+|---|---|---|---|---|
+| 97 | 11-16 14:02 | Plan a web app that processes CS2 demos and analyzes what you could do to improve, from mechanics (spray control) to macro decisions (CT positioning to prevent an A Long push); the user looks at the feedback, visualizes it, and learns a couple of applicable things that help immediately and over time. Plan with Fable 5.2, implement with Opus 5.5 subagents | planned; wave 1 in progress | `docs/coach-plan.md`. Wave 1: K0 (contracts, scaffold, Node ingest), K1 (browser parser), KM (map packs, line of sight) |
+| 98 | 11-16 14:23 | Keep in mind sites like Leetify already analyze demos. Future goal: software that watches the player's screen in real time and gives feedback as extra game sense ("3 CTs spotted on A, 2 long 1 short, only 1 left, so they might be B: shift and play B") | planned | Plan sections "Next to Leetify", "Game sense", "Later: the live coach"; decision 10 (the sense engine is causal and observation-only so it can run live); K14 (calls on demos, phase 2), K15/K16 (screen reader, live coach: future) |
+
+Log (PT):
+- 11-16 14:02–15:10: checked a real Valve matchmaking demo with `@laihoe/demoparser2` 0.42.3 (fields and events in the plan's "What a demo gives us"; all ticks as JS arrays cost 1.3 GB, so the browser parser must return typed arrays). Workspace limits found: the `wasm32-unknown-unknown` Rust target can't be installed here (`static.rust-lang.org` blocked; crates.io, GitHub and the Go proxy work), demo hosts (HLTV, FACEIT, GitLab) are blocked, so the only test demo is demoparser's public one until John sends his. The npm `demoparser2` WASM package is from April 2026, before the July format change. Plan written; #97 and #98 logged; wave 1 launched.
+- 11-16: **this repo is public now** (seen in the repo list; the 11-14 question below is answered by that). Consequences for the coach: nothing from John's matches is ever committed (demos stay in `local/`), fixtures are anonymized, and Actions minutes are free again (to confirm on the first PR; the last runs, 11-09, failed on the billing block).
+
+Needs John (coach):
+- Three to five recent demos of his own, ideally a Dust II and a Mirage (Valve `.dem.bz2` or FACEIT `.dem.zst`): in a folder on the Mac added to the chat, or attached. They are the acceptance test and the only current-format demos we can get.
+- His in-game name in them; his Leetify aim numbers for the same matches if he has them.
+- A word if he'd rather have a separate repo, an unlocked page, or embedded map packs (the plan fetches them from this public repo's raw files).
 
 ## Overnight log (PT)
 - 05:27 check-in #1: four agents (V0 parity, X1 map, Ctrl+W, audio) and later two more (weapons integration, barely's stairs) turned out to have been stopped by the client-side interrupts around 04:27–04:38; all six relaunched on their branches/worktrees (nothing lost; everything committed was pushed).
