@@ -461,7 +461,7 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     };
 
     // Players: present at some tick of the live range; sorted by the team of their first present
-    // tick (T first), then by Steam ID (bots: BOT-<name>). The last name seen wins.
+    // tick (T first), then by Steam ID (bots: BOT-<name>). The name is the one of the first present row.
     let mut first_team: BTreeMap<Key, (i32, i32)> = BTreeMap::new(); // key -> (first tick, team)
     let mut last_name: AHashMap<Key, String> = AHashMap::default();
     {
@@ -478,13 +478,9 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
             let e = first_team.entry(k.clone()).or_insert((t, team));
             if t < e.0 {
                 *e = (t, team);
-            }
-            match last_name.get_mut(&k) {
-                Some(n) if n == name => {}
-                Some(n) => *n = name.to_string(),
-                None => {
-                    last_name.insert(k, name.to_string());
-                }
+                last_name.insert(k, name.to_string());
+            } else if !last_name.contains_key(&k) {
+                last_name.insert(k, name.to_string());
             }
         }
     }
@@ -535,11 +531,16 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     let mut rounds_played = vec![0u8; tc];
     let mut score_t = vec![255u8; tc];
     let mut score_ct = vec![255u8; tc];
+    let row_slot: Vec<bool> = {
+        let (cs, cn) = (df.get(&STEAMID_ID), df.get(&NAME_ID));
+        (0..rows).map(|r| slots.of(col_u64(cs, r).unwrap_or(0), col_str(cn, r)).is_some()).collect()
+    };
     {
         let gcols: Vec<Option<&PropColumn>> = GAME_PROPS.iter().map(|p| col(df, p).and_then(|i| df.get(&i))).collect();
         let crp = col(df, "total_rounds_played").and_then(|i| df.get(&i));
         let cscore = col(df, "team_rounds_total").and_then(|i| df.get(&i));
         let cteam = col(df, "team_num").and_then(|i| df.get(&i));
+        let mut seen_tick = vec![false; tc];
         for r in 0..rows {
             let ti = row_ti[r];
             if ti == u32::MAX {
@@ -552,18 +553,25 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
                     g |= 1 << b;
                 }
             }
-            game[ti] = g;
-            rounds_played[ti] = clamp_u8(col_f32(crp, r));
-            if dense[r] != u32::MAX {
-                match col_i32(cteam, r) {
-                    Some(2) => score_t[ti] = clamp_u8(col_f32(cscore, r)),
-                    Some(3) => score_ct[ti] = clamp_u8(col_f32(cscore, r)),
-                    _ => {}
+            // the tick's first row sets the game columns (as the Node adapter)
+            if !seen_tick[ti] {
+                seen_tick[ti] = true;
+                game[ti] = g;
+                rounds_played[ti] = clamp_u8(col_f32(crp, r));
+            }
+            if row_slot[r] {
+                if let Some(sc) = col_f32(cscore, r) {
+                    match col_i32(cteam, r) {
+                        Some(2) => score_t[ti] = clamp_u8(Some(sc)),
+                        Some(3) => score_ct[ti] = clamp_u8(Some(sc)),
+                        _ => {}
+                    }
                 }
             }
         }
     }
     drop(row_ti);
+    drop(row_slot);
     for id in [TICK_ID, STEAMID_ID, NAME_ID] {
         df.remove(&id);
     }
@@ -595,7 +603,7 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     let health = fill(n, &dense, take("health"), u8c, 0);
     let armor = fill(n, &dense, take("armor_value"), u8c, 0);
     let duck = fill(n, &dense, take("duck_amount"), |c, r| clamp_u8(col_f32(c, r).map(|d| d * 255.0)), 0);
-    let clip = fill(n, &dense, take("active_weapon_ammo"), |c, r| col_f32(c, r).map(|v| v.round().clamp(0.0, 254.0) as u8).unwrap_or(CLIP_NONE), 0);
+    let clip = fill(n, &dense, take("active_weapon_ammo"), |c, r| col_f32(c, r).map(|v| v.round().clamp(0.0, 255.0) as u8).unwrap_or(CLIP_NONE), 0);
     let team = fill(n, &dense, take("team_num"), u8c, 0);
     let mut weapon_names = Names::new();
     let mut weapon = vec![0u8; n];
@@ -653,7 +661,7 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
         )
     };
     let flash = fill(n, &dense, take("flash_duration"), f32z, 0.0);
-    let penalty = fill(n, &dense, take("accuracy_penalty"), f32n, 0.0);
+    let penalty = fill(n, &dense, take("accuracy_penalty"), f32z, 0.0);
     let (punch_pitch, punch_yaw) = {
         let (mut a, mut b) = (vec![0.0f32; n], vec![0.0f32; n]);
         if let Some(c) = take("aim_punch_angle") {
@@ -690,8 +698,7 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
 
     // Pass 3: inventories and scoreboard totals on the ticks that need them.
     progress("inventories", 0.8);
-    let last_end = game_events.iter().filter(|e| e.name == "round_end").map(|e| e.tick).max().unwrap_or(end);
-    let (inventories, scoreboard) = inventories(bytes, &huf, &game_events, &slots, (start, end), last_end)?;
+    let (inventories, scoreboard) = inventories(bytes, &huf, &game_events, &slots, (start, end), end)?;
 
     // Pass 4: projectiles.
     progress("projectiles", 0.88);
@@ -702,7 +709,7 @@ pub fn parse(bytes: &[u8], progress: Progress) -> Result<Output, String> {
     progress("events", 0.97);
     let events = event_tables(&game_events, &slots);
     progress("done", 1.0);
-    Ok(Output { header, players, weapons, places, ticks, events, projectiles, inventories, score_tick: last_end, scoreboard })
+    Ok(Output { header, players, weapons, places, ticks, events, projectiles, inventories, score_tick: end, scoreboard })
 }
 
 // ---- pass 3 ---------------------------------------------------------------------------------
@@ -723,8 +730,12 @@ fn inventories(
             continue;
         }
         match e.name.as_str() {
-            "round_freeze_end" => want.entry(e.tick).or_default().push((0, 0)),
-            "round_end" => want.entry(e.tick).or_default().push((2, 0)),
+            "round_freeze_end" | "round_end" => {
+                let at = if e.name == "round_end" { 2 } else { 0 };
+                let w = want.entry(e.tick).or_default();
+                w.retain(|x| x.0 == 1);
+                w.push((at, 0));
+            }
             "player_death" => {
                 if let Some(s) = variant_u64(ev_field(e, "user_steamid")) {
                     want.entry(e.tick - 1).or_default().push((1, s));
@@ -760,14 +771,16 @@ fn inventories(
             score.insert(p, ScoreRow { p, v });
         }
         let Some(w) = want.get(&t) else { continue };
-        let present = col_f32(cx, r).is_some() && matches!(col_i32(cteam, r), Some(2) | Some(3));
+        let _ = cx;
+        let on_team = matches!(col_i32(cteam, r), Some(2) | Some(3));
         for &(at, victim) in w {
-            let ok = if at == 1 { victim == sid && sid != 0 } else { present };
+            let ok = if at == 1 { slots.of(victim, None) == Some(p as u16) } else { on_team };
             if !ok {
                 continue;
             }
             let items: Vec<String> = col_strs(ci, r).map(|x| x.to_vec()).unwrap_or_default();
-            inv.push(Inventory { tick: t, p, at, items });
+            // a death's inventory is read on the tick before and filed at the death tick
+            inv.push(Inventory { tick: if at == 1 { t + 1 } else { t }, p, at, items });
         }
     }
     inv.sort_by(|a, b| (a.tick, a.at, a.p).cmp(&(b.tick, b.at, b.p)));
@@ -790,7 +803,7 @@ fn event_tables(events: &[GameEvent], slots: &Slots) -> Vec<EventTable> {
                 if f.name == "tick" || f.name == "event_name" {
                     continue;
                 }
-                let k = if f.name.ends_with("_steamid") || f.name == "steamid" {
+                let k = if f.name.ends_with("_steamid") || f.name == "steamid" || f.name == "xuid" {
                     2
                 } else {
                     match &f.data {
@@ -804,6 +817,9 @@ fn event_tables(events: &[GameEvent], slots: &Slots) -> Vec<EventTable> {
                 }
             }
         }
+        // `<role>_name` duplicates the slot of `<role>_steamid`: dropped
+        let roles: Vec<String> = kinds.keys().filter_map(|k| k.strip_suffix("_steamid").map(|r| format!("{r}_name"))).collect();
+        kinds.retain(|k, _| !roles.iter().any(|r| r == k));
         let tick: Vec<i32> = list.iter().map(|(_, e)| e.tick).collect();
         let seq: Vec<u32> = list.iter().map(|(i, _)| *i).collect();
         let mut columns = Vec::new();
@@ -812,10 +828,12 @@ fn event_tables(events: &[GameEvent], slots: &Slots) -> Vec<EventTable> {
                 2 => {
                     let role = fname.strip_suffix("_steamid").unwrap_or("");
                     let name_field = if role.is_empty() { "name".to_string() } else { format!("{role}_name") };
+                    // `xuid` (player_disconnect) falls back to `user_steamid` when absent
+                    let fallback = if fname == "xuid" { Some("user_steamid") } else { None };
                     EventData::Slot(
                         list.iter()
                             .map(|(_, e)| {
-                                let sid = variant_u64(ev_field(e, fname));
+                                let sid = variant_u64(ev_field(e, fname)).or_else(|| fallback.and_then(|f| variant_u64(ev_field(e, f))));
                                 let nm = match ev_field(e, &name_field) {
                                     Some(Variant::String(s)) => Some(s.as_str()),
                                     _ => None,
@@ -860,6 +878,7 @@ fn projectiles(pr: &DemoOutput, slots: &Slots) -> Vec<Projectile> {
         kind: String,
         thrower: i16,
         entity: i32,
+        first: i32,
         last: i32,
         samples: Vec<(i32, [f32; 3])>,
     }
@@ -871,16 +890,16 @@ fn projectiles(pr: &DemoOutput, slots: &Slots) -> Vec<Projectile> {
         let Some(t) = col_i32(ct, r) else { continue };
         let ent = col_i32(cent, r).unwrap_or(-1);
         let kind = col_str(cty, r).unwrap_or("");
+        let thrower = slots.of(col_u64(csid, r).unwrap_or(0), col_str(cname, r)).map(|q| q as i16).unwrap_or(-1);
         let restart = match open.get(&ent) {
-            Some(a) => a.kind != kind || t > a.last + 8 || t < a.last,
+            Some(a) => a.kind != kind || a.thrower != thrower || t - a.last > PROJECTILE_GAP,
             None => true,
         };
         if restart {
             if let Some(a) = open.remove(&ent) {
                 done.push(a);
             }
-            let thrower = slots.of(col_u64(csid, r).unwrap_or(0), col_str(cname, r)).map(|q| q as i16).unwrap_or(-1);
-            open.insert(ent, Acc { kind: kind.to_string(), thrower, entity: ent, last: t, samples: Vec::new() });
+            open.insert(ent, Acc { kind: kind.to_string(), thrower, entity: ent, first: t, last: t, samples: Vec::new() });
         }
         let a = open.get_mut(&ent).unwrap();
         a.last = t;
@@ -891,26 +910,25 @@ fn projectiles(pr: &DemoOutput, slots: &Slots) -> Vec<Projectile> {
     done.extend(open.into_values());
     let mut out: Vec<Projectile> = done
         .into_iter()
-        .filter_map(|a| {
-            let s = &a.samples;
-            let (t0, t1) = (s.first()?.0, s.last()?.0);
+        .map(|a| {
+            let (t0, t1) = (a.first, a.last);
             let steps = ((t1 - t0) / PATH_STEP + 1) as usize;
             let mut path = vec![PATH_NONE; steps * 3];
-            let mut j = 0;
-            for k in 0..steps {
-                let want = t0 + k as i32 * PATH_STEP;
-                while j + 1 < s.len() && s[j + 1].0 <= want {
-                    j += 1;
+            for (t, p) in &a.samples {
+                if (t - t0) % PATH_STEP != 0 {
+                    continue;
                 }
-                if s[j].0 == want {
-                    for d in 0..3 {
-                        path[k * 3 + d] = s[j].1[d].round().clamp(-32767.0, 32767.0) as i16;
-                    }
+                let k = ((t - t0) / PATH_STEP) as usize;
+                for d in 0..3 {
+                    path[k * 3 + d] = p[d].round().clamp(-32767.0, 32767.0) as i16;
                 }
             }
-            Some(Projectile { kind: a.kind, thrower: a.thrower, entity: a.entity, t0, t1, path })
+            Projectile { kind: a.kind, thrower: a.thrower, entity: a.entity, t0, t1, path }
         })
         .collect();
     out.sort_by(|a, b| (a.t0, a.entity).cmp(&(b.t0, b.entity)));
     out
 }
+
+/// A gap longer than this (ticks) between rows of one entity starts a new projectile (ids are reused).
+const PROJECTILE_GAP: i32 = 16;
