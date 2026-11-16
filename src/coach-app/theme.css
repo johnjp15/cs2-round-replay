@@ -168,7 +168,7 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--s
 /* ---------------------------------------------------------------- replay */
 
 .replay-stage { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: var(--space-3); align-items: start; }
-.replay-canvas { position: relative; max-width: min(100%, calc(100vh - 150px)); min-width: 280px; }
+.replay-canvas { position: relative; max-width: min(100%, calc(100vh - 200px)); min-width: 280px; }
 .replay-canvas canvas { display: block; border-radius: var(--radius); background: var(--bg); }
 .caption {
   position: absolute; left: var(--space-2); right: var(--space-2); top: var(--space-2);

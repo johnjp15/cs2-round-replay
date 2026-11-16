@@ -7,8 +7,8 @@
  * and in a fresh browser profile:
  *  1. drops the `.craw` (default: the test demo's cache in /home/claude/coach-data/cache or local/coach-cache, else the
  *     committed anonymized fixture), picks a player, waits for the match page: drop → interactive time;
- *  2. opens a round from the round strip; checks every living player sits on a drawn (walkable) part of the radar at
- *     several ticks and inside the bounding box of his place name (data/coach/maps/<map>/places.json);
+ *  2. opens every played round from the round strip; checks every living player sits on a drawn (walkable) part of
+ *     the radar (within 30 units) at seven ticks per round and inside the bounding box of his place name (data/coach/maps/<map>/places.json);
  *  3. seeks to a kill: the kill line must appear on the kill's tick (pixels at its midpoint change against the tick
  *     before, toward the killer's side colour);
  *  4. plays 4 s at 1× and measures frame and draw times; keyboard: space, arrows, [ and ];
@@ -135,10 +135,11 @@ async function placed(page: Page): Promise<Placed[]> {
       const y = t.xy[o * 2 + 1] ?? 0;
       const px = (x - map.radar.pos_x) / map.radar.scale;
       const py = (map.radar.pos_y - y) / map.radar.scale;
-      // The most opaque, brightest pixel within 2 px (a player stands at a wall's edge at times).
+      // The most opaque, brightest pixel within 6 radar px (about 30 units: a player can stand on a ledge or a wall
+      // top just past the drawn floor, e.g. on top of mid's walls).
       let alpha = 0;
       let lum = 0;
-      const d = g.getImageData(Math.round(px) - 2, Math.round(py) - 2, 5, 5).data;
+      const d = g.getImageData(Math.round(px) - 6, Math.round(py) - 6, 13, 13).data;
       for (let i = 0; i < d.length; i += 4) {
         alpha = Math.max(alpha, d[i + 3] ?? 0);
         lum = Math.max(lum, ((d[i] ?? 0) + (d[i + 1] ?? 0) + (d[i + 2] ?? 0)) / 3);
@@ -209,36 +210,50 @@ async function main(): Promise<void> {
     if (!id) fail('no match id in the URL after analysis');
     await page.screenshot({ path: join(OUT, '2-match.png'), fullPage: true });
 
-    // 2. Open a round from the strip; players on the radar and in their places.
-    await page.click(`.rounds a[href$="/r/${ROUND}"]`);
-    await page.waitForFunction((n) => (window as unknown as { __coach: Hook }).__coach.replay?.track?.round === n, ROUND);
-    const track = await page.evaluate(() => {
-      const t = (window as unknown as { __coach: Hook }).__coach.replay?.track;
-      if (!t) throw new Error('no track');
-      return { tick0: t.tick0, step: t.step, samples: t.samples, phases: t.phases, kills: t.events.kills, side: [...t.side] };
-    });
+    // 2. Every played round (from the strip): players on the radar and in their places, at seven ticks each.
     const mapName = await page.evaluate(() => ((window as unknown as { __coach: Hook }).__coach.replay as unknown as { map: { map: string } }).map.map);
     const placesFile = resolve(ROOT, `data/coach/maps/${mapName}/places.json`);
     const boxes = existsSync(placesFile)
       ? (JSON.parse(readFileSync(placesFile, 'utf8')) as { places: { name: string; bounds: { minX: number; minY: number; maxX: number; maxY: number } }[] }).places
       : [];
-    const live = track.phases.freezeEnd ?? track.tick0;
+    const played = await page.evaluate(async (mid) => {
+      const r = await (window as unknown as { __coach: Hook }).__coach.library.loadReport(mid);
+      return (r?.match.rounds ?? []).filter((x) => x.played).map((x) => x.number);
+    }, id);
+    // The committed fixture has the full tick grid for round 4 only.
+    const checkRounds = CRAW.includes('test-demo-r4') ? [ROUND] : [...played.filter((n) => n !== ROUND), ROUND];
     let onRadar = 0;
     let offRadar = 0;
     let inPlace = 0;
     let outPlace = 0;
-    for (let s = 0; s <= 6; s++) {
-      const tick = live + Math.round(((track.phases.end - live) * s) / 6);
-      await seekTo(page, tick);
-      for (const q of await placed(page)) {
-        if (q.alpha > 0 && q.lum > 20) onRadar++;
-        else { offRadar++; console.log(`  off radar: slot ${q.p} at ${q.x},${q.y} (px ${q.px.toFixed(0)},${q.py.toFixed(0)}) tick ${tick}`); }
-        const box = boxes.find((b) => b.name === q.place);
-        if (!box) continue;
-        if (q.x >= box.bounds.minX - 1 && q.x <= box.bounds.maxX + 1 && q.y >= box.bounds.minY - 1 && q.y <= box.bounds.maxY + 1) inPlace++;
-        else { outPlace++; console.log(`  outside ${q.place}: slot ${q.p} at ${q.x},${q.y}`); }
+    const openRound = async (n: number): Promise<{ tick0: number; step: number; samples: number; phases: ReplayTrack['phases']; kills: ReplayTrack['events']['kills']; side: number[] }> => {
+      await page.click(`.rounds a[href$="/r/${n}"]`);
+      await page.waitForFunction((x) => (window as unknown as { __coach: Hook }).__coach.replay?.track?.round === x, n);
+      return page.evaluate(() => {
+        const t = (window as unknown as { __coach: Hook }).__coach.replay?.track;
+        if (!t) throw new Error('no track');
+        return { tick0: t.tick0, step: t.step, samples: t.samples, phases: t.phases, kills: t.events.kills, side: [...t.side] };
+      });
+    };
+    let track = await openRound(checkRounds[0] ?? ROUND);
+    for (const [i, n] of checkRounds.entries()) {
+      if (i > 0) track = await openRound(n);
+      const live0 = track.phases.freezeEnd ?? track.tick0;
+      for (let s = 0; s <= 6; s++) {
+        const tick = live0 + Math.round(((track.phases.end - live0) * s) / 6);
+        await seekTo(page, tick);
+        for (const q of await placed(page)) {
+          if (q.alpha > 0 && q.lum > 20) onRadar++;
+          else { offRadar++; console.log(`  off radar: round ${n} slot ${q.p} at ${q.x},${q.y} (px ${q.px.toFixed(0)},${q.py.toFixed(0)}) tick ${tick}`); }
+          const box = boxes.find((b) => b.name === q.place);
+          if (!box) continue;
+          if (q.x >= box.bounds.minX - 1 && q.x <= box.bounds.maxX + 1 && q.y >= box.bounds.minY - 1 && q.y <= box.bounds.maxY + 1) inPlace++;
+          else { outPlace++; console.log(`  outside ${q.place}: round ${n} slot ${q.p} at ${q.x},${q.y}`); }
+        }
       }
     }
+    const live = track.phases.freezeEnd ?? track.tick0;
+    console.log(`rounds checked: ${checkRounds.join(' ')}`);
     console.log(`positions: ${onRadar} on the radar's drawn area, ${offRadar} off it; ${inPlace} inside their place's box, ${outPlace} outside`);
     if (offRadar > 0) fail(`${offRadar} player positions off the radar's walkable area`);
     if (outPlace > 0) fail(`${outPlace} player positions outside their place name's box`);
@@ -246,28 +261,32 @@ async function main(): Promise<void> {
     await seekTo(page, live + 25 * 64);
     await page.screenshot({ path: join(OUT, '3-round.png') });
 
-    // 3. A kill line on the kill's tick.
-    const kill = track.kills.find((k) => k.attacker >= 0 && k.ax !== -32768 && Math.hypot(k.ax - k.vx, k.ay - k.vy) > 200);
+    // 3. Kill lines on their kills' ticks (every kill of the round with both positions, 200+ units apart).
+    const colors = await page.evaluate(() => {
+      const st = getComputedStyle(document.documentElement);
+      return { t: st.getPropertyValue('--t'), ct: st.getPropertyValue('--ct') };
+    });
+    const lineKills = track.kills.filter((k) => k.attacker >= 0 && k.ax !== -32768 && k.vx !== -32768 && Math.hypot(k.ax - k.vx, k.ay - k.vy) > 200);
+    const kill = lineKills[0];
     if (!kill) fail('no kill with two positions in the round');
-    else {
-      const mx = (kill.ax + kill.vx) / 2;
-      const my = (kill.ay + kill.vy) / 2;
-      const colors = await page.evaluate(() => {
-        const s = getComputedStyle(document.documentElement);
-        return { t: s.getPropertyValue('--t'), ct: s.getPropertyValue('--ct') };
-      });
-      const want = hex((track.side[kill.attacker] ?? 0) === 2 ? colors.t : colors.ct);
-      await seekTo(page, kill.tick - 8);
+    let linesOk = 0;
+    for (const k of lineKills) {
+      const mx = (k.ax + k.vx) / 2;
+      const my = (k.ay + k.vy) / 2;
+      const want = hex((track.side[k.attacker] ?? 0) === 2 ? colors.t : colors.ct);
+      await seekTo(page, k.tick - 8);
       const before = await pixelAt(page, mx, my);
-      await seekTo(page, kill.tick);
+      await seekTo(page, k.tick);
       const at = await pixelAt(page, mx, my);
-      await page.screenshot({ path: join(OUT, '4-kill.png') });
+      if (k === kill) await page.screenshot({ path: join(OUT, '4-kill.png') });
       const ok = dist(at, want) < dist(before, want) && dist(at, before) > 30;
-      console.log(`kill at tick ${kill.tick}: midpoint pixel before ${before.join(',')} → at ${at.join(',')} (killer side colour ${want.join(',')}): ${ok ? 'line drawn' : 'NO LINE'}`);
-      if (!ok) fail(`no kill line at tick ${kill.tick}`);
+      console.log(`  kill at tick ${k.tick}: midpoint ${before.join(',')} → ${at.join(',')} (killer side ${want.join(',')}) ${ok ? 'line' : 'NO LINE'}`);
+      if (ok) linesOk++;
+      else fail(`no kill line at tick ${k.tick}`);
       const feed = await page.locator('[data-testid="kill-feed"] li').count();
-      if (feed < 1) fail('the kill feed is empty on a kill tick');
+      if (feed < 1) fail(`the kill feed is empty on the kill at tick ${k.tick}`);
     }
+    console.log(`kill lines: ${linesOk} of ${lineKills.length} drawn on their tick`);
 
     // 4. Play at 1× for 4 s: frame and draw times; keyboard.
     await seekTo(page, live);
@@ -351,8 +370,15 @@ async function main(): Promise<void> {
       await page.reload();
       await page.waitForSelector('[data-testid="watch"]');
       await page.screenshot({ path: join(OUT, '6-finding.png') });
+      const watchHref = await page.getAttribute('[data-testid="watch"]', 'href');
       await page.click('[data-testid="watch"]');
       await page.waitForSelector('[data-testid="evidence-caption"]');
+      // Effects run after the paint that shows the caption: wait for the engine to take the evidence.
+      await page.waitForFunction((n) => {
+        const e = (window as unknown as { __coach: Hook }).__coach.replay;
+        return e?.track?.round === n && e.evidence !== null;
+      }, ROUND, { timeout: 5000 }).catch(() => undefined);
+      console.log(`Watch link ${watchHref ?? ''} → ${page.url().replace(ORIGIN, '')}`);
       const e0 = await engineState(page);
       const lead = focus - e0.tick;
       console.log(`Watch: round ${e0.round}, opened at tick ${e0.tick.toFixed(0)} (${(lead / 64).toFixed(2)} s before the focus), playing ${e0.playing}, evidence ${e0.evidence}`);

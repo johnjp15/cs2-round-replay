@@ -11,7 +11,8 @@ scoreboard reconciliation), the CLI and the page skeleton. Nothing is analyzed y
 | `src/coach/model/` | `raw.ts` (`RawDemo`), `items.ts` (canonical item names), `raw-codec.ts` (binary container), `match.ts` (`Match`), `report.ts` (`Finding`, `MatchReport`) |
 | `src/coach/ingest/` | `ingestMatch` (RawDemo → Match), `rounds.ts` (segmentation), `access.ts` (accessors), `validate.ts` (reconciliation) |
 | `src/coach/tuning.ts`, `data/coach/tuning.json` | every coach threshold |
-| `src/coach-app/`, `coach/index.html`, `vite.coach.config.ts` | the page (Preact), built to `dist-coach/` |
+| `src/coach-app/`, `coach/index.html`, `vite.coach.config.ts` | the page (Preact), built to `dist-coach/`: pipeline worker, library, player picker, match page, 2D replay ([`app.md`](app.md)) |
+| `src/coach/report/replay.ts` | replay tracks for the 2D viewer |
 | `tools/coach/` | `coach.ts` (CLI), `parse-node.ts` (native adapter), `fetch-test-demo.ts`, `make-fixture.ts` |
 | `tests/coach/` | unit tests (`synth.ts` builds synthetic RawDemos), the fixture test, the full-demo test |
 | `local/demos/`, `local/coach-cache/` | demos and parsed caches (gitignored; never commit a demo) |
@@ -41,7 +42,8 @@ npm run build:coach     # dist-coach/
 npm run preview:coach
 ```
 
-The page is a skeleton: the app name and a drop zone that accepts a file and does nothing with it yet.
+The page takes a `.craw` / `.craw.gz` today (and demos once K1's parser is in the build), analyzes it in a worker,
+keeps the result in a local library and replays every round in 2D. See [`app.md`](app.md).
 
 ## Tests
 

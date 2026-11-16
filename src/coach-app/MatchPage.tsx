@@ -6,6 +6,7 @@
 import type { FindingArea, Finding, MatchReport } from '../coach/model/report';
 import type { Side, TeamId } from '../coach/model/match';
 import { WATCH_LEAD_SEC } from './config';
+import { STUB_VERSION } from './stub-report';
 import type { LibraryEntry } from './library';
 import { clock, mapName, reasonLong, reasonShort } from './names';
 import { Replay } from './replay/Replay';
@@ -167,7 +168,9 @@ export function MatchPage(props: MatchPageProps) {
       <section class="fixes" aria-labelledby="fixes-h" data-testid="fixes">
         <h2 id="fixes-h">Your three fixes</h2>
         {fixIdx.length === 0
-          ? <p class="empty">No fixes for this match yet. They appear here once the analysis has run; the replay below works already.</p>
+          ? <p class="empty">{report.coachVersion === STUB_VERSION
+            ? 'No fixes yet: this build doesn\'t analyze matches. The rounds and the replay below work already.'
+            : 'No fixes found for you in this match. The replay below has every round.'}</p>
           : <div class="fix-list">{fixIdx.map((i) => { const f = report.findings[i]; return f ? <FindingCard key={i} id={id} report={report} f={f} index={i} /> : null; })}</div>}
       </section>
       <Replay

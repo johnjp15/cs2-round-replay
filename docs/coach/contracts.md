@@ -158,6 +158,11 @@ the viewer maps to the theme. `Evidence`, `MetricValue` (value, unit, n, lobby r
 optional history), `RoundSummary`, `ReplayTrack` (positions at `hz` as Int16) and `MatchReport` (match facts, user
 slot, metrics, findings, top fixes, strengths, rounds, replay tracks, coach version).
 
+`ReplayTrack` (K3, `src/coach/report/replay.ts`, docs/coach/app.md "Replay data") carries, besides `xy`, `yaw` and
+`health`: `step`, `samples`, `players`, `phases`, `side` per slot, `z`, `weapon`, `flags` (`REPLAY_FLAG`), `place`,
+the `weapons` / `places` name tables, and `events` (`ReplayEvents`: kills with positions, shots, hurts, blinds,
+grenades, effects with lifetimes, bomb events with positions). Absent = `REPLAY_ABSENT` (-32768).
+
 ## Reconciliation (`src/coach/ingest/validate.ts`)
 
 `reconcile(raw, match)` recomputes each player's scoreboard from the events between the live start and the
@@ -191,6 +196,9 @@ flash that blinded four enemies for 0.8–3.8 s counts 2). On the test demo 3 of
 | a player who leaves | his rows keep coming with team null and `is_connected` = 8 |
 
 ## Changelog
+
+- `coach-report@1` (K3, 2026-11-16): `ReplayTrack` extended (fields above); `xy`, `yaw` and `health` unchanged. Still
+  `@1`: no report had been stored before.
 
 - `coach-raw@1` (K0, 2026-11-16): first version. Name tables are sorted (`''` first) so they do not depend on the order
   the parser met the names.
