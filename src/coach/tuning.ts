@@ -22,6 +22,22 @@ export interface CoachTuning {
     /** A `player_blind` counts as "enemy flashed" on the scoreboard when longer than this (seconds). */
     blindMinSec: number;
   };
+  /** The 2D replay's tracks (`src/coach/report/replay.ts`). */
+  replay: {
+    /** Samples per second (must divide the tick rate). */
+    hz: number;
+    /** Seconds of freeze time kept before the freeze end (players barely move in it; it costs a fifth of the bytes). */
+    freezeLeadSec: number;
+    /** Seconds after the round end kept when the round has no official end. */
+    postEndSec: number;
+    /** Lifetimes used when the demo has no expiry event (seconds). */
+    smokeFallbackSec: number;
+    fireFallbackSec: number;
+    decoyFallbackSec: number;
+    /** How long an HE and a flash burst are drawn (seconds). */
+    heSec: number;
+    flashSec: number;
+  };
 }
 
 /** Parse and check a tuning object (throws on a missing or non-numeric field). */
@@ -35,6 +51,9 @@ export function loadCoachTuning(json: unknown): CoachTuning {
   need(typeof t?.economy?.ecoBelowPerPlayer === 'number', 'economy.ecoBelowPerPlayer');
   need(typeof t?.economy?.fullFromPerPlayer === 'number', 'economy.fullFromPerPlayer');
   need(typeof t?.validate?.blindMinSec === 'number', 'validate.blindMinSec');
+  for (const k of ['hz', 'freezeLeadSec', 'postEndSec', 'smokeFallbackSec', 'fireFallbackSec', 'decoyFallbackSec', 'heSec', 'flashSec'] as const) {
+    need(typeof t?.replay?.[k] === 'number', `replay.${k}`);
+  }
   return t;
 }
 

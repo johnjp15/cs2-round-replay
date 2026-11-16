@@ -105,17 +105,154 @@ export interface RoundSummary {
   user: { kills: number; died: boolean; damage: number };
 }
 
-/** Compact replay tracks: positions at `hz` per second as Int16 (x, y interleaved per slot), for the 2D replay. */
+/** Bits of `ReplayTrack.flags` (Uint8 per sample and player). */
+export const REPLAY_FLAG = {
+  alive: 1 << 0,
+  /** Has a defuse kit. */
+  kit: 1 << 1,
+  /** Carries the bomb (from the bomb pickup / drop / plant events). */
+  bomb: 1 << 2,
+  defusing: 1 << 3,
+  scoped: 1 << 4,
+  /** Blinded (`flash_duration` > 0). */
+  flashed: 1 << 5,
+  airborne: 1 << 6,
+  reloading: 1 << 7,
+} as const;
+
+/** `ReplayTrack.xy` / `z` value for an absent player. */
+export const REPLAY_ABSENT = -32768;
+
+/** A kill with both players' positions (feet, whole units) at the kill tick. */
+export interface ReplayKill {
+  tick: number;
+  attacker: number;
+  victim: number;
+  assister: number;
+  weapon: string;
+  headshot: boolean;
+  penetrated: number;
+  thruSmoke: boolean;
+  noScope: boolean;
+  attackerBlind: boolean;
+  /** Attacker position (absent attacker, e.g. the world: `REPLAY_ABSENT`). */
+  ax: number;
+  ay: number;
+  az: number;
+  vx: number;
+  vy: number;
+  vz: number;
+}
+
+/** A trigger pull (`weapon_fire`) from the shooter's position along his view yaw; `hit` = the victim it hurt on that tick, or -1. */
+export interface ReplayShot {
+  tick: number;
+  p: number;
+  weapon: string;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  hit: number;
+}
+
+/** A hit: health removed (before minus after, never `dmg_health`). */
+export interface ReplayHurt {
+  tick: number;
+  attacker: number;
+  victim: number;
+  weapon: string;
+  damage: number;
+  /** Health after the hit. */
+  health: number;
+  hitgroup: string;
+}
+
+export interface ReplayBlind {
+  tick: number;
+  attacker: number;
+  victim: number;
+  /** Seconds. */
+  duration: number;
+}
+
+/** A grenade in flight: x, y, z every `step` ticks from t0 (`REPLAY_ABSENT` = missing sample). */
+export interface ReplayGrenade {
+  type: string;
+  thrower: number;
+  t0: number;
+  t1: number;
+  step: number;
+  path: Int16Array;
+}
+
+/** A grenade effect with its lifetime: smokes and fires until their expiry event, HE and flash bursts briefly. */
+export interface ReplayEffect {
+  kind: 'smoke' | 'fire' | 'he' | 'flash' | 'decoy';
+  p: number;
+  tick0: number;
+  tick1: number;
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** A bomb event with the position of the player involved (the planter at the plant, the dropper at a drop). */
+export interface ReplayBombEvent {
+  tick: number;
+  kind: 'begin_plant' | 'abort_plant' | 'planted' | 'begin_defuse' | 'abort_defuse' | 'defused' | 'exploded' | 'dropped' | 'pickup';
+  p: number;
+  site: number;
+  hasKit: boolean;
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface ReplayEvents {
+  kills: ReplayKill[];
+  shots: ReplayShot[];
+  hurts: ReplayHurt[];
+  blinds: ReplayBlind[];
+  grenades: ReplayGrenade[];
+  effects: ReplayEffect[];
+  bomb: ReplayBombEvent[];
+}
+
+/**
+ * One round for the 2D replay (`src/coach/report/replay.ts`): every player sampled at `hz` (sample k = demo tick
+ * `tick0 + k * step`) as small typed arrays, plus the round's events with their ticks. Arrays marked
+ * [samples × players] are indexed `k * players + p`.
+ */
 export interface ReplayTrack {
   round: number;
   tick0: number;
   hz: number;
-  /** [samples × players × 2] Int16, x then y; -32768 = absent. */
+  /** Demo ticks per sample (tick rate / hz). */
+  step: number;
+  samples: number;
+  players: number;
+  /** The round's phases (demo ticks; null where the round has none). */
+  phases: { start: number; freezeEnd: number | null; plant: number | null; end: number; officialEnd: number | null };
+  /** [players] side in this round: 2 T, 3 CT, 0 not present. */
+  side: Uint8Array;
+  /** [samples × players × 2] Int16, x then y (whole units); `REPLAY_ABSENT` = absent. */
   xy: Int16Array;
+  /** [samples × players] feet z (whole units), for two-level radars. */
+  z: Int16Array;
   /** [samples × players] yaw in whole degrees (Int16). */
   yaw: Int16Array;
   /** [samples × players] health (Uint8, 0 = dead or absent). */
   health: Uint8Array;
+  /** [samples × players] active weapon: index into `weapons` (0 = none). */
+  weapon: Uint8Array;
+  /** [samples × players] `REPLAY_FLAG` bits. */
+  flags: Uint8Array;
+  /** [samples × players] place (callout): index into `places` (0 = unknown). */
+  place: Uint8Array;
+  weapons: string[];
+  places: string[];
+  events: ReplayEvents;
 }
 
 export interface MatchReport {

@@ -12,5 +12,15 @@
   },
   "validate": {
     "blindMinSec": 1.1
+  },
+  "replay": {
+    "hz": 16,
+    "freezeLeadSec": 3,
+    "postEndSec": 5,
+    "smokeFallbackSec": 22,
+    "fireFallbackSec": 7,
+    "heSec": 0.5,
+    "flashSec": 0.35,
+    "decoyFallbackSec": 15
   }
 }
