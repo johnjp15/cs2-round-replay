@@ -1,0 +1,16 @@
+{
+  "rounds": {
+    "regulationRounds": 24,
+    "pistolRounds": [
+      1,
+      13
+    ]
+  },
+  "economy": {
+    "ecoBelowPerPlayer": 1500,
+    "fullFromPerPlayer": 3900
+  },
+  "validate": {
+    "blindMinSec": 1.1
+  }
+}

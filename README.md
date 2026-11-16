@@ -45,13 +45,19 @@ R, 1–5, E. Engine: [`docs/sim3d.md`](docs/sim3d.md); app: [`docs/app3d.md`](do
 | `src/sim3d/` | H1: the 3D engine/host (Sim3DHost: 3D hitscan, hitboxes, mesh sight). May import `src/contracts`, `src/engine`, `src/sim2d`. |
 | `src/app3d/`, `sim3d/index.html` | H1: the 3D page (Three.js view, first-person controls, HUD). May import anything. |
 | `src/app/` | Browser app: `Session` driver, 64 Hz loop, input mapping, canvas renderer, HUD and camera; `main.ts` is the page entry. May import anything. |
+| `src/coach/` | Demo coach analysis (no DOM; Node and worker): `model/` (the `RawDemo`, `Match`, report contracts), `ingest/` (rounds, sides, scoreboard reconciliation). May import only `src/contracts`, `src/engine`, `src/sim2d`. No `Date` / `Math.random`. [`docs/coach/`](docs/coach/README.md) |
+| `src/coach-app/`, `coach/index.html` | The demo coach page (Preact). May import anything. |
+| `src/coach-parser/` | K1: the browser demo parser (WebAssembly). May import only `src/coach/model`. |
+| `tools/coach/` | Coach CLI (`npm run coach`), native Node demo adapter, test-demo fetch, fixture builder. |
+| `data/coach/` | Coach tuning (`tuning.json`) and, later, map packs and knowledge. |
 | `index.html` | Page entry for Vite. |
 | `data/` | Round data and `tuning.json` (all tunable numbers). |
-| `tests/` | Vitest tests. |
+| `tests/` | Vitest tests (`tests/coach/`: the coach's, with an anonymized fixture of the public test demo). |
 | `tools/` | Node scripts (extraction, log tools, the headless harness). |
 | `fixtures/` | Golden fixtures for the C# port (`golden/`: logged rounds, walk oracles, `manifest.json`) and human input scripts (`scripts/`). |
 | `docs/` | Project rules and specs. |
 | `logs/` | Local session logs (gitignored). |
+| `local/` | Local demos and caches (`local/demos/`, `local/coach-cache/`; gitignored, never committed). |
 
 Import boundaries and the no-`Date`/no-`Math.random` rule are enforced by ESLint (`eslint.config.js`).
 
@@ -76,6 +82,8 @@ npm run harness -- --human cart --script fixtures/scripts/cart-idle.json --until
 npm run harness -- --takeover 18.6   # watch the round, take control of cart at 18.6 s (G4; he then stands still)
 npm run fixtures:update  # regenerate the golden fixtures for the C# port after an intended behaviour change (docs/golden.md)
 npm run extract:vismask  # rebuild data/mirage-vismask.json (the sight mask: walls and cover) from the radar; logs/vismask-debug*.png
+npm run coach -- inspect local/demos/test_demo.dem   # demo coach: parse a demo, print rounds and the reconciled scoreboard (docs/coach/README.md)
+npm run dev:coach      # the demo coach page (skeleton); npm run build:coach builds it to dist-coach/
 npm run vision         # the labelled vision set against the sight mask (docs/vision.md); logs/vision-labels.png
 ```
 
