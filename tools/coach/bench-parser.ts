@@ -143,7 +143,7 @@ async function main(): Promise<void> {
         const sampler = setInterval(() => { peak = Math.max(peak, treeRss(userDir)); }, 100);
         let r: PageResult;
         try {
-          r = await page.evaluate(() => window.runBench()) as PageResult;
+          r = await page.evaluate(() => (window as unknown as { runBench(): Promise<unknown> }).runBench()) as PageResult;
         } finally {
           clearInterval(sampler);
         }
