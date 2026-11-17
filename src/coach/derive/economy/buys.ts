@@ -103,7 +103,6 @@ export function purchasesOf(ctx: Pick<AnalysisContext, 'raw'>, p: number, t0: nu
   for (const tick of ticks) {
     const group = by.get(tick) ?? [];
     const now = rowAt(raw, tick);
-    if (raw.ticks.tick[now] !== tick) continue;
     const delta = (raw.ticks.money[cell(raw, now, p)] ?? 0) - (raw.ticks.money[cell(raw, rowBefore(raw, tick), p)] ?? 0);
     if (delta < 0) {
       const pick = subsetSum(group.map((b) => b.cost), -delta);
