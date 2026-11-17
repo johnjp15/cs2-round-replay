@@ -34,7 +34,7 @@ import type { GrenadeState, GrenadeWorld, HullTrace, Smoke } from '../../engine/
 import { HITBOXES, type HitboxDef } from '../../engine/hitboxes';
 import { MapGeometry } from '../../sim2d/geometry';
 import tuningJson from '../../../data/tuning.json';
-import losTuningJson from '../../../data/coach/los-tuning.json';
+import losTuningJson from '../../../data/coach/tuning/sight.json';
 
 export type { Vec3 };
 
@@ -74,7 +74,7 @@ function num(o: Record<string, unknown>, k: string): number {
   return v;
 }
 
-/** The tunables from data/tuning.json (eye heights, grenades.cs2) and data/coach/los-tuning.json (`los`). */
+/** The tunables from data/tuning.json (eye heights, grenades.cs2) and data/coach/tuning/sight.json (`los`). */
 export function losTuningFrom(tuning: unknown, los: unknown): LosTuning {
   const t = parseTuning(tuning);
   const l = (los as { los?: Record<string, unknown> }).los;
@@ -165,6 +165,16 @@ export class LosWorld {
   bodyPoint(target: LosTarget, i: number): Vec3 {
     this.poseTarget(target);
     return { x: this.px[i] as number, y: this.py[i] as number, z: this.pz[i] as number };
+  }
+
+  /** All body points of a target into `out` (x, y, z per point, mask order; length ≥ 3 × BODY_POINTS.length): no allocation. */
+  bodyPointsInto(target: LosTarget, out: Float64Array): void {
+    this.poseTarget(target);
+    for (let i = 0; i < BODY_POINTS.length; i++) {
+      out[i * 3] = this.px[i] as number;
+      out[i * 3 + 1] = this.py[i] as number;
+      out[i * 3 + 2] = this.pz[i] as number;
+    }
   }
 
   /** True if nothing in the mesh lies between a and b. */

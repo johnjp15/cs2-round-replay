@@ -7,7 +7,7 @@ view angles but no usable sight (`spotted` is the radar's lagging flag). This ca
 | --- | --- |
 | map packs (radar, transform, sight mesh) | `data/coach/maps/<map>/`, built by `tools/coach/build-map-pack.ts` |
 | line of sight, field of view, smokes | `src/coach/derive/los.ts` (deterministic, no DOM; Node and worker) |
-| tunables | `data/coach/los-tuning.json` (`los`; eye heights and the smoke model from `data/tuning.json`) |
+| tunables | `data/coach/tuning/sight.json` (`los`; eye heights and the smoke model from `data/tuning.json`) |
 | sight check against real kills | `tools/coach/los-check.ts` |
 | benchmark | `tools/coach/bench-los.ts` |
 | callout vocabulary | `tools/coach/places-report.ts` → `data/coach/maps/de_mirage/places.json` |
@@ -117,7 +117,7 @@ crosses no sight triangle and, with a smoke field, no opaque smoke.
 
 **Field of view.** CS2's `fov` is 90° horizontal at 4:3 and Hor+ for wider screens: the vertical field stays at
 73.7° and the horizontal widens, tan(h/2) = tan(45°) · aspect / (4/3), so 106.3° at 16:9. Defaults in
-`data/coach/los-tuning.json`: `fovDeg` 90, `fovAspect` 4/3, `aspect` 16/9. A player on stretched 4:3 sees the 4:3
+`data/coach/tuning/sight.json`: `fovDeg` 90, `fovAspect` 4/3, `aspect` 16/9. A player on stretched 4:3 sees the 4:3
 frustum (pass `aspect` 4/3). Zoomed scopes are not modelled (pass their fov).
 
 **Smokes: the engine's model.** `SmokeField` drives `createSmoke` (src/engine/grenades/smoke.ts) from the detonation

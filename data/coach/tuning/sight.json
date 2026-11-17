@@ -1,0 +1,79 @@
+{
+  "_note": "KM + K6: line of sight (`los`, src/coach/derive/los.ts, docs/coach/maps.md) and the sight-based tables, metrics and detectors (the other sections: src/coach/derive/sight, docs/coach/sight.md). Eye heights and the smoke model's numbers come from data/tuning.json (damage.eyeHeight / crouchEyeHeight, grenades.cs2). Distances in Source units, times in seconds unless the key says ms, angles in degrees.",
+  "los": {
+    "_fov": "CS2's fov is horizontal at 4:3 (90), widened for wider screens (Hor+): tan(h/2) = tan(fovDeg/2) * aspect / fovAspect. 16:9 is the default screen; stretched 4:3 players see the 4:3 frustum.",
+    "fovDeg": 90,
+    "fovAspect": 1.3333333333333333,
+    "aspect": 1.7777777777777777,
+    "_smoke": "Smokes use the engine's voxel flood (src/engine/grenades/smoke.ts), built per smoke on first use. A smoke whose expiry is unknown lasts grenades.cs2's smokeFullSec + smokeFadeSec. queryRadius: a segment farther than this from the detonation never meets that smoke (the flood's cost radius plus a voxel).",
+    "smokeQueryRadius": 340
+  },
+  "sightings": {
+    "_step": "Pairs are evaluated every stepTicks rows of live play (freeze end to round end, both alive), plus at the rows of every gun shot, hurt and kill between the two (anchors); where two evaluated rows differ, the change is found to the row by bisection. A sighting shorter than stepTicks that no anchor touches can be missed (docs/coach/sight.md measures how many).",
+    "stepTicks": 8,
+    "_maxDistance": "Pairs farther apart than this (eye to eye) are not tested: no line of sight on the test demo was longer than 3,600 units (docs/coach/sight.md).",
+    "maxDistance": 4500,
+    "_blind": "The observer is blind while the flash he is under has more than blindRemainingSec left (the demo's flash column is the flash's full duration, constant until the next one; the remaining time is counted from the row it changed). CS2's screen stays white for most of a flash and fades over the last two or so seconds.",
+    "blindRemainingSec": 1.0
+  },
+  "duels": {
+    "_": "A duel (meeting) joins the two directions' sightings of one enemy pair in one round, merging gaps up to mergeGapSec. Shots and damage count from preSec before the first sight to postSec after the last; a kill within postSec after the last sight still ends the duel. A player is holding at his first sight when his speed is at most holdSpeed (units/s, one-tick velocity lag applied); he saw first by a clear margin when his first sight came at least clearMarginMs before the other's (or the other never saw him).",
+    "mergeGapSec": 1.0,
+    "preSec": 0.5,
+    "postSec": 1.0,
+    "holdSpeed": 80,
+    "clearMarginMs": 300
+  },
+  "placement": {
+    "_": "Crosshair placement: the angle between the view direction and the enemy's head point at the observer's first sight in each duel. Leetify-style figure: the angle the view moved from the first sight to the shot that did the first damage. Fix: n >= minN, the median in the lobby's bottom half and at least gapDeg worse than the lobby median. A signed error (vertical or horizontal) is named when its |median| is at least namedDeg. costPerDuel: fights per lost duel that began with the crosshair more than the lobby median off. Strength: lobby rank <= 2 (report.json).",
+    "minN": 8,
+    "gapDeg": 1.5,
+    "namedDeg": 1.5,
+    "maxDistance": 4000,
+    "nScale": 20,
+    "precision": 0.8,
+    "costPerDuel": 0.3
+  },
+  "timeToDamage": {
+    "_": "First sight to first damage and to first shot in each duel the player damaged (or shot in), in ms. leetifyCapMs: Leetify drops times of a second or more; both medians are reported. Fix 'slow': n >= minN, in the lobby's bottom half and at least gapMs slower than the lobby median. Fix 'saw first, lost': at least minSawFirstLost such duels and a share of the saw-first duels >= sawFirstLostShare. Costs in fights per instance.",
+    "leetifyCapMs": 1000,
+    "minN": 6,
+    "gapMs": 100,
+    "minSawFirstLost": 2,
+    "sawFirstLostShare": 0.3,
+    "nScale": 15,
+    "precision": 0.8,
+    "costSlow": 0.3,
+    "costSawFirstLost": 1
+  },
+  "habits": {
+    "_": "Counted habits. Airborne shots: bullets fired in the air with a target. Flashed shots: bullets fired while blind (sightings.blindRemainingSec). Scoped moving: runs of at least scopedMinMs where a sniper rifle is scoped and the speed is above the weapon's moveStartFraction of its scoped max speed while an enemy sees the player or the player sees one. Re-peek: after a sniper bullet at a target that hurt nobody, the two lose sight of each other and within repeekSec of the shot the target sees the player again from within repeekRadius of the shot. A fix when a habit recurs: count >= fixCount; costPerInstance fights each.",
+    "scopedMinMs": 150,
+    "repeekSec": 4,
+    "repeekRadius": 160,
+    "fixCount": 4,
+    "nScale": 6,
+    "precision": 0.85,
+    "costPerInstance": 0.25
+  },
+  "deathContext": {
+    "_": "Labels of each death by an enemy. unseen: the victim did not see the killer in the lookbackSec before the death (behind: the killer more than behindDeg off the victim's view yaw at death). crossfire: two or more enemies saw the victim at the row before the death. repeek: in the repeekSec before the death the victim was hurt by or killed an enemy within repeekRadius of where he died, then no enemy saw him for at least hideSec, then he died within repeekSec of coming back into sight. objective: planting or defusing. open: the killer had line of sight to the victim for all of the openSec before the death while the victim moved at least openMinMove units. Fix: at least minDeaths deaths and the top avoidable label (unseen, crossfire, repeek, open) on >= fixShare of them; costPerDeath fights per labelled death.",
+    "lookbackSec": 3,
+    "behindDeg": 120,
+    "repeekSec": 4,
+    "repeekRadius": 250,
+    "hideSec": 0.3,
+    "openSec": 1.5,
+    "openMinMove": 100,
+    "minDeaths": 4,
+    "fixShare": 0.4,
+    "nScale": 6,
+    "precision": 0.75,
+    "costPerDeath": 0.5
+  },
+  "radar": {
+    "_": "Radar flag comparison (docs/coach/sight.md): lags are searched up to maxLagSec around each edge; coverage is also given for sightings of at least longSightingSec.",
+    "maxLagSec": 2,
+    "longSightingSec": 1
+  }
+}
