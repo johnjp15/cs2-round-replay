@@ -1,0 +1,45 @@
+# Checks the coach parser WebAssembly two ways on the public test demo, against the native adapter:
+# 1. the binary committed in src/coach-parser/pkg/ (the one the page ships) must match its PROVENANCE.json hash and
+#    conform; 2. a fresh build with the official wasm32 target (the workspace builds it with -Z build-std) must
+#    conform too. The fresh build is uploaded as an artifact; it is a cross-check of the committed binary and does
+#    not replace it.
+name: coach-parser
+on:
+  push:
+    paths: ['crates/coach-parser/**', 'src/coach-parser/**', 'tools/coach/parse-wasm.ts', 'tools/coach/raw-compare.ts', '.github/workflows/coach-parser.yml']
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Public test demo
+        run: |
+          mkdir -p local/demos
+          curl -sSfL -o local/demos/test_demo.dem https://raw.githubusercontent.com/LaihoE/demoparser/8035c3d9c61e00fb6634f76541e535f64f0f4d3f/src/parser/test_demo.dem
+          echo "84a1a4191302bdd2a3bbb5a727842093744b1fb1a228aeec630369e44b622cb2  local/demos/test_demo.dem" | sha256sum -c
+      - name: The committed binary matches its provenance and conforms
+        run: |
+          echo "$(jq -r .sha256 src/coach-parser/pkg/PROVENANCE.json)  src/coach-parser/pkg/coach_parser_bg.wasm" | sha256sum -c
+          npx tsx tools/coach/parser-conformance.ts
+      - name: Rust toolchain (1.97.0, wasm32)
+        run: rustup toolchain install 1.97.0 --profile minimal --target wasm32-unknown-unknown && rustup default 1.97.0
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/wasm-bindgen
+            ~/.cargo/registry
+            crates/coach-parser/target
+          key: coach-parser-${{ hashFiles('crates/coach-parser/Cargo.lock', 'crates/coach-parser/upstream.env') }}
+      - name: wasm-bindgen-cli
+        run: command -v wasm-bindgen || cargo install wasm-bindgen-cli --version 0.2.130 --locked
+      - name: Build
+        run: crates/coach-parser/build.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: coach-parser-pkg, path: src/coach-parser/pkg/ }
+      - name: The fresh build conforms
+        run: npx tsx tools/coach/parser-conformance.ts

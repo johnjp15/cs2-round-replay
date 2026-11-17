@@ -1,0 +1,10 @@
+{
+  "artifact": "coach_parser_bg.wasm",
+  "crate": "crates/coach-parser 0.1.0",
+  "upstream": { "repo": "https://github.com/LaihoE/demoparser.git", "commit": "8035c3d9c61e00fb6634f76541e535f64f0f4d3f", "license": "MIT", "patches": ["0001-wasm-no-instant.patch"] },
+  "toolchain": { "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)", "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)", "wasmBindgen": "0.2.130", "std": "build-std", "wasmOpt": "not run" },
+  "build": "crates/coach-parser/build.sh",
+  "sha256": "b0be26372010473e55b6fdf10026f52b991e7e8c6e26887c0fbfe927ab80484d",
+  "bytes": 2964579,
+  "gzipBytes": 887367
+}

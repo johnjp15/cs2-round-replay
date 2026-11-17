@@ -26,7 +26,7 @@ const boundaryZones = [
 const nondeterminism = 'Non-deterministic: use the seeded PRNG in src/contracts/rng.ts and integer ticks.';
 
 export default tseslint.config(
-  { ignores: ['dist/', 'dist-single/', 'dist-3d/', 'dist-single-3d/', 'dist-coach/', 'local/', 'node_modules/', 'logs/', 'coverage/'] },
+  { ignores: ['dist/', 'dist-single/', 'dist-3d/', 'dist-single-3d/', 'dist-coach/', 'local/', 'node_modules/', 'logs/', 'coverage/', 'crates/', 'src/coach-parser/pkg/'] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {
