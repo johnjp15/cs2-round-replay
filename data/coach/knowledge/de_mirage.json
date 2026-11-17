@@ -1,0 +1,73 @@
+{
+  "format": "coach-knowledge@1",
+  "map": "de_mirage",
+  "_note": "K8: Mirage map knowledge (docs/coach/strategy.md). Every place name a demo reports (last_place_name) belongs to exactly one zone; lanes list the places Ts walk through toward a site; counters are what the advice text quotes.",
+  "verified": true,
+  "checkedAgainst": [
+    { "demoSha256": "84a1a4191302bdd2a3bbb5a727842093744b1fb1a228aeec630369e44b622cb2", "places": 23, "unknown": 0, "siteIds": { "184": "A", "185": "B" } }
+  ],
+  "zones": [
+    { "id": "t_spawn", "name": "T spawn", "kind": "spawn", "group": "T", "places": ["TSpawn", "SideAlley"] },
+    { "id": "a_approach", "name": "Palace alley", "kind": "connector", "group": "T", "places": ["PalaceAlley"] },
+    { "id": "a_ramp", "name": "A Ramp", "kind": "lane", "group": "A", "places": ["TRamp"] },
+    { "id": "palace", "name": "Palace", "kind": "lane", "group": "A", "places": ["PalaceInterior"] },
+    { "id": "a_site", "name": "A site", "kind": "site", "group": "A", "site": "A", "places": ["BombsiteA", "Scaffolding"] },
+    { "id": "a_ct", "name": "Jungle and Stairs", "kind": "connector", "group": "A", "site": "A", "places": ["Jungle", "Stairs"] },
+    { "id": "ct_spawn", "name": "CT spawn", "kind": "spawn", "group": "CT", "defends": ["A"], "places": ["CTSpawn"] },
+    { "id": "mid", "name": "Mid", "kind": "mid", "group": "mid", "places": ["TopofMid", "Middle"] },
+    { "id": "window_connector", "name": "Window and Connector", "kind": "connector", "group": "mid", "places": ["SnipersNest", "Connector"] },
+    { "id": "short", "name": "Short", "kind": "lane", "group": "mid", "places": ["Catwalk", "Ladder"] },
+    { "id": "underpass", "name": "Underpass", "kind": "lane", "group": "mid", "places": ["Underpass"] },
+    { "id": "apartments", "name": "Apartments", "kind": "lane", "group": "B", "places": ["House", "BackAlley", "Apartments"] },
+    { "id": "b_site", "name": "B site", "kind": "site", "group": "B", "site": "B", "places": ["BombsiteB", "Truck"] },
+    { "id": "b_ct", "name": "Market", "kind": "connector", "group": "B", "site": "B", "places": ["Shop"] }
+  ],
+  "sites": [
+    { "id": "A", "name": "A", "zones": ["a_site", "a_ct"] },
+    { "id": "B", "name": "B", "zones": ["b_site", "b_ct"] }
+  ],
+  "lanes": [
+    {
+      "id": "a_ramp", "name": "A Ramp", "places": ["TRamp"], "site": "A", "earlyFight": "T",
+      "counters": [
+        "Hold Ramp from Tetris or Triple with a teammate close enough to trade, not from the open middle of the site.",
+        "When you hear them gather at the bottom of Ramp, a molotov or HE on the Ramp exit buys the time for a rotation."
+      ]
+    },
+    {
+      "id": "palace", "name": "Palace", "places": ["PalaceInterior"], "site": "A", "earlyFight": "both",
+      "counters": [
+        "Hold the Palace exit from Firebox or Ticket, off the angle they pre-aim, and fall back after the first contact.",
+        "A molotov on the Palace exit when you hear feet stops a fast take; keep one flash for the retake."
+      ]
+    },
+    {
+      "id": "mid", "name": "Mid, Window and Connector", "places": ["Middle", "SnipersNest", "Connector"], "site": "A", "earlyFight": "both",
+      "counters": [
+        "Contest Mid early from Window or Connector with an AWP or a smoke at Top Mid, then give it up before the flashes come.",
+        "Once they own Mid, keep a player in Connector or Jungle with a flash ready, so a Connector split cannot walk into A unseen."
+      ]
+    },
+    {
+      "id": "short", "name": "Short", "places": ["Catwalk", "Ladder"], "site": "B", "earlyFight": "both",
+      "counters": [
+        "Hold Short from Market window or the Bench corner and call it the moment you see one, so B can rotate.",
+        "A molotov on Short when they stack at Ladder room delays a B split by the seconds a rotation needs."
+      ]
+    },
+    {
+      "id": "underpass", "name": "Underpass", "places": ["Underpass"], "site": "B", "earlyFight": "both",
+      "counters": [
+        "Underpass is the back door into Mid and Short: a quick early peek for information, then hold it from Short with a teammate.",
+        "A molotov down the Underpass stairs when you hear them stops a lurk from cutting off the B rotation."
+      ]
+    },
+    {
+      "id": "apartments", "name": "Apartments", "places": ["House", "BackAlley", "Apartments"], "site": "B", "earlyFight": "T",
+      "counters": [
+        "Hold the Apartments exit from Van or Bench, not from the open site, and fall back to Market when the flashes come.",
+        "A molotov on the Apartments exit plus a flash over it stops a rush; an early info push into Apartments needs a teammate to trade."
+      ]
+    }
+  ]
+}

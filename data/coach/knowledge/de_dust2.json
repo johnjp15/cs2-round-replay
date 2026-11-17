@@ -1,0 +1,52 @@
+{
+  "format": "coach-knowledge@1",
+  "map": "de_dust2",
+  "_note": "K8 DRAFT, not verified: written from knowledge of the map, before any Dust II demo was seen. Place names are CS:GO-era nav names and must be confirmed by the first Dust II demo (tools/coach/knowledge-check.ts lists unknown and unused names). Unknown names are treated as unclassified, never guessed.",
+  "verified": false,
+  "checkedAgainst": [],
+  "zones": [
+    { "id": "t_spawn", "name": "T spawn", "kind": "spawn", "group": "T", "places": ["TSpawn", "TRamp"] },
+    { "id": "outside_long", "name": "Outside Long", "kind": "connector", "group": "T", "places": ["OutsideLong"] },
+    { "id": "long", "name": "Long", "kind": "lane", "group": "A", "places": ["LongDoors", "LongA", "Pit"] },
+    { "id": "short", "name": "Short (Catwalk)", "kind": "lane", "group": "A", "places": ["Catwalk", "ShortStairs", "Short"] },
+    { "id": "a_site", "name": "A site", "kind": "site", "group": "A", "site": "A", "places": ["BombsiteA", "ARamp"] },
+    { "id": "ct_spawn", "name": "CT spawn", "kind": "spawn", "group": "CT", "defends": ["A"], "places": ["CTSpawn"] },
+    { "id": "mid", "name": "Mid", "kind": "mid", "group": "mid", "places": ["TopofMid", "Middle", "MidDoors", "CTMid"] },
+    { "id": "tunnels", "name": "B tunnels", "kind": "lane", "group": "B", "places": ["OutsideTunnel", "UpperTunnel", "TunnelStairs", "LowerTunnel"] },
+    { "id": "b_site", "name": "B site", "kind": "site", "group": "B", "site": "B", "places": ["BombsiteB", "BDoors", "Hole"] }
+  ],
+  "sites": [
+    { "id": "A", "name": "A", "zones": ["a_site"] },
+    { "id": "B", "name": "B", "zones": ["b_site"] }
+  ],
+  "lanes": [
+    {
+      "id": "long", "name": "Long", "places": ["LongDoors", "LongA", "Pit"], "site": "A", "earlyFight": "both",
+      "counters": [
+        "Contest Long doors early with a flash from the corner or an AWP from Pit side, then fall back to Car or the site before the smoke drops.",
+        "When they own Long, hold from Car or Goose with a teammate on Short side, and molotov the Long corner on the hit."
+      ]
+    },
+    {
+      "id": "short", "name": "Short (Catwalk)", "places": ["Catwalk", "ShortStairs", "Short"], "site": "A", "earlyFight": "both",
+      "counters": [
+        "Hold Short from the site's Goose or Ramp side so you can fall back; a molotov on the Short stairs stops a fast split.",
+        "The Mid player calls Catwalk pressure early so A can bring a second player before the split."
+      ]
+    },
+    {
+      "id": "mid", "name": "Mid", "places": ["Middle", "MidDoors", "CTMid"], "site": null, "earlyFight": "both",
+      "counters": [
+        "Smoke or flash Mid doors early so the Ts cannot cross freely to B or Short, and give the cross up before the AWP peek.",
+        "Once they hold Mid, B and Short both need a heads-up: watch Lower tunnels and Catwalk for the split."
+      ]
+    },
+    {
+      "id": "tunnels", "name": "B tunnels", "places": ["OutsideTunnel", "UpperTunnel", "TunnelStairs", "LowerTunnel"], "site": "B", "earlyFight": "T",
+      "counters": [
+        "Hold the tunnel exit from Car, Back plat or Window, never from the open site; a molotov at the tunnel exit plus a flash stops a rush.",
+        "An early flash into Upper tunnels for information is fine with a teammate ready to trade, then fall back."
+      ]
+    }
+  ]
+}

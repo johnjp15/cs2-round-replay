@@ -21,7 +21,8 @@ import { ALL_METRICS } from '../metrics/index';
 import type { MetricDef } from '../metrics/types';
 import type { Match, MatchRound } from '../model/match';
 import type { RawDemo } from '../model/raw';
-import { REPORT_FORMAT, type Finding, type MatchReport, type MetricValue, type RoundSummary } from '../model/report';
+import { REPORT_FORMAT, type ChartPayload, type Finding, type MatchReport, type MetricValue, type RoundSummary } from '../model/report';
+import { knowledgeFor } from '../derive/strategy/knowledge';
 import type { CoachTuning } from '../tuning';
 import { createContext, type AnalysisContext } from './context';
 import { REPORT_TUNING, type ReportTuning } from './report-tuning';
@@ -151,16 +152,27 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
   };
   const findings: Finding[] = [];
   const seen = new Set<string>();
+  const charts: Record<string, ChartPayload> = {};
   for (const d of opts.detectors ?? ALL_DETECTORS) {
     if (d.needs?.includes('los') === true && ctx.los === null) continue;
-    if (d.needs?.includes('knowledge') === true) continue; // no map knowledge loader yet (K8)
+    if (d.needs?.includes('knowledge') === true && knowledgeFor(match.meta.map) === null) continue;
+    const own: Finding[] = [];
     for (const f of d.run(ctx, opts.user, metric)) {
       if (!f.id.startsWith(d.id)) throw new Error(`analysis: finding ${f.id} does not start with its detector id ${d.id}`);
       if (seen.has(f.id)) throw new Error(`analysis: finding id ${f.id} used twice`);
       seen.add(f.id);
       findings.push(f);
+      own.push(f);
+    }
+    if (d.charts) {
+      const c = d.charts(ctx, opts.user, own);
+      for (const k of Object.keys(c).sort()) {
+        if (charts[k] !== undefined) throw new Error(`analysis: chart ${k} filled twice`);
+        charts[k] = c[k] as ChartPayload;
+      }
     }
   }
+  const chartKeys = Object.keys(charts).sort();
   const { topFixes, strengths } = prioritize(findings, t);
   return {
     format: REPORT_FORMAT,
@@ -176,6 +188,7 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
     strengths,
     rounds: roundSummaries(ctx, opts.user),
     replay: [],
+    ...(chartKeys.length > 0 ? { charts: Object.fromEntries(chartKeys.map((k) => [k, charts[k] as ChartPayload])) } : {}),
     coachVersion: COACH_VERSION,
   };
 }
