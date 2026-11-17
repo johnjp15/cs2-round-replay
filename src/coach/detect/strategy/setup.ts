@@ -9,6 +9,7 @@ import type { SiteId } from '../../derive/strategy/knowledge';
 import type { ChartPayload, Evidence, Finding } from '../../model/report';
 import { plural } from '../../report/format';
 import { makeFinding, pickClearest } from '../common';
+import { secToTicks } from '../../derive/positioning/grid';
 import type { Detector } from '../types';
 import { replayAt } from '../utility/evidence';
 import { board, boardZones, lookupOf, markPlayers, patternConfidence, patternImpact, placeZones, sitePlaces, sideRounds, ST, tally, times, whereList, zoneNameAt, type SideRound } from './common';
@@ -21,8 +22,8 @@ function evidenceFor(ctx: AnalysisContext, slot: number, r: SideRound): Evidence
   const lookup = lookupOf(ctx);
   const site = r.hit.site as SiteId;
   const focus = entryTick(r);
-  const t0 = focus - 5 * 64;
-  const t1 = focus + 5 * 64;
+  const t0 = focus - secToTicks(ctx.raw, 5);
+  const t1 = focus + secToTicks(ctx.raw, 5);
   const n = r.setup.onHitSiteAtSetup ?? 0;
   const anns = [
     ...(lookup ? placeZones(ctx, sitePlaces(lookup, site), t0, t1, 'bad', `${site}: ${n} CT${n === 1 ? '' : 's'} set up here`) : []),

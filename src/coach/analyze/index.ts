@@ -4,7 +4,9 @@
  * 1. Build the context (`createContext`).
  * 2. Compute every metric for every slot: the lobby values, and ranks (1 = best; ties share a rank, competition
  *    ranking 1, 2, 2, 4; `better` decides the direction; slots without a value get NaN and rank 0).
- * 3. Run every detector for the user (skipping those whose `needs` are missing).
+ * 3. Run every detector for the user (skipping those whose `needs` are missing: `los` without a sight mesh,
+ *    `knowledge` on a map without `data/coach/knowledge/<map>.json`) and collect the charts detectors return
+ *    (`Detector.charts`) into `MatchReport.charts`, keys sorted.
  * 4. First prioritizer: `priority = impact × confidence`; fixes sorted by priority (then id); the top `maxFixes`, never
  *    two from the same detector family (the id up to the second dot) and never one without evidence; strengths = up to
  *    `maxStrengths` `strength` findings by priority. K5 replaces this.

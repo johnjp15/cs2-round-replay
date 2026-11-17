@@ -10,6 +10,7 @@ import type { LaneRow } from '../../derive/strategy/lanes';
 import type { ChartPayload, Evidence, Finding } from '../../model/report';
 import { plural } from '../../report/format';
 import { makeFinding, pickClearest } from '../common';
+import { secToTicks } from '../../derive/positioning/grid';
 import type { Detector } from '../types';
 import { replayAt } from '../utility/evidence';
 import { board, boardZones, lookupOf, markPlayers, patternConfidence, patternImpact, placeZones, sideRounds, ST, tally, whereList, zoneNameAt, type SideRound } from './common';
@@ -89,8 +90,8 @@ function evidenceFor(ctx: AnalysisContext, slot: number, s: LaneStats, r: SideRo
   const li = s.laneIndex;
   const l = rowOf(r, li);
   const focus = laneTick(r, li);
-  const t0 = focus - 5 * 64;
-  const t1 = focus + 5 * 64;
+  const t0 = focus - secToTicks(ctx.raw, 5);
+  const t1 = focus + secToTicks(ctx.raw, 5);
   const anns = [
     ...placeZones(ctx, s.lane.places, t0, t1, 't', `${s.lane.name}: nobody contested`),
     ...markPlayers(ctx, r.g, focus, slot, l?.ts ?? [], t0, t1),

@@ -8,6 +8,7 @@ import { STRAT_ROTATIONS, type RotationRow } from '../../derive/strategy/rotatio
 import type { ChartPayload, Evidence, Finding } from '../../model/report';
 import { plural } from '../../report/format';
 import { makeFinding, pickClearest } from '../common';
+import { secToTicks } from '../../derive/positioning/grid';
 import type { Detector } from '../types';
 import { replayAt } from '../utility/evidence';
 import { board, boardZones, lookupOf, markPlayers, patternConfidence, patternImpact, placeZones, sideRounds, sitePlaces, ST, type SideRound } from './common';
@@ -16,17 +17,17 @@ export function userRotations(ctx: AnalysisContext, slot: number): RotationRow[]
   return ctx.table(STRAT_ROTATIONS).filter((r) => r.slot === slot);
 }
 
-function focusOf(r: RotationRow): number {
+function focusOf(ctx: AnalysisContext, r: RotationRow): number {
   if (r.punished || (r.rotated && r.early)) return r.leftTick ?? 0;
   const inf = r.info[r.other];
-  return inf !== null ? inf.tick + Math.round(ST.rotations.stayGraceSec * 64) : 0;
+  return inf !== null ? inf.tick + secToTicks(ctx.raw, ST.rotations.stayGraceSec) : 0;
 }
 
 function evidenceFor(ctx: AnalysisContext, slot: number, r: RotationRow, sr: SideRound): Evidence {
   const lookup = lookupOf(ctx);
-  const focus = focusOf(r);
-  const t0 = focus - 6 * 64;
-  const t1 = focus + 6 * 64;
+  const focus = focusOf(ctx, r);
+  const t0 = focus - secToTicks(ctx.raw, 6);
+  const t1 = focus + secToTicks(ctx.raw, 6);
   const stay = !r.punished;
   const site = stay ? r.other : r.home;
   const anns = [
@@ -36,7 +37,7 @@ function evidenceFor(ctx: AnalysisContext, slot: number, r: RotationRow, sr: Sid
   const inf = r.info[r.other];
   const caption = stay
     ? `Round ${r.round}: ${inf?.kind === 'plant' ? 'the bomb was down' : inf?.kind === 'fight' ? 'the fight was' : 'they were seen'} on ${r.other} and ${ST.rotations.stayGraceSec} s later you were still on ${r.home}; round ${sr.g.round.winnerSide === 'CT' ? 'won' : 'lost'}`
-    : `Round ${r.round}: you left ${r.home} with no information on ${r.other}; they entered ${r.home} ${Math.round(((sr.hit.entryTick ?? 0) - (r.leftTick ?? 0)) / 64)} s later`;
+    : `Round ${r.round}: you left ${r.home} with no information on ${r.other}; they entered ${r.home} ${Math.round(((sr.hit.entryTick ?? 0) - (r.leftTick ?? 0)) / (ctx.raw.header.tickRate || 64))} s later`;
   return replayAt(ctx, r.round, focus, 6, 6, [slot, ...sr.hit.committed], anns, caption);
 }
 
@@ -85,7 +86,7 @@ function rotateBoards(ctx: AnalysisContext, slot: number, findings: readonly Fin
     const r = rows.get(sr.g.round.number);
     const ev = f.evidence.findIndex((e) => e.round === sr.g.round.number);
     const what = r === undefined ? 'not on a site' : r.punished ? `left ${r.home} early, ${r.home} hit` : r.stayed ? `stayed on ${r.home} after the ${r.other} call` : r.rotated ? `rotated ${r.home}→${r.other}` : `held ${r.home}`;
-    const tick = r !== undefined && (r.punished || r.stayed) ? focusOf(r) : sr.hit.entryTick ?? sr.setup.setupTick;
+    const tick = r !== undefined && (r.punished || r.stayed) ? focusOf(ctx, r) : sr.hit.entryTick ?? sr.setup.setupTick;
     const zones = r !== undefined ? boardZones(ctx, sitePlaces(lookup, r.home), r.punished ? 'bad' : 'ct', r.home) : [];
     return board(ctx, sr.g, tick, slot, zones, `R${sr.g.round.number} · ${what} · ${sr.g.round.winnerSide === 'CT' ? 'won' : 'lost'}`,
       r !== undefined && (r.punished || r.stayed), ev >= 0 ? { finding: f.id, evidence: ev } : undefined);

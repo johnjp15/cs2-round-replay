@@ -9,6 +9,7 @@ import type { HitRole } from '../../derive/strategy/hits';
 import type { ChartPayload, Evidence, Finding } from '../../model/report';
 import { plural } from '../../report/format';
 import { makeFinding, pickClearest } from '../common';
+import { secToTicks } from '../../derive/positioning/grid';
 import type { Detector } from '../types';
 import { replayAt } from '../utility/evidence';
 import { board, boardZones, lookupOf, markPlayers, patternConfidence, patternImpact, placeZones, sideRounds, sitePlaces, ST, times, type SideRound } from './common';
@@ -26,8 +27,8 @@ function evidenceFor(ctx: AnalysisContext, slot: number, r: SideRound): Evidence
   const lookup = lookupOf(ctx);
   const site = r.hit.site ?? 'A';
   const focus = r.hit.entryTick ?? r.setup.setupTick;
-  const t0 = focus - 6 * 64;
-  const t1 = focus + 6 * 64;
+  const t0 = focus - secToTicks(ctx.raw, 6);
+  const t1 = focus + secToTicks(ctx.raw, 6);
   const anns = [
     ...(lookup ? placeZones(ctx, sitePlaces(lookup, site), t0, t1, r.hit.behindUtil ? 'good' : 'bad', `${site}: ${utilText(r)} before the entry`) : []),
     ...markPlayers(ctx, r.g, focus, slot, r.hit.committed, t0, t1),
@@ -53,7 +54,7 @@ export const tSideDetector: Detector = {
     const polarity = fix ? 'fix' : strength ? 'strength' : 'observation';
     const sites = ['A', 'B'].map((s) => ({ s, n: hits.filter((r) => r.hit.site === s).length })).filter((x) => x.n > 0).map((x) => `${x.s} ${times(x.n)}`).join(', ');
     const timing = (['fast', 'default', 'late'] as const).map((t) => ({ t, n: hits.filter((r) => r.hit.timing === t).length })).filter((x) => x.n > 0)
-      .map((x) => `${x.n} ${x.t === 'fast' ? `fast (by ${d.tMinHits > 0 ? ST.hits.fastSec : 0} s)` : x.t === 'late' ? `late (after ${ST.hits.lateSec} s)` : 'mid-round'}`).join(', ');
+      .map((x) => `${x.n} ${x.t === 'fast' ? `fast (by ${ST.hits.fastSec} s)` : x.t === 'late' ? `late (after ${ST.hits.lateSec} s)` : 'mid-round'}`).join(', ');
     const roleCount = ROLES.map((role) => ({ role, n: hits.filter((r) => r.hit.roles[slot] === role).length })).filter((x) => x.n > 0);
     const you = `You ${roleCount.map((x) => `${ROLE_TEXT[x.role]} ${times(x.n)}`).join(', ')}.`;
     const mine = hits.filter((r) => r.hit.roles[slot] === 'entry' || r.hit.roles[slot] === 'second');

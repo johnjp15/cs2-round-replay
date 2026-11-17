@@ -6,7 +6,7 @@ import { checkNumbers } from '../utility/tuning';
 
 export interface StrategyTuning {
   grid: { sampleTicks: number };
-  lanes: { takeMinTs: number; checkpoint1Sec: number; checkpoint2Sec: number; checkpoint3Sec: number; contestSec: number };
+  lanes: { takeMinTs: number; takeMinSec: number; checkpoint1Sec: number; checkpoint2Sec: number; checkpoint3Sec: number; contestSec: number; lookRange: number; lookStep: number };
   hits: {
     hitMinTs: number; commitWindowSec: number; utilWindowSec: number; utilAfterSec: number; utilMin: number;
     fastSec: number; lateSec: number; secondSec: number; lurkDistance: number;
@@ -25,7 +25,7 @@ export interface StrategyTuning {
 export function loadStrategyTuning(j: unknown): StrategyTuning {
   return checkNumbers<StrategyTuning>(j, {
     grid: ['sampleTicks'],
-    lanes: ['takeMinTs', 'checkpoint1Sec', 'checkpoint2Sec', 'checkpoint3Sec', 'contestSec'],
+    lanes: ['takeMinTs', 'takeMinSec', 'checkpoint1Sec', 'checkpoint2Sec', 'checkpoint3Sec', 'contestSec', 'lookRange', 'lookStep'],
     hits: ['hitMinTs', 'commitWindowSec', 'utilWindowSec', 'utilAfterSec', 'utilMin', 'fastSec', 'lateSec', 'secondSec', 'lurkDistance'],
     setup: ['setupSec'],
     rotations: ['infoMinTs', 'earlySlackSec', 'stayGraceSec', 'rotateMaxSec', 'punishSec'],

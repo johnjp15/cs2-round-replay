@@ -5,13 +5,17 @@
     "sampleTicks": 16
   },
   "lanes": {
-    "_take": "A lane is taken when at least takeMinTs Ts entered it before the plant (or the round end). enteredBy counts the distinct Ts who had entered by each checkpoint.",
+    "_take": "A lane is taken when at least takeMinTs Ts entered it before the plant (or the round end) and one of them got through to the lane's site or stayed in it at least takeMinSec. enteredBy counts the distinct Ts who had entered by each checkpoint.",
     "takeMinTs": 1,
+    "takeMinSec": 3,
     "checkpoint1Sec": 15,
     "checkpoint2Sec": 25,
     "checkpoint3Sec": 40,
     "_contest": "Contested in time: from freeze end to contestSec after the first T entered, a CT stood in the lane, saw a T in it (the demo's spotted_by), dealt damage to a T in it or from it, or a CT grenade landed in it.",
-    "contestSec": 5
+    "contestSec": 5,
+    "_look": "Sight with a sight mesh: a CT within lookRange units of a T in the lane, the T inside his field of view and a clear line to a body point, tested every lookStep samples (spotted_by alone is sparse in GOTV demos).",
+    "lookRange": 3000,
+    "lookStep": 2
   },
   "hits": {
     "_commit": "The Ts committed to a site when hitMinTs living Ts stood in its area at once (or planted there). committed = distinct Ts in the area from that entry to commitWindowSec later.",

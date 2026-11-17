@@ -11,6 +11,7 @@ import { STRAT_REPEATS, type Repeat } from '../../derive/strategy/repeats';
 import type { Side } from '../../model/match';
 import type { Evidence } from '../../model/report';
 import { makeFinding, pickClearest } from '../common';
+import { secToTicks } from '../../derive/positioning/grid';
 import type { Detector } from '../types';
 import { replayAt } from '../utility/evidence';
 import { laneOf, lookupOf, markPlayers, patternConfidence, patternImpact, placeZones, sideRounds, sitePlaces, ST, type SideRound } from './common';
@@ -74,8 +75,8 @@ export const opponentDetector: Detector = {
     const evid = pickClearest(later.length > 0 ? later : occ, (r) => (answered(ctx, p, r) ? 0 : 1) + (won(r) ? 0 : 1), (r) => r.g.round.number, (r) => r.g.round.number, ST.detect.evidenceRounds);
     const evidence: Evidence[] = evid.map((r) => {
       const focus = p.side === 'CT' ? r.hit.entryTick ?? r.setup.setupTick : r.setup.setupTick;
-      const t0 = focus - 5 * 64;
-      const t1 = focus + 5 * 64;
+      const t0 = focus - secToTicks(ctx.raw, 5);
+      const t1 = focus + secToTicks(ctx.raw, 5);
       return replayAt(ctx, r.g.round.number, focus, 5, 5, [slot, ...(p.side === 'CT' ? r.hit.committed : [])],
         [...placeZones(ctx, w.places, t0, t1, answered(ctx, p, r) ? 'good' : 'bad', w.text), ...markPlayers(ctx, r.g, focus, slot, p.side === 'CT' ? r.hit.committed : [], t0, t1)],
         `Round ${r.g.round.number}: they ${w.text}${p.side === 'CT' ? ` (setup ${r.setup.label})` : ''}; ${answered(ctx, p, r) ? 'answered' : 'not answered'}; round ${won(r) ? 'won' : 'lost'}`);

@@ -6,7 +6,7 @@ import { analyze } from '../../src/coach/analyze/index';
 import { createContext } from '../../src/coach/analyze/context';
 import { STRAT_GRID, Z_UNKNOWN } from '../../src/coach/derive/strategy/grid';
 import { STRAT_HITS } from '../../src/coach/derive/strategy/hits';
-import { checkPlaces, KNOWLEDGE, knowledgeFor, loadKnowledge } from '../../src/coach/derive/strategy/knowledge';
+import { checkPlaces, KNOWLEDGE, knowledgeFor, loadKnowledge, type MapKnowledge } from '../../src/coach/derive/strategy/knowledge';
 import { STRAT_LANES } from '../../src/coach/derive/strategy/lanes';
 import { halvesOf, STRAT_REPEATS } from '../../src/coach/derive/strategy/repeats';
 import { STRAT_ROTATIONS } from '../../src/coach/derive/strategy/rotations';
@@ -47,14 +47,14 @@ function checkEvidence(f: Finding | undefined): void {
 describe('map knowledge', () => {
   it('loads the committed files; Mirage classifies every place of its places.json, Dust II is a draft', () => {
     expect(Object.keys(KNOWLEDGE).sort()).toEqual(['de_dust2', 'de_mirage']);
-    const m = knowledgeFor('de_mirage');
-    expect(m?.verified).toBe(true);
+    const m = KNOWLEDGE['de_mirage'] as MapKnowledge;
+    expect(m.verified).toBe(true);
     expect(knowledgeFor('de_dust2')?.verified).toBe(false);
     expect(knowledgeFor('de_inferno')).toBeNull();
-    const res = checkPlaces(m!, places.places.map((p) => p.name));
+    const res = checkPlaces(m, places.places.map((p) => p.name));
     expect(res).toEqual({ unknown: [], unused: [], classified: 23 });
-    expect(m?.checkedAgainst[0]?.siteIds).toEqual({ 184: 'A', 185: 'B' });
-    for (const l of m?.lanes ?? []) expect(l.counters.length).toBeGreaterThanOrEqual(1);
+    expect(m.checkedAgainst[0]?.siteIds).toEqual({ 184: 'A', 185: 'B' });
+    for (const l of m.lanes) expect(l.counters.length).toBeGreaterThanOrEqual(1);
   });
 
   it('rejects broken files', () => {
@@ -74,7 +74,7 @@ describe('map knowledge', () => {
   });
 
   it('reports unknown and unused names', () => {
-    const res = checkPlaces(knowledgeFor('de_mirage')!, ['TSpawn', 'Fountain', '']);
+    const res = checkPlaces(KNOWLEDGE['de_mirage'] as MapKnowledge, ['TSpawn', 'Fountain', '']);
     expect(res.unknown).toEqual(['Fountain']);
     expect(res.unused.length).toBe(22);
   });
@@ -148,7 +148,7 @@ describe('lane control', () => {
     const { raw } = palaceMatch(false);
     // A smoke by CT slot 7 into Palace in every round, landing at 12 s.
     for (let k = 0; k < 6; k++) {
-      const c = places.places.find((p) => p.name === 'PalaceInterior')!.centroid;
+      const c = places.places.find((p) => p.name === 'PalaceInterior')?.centroid ?? { x: 0, y: 0, z: 0 };
       raw.events.detonations.push({ tick: at(k, 12), kind: 'smoke', p: 7, entity: 900 + k, x: c.x, y: c.y, z: c.z });
       raw.events.detonations.push({ tick: at(k, 30), kind: 'smoke_end', p: 7, entity: 900 + k, x: c.x, y: c.y, z: c.z });
     }

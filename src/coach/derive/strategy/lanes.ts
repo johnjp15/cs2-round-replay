@@ -3,12 +3,13 @@
  * contested it in time.
  *
  * - First T: the first sample before the cap (the plant, else the round end) with a living T in one of the lane's
- *   places. Taken: at least `takeMinTs` Ts entered before the cap. `enteredBy[i]`: distinct Ts who had entered by
+ *   places. Taken: at least `takeMinTs` Ts entered before the cap, and one of them got through to the lane's site or
+ *   stayed in the lane at least `takeMinSec` (a peek into a doorway next to spawn is not a take). `enteredBy[i]`: distinct Ts who had entered by
  *   checkpoint i (seconds after freeze end); `maxTs`: the most Ts in it at once before the cap.
  * - Contested in time, from freeze end until the Ts were through the lane (the first of its Ts on the lane's site;
  *   for a lane without a site, or when none got through, the last T in it) plus `contestSec`, at most the cap: a CT
- *   stood in the lane (`body`), had a T in the lane on his radar through his own sight (`sight`: the T's
- *   `spotted_by` holds the CT), dealt damage to a T in the lane or from inside it (`damage`), or a CT grenade
+ *   stood in the lane (`body`), saw a T in the lane (`sight`: the T's `spotted_by` holds the CT, or, with a
+ *   sight mesh, the T was inside the CT's field of view within `lookRange` with a clear line; smokes ignored), dealt damage to a T in the lane or from inside it (`damage`), or a CT grenade
  *   landed in it (`grenade`). One entry per CT and kind, the first.
  * - The CTs gave it up: the last sample with a CT in the lane before the cap (`ctLastTick`) and why he was gone
  *   after it (`died`, `left`, or `held` when one was still there at the cap).
@@ -17,6 +18,7 @@ import type { AnalysisContext, TableDef } from '../../analyze/context';
 import type { Side } from '../../model/match';
 import { rowAtOrAfter } from '../../model/raw';
 import { HURTS } from '../hurts';
+import { ALL_POINTS_MASK, inFov } from '../los';
 import { THROWS } from '../utility/throws';
 import { STRAT_GRID, Z_DEAD, sampleAt } from './grid';
 import { STRAT_HITS, type HitRow } from './hits';
@@ -61,6 +63,23 @@ export interface LaneRow {
   winnerSide: Side | null;
 }
 
+/** CT q sees T p at row `row`: within `range`, inside q's field of view, a clear line to some body point. */
+function sees(ctx: AnalysisContext, row: number, q: number, p: number, range: number): boolean {
+  const los = ctx.los;
+  if (los === null) return false;
+  const t = ctx.raw.ticks;
+  const P = ctx.P;
+  const iq = row * P + q;
+  const ip = row * P + p;
+  const feet = { x: t.x[iq] ?? 0, y: t.y[iq] ?? 0, z: t.z[iq] ?? 0 };
+  const target = { x: t.x[ip] ?? 0, y: t.y[ip] ?? 0, z: t.z[ip] ?? 0, yaw: t.yaw[ip] ?? 0, duck: (t.duck[ip] ?? 0) / 255 };
+  if (Math.hypot(target.x - feet.x, target.y - feet.y) > range) return false;
+  const eye = los.eyePosition(feet, (t.duck[iq] ?? 0) / 255);
+  const chest = { x: target.x, y: target.y, z: target.z + 48 };
+  if (!inFov(t.yaw[iq] ?? 0, t.pitch[iq] ?? 0, eye, chest)) return false;
+  return los.visible(eye, target, null, 0, ALL_POINTS_MASK, true).any;
+}
+
 export function buildLanes(ctx: AnalysisContext): LaneRow[] {
   const grid = ctx.table(STRAT_GRID);
   const lookup = grid.lookup;
@@ -87,21 +106,23 @@ export function buildLanes(ctx: AnalysisContext): LaneRow[] {
       let firstSlot = -1;
       let maxTs = 0;
       const entered = new Map<number, number>();
+      const dwell = new Map<number, number>();
       for (let k = 0; k <= lastK; k++) {
         let n = 0;
         for (const p of g.T) {
           if ((g.lane[k * P + p] ?? -1) !== li) continue;
           n++;
+          dwell.set(p, (dwell.get(p) ?? 0) + 1);
           if (!entered.has(p)) entered.set(p, g.ticks[k] ?? 0);
           if (firstK < 0) { firstK = k; firstSlot = p; }
         }
         if (n > maxTs) maxTs = n;
       }
       const firstTTick = firstK >= 0 ? (g.ticks[firstK] ?? null) : null;
-      const taken = entered.size >= tl.takeMinTs && firstK >= 0;
       const enteredBy = cps.map((sec) => [...entered.values()].filter((tk) => tk <= g.t0 + sec * rate).length);
       // In time: before the Ts were through the lane (the first T of the lane on its site), plus contestSec.
       let throughK = -1;
+      let gotThrough = false;
       if (firstK >= 0) {
         for (let k = firstK; k <= lastK && throughK < 0; k++) {
           for (const p of entered.keys()) {
@@ -109,8 +130,13 @@ export function buildLanes(ctx: AnalysisContext): LaneRow[] {
             if (ln.site !== null && z >= 0 && lookup.siteOfZone(z) === ln.site && (entered.get(p) ?? Infinity) <= (g.ticks[k] ?? 0)) { throughK = k; break; }
           }
         }
+        if (throughK >= 0) gotThrough = true;
         if (throughK < 0) for (let k = lastK; k >= firstK && throughK < 0; k--) for (const p of g.T) if ((g.lane[k * P + p] ?? -1) === li) { throughK = k; break; }
       }
+      // Taken: enough Ts entered, and one got through to the site or stayed takeMinSec (a peek into the doorway of a
+      // lane next to spawn, like Mirage's House, is not a take).
+      const minDwell = Math.round((tl.takeMinSec * rate) / STRATEGY_TUNING.grid.sampleTicks);
+      const taken = entered.size >= tl.takeMinTs && firstK >= 0 && (gotThrough || Math.max(0, ...dwell.values()) >= minDwell);
       const throughTick = throughK >= 0 ? (g.ticks[throughK] ?? null) : null;
       const windowEnd = throughTick !== null ? Math.min(g.cap, throughTick + Math.round(tl.contestSec * rate)) : g.cap;
       const endK = sampleAt(g, windowEnd);
@@ -125,12 +151,19 @@ export function buildLanes(ctx: AnalysisContext): LaneRow[] {
       for (let k = 0; k <= endK; k++) {
         const tick = g.ticks[k] ?? 0;
         for (const q of g.CT) if ((g.lane[k * P + q] ?? -1) === li) add(q, 'body', tick);
-        // Sight: a T in the lane with this CT in his spotted_by.
+        // Sight: a T in the lane with this CT in his spotted_by; with a sight mesh, also a CT who has the T in his
+        // field of view with a clear line (smokes ignored), checked every lookStep samples.
         const row = g.rows[k] ?? 0;
         for (const p of g.T) {
           if ((g.lane[k * P + p] ?? -1) !== li) continue;
           const mask = ctx.raw.ticks.spottedBy[row * P + p] ?? 0;
           for (const q of g.CT) if (q < 16 && (mask & (1 << q)) !== 0 && (g.zone[k * P + q] ?? Z_DEAD) !== Z_DEAD) add(q, 'sight', tick);
+          if (ctx.los !== null && k % Math.max(1, Math.round(tl.lookStep)) === 0) {
+            for (const q of g.CT) {
+              if (have.has(`${q}:sight`) || (g.zone[k * P + q] ?? Z_DEAD) === Z_DEAD) continue;
+              if (sees(ctx, row, q, p, tl.lookRange)) add(q, 'sight', tick);
+            }
+          }
         }
       }
       for (const h of hurts) {
