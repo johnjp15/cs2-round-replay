@@ -10,6 +10,7 @@
  */
 import type { Side, TeamId } from '../coach/model/match';
 import type { MatchReport } from '../coach/model/report';
+import { slotLabel } from './display';
 import { packGzip, unpackGzip } from './pack';
 
 const DB_NAME = 'cs2-coach';
@@ -22,7 +23,7 @@ export interface LibraryEntry {
   fileName: string;
   map: string;
   demoSha256: string;
-  user: { slot: number; name: string; steamId: string; team: TeamId };
+  user: { slot: number; name: string; steamId: string; team: TeamId; label?: string };
   /** Final score, the user's team first. */
   score: [number, number];
   /** The user's team's rounds won and played on each side. */
@@ -80,7 +81,7 @@ export function entryFor(report: MatchReport, fileName: string, steamId: string,
   }
   return {
     id: matchId(meta.demoSha256), addedAt, fileName, map: meta.map, demoSha256: meta.demoSha256,
-    user: { slot: report.user, name: me?.name ?? '', steamId, team },
+    user: { slot: report.user, name: me?.name ?? '', steamId, team, label: slotLabel(report.match.players, report.user) },
     score: [meta.score[team], meta.score[other]], sides,
     findings: report.findings.length, coachVersion: report.coachVersion, bytes,
   };

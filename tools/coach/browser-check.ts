@@ -25,7 +25,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import type { Page } from 'playwright-core';
-import type { Annotation, Finding, MatchReport, ReplayTrack } from '../../src/coach/model/report';
+import type { Annotation, ChartPayload, Finding, MatchReport, ReplayTrack } from '../../src/coach/model/report';
+import { metricValue } from '../../src/coach/report/format';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = resolve(ROOT, 'logs/coach');
@@ -46,7 +47,7 @@ function defaultCraw(): string {
   return resolve(ROOT, 'tests/coach/fixtures/test-demo-r4.craw.gz');
 }
 const CRAW = resolve(arg('--craw', defaultCraw()));
-const USER = Number(arg('--user', '0'));
+const USER = Number(arg('--user', '6'));
 const ROUND = Number(arg('--round', '4'));
 
 interface EngineView {
@@ -169,6 +170,84 @@ function hex(c: string): [number, number, number] {
 }
 const dist = (a: number[], b: number[]): number => Math.hypot((a[0] ?? 0) - (b[0] ?? 0), (a[1] ?? 0) - (b[1] ?? 0), (a[2] ?? 0) - (b[2] ?? 0));
 
+/** Everything the report part of the page must show for this report. */
+async function checkReport(page: Page, report: MatchReport, id: string, fail: (m: string) => void): Promise<void> {
+  // Names hidden: no real player name anywhere in the page text.
+  const text = await page.evaluate(() => document.body.innerText);
+  const leaked = report.match.players.map((p) => p.name).filter((n) => n.length >= 3 && text.includes(n));
+  if (leaked.length) fail(`names shown with "Hide names" on: ${leaked.length}`);
+  const fixes = await page.$$eval('[data-testid="fix-card"]', (els) => els.map((e) => ({
+    id: e.getAttribute('data-id') ?? '', key: e.querySelector('[data-testid="key-number"]')?.textContent ?? '',
+    strip: e.querySelector('[data-testid="rank-strip"] svg circle') !== null, watch: e.querySelectorAll('[data-testid="watch"]').length,
+  })));
+  console.log(`fix cards: ${fixes.map((f) => `${f.id} = ${f.key}`).join('; ')}`);
+  if (fixes.length !== report.topFixes.length || fixes.some((f, k) => f.id !== report.topFixes[k])) fail('fix cards do not match report.topFixes');
+  for (const f of fixes) {
+    const fd = report.findings.find((x) => x.id === f.id);
+    const m = fd?.metrics[0];
+    if (m && f.key !== metricValue(m.value, m.unit)) fail(`${f.id}: key number "${f.key}", expected "${metricValue(m.value, m.unit)}"`);
+    if (!f.strip) fail(`${f.id}: no rank strip`);
+    if (f.watch !== (fd?.evidence.length ?? 0)) fail(`${f.id}: ${f.watch} Watch buttons for ${fd?.evidence.length ?? 0} moments`);
+  }
+  const strengths = await page.$$eval('[data-testid="strength-card"]', (els) => els.length);
+  if (strengths !== report.strengths.length) fail(`${strengths} strength cards for ${report.strengths.length} strengths`);
+  const areas = await page.$$eval('[data-testid="area"]', (els) => els.map((e) => `${e.getAttribute('data-area') ?? ''}=${e.querySelector('[data-testid="area-status"]')?.textContent ?? ''}`));
+  console.log(`areas: ${areas.join(', ')}`);
+  for (const a of ['aim', 'movement', 'utility', 'positioning', 'economy']) if (areas.includes(`${a}=not analyzed`)) fail(`${a} says "not analyzed"`);
+  const strips = await page.$$eval('[data-testid="rank-strip"]', (els) => ({ n: els.length, tied: els.filter((e) => e.getAttribute('data-tied') !== '1').length }));
+  console.log(`rank strips: ${strips.n} (${strips.tied} with the user tied)`);
+  if (strips.n < report.metrics.filter((m) => m.lobby.some((v) => Number.isFinite(v))).length) fail('a metric without a rank strip');
+  if (/\b0\.\d+ %/.test(text)) fail('a raw share printed as a percentage');
+  // Duel view and spray plot from the report's own evidence.
+  for (const kind of ['duel', 'spray'] as const) {
+    const fi = report.findings.findIndex((f) => f.evidence.some((e) => e.kind === kind && (e.series?.length ?? 0) > 0));
+    if (fi < 0) { fail(`no ${kind} evidence with series in this report (pick a player who has one)`); continue; }
+    const k = report.findings[fi]?.evidence.findIndex((e) => e.kind === kind) ?? 0;
+    const ev = report.findings[fi]?.evidence[k];
+    await page.click(`a[data-testid="watch"][href*="ev=${fi}.${k}"]`);
+    const sel = kind === 'duel' ? '[data-testid="duel-view"] svg path.dv-line' : '[data-testid="spray-plot"] svg .sp-b circle';
+    const ok = await page.waitForSelector(sel, { timeout: 5000 }).then(() => true).catch(() => false);
+    await page.waitForFunction((r) => (window as unknown as { __coach: Hook }).__coach.replay?.track?.round === r, ev?.round ?? 0, { timeout: 5000 }).catch(() => undefined);
+    const st = await engineState(page);
+    console.log(`${kind}: finding ${report.findings[fi]?.id ?? ''} evidence ${k}, round ${st.round} tick ${st.tick.toFixed(0)} (focus ${ev?.focus ?? 0}), viewer ${ok}`);
+    if (!ok) fail(`the ${kind} viewer did not render`);
+    if (st.round !== ev?.round || !st.evidence) fail(`the ${kind} Watch did not open its round with the evidence`);
+    await page.evaluate(() => (window as unknown as { __coach: Hook }).__coach.replay?.play(false));
+    await page.screenshot({ path: join(OUT, `2${kind === 'duel' ? 'b-duel' : 'c-spray'}.png`), fullPage: false });
+  }
+  await page.goto(`${ORIGIN}/#/m/${id}`);
+}
+
+/** Synthetic chart payloads of every kind, as K6 and K8 will fill them. */
+function syntheticCharts(f: Finding, kill: { ax: number; ay: number; vx: number; vy: number } | undefined): Record<string, ChartPayload> {
+  const link = { finding: f.id, evidence: 0 };
+  const k = kill ?? { ax: 0, ay: 0, vx: 500, vy: 500 };
+  return {
+    'aim.placement': {
+      kind: 'scatter', area: 'aim', title: 'Where enemies appeared (synthetic)', caption: 'Degrees from your crosshair; rings at 1°, 3°, 5°.',
+      x: { label: 'Horizontal', unit: '°', min: -8, max: 8 }, y: { label: 'Vertical', unit: '°', min: -8, max: 8 }, rings: [1, 3, 5],
+      categories: [{ key: 'hold', label: 'Holding', role: 'ct' }, { key: 'peek', label: 'Peeking', role: 't' }],
+      points: [{ x: 0.5, y: -0.4, cat: 'hold', label: 'r4', link }, { x: -2.2, y: 1.1, cat: 'peek' }, { x: 4.1, y: -2.5, cat: 'peek' }, { x: 1.4, y: 0.2, cat: 'hold' }],
+    },
+    'aim.synthetic_bars': {
+      kind: 'bars', area: 'aim', title: 'First-bullet hits by distance (synthetic)', unit: '%',
+      bars: [{ label: 'close', value: 62, n: 13 }, { label: 'mid', value: 41, n: 22, user: true }, { label: 'long', value: 18, n: 9 }], ref: { value: 45, label: 'lobby' },
+    },
+    'strat.lane': {
+      kind: 'boards', area: 'strategy', title: 'Round boards (synthetic)', legend: [{ key: 'ct', label: 'CT', role: 'ct' }, { key: 't', label: 'T', role: 't' }],
+      boards: [1, 2, 3].map((r) => ({
+        round: r, caption: r === 2 ? 'Long taken, nobody contested' : 'Contested', highlight: r === 2, link,
+        dots: [{ x: k.ax, y: k.ay, role: 't' as const }, { x: k.vx, y: k.vy, role: 'ct' as const, shape: r === 2 ? 'cross' as const : 'dot' as const }],
+        zones: [{ polygon: [[k.vx - 300, k.vy - 300], [k.vx + 300, k.vy - 300], [k.vx + 300, k.vy + 300], [k.vx - 300, k.vy + 300]] as [number, number][], role: 'accent' as const, label: 'lane' }],
+      })),
+    },
+    'strat.synthetic_series': {
+      kind: 'series', area: 'strategy', title: 'A series chart (synthetic)', x: { label: 'Round', unit: '#' }, y: { label: 'Alive', unit: 'players' },
+      series: [{ name: 'ct', label: 'CT alive', role: 'ct', x: [1, 2, 3, 4], y: [5, 4, 2, 1] }, { name: 't', label: 'T alive', role: 't', x: [1, 2, 3, 4], y: [5, 5, 4, 3] }],
+    },
+  };
+}
+
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
   if (!argv.includes('--no-build')) {
@@ -189,8 +268,10 @@ async function main(): Promise<void> {
     page.on('console', (m) => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
     page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
 
-    // 1. Drop the .craw and pick a player.
+    // 1. Drop the .craw and pick a player (names hidden: every screenshot shows A1…B5 only).
     await page.goto(ORIGIN + '/');
+    await page.evaluate(() => localStorage.setItem('cs2-coach.hideNames', '1'));
+    await page.reload();
     const t0 = Date.now();
     await page.setInputFiles('[data-testid="file-input"]', CRAW);
     await page.waitForSelector('[data-testid="picker"]', { timeout: 60_000 });
@@ -209,6 +290,12 @@ async function main(): Promise<void> {
     console.log(`pipeline: ${JSON.stringify(load)}`);
     if (!id) fail('no match id in the URL after analysis');
     await page.screenshot({ path: join(OUT, '2-match.png'), fullPage: true });
+
+    // 1b. The report (K5): fix cards with formatted numbers and rank strips, strengths, skill areas, names hidden,
+    // a duel view and a spray plot from the report's own evidence.
+    const report = await page.evaluate(async (mid) => (window as unknown as { __coach: Hook }).__coach.library.loadReport(mid), id);
+    if (!report) fail('report not in the library');
+    else await checkReport(page, report, id, fail);
 
     // 2. Every played round (from the strip): players on the radar and in their places, at seven ticks each.
     const mapName = await page.evaluate(() => ((window as unknown as { __coach: Hook }).__coach.replay as unknown as { map: { map: string } }).map.map);
@@ -342,7 +429,7 @@ async function main(): Promise<void> {
         id: 'check.synthetic', area: 'positioning', scope: 'micro', polarity: 'fix', title: 'Synthetic check finding',
         summary: 'A finding the browser check adds, with one moment and every annotation kind.', why: 'Checks the viewer.',
         advice: [{ text: 'Nothing to do.' }],
-        metrics: [{ id: 'check.metric', value: 42, unit: '%', n: 9, lobbyRank: 8, lobby: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }],
+        metrics: [{ id: 'check.metric', value: 0.42, unit: '%', n: 9, lobbyRank: 8, lobby: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }],
         evidence: [{
           kind: 'replay', round: ROUND, tick0, tick1, focus, players: [kill.attacker, kill.victim],
           caption: 'Synthetic evidence: the sight line that killed, a ring, a cone, a path, a zone and a label.',
@@ -358,17 +445,28 @@ async function main(): Promise<void> {
         stats: { instances: 1, opportunities: 1, rounds: [ROUND], roundsLost: 0, winProbLost: null },
         confidence: 1, impact: 1, priority: 1,
       };
-      await page.evaluate(async ([mid, f]) => {
+      await page.evaluate(async ([mid, f, charts]) => {
         const lib = (window as unknown as { __coach: Hook }).__coach.library;
         const r = await lib.loadReport(mid);
         if (!r) throw new Error('report not in the library');
         r.findings = [f];
         r.topFixes = [f.id];
+        r.strengths = [];
+        r.charts = charts;
         await lib.putReport(mid, r);
-      }, [id, finding] as [string, Finding]);
+      }, [id, finding, syntheticCharts(finding, kill)] as [string, Finding, Record<string, ChartPayload>]);
       await page.goto(`${ORIGIN}/#/m/${id}`);
       await page.reload();
       await page.waitForSelector('[data-testid="watch"]');
+      // The synthetic charts render in their areas (scatter and bars in Aim, boards in Strategy).
+      const charts = await page.$$eval('[data-testid="chart"]', (els) => els.map((e) => `${e.getAttribute('data-chart') ?? ''}:${e.getAttribute('data-kind') ?? ''}:${e.querySelectorAll('circle,rect,polygon,path').length}`));
+      console.log(`charts: ${charts.join(', ')}`);
+      if (charts.length !== 4 || charts.some((c) => c.endsWith(':0'))) fail(`expected 4 non-empty charts, got ${charts.join(', ')}`);
+      const boards = await page.$$eval('[data-testid="board"] image', (els) => els.length);
+      if (boards < 3) fail(`round boards without the radar: ${boards}`);
+      await page.locator('[data-testid="chart"]').first().scrollIntoViewIfNeeded();
+      await page.screenshot({ path: join(OUT, '6b-charts.png'), fullPage: true });
+      await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({ path: join(OUT, '6-finding.png') });
       const watchHref = await page.getAttribute('[data-testid="watch"]', 'href');
       await page.click('[data-testid="watch"]');
@@ -398,10 +496,28 @@ async function main(): Promise<void> {
       if (Math.round(e1.tick) !== tick1) fail(`did not pause at tick1 (${e1.tick})`);
     }
 
+    // 5b. Feedback: a thumbs-down with a note on the synthetic finding, kept per match, exported from the library.
+    await page.goto(`${ORIGIN}/#/m/${id}`);
+    await page.waitForSelector('[data-testid="fix-card"] [data-testid="fb-down"]');
+    await page.click('[data-testid="fix-card"] [data-testid="fb-down"]');
+    await page.fill('[data-testid="fix-card"] [data-testid="fb-note"]', 'checked by the browser check');
+    await page.press('[data-testid="fix-card"] [data-testid="fb-note"]', 'Enter');
+    await page.locator('[data-testid="fix-card"] [data-testid="fb-note"]').blur();
+    const stored = await page.evaluate((mid) => localStorage.getItem(`cs2-coach.feedback.${mid}`), id);
+    console.log(`feedback stored: ${stored ?? 'nothing'}`);
+    if (!stored?.includes('"down"') || !stored.includes('checked by the browser check')) fail('feedback not stored');
+
     // 6. Reload and reopen from the library.
     await page.goto(`${ORIGIN}/#/`);
     await page.reload();
     await page.waitForSelector('[data-testid="open-match"]');
+    const dl = page.waitForEvent('download', { timeout: 10_000 }).catch(() => null);
+    await page.click('[data-testid="export-feedback"]');
+    const download = await dl;
+    const exported = await page.evaluate(() => (window as unknown as { __coach: Record<string, unknown> }).__coach['lastFeedbackExport'] as { matches: { id: string; findings: { id: string; vote: string; title?: string }[] }[] } | undefined);
+    const exp = exported?.matches.find((m) => m.id === id)?.findings.find((f) => f.id === 'check.synthetic');
+    console.log(`feedback export: ${download ? download.suggestedFilename() : 'no download'}; ${JSON.stringify(exp ?? null)}`);
+    if (!download || exp?.vote !== 'down' || exp.title !== 'Synthetic check finding') fail('feedback export missing the entry');
     await page.screenshot({ path: join(OUT, '8-library.png') });
     await page.click('[data-testid="open-match"]');
     await page.waitForFunction(() => (window as unknown as { __coach: Hook }).__coach.replay?.track != null);

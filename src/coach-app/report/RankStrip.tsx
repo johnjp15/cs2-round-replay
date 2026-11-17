@@ -48,9 +48,11 @@ export function RankStrip(props: RankStripProps) {
   // Stack tied values: same value → same x, one above the other.
   const groups = new Map<number, number[]>();
   for (const d of [...pts].sort((a, b) => a.slot - b.slot)) groups.set(d.v, [...(groups.get(d.v) ?? []), d.slot]);
-  const maxStack = Math.max(...[...groups.values()].map((g) => g.length));
+  // Up to MAX_STACK tied dots are stacked; a bigger tie is one dot with the count above it.
+  const MAX_STACK = 3;
+  const maxStack = Math.min(MAX_STACK, Math.max(...[...groups.values()].map((g) => g.length)));
   const rowH = 9;
-  const H = 16 + Math.max(1, maxStack) * rowH + 14;
+  const H = 22 + Math.max(1, maxStack) * rowH + 14;
   const base = H - 16;
   const med = median(pts.map((d) => d.v));
   const info = lobbyRankInfo(mv);
@@ -63,7 +65,7 @@ export function RankStrip(props: RankStripProps) {
         {Number.isFinite(med) && (
           <g class="rs-median">
             <line x1={xOf(med)} x2={xOf(med)} y1={base - maxStack * rowH - 4} y2={base + 4} />
-            <text x={xOf(med)} y={H - 2} text-anchor="middle">median</text>
+            {xOf(med) > pad + 34 && xOf(med) < W - pad - 34 && <text x={xOf(med)} y={H - 2} text-anchor="middle">median</text>}
           </g>
         )}
         <text x={pad} y={H - 2} class="rs-end">worse</text>
@@ -71,6 +73,19 @@ export function RankStrip(props: RankStripProps) {
         {[...groups.entries()].map(([v, slots]) => {
           // The user's dot sits at the bottom of its stack.
           const ordered = [...slots].sort((a, b) => (a === props.user ? -1 : b === props.user ? 1 : a - b));
+          if (ordered.length > MAX_STACK) {
+            const slot = ordered[0] ?? 0;
+            const me = slot === props.user;
+            const cx = xOf(v);
+            const cy = base - dotR - 2;
+            return (
+              <g key={`g${v}`} class={`rs-dot rs-pile ${me ? 'me' : ''}`} data-slot={slot} data-tie={ordered.length}>
+                <title>{`${ordered.map((q) => props.names[q] ?? `#${q}`).join(', ')}: ${metricValue(v, mv.unit)} (tied, ${ordered.length} players)`}</title>
+                <circle cx={cx} cy={cy} r={me ? dotR + 1.5 : dotR} />
+                <text x={cx} y={cy - dotR - 4} text-anchor="middle">{`${ordered.length} tied`}</text>
+              </g>
+            );
+          }
           return ordered.map((slot, k) => {
             const me = slot === props.user;
             const cx = xOf(v);

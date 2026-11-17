@@ -1,23 +1,24 @@
 /**
- * The match page: header (map, score, sides, the user), the round strip, the place for "Your three fixes" and the skill
- * areas (card K5 fills them; findings that already exist render as simple cards with a Watch button per evidence
- * moment), and the 2D replay.
+ * The match page (K3's shell, K5's report): header (map, score, sides, the user, "Hide names"), the round strip,
+ * "Your three fixes" (report/Cards.tsx), one or two strengths, the 2D replay with the duel view or spray plot beside it
+ * when a duel or spray evidence is open (viewers/), and the skill areas with every metric, finding and chart
+ * (report/Areas.tsx). docs/coach/report.md "The report page".
  */
-import type { FindingArea, Finding, MatchReport } from '../coach/model/report';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { ChartLink, MatchReport } from '../coach/model/report';
 import type { Side, TeamId } from '../coach/model/match';
-import { WATCH_LEAD_SEC } from './config';
 import { STUB_VERSION } from './stub-report';
 import type { LibraryEntry } from './library';
-import { clock, mapName, reasonLong, reasonShort } from './names';
+import { displayReport, setHideNames, useHideNames } from './display';
+import { loadFeedback, type MatchFeedback } from './feedback';
+import { mapName, reasonLong, reasonShort } from './names';
 import { Replay } from './replay/Replay';
 import type { Marker } from './replay/engine';
+import { SkillAreas } from './report/Areas';
+import { clockAt, evidenceHref, FixCard, StrengthCard, type CardContext } from './report/Cards';
 import { matchHref, navigate } from './router';
-
-const AREAS: { id: FindingArea; label: string }[] = [
-  { id: 'aim', label: 'Aim' }, { id: 'movement', label: 'Movement' }, { id: 'utility', label: 'Utility' },
-  { id: 'positioning', label: 'Positioning' }, { id: 'trading', label: 'Trades' }, { id: 'decisions', label: 'Decisions' },
-  { id: 'economy', label: 'Economy' }, { id: 'strategy', label: 'Strategy' },
-];
+import { DuelView } from './viewers/DuelView';
+import { SprayPlot } from './viewers/SprayPlot';
 
 export interface MatchPageProps {
   id: string;
@@ -31,18 +32,12 @@ export interface MatchPageProps {
   onChangePlayer: (() => void) | null;
 }
 
-const ordinal = (n: number): string => {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
-};
-
 function sideOf(report: MatchReport, team: TeamId, roundIndex = 0): Side {
   const r = report.match.rounds[roundIndex];
   return r && r.sides.T === team ? 'T' : 'CT';
 }
 
-function Header(props: { report: MatchReport; onChangePlayer: (() => void) | null }) {
+function Header(props: { report: MatchReport; onChangePlayer: (() => void) | null; hide: boolean }) {
   const { report } = props;
   const me = report.match.players[report.user];
   const team: TeamId = me?.team ?? 'A';
@@ -82,6 +77,10 @@ function Header(props: { report: MatchReport; onChangePlayer: (() => void) | nul
           </dd>
         </div>
       </dl>
+      <label class="hide-names">
+        <input type="checkbox" checked={props.hide} data-testid="hide-names" onChange={(e) => setHideNames((e.currentTarget as HTMLInputElement).checked)} />
+        Hide names
+      </label>
     </header>
   );
 }
@@ -117,85 +116,78 @@ function RoundStrip(props: { id: string; report: MatchReport; current: number })
   );
 }
 
-function FindingCard(props: { id: string; report: MatchReport; f: Finding; index: number }) {
-  const { f, report } = props;
-  const m = f.metrics[0];
-  const rate = report.match.meta.tickRate || 64;
+function EvidenceViewer(props: { report: MatchReport; fi: number; k: number }) {
+  const f = props.report.findings[props.fi];
+  const ev = f?.evidence[props.k];
+  if (!f || !ev || (ev.kind !== 'duel' && ev.kind !== 'spray')) return null;
   return (
-    <article class={`finding ${f.polarity}`} data-testid="finding">
-      <h3>{f.title}</h3>
-      <p class="f-sum">{f.summary}</p>
-      {m && (
-        <p class="f-metric">
-          <strong>{Number.isInteger(m.value) ? m.value : m.value.toFixed(1)}{m.unit === '%' ? '%' : ` ${m.unit}`}</strong>
-          <span>{ordinal(m.lobbyRank)} of {m.lobby.filter((x) => Number.isFinite(x)).length || 10} in this lobby, n = {m.n}</span>
-        </p>
-      )}
-      {f.advice[0] && <p class="f-advice">{f.advice[0].text}{f.advice[0].drill ? ` Drill: ${f.advice[0].drill}` : ''}</p>}
-      <div class="f-watch">
-        {f.evidence.map((ev, k) => {
-          const round = report.match.rounds.find((r) => r.number === ev.round);
-          const at = round ? (ev.focus - (round.freezeEndTick ?? round.startTick)) / rate : 0;
-          return (
-            <a key={k} class="watch" data-testid="watch" href={matchHref(props.id, ev.round, ev.focus - WATCH_LEAD_SEC * rate, [props.index, k])}>
-              Watch round {ev.round} at {clock(at)}
-            </a>
-          );
-        })}
-      </div>
-    </article>
+    <section class="evidence-view" aria-label={ev.kind === 'duel' ? 'Duel view' : 'Spray plot'} data-testid="evidence-view">
+      <h3>{ev.kind === 'duel' ? 'Duel view' : 'Spray plot'} <span class="dim">· {f.title} · round {ev.round}, {clockAt(props.report, ev.round, ev.focus)}</span></h3>
+      <p class="ev-cap">{ev.caption}</p>
+      {ev.kind === 'duel' ? <DuelView ev={ev} tickRate={props.report.match.meta.tickRate} /> : <SprayPlot ev={ev} />}
+    </section>
   );
 }
 
 export function MatchPage(props: MatchPageProps) {
-  const { report, id } = props;
+  const { id } = props;
+  const hide = useHideNames();
+  const report = useMemo(() => displayReport(props.report, hide), [props.report, hide]);
+  const [feedback, setFeedback] = useState<MatchFeedback>(() => loadFeedback(id));
+  useEffect(() => setFeedback(loadFeedback(id)), [id]);
+  const replayRef = useRef<HTMLDivElement>(null);
   const rounds = report.replay.map((t) => t.round);
   const firstPlayed = report.match.rounds.find((r) => r.played)?.number ?? rounds[0] ?? 1;
   const round = props.round !== null && rounds.includes(props.round) ? props.round : firstPlayed;
   const evidence = props.evidence ? (report.findings[props.evidence[0]]?.evidence[props.evidence[1]] ?? null) : null;
+  const evKey = props.evidence ? props.evidence.join('.') : '';
+  useEffect(() => { if (evKey) replayRef.current?.scrollIntoView({ block: 'start' }); }, [evKey]);
   const markers: Marker[] = [];
   for (const f of report.findings) for (const ev of f.evidence) if (ev.round === round) markers.push({ tick: ev.focus, label: f.title });
-  const top = report.topFixes.map((fid) => report.findings.findIndex((f) => f.id === fid)).filter((i) => i >= 0);
-  const fixIdx = top.length ? top : report.findings.map((f, i) => (f.polarity === 'fix' ? i : -1)).filter((i) => i >= 0).slice(0, 3);
-  const rest = report.findings.map((_, i) => i).filter((i) => !fixIdx.includes(i));
+  const idx = (fid: string): number => report.findings.findIndex((f) => f.id === fid);
+  const fixIdx = report.topFixes.map(idx).filter((i) => i >= 0);
+  const strIdx = report.strengths.map(idx).filter((i) => i >= 0);
+  const first = report.match.rounds.find((r) => r.played) ?? report.match.rounds[0];
+  const sides = report.match.players.map((p) => (first ? (first.sides.T === p.team ? 't' : 'ct') : ''));
+  const ctx: CardContext = { id, report, names: report.match.players.map((p) => p.name), sides, feedback, setFeedback };
+  const href = (l: ChartLink): string | null => {
+    const fi = idx(l.finding);
+    const ev = report.findings[fi]?.evidence[l.evidence];
+    return ev ? evidenceHref(ctx, fi, l.evidence, ev) : null;
+  };
 
   return (
     <main class="match">
       <p class="crumbs"><a href="#/">Library</a></p>
-      <Header report={report} onChangePlayer={props.onChangePlayer} />
+      <Header report={report} onChangePlayer={props.onChangePlayer} hide={hide} />
       <RoundStrip id={id} report={report} current={round} />
       {props.note && <p class="notice" data-testid="note">{props.note}</p>}
       <section class="fixes" aria-labelledby="fixes-h" data-testid="fixes">
-        <h2 id="fixes-h">Your three fixes</h2>
+        <h2 id="fixes-h">Your {fixIdx.length === 1 ? 'fix' : fixIdx.length === 2 ? 'two fixes' : 'three fixes'}</h2>
         {fixIdx.length === 0
           ? <p class="empty">{report.coachVersion === STUB_VERSION
             ? 'No fixes yet: this build doesn\'t analyze matches. The rounds and the replay below work already.'
-            : 'No fixes found for you in this match. The replay below has every round.'}</p>
-          : <div class="fix-list">{fixIdx.map((i) => { const f = report.findings[i]; return f ? <FindingCard key={i} id={id} report={report} f={f} index={i} /> : null; })}</div>}
+            : 'Nothing in this match clears the bar for a fix. The skill areas below have every number; the replay has every round.'}</p>
+          : <div class="fix-list">{fixIdx.map((i, n) => { const f = report.findings[i]; return f ? <FixCard key={f.id} ctx={ctx} f={f} fi={i} n={n + 1} /> : null; })}</div>}
       </section>
-      <Replay
-        report={report}
-        round={round}
-        tick={props.tick}
-        evidence={evidence}
-        markers={markers}
-        onRound={(n) => navigate(matchHref(id, n))}
-      />
-      <section class="areas" aria-labelledby="areas-h">
-        <h2 id="areas-h">Skill areas</h2>
-        <ul class="area-list">
-          {AREAS.map((a) => {
-            const n = rest.filter((i) => report.findings[i]?.area === a.id);
-            return (
-              <li key={a.id}>
-                <span class="area-name">{a.label}</span>
-                <span class="area-n">{n.length ? `${n.length} finding${n.length > 1 ? 's' : ''}` : 'not analyzed yet'}</span>
-                {n.length > 0 && <div class="fix-list">{n.map((i) => { const f = report.findings[i]; return f ? <FindingCard key={i} id={id} report={report} f={f} index={i} /> : null; })}</div>}
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+      {strIdx.length > 0 && (
+        <section class="strengths" aria-labelledby="str-h" data-testid="strengths">
+          <h2 id="str-h">What went well</h2>
+          <div class="str-list">{strIdx.map((i) => { const f = report.findings[i]; return f ? <StrengthCard key={f.id} ctx={ctx} f={f} fi={i} /> : null; })}</div>
+        </section>
+      )}
+      <div ref={replayRef} class="replay-wrap">
+        {props.evidence && <EvidenceViewer report={report} fi={props.evidence[0]} k={props.evidence[1]} />}
+        <Replay
+          report={report}
+          round={round}
+          tick={props.tick}
+          evidence={evidence}
+          markers={markers}
+          onRound={(n) => navigate(matchHref(id, n))}
+        />
+      </div>
+      <SkillAreas ctx={ctx} report={report} topFixes={report.topFixes} href={href} />
     </main>
   );
 }

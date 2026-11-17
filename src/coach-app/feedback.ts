@@ -24,9 +24,10 @@ export function loadFeedback(matchId: string): MatchFeedback {
 }
 
 export function saveFeedback(matchId: string, findingId: string, e: Omit<FeedbackEntry, 'at'>): MatchFeedback {
-  const all = loadFeedback(matchId);
-  if (e.vote === null && e.note.trim() === '') delete all[findingId];
-  else all[findingId] = { ...e, at: Date.now() };
+  const old = loadFeedback(matchId);
+  const all: MatchFeedback = {};
+  for (const k of Object.keys(old)) if (k !== findingId) all[k] = old[k] as FeedbackEntry;
+  if (e.vote !== null || e.note.trim() !== '') all[findingId] = { ...e, at: Date.now() };
   try {
     localStorage.setItem(PREFIX + matchId, JSON.stringify(all));
   } catch {

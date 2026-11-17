@@ -36,7 +36,7 @@ export function DuelView(props: { ev: Evidence; tickRate: number }) {
   panels.push({
     key: 'speed', h: 92, body: (y0, h) => {
       const top = Math.max(250, finiteRange(speed.values)[1]);
-      const sy = scale(0, top, y0 + h, y0 + 4);
+      const sy = scale(0, top, y0 + h, y0 + 16);
       const ref = speed.ref;
       return (
         <g>
@@ -53,7 +53,7 @@ export function DuelView(props: { ev: Evidence; tickRate: number }) {
     panels.push({
       key: 'angle', h: 72, body: (y0, h) => {
         const top = Math.max(2, Math.min(30, finiteRange(angle.values)[1]));
-        const sy = scale(0, top, y0 + h, y0 + 4);
+        const sy = scale(0, top, y0 + h, y0 + 16);
         return (
           <g>
             {ticks(0, top, 2).map((v) => <g key={v} class="dv-grid"><line x1={L} x2={W - R} y1={sy(v)} y2={sy(v)} /><text x={L - 4} y={sy(v) + 3} text-anchor="end">{fmt(v)}°</text></g>)}
@@ -68,7 +68,7 @@ export function DuelView(props: { ev: Evidence; tickRate: number }) {
     panels.push({
       key: 'inacc', h: 72, body: (y0, h) => {
         const top = finiteRange(inacc.values, standing?.values ?? [])[1] * 1.1 || 1;
-        const sy = scale(0, top, y0 + h, y0 + 4);
+        const sy = scale(0, top, y0 + h, y0 + 16);
         return (
           <g>
             {ticks(0, top, 2).map((v) => <g key={v} class="dv-grid"><line x1={L} x2={W - R} y1={sy(v)} y2={sy(v)} /><text x={L - 4} y={sy(v) + 3} text-anchor="end">{fmt(v)}</text></g>)}
