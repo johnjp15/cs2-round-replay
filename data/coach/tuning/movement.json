@@ -1,0 +1,24 @@
+{
+  "_note": "K2: movement tunables (src/coach/derive/movement, src/coach/metrics/movement, src/coach/detect/movement). docs/coach/mechanics.md.",
+  "reload": {
+    "_": "A reload is exposed when a living enemy is within nearUnits (and visible from the eye when a map pack is loaded) or the clip holds more than fullShare of the magazine. Deaths while reloading: the victim's reloading flag on the row before the death. Costs in fights per instance: a death, a reload with an enemy near, a reload with more than half the magazine (and no enemy near).",
+    "nearUnits": 1200,
+    "fullShare": 0.5,
+    "minInstances": 2,
+    "nScale": 6,
+    "precision": 0.85,
+    "costDeath": 1,
+    "costNear": 0.25,
+    "costFull": 0.05
+  },
+  "caughtOut": {
+    "_": "Deaths with the knife or a grenade in hand (row before the death). Not counted: a grenade thrown within throwGraceMs before the death toward the killer (view yaw within throwAimDeg of the killer).",
+    "items": ["knife", "flashbang", "hegrenade", "smokegrenade", "molotov", "incgrenade", "decoy"],
+    "throwGraceMs": 1500,
+    "throwAimDeg": 45,
+    "minInstances": 2,
+    "nScale": 3,
+    "precision": 0.85,
+    "costDeath": 0.7
+  }
+}
