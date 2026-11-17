@@ -1,0 +1,28 @@
+{
+  "_note": "K4: buys per player and round (src/coach/derive/economy, docs/coach/utility.md).",
+  "buys": {
+    "_window": "Purchases count from the round start to the round's buytime_ended (fallback: freeze end + buyTimeSec). item_purchase records after it are not purchases (the test demo has 90 of them mid-round).",
+    "buyTimeSec": 20,
+    "_class": "A player's own buy class uses his own equipment value at freeze end with the team thresholds of data/coach/tuning.json economy (eco below, full from); pistol rounds are pistol.",
+    "maxGrenades": 4
+  },
+  "sync": {
+    "_detector": "Rounds where the player's class is a buy (force or full) and at least minTeammates teammates are eco, or the player is eco and at least minTeammates teammates buy. A finding needs minRounds.",
+    "minTeammates": 3,
+    "minRounds": 2
+  },
+  "kitArmor": {
+    "_detector": "CT gun rounds (a primary after the buy) without a kit with at least the kit's price left; a primary rifle or sniper with no armor; a full buy with more than leftoverMin left and at most maxGrenadesLeftover grenades. A finding needs minRounds.",
+    "leftoverMin": 1000,
+    "maxGrenadesLeftover": 2,
+    "minRounds": 2
+  },
+  "scoring": {
+    "_confidence": "As utility.json scoring.",
+    "nScale": 4,
+    "precision": 0.85,
+    "_impact": "Fights per round: a buy out of sync with three teammates half a fight, a missing kit / armor / leftover money a third.",
+    "impactSyncRound": 0.5,
+    "impactKitArmorRound": 0.33
+  }
+}
