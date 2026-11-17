@@ -1,0 +1,3130 @@
+{
+ "format": "coach-report@1",
+ "match": {
+  "meta": {
+   "map": "de_mirage",
+   "source": "valve",
+   "server": "Valve Counter-Strike 2 helsinki Server (srcds1029-hel1.380.15)",
+   "patch": 13984,
+   "tickRate": 64,
+   "demoSha256": "84a1a4191302bdd2a3bbb5a727842093744b1fb1a228aeec630369e44b622cb2",
+   "score": {
+    "A": 8,
+    "B": 2
+   },
+   "gameScore": {
+    "A": 8,
+    "B": 2
+   },
+   "winner": "A",
+   "surrendered": "B",
+   "startedMidMatch": false,
+   "regulationRounds": 24,
+   "notes": [
+    "round 10 not played (ct_surrender); its result still counts in the score",
+    "slot 8 left after round 9"
+   ]
+  },
+  "players": [
+   {
+    "slot": 0,
+    "name": "T1",
+    "bot": false,
+    "team": "A",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   {
+    "slot": 1,
+    "name": "T2",
+    "bot": false,
+    "team": "A",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   {
+    "slot": 2,
+    "name": "T3",
+    "bot": false,
+    "team": "A",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   {
+    "slot": 3,
+    "name": "T4",
+    "bot": false,
+    "team": "A",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   {
+    "slot": 4,
+    "name": "T5",
+    "bot": false,
+    "team": "A",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   {
+    "slot": 5,
+    "name": "CT1",
+    "bot": false,
+    "team": "B",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   {
+    "slot": 6,
+    "name": "CT2",
+    "bot": false,
+    "team": "B",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   {
+    "slot": 7,
+    "name": "CT3",
+    "bot": false,
+    "team": "B",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   {
+    "slot": 8,
+    "name": "CT4",
+    "bot": false,
+    "team": "B",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9
+    ]
+   },
+   {
+    "slot": 9,
+    "name": "CT5",
+    "bot": false,
+    "team": "B",
+    "rounds": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   }
+  ],
+  "rounds": [
+   {
+    "index": 0,
+    "number": 1,
+    "played": true,
+    "kind": "regulation",
+    "startTick": 67,
+    "freezeEndTick": 1761,
+    "endTick": 8971,
+    "officialEndTick": 9419,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "T",
+    "winner": "A",
+    "reason": 9,
+    "reasonName": "ct_killed",
+    "scoreAfter": {
+     "A": 1,
+     "B": 0
+    },
+    "bomb": {
+     "plantTick": 8259,
+     "site": 185,
+     "planter": 2,
+     "defuseTick": null,
+     "defuser": -1,
+     "explodeTick": null
+    },
+    "economy": {
+     "A": {
+      "equipValue": 2400,
+      "moneyStart": 4000,
+      "players": 5,
+      "buy": "pistol"
+     },
+     "B": {
+      "equipValue": 3650,
+      "moneyStart": 4000,
+      "players": 5,
+      "buy": "pistol"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "number": 2,
+    "played": true,
+    "kind": "regulation",
+    "startTick": 9419,
+    "freezeEndTick": 10699,
+    "endTick": 15232,
+    "officialEndTick": 15680,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "CT",
+    "winner": "B",
+    "reason": 7,
+    "reasonName": "bomb_defused",
+    "scoreAfter": {
+     "A": 1,
+     "B": 1
+    },
+    "bomb": {
+     "plantTick": 13361,
+     "site": 184,
+     "planter": 0,
+     "defuseTick": 15232,
+     "defuser": 7,
+     "explodeTick": null
+    },
+    "economy": {
+     "A": {
+      "equipValue": 14850,
+      "moneyStart": 20250,
+      "players": 5,
+      "buy": "force"
+     },
+     "B": {
+      "equipValue": 3700,
+      "moneyStart": 10850,
+      "players": 5,
+      "buy": "eco"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   },
+   {
+    "index": 2,
+    "number": 3,
+    "played": true,
+    "kind": "regulation",
+    "startTick": 15680,
+    "freezeEndTick": 16960,
+    "endTick": 21457,
+    "officialEndTick": 21905,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "T",
+    "winner": "A",
+    "reason": 9,
+    "reasonName": "ct_killed",
+    "scoreAfter": {
+     "A": 2,
+     "B": 1
+    },
+    "bomb": {
+     "plantTick": null,
+     "site": -1,
+     "planter": -1,
+     "defuseTick": null,
+     "defuser": -1,
+     "explodeTick": null
+    },
+    "economy": {
+     "A": {
+      "equipValue": 17200,
+      "moneyStart": 18700,
+      "players": 5,
+      "buy": "force"
+     },
+     "B": {
+      "equipValue": 26700,
+      "moneyStart": 26200,
+      "players": 5,
+      "buy": "full"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   },
+   {
+    "index": 3,
+    "number": 4,
+    "played": true,
+    "kind": "regulation",
+    "startTick": 21905,
+    "freezeEndTick": 23185,
+    "endTick": 26064,
+    "officialEndTick": 26512,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "T",
+    "winner": "A",
+    "reason": 9,
+    "reasonName": "ct_killed",
+    "scoreAfter": {
+     "A": 3,
+     "B": 1
+    },
+    "bomb": {
+     "plantTick": 25497,
+     "site": 185,
+     "planter": 0,
+     "defuseTick": null,
+     "defuser": -1,
+     "explodeTick": null
+    },
+    "economy": {
+     "A": {
+      "equipValue": 20800,
+      "moneyStart": 21150,
+      "players": 5,
+      "buy": "full"
+     },
+     "B": {
+      "equipValue": 2650,
+      "moneyStart": 14000,
+      "players": 5,
+      "buy": "eco"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   },
+   {
+    "index": 4,
+    "number": 5,
+    "played": true,
+    "kind": "regulation",
+    "startTick": 26512,
+    "freezeEndTick": 27792,
+    "endTick": 31197,
+    "officialEndTick": 31645,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "CT",
+    "winner": "B",
+    "reason": 8,
+    "reasonName": "t_killed",
+    "scoreAfter": {
+     "A": 3,
+     "B": 2
+    },
+    "bomb": {
+     "plantTick": null,
+     "site": -1,
+     "planter": -1,
+     "defuseTick": null,
+     "defuser": -1,
+     "explodeTick": null
+    },
+    "economy": {
+     "A": {
+      "equipValue": 22100,
+      "moneyStart": 31350,
+      "players": 5,
+      "buy": "full"
+     },
+     "B": {
+      "equipValue": 12450,
+      "moneyStart": 19550,
+      "players": 5,
+      "buy": "force"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   },
+   {
+    "index": 5,
+    "number": 6,
+    "played": true,
+    "kind": "regulation",
+    "startTick": 31645,
+    "freezeEndTick": 32925,
+    "endTick": 38820,
+    "officialEndTick": 39268,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "T",
+    "winner": "A",
+    "reason": 1,
+    "reasonName": "bomb_exploded",
+    "scoreAfter": {
+     "A": 4,
+     "B": 2
+    },
+    "bomb": {
+     "plantTick": 36196,
+     "site": 184,
+     "planter": 2,
+     "defuseTick": null,
+     "defuser": -1,
+     "explodeTick": 38820
+    },
+    "economy": {
+     "A": {
+      "equipValue": 23750,
+      "moneyStart": 35550,
+      "players": 5,
+      "buy": "full"
+     },
+     "B": {
+      "equipValue": 25850,
+      "moneyStart": 24250,
+      "players": 5,
+      "buy": "full"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   },
+   {
+    "index": 6,
+    "number": 7,
+    "played": true,
+    "kind": "regulation",
+    "startTick": 39268,
+    "freezeEndTick": 40548,
+    "endTick": 45092,
+    "officialEndTick": 45540,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "T",
+    "winner": "A",
+    "reason": 9,
+    "reasonName": "ct_killed",
+    "scoreAfter": {
+     "A": 5,
+     "B": 2
+    },
+    "bomb": {
+     "plantTick": 44650,
+     "site": 184,
+     "planter": 2,
+     "defuseTick": null,
+     "defuser": -1,
+     "explodeTick": null
+    },
+    "economy": {
+     "A": {
+      "equipValue": 27150,
+      "moneyStart": 31000,
+      "players": 5,
+      "buy": "full"
+     },
+     "B": {
+      "equipValue": 12400,
+      "moneyStart": 11000,
+      "players": 5,
+      "buy": "force"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   },
+   {
+    "index": 7,
+    "number": 8,
+    "played": true,
+    "kind": "regulation",
+    "startTick": 45540,
+    "freezeEndTick": 46820,
+    "endTick": 51718,
+    "officialEndTick": 52166,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "T",
+    "winner": "A",
+    "reason": 1,
+    "reasonName": "bomb_exploded",
+    "scoreAfter": {
+     "A": 6,
+     "B": 2
+    },
+    "bomb": {
+     "plantTick": 49094,
+     "site": 185,
+     "planter": 2,
+     "defuseTick": null,
+     "defuser": -1,
+     "explodeTick": 51718
+    },
+    "economy": {
+     "A": {
+      "equipValue": 27950,
+      "moneyStart": 30100,
+      "players": 5,
+      "buy": "full"
+     },
+     "B": {
+      "equipValue": 4100,
+      "moneyStart": 11100,
+      "players": 5,
+      "buy": "eco"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   },
+   {
+    "index": 8,
+    "number": 9,
+    "played": true,
+    "kind": "regulation",
+    "startTick": 52166,
+    "freezeEndTick": 53446,
+    "endTick": 55959,
+    "officialEndTick": 56407,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "T",
+    "winner": "A",
+    "reason": 9,
+    "reasonName": "ct_killed",
+    "scoreAfter": {
+     "A": 7,
+     "B": 2
+    },
+    "bomb": {
+     "plantTick": null,
+     "site": -1,
+     "planter": -1,
+     "defuseTick": null,
+     "defuser": -1,
+     "explodeTick": null
+    },
+    "economy": {
+     "A": {
+      "equipValue": 27950,
+      "moneyStart": 32000,
+      "players": 5,
+      "buy": "full"
+     },
+     "B": {
+      "equipValue": 14000,
+      "moneyStart": 18700,
+      "players": 5,
+      "buy": "force"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ]
+    }
+   },
+   {
+    "index": 9,
+    "number": 10,
+    "played": false,
+    "kind": "regulation",
+    "startTick": 56407,
+    "freezeEndTick": null,
+    "endTick": 56705,
+    "officialEndTick": null,
+    "sides": {
+     "T": "A",
+     "CT": "B"
+    },
+    "winnerSide": "T",
+    "winner": "A",
+    "reason": 18,
+    "reasonName": "ct_surrender",
+    "scoreAfter": {
+     "A": 8,
+     "B": 2
+    },
+    "bomb": {
+     "plantTick": null,
+     "site": -1,
+     "planter": -1,
+     "defuseTick": null,
+     "defuser": -1,
+     "explodeTick": null
+    },
+    "economy": {
+     "A": {
+      "equipValue": 19200,
+      "moneyStart": 39900,
+      "players": 5,
+      "buy": "force"
+     },
+     "B": {
+      "equipValue": 800,
+      "moneyStart": 12450,
+      "players": 4,
+      "buy": "eco"
+     }
+    },
+    "roster": {
+     "A": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "B": [
+      5,
+      6,
+      7,
+      9
+     ]
+    }
+   }
+  ]
+ },
+ "user": 6,
+ "metrics": [
+  {
+   "id": "aim.counter_strafe.early_share",
+   "value": null,
+   "unit": "%",
+   "n": 5,
+   "lobbyRank": 0,
+   "label": "First rifle bullets fired while moving (Leetify-comparable: rifles, not crouched)",
+   "area": "aim",
+   "better": "lower",
+   "lobby": [
+    null,
+    null,
+    null,
+    null,
+    0.272727,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "id": "aim.counter_strafe.early_share_all",
+   "value": 0.3,
+   "unit": "%",
+   "n": 10,
+   "lobbyRank": 3,
+   "label": "First bullets fired while moving (every gun)",
+   "area": "aim",
+   "better": "lower",
+   "lobby": [
+    0.538462,
+    null,
+    null,
+    null,
+    0.214286,
+    null,
+    0.3,
+    0.111111,
+    0.727273,
+    null
+   ]
+  },
+  {
+   "id": "aim.counter_strafe.late_ms",
+   "value": 500,
+   "unit": "ms",
+   "n": 3,
+   "lobbyRank": 1,
+   "label": "Median ms from a moving first bullet until the speed fell under the threshold",
+   "area": "aim",
+   "better": "lower",
+   "lobby": [
+    500,
+    null,
+    500,
+    null,
+    500,
+    null,
+    500,
+    null,
+    500,
+    null
+   ]
+  },
+  {
+   "id": "aim.counter_strafe.cost_x",
+   "value": null,
+   "unit": "x",
+   "n": 1,
+   "lobbyRank": 0,
+   "label": "Inaccuracy of moving first bullets against the same shot standing (mean ratio)",
+   "area": "aim",
+   "better": "lower",
+   "lobby": [
+    1.710856,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "id": "aim.counter_strafe.opposite_share",
+   "value": null,
+   "unit": "%",
+   "n": 4,
+   "lobbyRank": 0,
+   "label": "Stops before a first bullet made with the opposite key",
+   "area": "aim",
+   "better": "higher",
+   "lobby": [
+    0.142857,
+    null,
+    0,
+    null,
+    0.4,
+    null,
+    null,
+    null,
+    0.2,
+    null
+   ]
+  },
+  {
+   "id": "aim.spray.on_target_share",
+   "value": 0.626866,
+   "unit": "%",
+   "n": 67,
+   "lobbyRank": 4,
+   "label": "Spray bullets (from bullet 2) whose compensated aim crossed the target",
+   "area": "aim",
+   "better": "higher",
+   "lobby": [
+    0.612245,
+    0.357143,
+    0.263158,
+    0.676923,
+    0.456897,
+    0.457143,
+    0.626866,
+    0.5,
+    0.76,
+    0.8
+   ]
+  },
+  {
+   "id": "aim.spray.vertical_drift_deg",
+   "value": 0.49935,
+   "unit": "deg",
+   "n": 45,
+   "lobbyRank": 4,
+   "label": "Vertical drift of the compensated aim over bullets 4+ (|median|, degrees)",
+   "area": "aim",
+   "better": "lower",
+   "lobby": [
+    0.20864,
+    0.779649,
+    0.227397,
+    0.531788,
+    0.694259,
+    2.138171,
+    0.49935,
+    0.222491,
+    0.846316,
+    null
+   ]
+  },
+  {
+   "id": "aim.spray.horizontal_drift_deg",
+   "value": 0.148216,
+   "unit": "deg",
+   "n": 45,
+   "lobbyRank": 2,
+   "label": "Horizontal drift of the compensated aim over bullets 4+ (|median|, degrees)",
+   "area": "aim",
+   "better": "lower",
+   "lobby": [
+    1.919121,
+    18.587643,
+    1.911636,
+    0.22489,
+    0.216533,
+    0.757511,
+    0.148216,
+    0.009582,
+    0.324729,
+    null
+   ]
+  },
+  {
+   "id": "aim.spray.hit_share",
+   "value": 0.328358,
+   "unit": "%",
+   "n": 67,
+   "lobbyRank": 2,
+   "label": "Spray bullets (from bullet 2) that hit the target",
+   "area": "aim",
+   "better": "higher",
+   "lobby": [
+    0.326531,
+    0.142857,
+    0.157895,
+    0.246154,
+    0.189655,
+    0.257143,
+    0.328358,
+    0.266667,
+    0.28,
+    0.5
+   ]
+  },
+  {
+   "id": "aim.range_discipline.wasted_share",
+   "value": 1,
+   "unit": "%",
+   "n": 2,
+   "lobbyRank": 5,
+   "label": "Long sprays at long range that hit nothing after bullet 4",
+   "area": "aim",
+   "better": "lower",
+   "lobby": [
+    0.5,
+    0,
+    0,
+    1,
+    0.5,
+    null,
+    1,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "id": "aim.first_bullet.hit_share",
+   "value": 0.8,
+   "unit": "%",
+   "n": 10,
+   "lobbyRank": 3,
+   "label": "First bullets that hit",
+   "area": "aim",
+   "better": "higher",
+   "lobby": [
+    0.923077,
+    null,
+    null,
+    null,
+    0.857143,
+    null,
+    0.8,
+    null,
+    0.454545,
+    null
+   ]
+  },
+  {
+   "id": "aim.first_bullet.hit_share_standing",
+   "value": 0.857143,
+   "unit": "%",
+   "n": 7,
+   "lobbyRank": 3,
+   "label": "First bullets that hit, fired standing (below the threshold)",
+   "area": "aim",
+   "better": "higher",
+   "lobby": [
+    1,
+    null,
+    null,
+    null,
+    0.818182,
+    null,
+    0.857143,
+    0.75,
+    null,
+    1
+   ]
+  },
+  {
+   "id": "aim.first_bullet.hit_share_moving",
+   "value": null,
+   "unit": "%",
+   "n": 3,
+   "lobbyRank": 0,
+   "label": "First bullets that hit, fired moving",
+   "area": "aim",
+   "better": "higher",
+   "lobby": [
+    0.857143,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    0.5,
+    null
+   ]
+  },
+  {
+   "id": "move.reload.exposed_share",
+   "value": null,
+   "unit": "%",
+   "n": 1,
+   "lobbyRank": 0,
+   "label": "Reloads started with an enemy near or more than half a magazine left",
+   "area": "movement",
+   "better": "lower",
+   "lobby": [
+    0.75,
+    1,
+    0.75,
+    null,
+    0.75,
+    1,
+    null,
+    0.636364,
+    0.833333,
+    0.666667
+   ]
+  },
+  {
+   "id": "move.reload.deaths",
+   "value": 0,
+   "unit": "count",
+   "n": 7,
+   "lobbyRank": 1,
+   "label": "Deaths while reloading",
+   "area": "movement",
+   "better": "lower",
+   "lobby": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0
+   ]
+  },
+  {
+   "id": "move.caught_out.share",
+   "value": 0.142857,
+   "unit": "%",
+   "n": 7,
+   "lobbyRank": 4,
+   "label": "Deaths with the knife or a grenade in hand",
+   "area": "movement",
+   "better": "lower",
+   "lobby": [
+    0,
+    0.142857,
+    null,
+    0.25,
+    0.25,
+    0,
+    0.142857,
+    0,
+    0.222222,
+    0.555556
+   ]
+  },
+  {
+   "id": "util.flash.enemies_per_flash",
+   "value": null,
+   "unit": "count",
+   "n": 0,
+   "lobbyRank": 0,
+   "label": "Enemies blinded per flash (≥ 1.1 s)",
+   "area": "utility",
+   "better": "higher",
+   "lobby": [
+    0.2,
+    0.75,
+    0.555556,
+    0.142857,
+    0.2,
+    2,
+    null,
+    0,
+    1,
+    null
+   ]
+  },
+  {
+   "id": "util.flash.blind_median",
+   "value": null,
+   "unit": "ms",
+   "n": 0,
+   "lobbyRank": 0,
+   "label": "Median enemy blind time",
+   "area": "utility",
+   "better": "higher",
+   "lobby": [
+    null,
+    1842.12625,
+    3006.32143,
+    null,
+    4900.513649,
+    null,
+    null,
+    null,
+    2608.675241,
+    null
+   ]
+  },
+  {
+   "id": "util.flash.team_per_flash",
+   "value": null,
+   "unit": "count",
+   "n": 0,
+   "lobbyRank": 0,
+   "label": "Teammates blinded per flash (≥ 1.1 s)",
+   "area": "utility",
+   "better": "lower",
+   "lobby": [
+    0.4,
+    0.25,
+    0.111111,
+    0.285714,
+    0.2,
+    0,
+    null,
+    0,
+    0.6,
+    null
+   ]
+  },
+  {
+   "id": "util.flash.self_share",
+   "value": null,
+   "unit": "%",
+   "n": 0,
+   "lobbyRank": 0,
+   "label": "Flashes that blinded yourself (≥ 1.1 s)",
+   "area": "utility",
+   "better": "lower",
+   "lobby": [
+    0.2,
+    0.25,
+    0,
+    0,
+    0.066667,
+    0,
+    null,
+    0,
+    0.6,
+    null
+   ]
+  },
+  {
+   "id": "util.flash.kill_share",
+   "value": null,
+   "unit": "%",
+   "n": 0,
+   "lobbyRank": 0,
+   "label": "Flashes that led to a kill",
+   "area": "utility",
+   "better": "higher",
+   "lobby": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    null,
+    0,
+    0,
+    null
+   ]
+  },
+  {
+   "id": "util.unused.grenades_per_round",
+   "value": 0.777778,
+   "unit": "per_round",
+   "n": 9,
+   "lobbyRank": 9,
+   "label": "Grenades unused at death or round end, per round",
+   "area": "utility",
+   "better": "lower",
+   "lobby": [
+    0.555556,
+    0,
+    0.666667,
+    0.222222,
+    0.333333,
+    0.555556,
+    0.777778,
+    0.777778,
+    0.333333,
+    0.111111
+   ]
+  },
+  {
+   "id": "util.unused.value_per_round",
+   "value": 188.888889,
+   "unit": "$/round",
+   "n": 9,
+   "lobbyRank": 8,
+   "label": "Dollars of grenades unused at death or round end, per round",
+   "area": "utility",
+   "better": "lower",
+   "lobby": [
+    122.222222,
+    0,
+    200,
+    66.666667,
+    88.888889,
+    177.777778,
+    188.888889,
+    211.111111,
+    66.666667,
+    22.222222
+   ]
+  },
+  {
+   "id": "util.buy.no_util_share",
+   "value": 0.25,
+   "unit": "%",
+   "n": 4,
+   "lobbyRank": 9,
+   "label": "Rifle rounds with no utility though affordable",
+   "area": "utility",
+   "better": "lower",
+   "lobby": [
+    0,
+    0.166667,
+    0,
+    0,
+    0,
+    0,
+    0.25,
+    0.4,
+    0,
+    0
+   ]
+  },
+  {
+   "id": "util.damage.per_grenade",
+   "value": 2.333333,
+   "unit": "count",
+   "n": 3,
+   "lobbyRank": 8,
+   "label": "HE and fire damage per grenade",
+   "area": "utility",
+   "better": "higher",
+   "lobby": [
+    24.4,
+    6.1,
+    0,
+    11,
+    12.142857,
+    16,
+    2.333333,
+    15,
+    0,
+    26
+   ]
+  },
+  {
+   "id": "util.damage.wasted_fire_share",
+   "value": null,
+   "unit": "%",
+   "n": 0,
+   "lobbyRank": 0,
+   "label": "Fires no enemy touched or came near",
+   "area": "utility",
+   "better": "lower",
+   "lobby": [
+    0,
+    0.75,
+    0.8,
+    0.4,
+    0.4,
+    0,
+    null,
+    1,
+    0.5,
+    1
+   ]
+  },
+  {
+   "id": "pos.untradeable.share",
+   "value": 0.666667,
+   "unit": "%",
+   "n": 6,
+   "lobbyRank": 8,
+   "label": "Deaths with no teammate in trade range, untraded",
+   "area": "positioning",
+   "better": "lower",
+   "lobby": [
+    0.2,
+    0.571429,
+    0,
+    1,
+    0.333333,
+    0.2,
+    0.666667,
+    0.571429,
+    0.875,
+    0.555556
+   ]
+  },
+  {
+   "id": "pos.untradeable.nearest_median",
+   "value": 1118.351296,
+   "unit": "units",
+   "n": 6,
+   "lobbyRank": 7,
+   "label": "Median distance to the nearest teammate at death",
+   "area": "positioning",
+   "better": "lower",
+   "lobby": [
+    916.146725,
+    955.00799,
+    839.626309,
+    1349.895493,
+    948.859134,
+    818.648403,
+    1118.351296,
+    1069.205438,
+    1205.880645,
+    1174.233406
+   ]
+  },
+  {
+   "id": "trade.missed.miss_share",
+   "value": 1,
+   "unit": "%",
+   "n": 1,
+   "lobbyRank": 1,
+   "label": "Trade chances with no damage to the killer",
+   "area": "trading",
+   "better": "lower",
+   "lobby": [
+    1,
+    null,
+    null,
+    1,
+    1,
+    null,
+    1,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "id": "trade.missed.success_share",
+   "value": 0,
+   "unit": "%",
+   "n": 1,
+   "lobbyRank": 1,
+   "label": "Trade chances you traded",
+   "area": "trading",
+   "better": "higher",
+   "lobby": [
+    0,
+    null,
+    null,
+    0,
+    0,
+    null,
+    0,
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "id": "pos.opening.duels",
+   "value": 2,
+   "unit": "count",
+   "n": 9,
+   "lobbyRank": 3,
+   "label": "Opening duels taken",
+   "area": "positioning",
+   "better": "higher",
+   "lobby": [
+    2,
+    1,
+    0,
+    5,
+    1,
+    2,
+    2,
+    0,
+    2,
+    3
+   ]
+  },
+  {
+   "id": "pos.opening.win_rate",
+   "value": 0,
+   "unit": "%",
+   "n": 2,
+   "lobbyRank": 5,
+   "label": "Opening duels won",
+   "area": "positioning",
+   "better": "higher",
+   "lobby": [
+    1,
+    0,
+    null,
+    1,
+    1,
+    0,
+    0,
+    null,
+    0.5,
+    0
+   ]
+  },
+  {
+   "id": "pos.opening.ct_push_deaths",
+   "value": 0,
+   "unit": "count",
+   "n": 9,
+   "lobbyRank": 1,
+   "label": "First deaths as CT pushing early",
+   "area": "positioning",
+   "better": "lower",
+   "lobby": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "id": "eco.sync.off_share",
+   "value": 0.25,
+   "unit": "%",
+   "n": 8,
+   "lobbyRank": 9,
+   "label": "Rounds your buy went against three or more teammates",
+   "area": "economy",
+   "better": "lower",
+   "lobby": [
+    0,
+    0.125,
+    0,
+    0,
+    0,
+    0.125,
+    0.25,
+    0,
+    0.125,
+    0.25
+   ]
+  },
+  {
+   "id": "eco.kit_armor.miss_share",
+   "value": 0.6,
+   "unit": "%",
+   "n": 5,
+   "lobbyRank": 7,
+   "label": "Gun rounds with a kit, armor or utility hole",
+   "area": "economy",
+   "better": "lower",
+   "lobby": [
+    0.25,
+    0.333333,
+    0,
+    0.25,
+    0.142857,
+    0.8,
+    0.6,
+    0.2,
+    0.75,
+    0.666667
+   ]
+  }
+ ],
+ "findings": [
+  {
+   "id": "aim.range_discipline.long_sprays",
+   "area": "aim",
+   "scope": "mechanics",
+   "polarity": "fix",
+   "title": "Burst or tap at long range",
+   "summary": "2 of your 2 sprays of 6+ bullets beyond 1,200 units hit nothing after bullet 4 (100 %); 9 bullets went nowhere.",
+   "why": "Past the first bullets the spread and recoil are wider than a body at that range; those bullets only tell the enemy where you are and empty your magazine.",
+   "advice": [
+    {
+     "text": "Beyond 1,200 units fire bursts of 2–3 bullets and let the recoil reset between them, or tap the head.",
+     "drill": "5 minutes on a long-range bot map: 3-bullet bursts at 30+ m, wait for the crosshair to settle each time."
+    }
+   ],
+   "metrics": [
+    {
+     "id": "aim.range_discipline.wasted_share",
+     "value": 1,
+     "unit": "%",
+     "n": 2,
+     "lobbyRank": 5,
+     "label": "Long sprays at long range that hit nothing after bullet 4",
+     "area": "aim",
+     "better": "lower",
+     "lobby": [
+      0.5,
+      0,
+      0,
+      1,
+      0.5,
+      null,
+      1,
+      null,
+      null,
+      null
+     ]
+    }
+   ],
+   "evidence": [
+    {
+     "kind": "spray",
+     "round": 5,
+     "tick0": 29624,
+     "tick1": 29861,
+     "focus": 29752,
+     "players": [
+      6,
+      1
+     ],
+     "annotations": [
+      {
+       "kind": "line",
+       "from": [
+        -673.6,
+        -325.5,
+        -96
+       ],
+       "to": [
+        -688.8,
+        -1591.5,
+        -120
+       ],
+       "tick0": 29688,
+       "tick1": 29861,
+       "role": "bad",
+       "label": "1,266 units"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -673.6,
+        -325.5,
+        -96
+       ],
+       "text": "8 bullets at 1,266 units, 0 of 4 hit after bullet 4",
+       "tick0": 29752,
+       "tick1": 29861,
+       "role": "bad"
+      }
+     ],
+     "caption": "round 5, 1:24: 8 bullets at 1,266 units, 0 of 4 hit after bullet 4 (M4A1-S); 2 hit in all",
+     "series": [
+      {
+       "name": "aim_x",
+       "label": "Aim, right of the target",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+       ],
+       "values": [
+        -2.87,
+        -2.65,
+        -2.61,
+        -1.15,
+        -1.16,
+        -1.21,
+        -1.63,
+        -2.83
+       ],
+       "marks": [
+        "hit",
+        "hit",
+        "miss",
+        "miss",
+        "miss",
+        "miss",
+        "miss",
+        "miss"
+       ]
+      },
+      {
+       "name": "aim_y",
+       "label": "Aim, above the target",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+       ],
+       "values": [
+        -0.13,
+        -0.26,
+        -0.92,
+        -1.38,
+        -0.91,
+        -0.71,
+        -0.58,
+        -0.07
+       ],
+       "marks": [
+        "hit",
+        "hit",
+        "miss",
+        "miss",
+        "miss",
+        "miss",
+        "miss",
+        "miss"
+       ]
+      },
+      {
+       "name": "view_x",
+       "label": "Crosshair, right of the target",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+       ],
+       "values": [
+        -28.32,
+        -28.32,
+        -28.32,
+        -28.32,
+        -28.32,
+        -28.32,
+        -28.32,
+        -28.29
+       ]
+      },
+      {
+       "name": "view_y",
+       "label": "Crosshair, above the target",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+       ],
+       "values": [
+        -1.24,
+        -1.24,
+        -1.24,
+        -1.24,
+        -1.24,
+        -1.24,
+        -1.24,
+        -1.24
+       ]
+      },
+      {
+       "name": "ideal_x",
+       "label": "Ideal crosshair (measured kick)",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+       ],
+       "values": [
+        -25.45,
+        -25.66,
+        -25.71,
+        -27.17,
+        -27.15,
+        -27.1,
+        -26.69,
+        -25.46
+       ]
+      },
+      {
+       "name": "ideal_y",
+       "label": "Ideal crosshair (measured kick)",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+       ],
+       "values": [
+        -1.11,
+        -0.98,
+        -0.32,
+        0.14,
+        -0.33,
+        -0.53,
+        -0.66,
+        -1.18
+       ]
+      },
+      {
+       "name": "distance",
+       "label": "Distance",
+       "unit": "units",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+       ],
+       "values": [
+        1266,
+        1266,
+        1266,
+        1266,
+        1266,
+        1266,
+        1266,
+        1266
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "spray",
+     "round": 7,
+     "tick0": 44907,
+     "tick1": 45150,
+     "focus": 45035,
+     "players": [
+      6,
+      2
+     ],
+     "annotations": [
+      {
+       "kind": "line",
+       "from": [
+        -650.6,
+        -926.6,
+        -164.6
+       ],
+       "to": [
+        -616.2,
+        -2166.1,
+        -132
+       ],
+       "tick0": 44971,
+       "tick1": 45150,
+       "role": "bad",
+       "label": "1,240 units"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -650.6,
+        -926.6,
+        -164.6
+       ],
+       "text": "9 bullets at 1,240 units, 0 of 5 hit after bullet 4",
+       "tick0": 45035,
+       "tick1": 45150,
+       "role": "bad"
+      }
+     ],
+     "caption": "round 7, bomb 0:33: 9 bullets at 1,240 units, 0 of 5 hit after bullet 4 (AK-47); 1 hit in all",
+     "series": [
+      {
+       "name": "aim_x",
+       "label": "Aim, right of the target",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "values": [
+        -1.58,
+        -1.2,
+        -1.13,
+        -0.43,
+        -0.16,
+        -0.49,
+        -0.6,
+        -1.86,
+        -1.48
+       ],
+       "marks": [
+        "miss",
+        "miss",
+        "miss",
+        "hit",
+        "on",
+        "on",
+        "on",
+        "miss",
+        "miss"
+       ]
+      },
+      {
+       "name": "aim_y",
+       "label": "Aim, above the target",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "values": [
+        -0.05,
+        -0.6,
+        -0.68,
+        -0.64,
+        -0.43,
+        0.02,
+        0.16,
+        -0.5,
+        -0.21
+       ],
+       "marks": [
+        "miss",
+        "miss",
+        "miss",
+        "hit",
+        "on",
+        "on",
+        "on",
+        "miss",
+        "miss"
+       ]
+      },
+      {
+       "name": "view_x",
+       "label": "Crosshair, right of the target",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "values": [
+        -165.9,
+        -165.9,
+        -165.9,
+        -165.9,
+        -165.9,
+        -165.9,
+        -165.9,
+        -165.9,
+        -165.9
+       ]
+      },
+      {
+       "name": "view_y",
+       "label": "Crosshair, above the target",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "values": [
+        -2.31,
+        -2.31,
+        -2.31,
+        -2.31,
+        -2.31,
+        -2.31,
+        -2.31,
+        -2.31,
+        -2.31
+       ]
+      },
+      {
+       "name": "ideal_x",
+       "label": "Ideal crosshair (pattern)",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "values": [
+        0,
+        -0.19,
+        0.01,
+        -0.13,
+        -0.18,
+        0.47,
+        0.89,
+        1.57,
+        0.7
+       ]
+      },
+      {
+       "name": "ideal_y",
+       "label": "Ideal crosshair (pattern)",
+       "unit": "°",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "values": [
+        0,
+        -0.37,
+        -1.36,
+        -2.88,
+        -4.48,
+        -6.16,
+        -7.61,
+        -8.62,
+        -9.35
+       ]
+      },
+      {
+       "name": "distance",
+       "label": "Distance",
+       "unit": "units",
+       "axis": "bullet",
+       "x": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+       ],
+       "values": [
+        1240,
+        1240,
+        1240,
+        1240,
+        1240,
+        1240,
+        1240,
+        1240,
+        1240
+       ]
+      }
+     ]
+    }
+   ],
+   "stats": {
+    "instances": 2,
+    "opportunities": 2,
+    "rounds": [
+     5,
+     7
+    ],
+    "roundsLost": 0,
+    "winProbLost": null
+   },
+   "confidence": 0.354,
+   "impact": 0.8,
+   "priority": 0.124,
+   "scoring": {
+    "rawImpact": 0.8,
+    "polarity": "fix",
+    "family": "spray",
+    "excess": 1,
+    "confidence": 0.1723,
+    "fixability": 0.9,
+    "recurrence": 1,
+    "gated": false,
+    "bar": false
+   }
+  },
+  {
+   "id": "util.unused.death",
+   "area": "utility",
+   "scope": "micro",
+   "polarity": "fix",
+   "title": "Use your grenades before you die",
+   "summary": "You died 2 times with 2 or more grenades left in rounds your team lost ($1,000 unused); over the match $189 of grenades a round went unused (8th of 10).",
+   "why": "Grenades left on a dead player helped nobody; thrown, they could have delayed, damaged or blinded.",
+   "advice": [
+    {
+     "text": "When you hold an angle, throw your molotov or HE at the first sound of contact instead of waiting for the perfect moment."
+    },
+    {
+     "text": "Before a peek you might not survive, throw what you carry first."
+    }
+   ],
+   "metrics": [
+    {
+     "id": "util.unused.value_per_round",
+     "value": 188.888889,
+     "unit": "$/round",
+     "n": 9,
+     "lobbyRank": 8,
+     "label": "Dollars of grenades unused at death or round end, per round",
+     "area": "utility",
+     "better": "lower",
+     "lobby": [
+      122.222222,
+      0,
+      200,
+      66.666667,
+      88.888889,
+      177.777778,
+      188.888889,
+      211.111111,
+      66.666667,
+      22.222222
+     ]
+    },
+    {
+     "id": "util.unused.grenades_per_round",
+     "value": 0.777778,
+     "unit": "per_round",
+     "n": 9,
+     "lobbyRank": 9,
+     "label": "Grenades unused at death or round end, per round",
+     "area": "utility",
+     "better": "lower",
+     "lobby": [
+      0.555556,
+      0,
+      0.666667,
+      0.222222,
+      0.333333,
+      0.555556,
+      0.777778,
+      0.777778,
+      0.333333,
+      0.111111
+     ]
+    }
+   ],
+   "evidence": [
+    {
+     "kind": "replay",
+     "round": 8,
+     "tick0": 49026,
+     "tick1": 49474,
+     "focus": 49410,
+     "players": [
+      1,
+      6
+     ],
+     "annotations": [
+      {
+       "kind": "label",
+       "at": [
+        -578.0538940429688,
+        -1782.4239501953125,
+        -179.96875
+       ],
+       "text": "died with flashbang, smokegrenade ($500)",
+       "tick0": 49346,
+       "tick1": 49474,
+       "role": "bad"
+      },
+      {
+       "kind": "line",
+       "from": [
+        -531.0717163085938,
+        -1448.5155029296875,
+        -69.94757080078125
+       ],
+       "to": [
+        -578.0538940429688,
+        -1782.4239501953125,
+        -179.96875
+       ],
+       "tick0": 49394,
+       "tick1": 49442,
+       "role": "enemy"
+      }
+     ],
+     "caption": "round 8, bomb 0:35: you died with 2 grenades ($500)"
+    },
+    {
+     "kind": "replay",
+     "round": 9,
+     "tick0": 54215,
+     "tick1": 54663,
+     "focus": 54599,
+     "players": [
+      3,
+      6
+     ],
+     "annotations": [
+      {
+       "kind": "label",
+       "at": [
+        -1498.8289794921875,
+        159.6961212158203,
+        -166.96875
+       ],
+       "text": "died with flashbang, smokegrenade ($500)",
+       "tick0": 54535,
+       "tick1": 54663,
+       "role": "bad"
+      },
+      {
+       "kind": "line",
+       "from": [
+        -1868.178955078125,
+        -496.5487060546875,
+        -167.96875
+       ],
+       "to": [
+        -1498.8289794921875,
+        159.6961212158203,
+        -166.96875
+       ],
+       "tick0": 54583,
+       "tick1": 54631,
+       "role": "enemy"
+      }
+     ],
+     "caption": "round 9, 1:36: you died with 2 grenades ($500)"
+    }
+   ],
+   "stats": {
+    "instances": 2,
+    "opportunities": 7,
+    "rounds": [
+     8,
+     9
+    ],
+    "roundsLost": 2,
+    "winProbLost": null
+   },
+   "confidence": 0.585,
+   "impact": 0.7057,
+   "priority": 0.1808,
+   "scoring": {
+    "rawImpact": 1.333,
+    "polarity": "fix",
+    "family": "util.unused",
+    "excess": 0.5294,
+    "confidence": 0.2847,
+    "fixability": 0.9,
+    "recurrence": 1,
+    "gated": false,
+    "bar": false
+   }
+  },
+  {
+   "id": "pos.untradeable.isolated",
+   "area": "positioning",
+   "scope": "micro",
+   "polarity": "fix",
+   "title": "Play where a teammate can trade you",
+   "summary": "4 of your 6 deaths (67 %) came with no teammate within 900 units and went untraded; your team lost 4 of those 4 rounds. At death your nearest teammate was 1,118 units away on median (7th of 10).",
+   "why": "A death nobody can trade is a free kill: your team is a player down with nothing back.",
+   "advice": [
+    {
+     "text": "Before you take a fight, check the radar: if no teammate could swing within a few seconds, fall back or wait for one."
+    },
+    {
+     "text": "When you lurk or hold alone, play for information and survival, not for the first duel."
+    }
+   ],
+   "metrics": [
+    {
+     "id": "pos.untradeable.share",
+     "value": 0.666667,
+     "unit": "%",
+     "n": 6,
+     "lobbyRank": 8,
+     "label": "Deaths with no teammate in trade range, untraded",
+     "area": "positioning",
+     "better": "lower",
+     "lobby": [
+      0.2,
+      0.571429,
+      0,
+      1,
+      0.333333,
+      0.2,
+      0.666667,
+      0.571429,
+      0.875,
+      0.555556
+     ]
+    },
+    {
+     "id": "pos.untradeable.nearest_median",
+     "value": 1118.351296,
+     "unit": "units",
+     "n": 6,
+     "lobbyRank": 7,
+     "label": "Median distance to the nearest teammate at death",
+     "area": "positioning",
+     "better": "lower",
+     "lobby": [
+      916.146725,
+      955.00799,
+      839.626309,
+      1349.895493,
+      948.859134,
+      818.648403,
+      1118.351296,
+      1069.205438,
+      1205.880645,
+      1174.233406
+     ]
+    }
+   ],
+   "evidence": [
+    {
+     "kind": "replay",
+     "round": 3,
+     "tick0": 19109,
+     "tick1": 19557,
+     "focus": 19429,
+     "players": [
+      3,
+      6,
+      7
+     ],
+     "annotations": [
+      {
+       "kind": "circle",
+       "center": [
+        -836.8525390625,
+        294.9678039550781,
+        -166.706787109375
+       ],
+       "radius": 900,
+       "tick0": 19109,
+       "tick1": 19557,
+       "role": "bad",
+       "label": "trade range"
+      },
+      {
+       "kind": "line",
+       "from": [
+        -948.8237915039062,
+        -554.9988403320312,
+        -263.96875
+       ],
+       "to": [
+        -836.8525390625,
+        294.9678039550781,
+        -166.706787109375
+       ],
+       "tick0": 19397,
+       "tick1": 19493,
+       "role": "enemy",
+       "label": "A4"
+      },
+      {
+       "kind": "line",
+       "from": [
+        -836.8525390625,
+        294.9678039550781,
+        -166.706787109375
+       ],
+       "to": [
+        -1749.63134765625,
+        -651.7346801757812,
+        -167.96875
+       ],
+       "tick0": 19429,
+       "tick1": 19557,
+       "role": "teammate",
+       "label": "nearest teammate 1,315 units",
+       "dashed": true
+      }
+     ],
+     "caption": "round 3, 1:16: A4 killed you at Underpass; nearest teammate 1,315 units"
+    },
+    {
+     "kind": "replay",
+     "round": 8,
+     "tick0": 49090,
+     "tick1": 49538,
+     "focus": 49410,
+     "players": [
+      1,
+      5,
+      6
+     ],
+     "annotations": [
+      {
+       "kind": "circle",
+       "center": [
+        -578.0538940429688,
+        -1782.4239501953125,
+        -179.96875
+       ],
+       "radius": 900,
+       "tick0": 49090,
+       "tick1": 49538,
+       "role": "bad",
+       "label": "trade range"
+      },
+      {
+       "kind": "line",
+       "from": [
+        -531.0717163085938,
+        -1448.5155029296875,
+        -69.94757080078125
+       ],
+       "to": [
+        -578.0538940429688,
+        -1782.4239501953125,
+        -179.96875
+       ],
+       "tick0": 49378,
+       "tick1": 49474,
+       "role": "enemy",
+       "label": "A2"
+      },
+      {
+       "kind": "line",
+       "from": [
+        -578.0538940429688,
+        -1782.4239501953125,
+        -179.96875
+       ],
+       "to": [
+        551.9691772460938,
+        -2141.025634765625,
+        -39.96875
+       ],
+       "tick0": 49410,
+       "tick1": 49538,
+       "role": "teammate",
+       "label": "nearest teammate 1,186 units",
+       "dashed": true
+      }
+     ],
+     "caption": "round 8, bomb 0:35: A2 killed you at BombsiteA; nearest teammate 1,186 units"
+    },
+    {
+     "kind": "replay",
+     "round": 9,
+     "tick0": 54279,
+     "tick1": 54727,
+     "focus": 54599,
+     "players": [
+      3,
+      6,
+      7
+     ],
+     "annotations": [
+      {
+       "kind": "circle",
+       "center": [
+        -1498.8289794921875,
+        159.6961212158203,
+        -166.96875
+       ],
+       "radius": 900,
+       "tick0": 54279,
+       "tick1": 54727,
+       "role": "bad",
+       "label": "trade range"
+      },
+      {
+       "kind": "line",
+       "from": [
+        -1868.178955078125,
+        -496.5487060546875,
+        -167.96875
+       ],
+       "to": [
+        -1498.8289794921875,
+        159.6961212158203,
+        -166.96875
+       ],
+       "tick0": 54567,
+       "tick1": 54663,
+       "role": "enemy",
+       "label": "A4"
+      },
+      {
+       "kind": "line",
+       "from": [
+        -1498.8289794921875,
+        159.6961212158203,
+        -166.96875
+       ],
+       "to": [
+        -532.1111450195312,
+        -2161.246826171875,
+        -179.96875
+       ],
+       "tick0": 54599,
+       "tick1": 54727,
+       "role": "teammate",
+       "label": "nearest teammate 2,514 units",
+       "dashed": true
+      }
+     ],
+     "caption": "round 9, 1:36: A4 killed you at BombsiteB; nearest teammate 2,514 units"
+    }
+   ],
+   "stats": {
+    "instances": 4,
+    "opportunities": 6,
+    "rounds": [
+     1,
+     3,
+     8,
+     9
+    ],
+    "roundsLost": 4,
+    "winProbLost": null
+   },
+   "confidence": 0.559,
+   "impact": 0.7112,
+   "priority": 0.1757,
+   "scoring": {
+    "rawImpact": 4.267,
+    "polarity": "fix",
+    "family": "pos.untradeable",
+    "excess": 0.1667,
+    "confidence": 0.4116,
+    "fixability": 0.6,
+    "recurrence": 1,
+    "gated": false,
+    "bar": false
+   }
+  },
+  {
+   "id": "eco.sync.off",
+   "area": "economy",
+   "scope": "macro",
+   "polarity": "fix",
+   "title": "Buy with your team",
+   "summary": "In 2 of 8 rounds your buy went against 3 or more teammates: 2 times you bought while they saved (tied 9th of 10).",
+   "why": "A lone buy is wasted with four players on pistols, and a lone save leaves four rifles a player short; next round the money is out of step again.",
+   "advice": [
+    {
+     "text": "Ask for the buy before the round (\"full buy\", \"save\") and follow the call even when your own money says otherwise; drop or ask for a weapon instead."
+    }
+   ],
+   "metrics": [
+    {
+     "id": "eco.sync.off_share",
+     "value": 0.25,
+     "unit": "%",
+     "n": 8,
+     "lobbyRank": 9,
+     "label": "Rounds your buy went against three or more teammates",
+     "area": "economy",
+     "better": "lower",
+     "lobby": [
+      0,
+      0.125,
+      0,
+      0,
+      0,
+      0.125,
+      0.25,
+      0,
+      0.125,
+      0.25
+     ]
+    }
+   ],
+   "evidence": [
+    {
+     "kind": "replay",
+     "round": 4,
+     "tick0": 22545,
+     "tick1": 23505,
+     "focus": 23185,
+     "players": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ],
+     "annotations": [
+      {
+       "kind": "label",
+       "at": [
+        -1957,
+        -1898,
+        -283.86419677734375
+       ],
+       "text": "you: force, $2,100",
+       "tick0": 22545,
+       "tick1": 23825,
+       "role": "bad"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -1656,
+        -1800,
+        -267.2064208984375
+       ],
+       "text": "eco, $200",
+       "tick0": 22545,
+       "tick1": 23825,
+       "role": "teammate"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -1552,
+        -1808,
+        -266.460693359375
+       ],
+       "text": "eco, $700",
+       "tick0": 22545,
+       "tick1": 23825,
+       "role": "teammate"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -1632,
+        -2072,
+        -261
+       ],
+       "text": "eco, $1,350",
+       "tick0": 22545,
+       "tick1": 23825,
+       "role": "teammate"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -1902,
+        -1976,
+        -273.9879150390625
+       ],
+       "text": "eco, $200",
+       "tick0": 22545,
+       "tick1": 23825,
+       "role": "teammate"
+      }
+     ],
+     "caption": "Round 4: you bought ($2,100) while 4 teammates saved"
+    },
+    {
+     "kind": "replay",
+     "round": 8,
+     "tick0": 46180,
+     "tick1": 47140,
+     "focus": 46820,
+     "players": [
+      5,
+      6,
+      7,
+      8,
+      9
+     ],
+     "annotations": [
+      {
+       "kind": "label",
+       "at": [
+        -1552,
+        -1808,
+        -266.460693359375
+       ],
+       "text": "you: force, $2,200",
+       "tick0": 46180,
+       "tick1": 47460,
+       "role": "bad"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -1632,
+        -2072,
+        -261
+       ],
+       "text": "eco, $500",
+       "tick0": 46180,
+       "tick1": 47460,
+       "role": "teammate"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -1608,
+        -1888,
+        -266.8623046875
+       ],
+       "text": "eco, $1,000",
+       "tick0": 46180,
+       "tick1": 47460,
+       "role": "teammate"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -1957,
+        -1898,
+        -283.86419677734375
+       ],
+       "text": "eco, $700",
+       "tick0": 46180,
+       "tick1": 47460,
+       "role": "teammate"
+      },
+      {
+       "kind": "label",
+       "at": [
+        -1598,
+        -1732,
+        -264.907958984375
+       ],
+       "text": "eco, $500",
+       "tick0": 46180,
+       "tick1": 47460,
+       "role": "teammate"
+      }
+     ],
+     "caption": "Round 8: you bought ($2,200) while 4 teammates saved"
+    }
+   ],
+   "stats": {
+    "instances": 2,
+    "opportunities": 8,
+    "rounds": [
+     4,
+     8
+    ],
+    "roundsLost": 2,
+    "winProbLost": null
+   },
+   "confidence": 0.735,
+   "impact": 1.333,
+   "priority": 0.3814,
+   "scoring": {
+    "rawImpact": 1.333,
+    "polarity": "fix",
+    "family": "eco.sync",
+    "excess": 1,
+    "confidence": 0.3576,
+    "fixability": 0.8,
+    "recurrence": 1,
+    "gated": false,
+    "bar": true
+   }
+  },
+  {
+   "id": "eco.kit_armor.holes",
+   "area": "economy",
+   "scope": "macro",
+   "polarity": "fix",
+   "title": "Complete your loadout",
+   "summary": "3 of your 5 gun rounds had a hole in the loadout: 3 as CT without a kit you could afford ($400); 1 with a rifle and no armor; 2 full buys with over $1,000 left and 2 or fewer grenades (7th of 10).",
+   "why": "No kit loses retakes on time, no armor turns body shots into kills, and money left in the bank does nothing this round.",
+   "advice": [
+    {
+     "text": "Finish every gun buy in the same order: armor, gun, kit (CT), then grenades until the money or the slots run out."
+    }
+   ],
+   "metrics": [
+    {
+     "id": "eco.kit_armor.miss_share",
+     "value": 0.6,
+     "unit": "%",
+     "n": 5,
+     "lobbyRank": 7,
+     "label": "Gun rounds with a kit, armor or utility hole",
+     "area": "economy",
+     "better": "lower",
+     "lobby": [
+      0.25,
+      0.333333,
+      0,
+      0.25,
+      0.142857,
+      0.8,
+      0.6,
+      0.2,
+      0.75,
+      0.666667
+     ]
+    }
+   ],
+   "evidence": [
+    {
+     "kind": "replay",
+     "round": 4,
+     "tick0": 22545,
+     "tick1": 23505,
+     "focus": 23185,
+     "players": [
+      6
+     ],
+     "annotations": [
+      {
+       "kind": "label",
+       "at": [
+        -1957,
+        -1898,
+        -283.86419677734375
+       ],
+       "text": "mp9: no kit, $3,900 left",
+       "tick0": 22545,
+       "tick1": 23825,
+       "role": "bad"
+      }
+     ],
+     "caption": "Round 4: no kit with $3,900 left after the buy"
+    },
+    {
+     "kind": "replay",
+     "round": 5,
+     "tick0": 27152,
+     "tick1": 28112,
+     "focus": 27792,
+     "players": [
+      6
+     ],
+     "annotations": [
+      {
+       "kind": "label",
+       "at": [
+        -1608,
+        -1888,
+        -266.8623046875
+       ],
+       "text": "m4a1_silencer: no kit, 0 grenades, $1,900 left",
+       "tick0": 27152,
+       "tick1": 28432,
+       "role": "bad"
+      }
+     ],
+     "caption": "Round 5: no kit, 0 grenades with $1,900 left after the buy"
+    },
+    {
+     "kind": "replay",
+     "round": 6,
+     "tick0": 32285,
+     "tick1": 33245,
+     "focus": 32925,
+     "players": [
+      6
+     ],
+     "annotations": [
+      {
+       "kind": "label",
+       "at": [
+        -1902,
+        -1816,
+        -273.9879150390625
+       ],
+       "text": "ak47: no kit, no armor, 2 grenades, $1,850 left",
+       "tick0": 32285,
+       "tick1": 33565,
+       "role": "bad"
+      }
+     ],
+     "caption": "Round 6: no kit, no armor, 2 grenades with $1,850 left after the buy"
+    }
+   ],
+   "stats": {
+    "instances": 3,
+    "opportunities": 5,
+    "rounds": [
+     4,
+     5,
+     6
+    ],
+    "roundsLost": 2,
+    "winProbLost": null
+   },
+   "confidence": 0.606,
+   "impact": 1.1667,
+   "priority": 0.4022,
+   "scoring": {
+    "rawImpact": 2,
+    "polarity": "fix",
+    "family": "loadout",
+    "excess": 0.5833,
+    "confidence": 0.3831,
+    "fixability": 0.9,
+    "recurrence": 1,
+    "gated": false,
+    "bar": true
+   }
+  }
+ ],
+ "topFixes": [
+  "eco.kit_armor.holes",
+  "eco.sync.off"
+ ],
+ "strengths": [],
+ "rounds": [
+  {
+   "number": 1,
+   "winner": "A",
+   "reasonName": "ct_killed",
+   "tags": [
+    "pistol",
+    "CT",
+    "planted"
+   ],
+   "user": {
+    "kills": 1,
+    "died": true,
+    "damage": 194
+   }
+  },
+  {
+   "number": 2,
+   "winner": "B",
+   "reasonName": "bomb_defused",
+   "tags": [
+    "eco",
+    "CT",
+    "planted",
+    "defused"
+   ],
+   "user": {
+    "kills": 2,
+    "died": false,
+    "damage": 145
+   }
+  },
+  {
+   "number": 3,
+   "winner": "A",
+   "reasonName": "ct_killed",
+   "tags": [
+    "full",
+    "CT"
+   ],
+   "user": {
+    "kills": 0,
+    "died": true,
+    "damage": 99
+   }
+  },
+  {
+   "number": 4,
+   "winner": "A",
+   "reasonName": "ct_killed",
+   "tags": [
+    "eco",
+    "CT",
+    "planted"
+   ],
+   "user": {
+    "kills": 0,
+    "died": true,
+    "damage": 75
+   }
+  },
+  {
+   "number": 5,
+   "winner": "B",
+   "reasonName": "t_killed",
+   "tags": [
+    "force",
+    "CT"
+   ],
+   "user": {
+    "kills": 2,
+    "died": false,
+    "damage": 153
+   }
+  },
+  {
+   "number": 6,
+   "winner": "A",
+   "reasonName": "bomb_exploded",
+   "tags": [
+    "full",
+    "CT",
+    "planted",
+    "exploded"
+   ],
+   "user": {
+    "kills": 0,
+    "died": true,
+    "damage": 7
+   }
+  },
+  {
+   "number": 7,
+   "winner": "A",
+   "reasonName": "ct_killed",
+   "tags": [
+    "force",
+    "CT",
+    "planted"
+   ],
+   "user": {
+    "kills": 1,
+    "died": true,
+    "damage": 62
+   }
+  },
+  {
+   "number": 8,
+   "winner": "A",
+   "reasonName": "bomb_exploded",
+   "tags": [
+    "eco",
+    "CT",
+    "planted",
+    "exploded"
+   ],
+   "user": {
+    "kills": 0,
+    "died": true,
+    "damage": 19
+   }
+  },
+  {
+   "number": 9,
+   "winner": "A",
+   "reasonName": "ct_killed",
+   "tags": [
+    "force",
+    "CT"
+   ],
+   "user": {
+    "kills": 0,
+    "died": true,
+    "damage": 0
+   }
+  },
+  {
+   "number": 10,
+   "winner": "A",
+   "reasonName": "ct_surrender",
+   "tags": [
+    "not_played",
+    "CT"
+   ],
+   "user": {
+    "kills": 0,
+    "died": false,
+    "damage": 0
+   }
+  }
+ ],
+ "replay": [],
+ "coachVersion": "coach@0.2.0-k2"
+}

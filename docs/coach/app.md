@@ -19,7 +19,8 @@ CHROME_PATH=/usr/bin/google-chrome npm run check:browser:coach   # the browser c
 | `src/coach-app/stub-report.ts` | the report without analysis (match facts, round summaries, replay) |
 | `src/coach-app/library.ts`, `pack.ts` | IndexedDB library and its storage codec |
 | `src/coach-app/prefs.ts` | the remembered player (Steam ID, localStorage) |
-| `src/coach-app/MatchPage.tsx` | header, round strip, fixes, skill areas, the replay |
+| `src/coach-app/MatchPage.tsx` | header, round strip, fixes, strengths, evidence viewer, the replay, skill areas (K5: docs/coach/report.md) |
+| `src/coach-app/report/`, `viewers/`, `charts/`, `display.ts`, `feedback.ts` | K5: cards and rank strips, duel view and spray plot, chart renderers, Hide names, feedback (docs/coach/report.md) |
 | `src/coach-app/replay/engine.ts`, `Replay.tsx` | the canvas replay and its HUD and controls |
 | `src/coach-app/maps.ts`, `config.ts` | map packs (`MAP_PACK_BASE`), clock constants |
 | `src/coach/report/replay.ts` | replay tracks from `RawDemo` + `Match` (pure, tested in Node: `tests/coach/replay.test.ts`) |
@@ -119,7 +120,9 @@ fixture, which has a full grid for round 4 only), picks a player (`--user`), che
 (every living player on the radar's drawn area within 30 units and inside his place name's box from `places.json`),
 checks every kill line of round 4 (`--round`) appears on its tick, plays 4 s and measures frames, tries the keys,
 adds a synthetic finding with every annotation kind to the stored report, follows its Watch link, and reopens the
-match from the library after a reload. It fails on console or page errors. Screenshots go to `logs/coach/`
+match from the library after a reload. It fails on console or page errors. K5 extended it to the report (fix cards,
+rank strips, areas, duel view, spray plot, synthetic charts, feedback and its export) with names hidden throughout:
+docs/coach/report.md "Browser check". Screenshots go to `logs/coach/`
 (gitignored: with the real demo they show player names; run with the fixture for shareable ones).
 
 Last run (full test demo `.craw`, 43 MB): drop → picker 0.23 s, drop → interactive 0.6 s including the pick;

@@ -15,7 +15,8 @@ the aim and movement detectors: [`mechanics.md`](mechanics.md).
 | `src/coach/analyze/`, `metrics/`, `detect/`, `derive/<area>/`, `report/format.ts`, `data/coach/tuning/<area>.json` | the analysis (Contract 3) and per-area tunables ([`mechanics.md`](mechanics.md), [`utility.md`](utility.md)) |
 | `src/coach/report/replay.ts` | replay tracks for the 2D viewer |
 | `src/coach-parser/`, `crates/coach-parser/` | the browser parser: demoparser2's Rust core as WebAssembly in a worker ([`parser.md`](parser.md)) |
-| `src/coach-app/`, `coach/index.html`, `vite.coach.config.ts` | the page (Preact), built to `dist-coach/`: pipeline worker, library, player picker, match page, 2D replay ([`app.md`](app.md)) |
+| `src/coach/report/prioritize.ts`, `evidence-series.ts`, `data/coach/tuning/report.json` | the prioritizer and the viewers' series ([`report.md`](report.md)) |
+| `src/coach-app/`, `coach/index.html`, `vite.coach.config.ts` | the page (Preact), built to `dist-coach/`: pipeline worker, library, player picker, match page, 2D replay ([`app.md`](app.md)); the report, viewers and charts ([`report.md`](report.md)) |
 | `tools/coach/` | `coach.ts` (CLI), `parse-node.ts` (native adapter), `fetch-test-demo.ts`, `make-fixture.ts` |
 | `tests/coach/` | unit tests (`synth.ts` builds synthetic RawDemos), the fixture test, the full-demo test |
 | `local/demos/`, `local/coach-cache/` | demos and parsed caches (gitignored; never commit a demo) |

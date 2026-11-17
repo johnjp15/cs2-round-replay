@@ -34,14 +34,14 @@ findings and the lobby table of every metric, and writes the report JSON to `loc
   `MatchReport.metrics` holds the user's `MetricValue` of every metric, with the whole lobby in `lobby`.
 - **Detectors** run for the user; a detector whose `needs` are missing is skipped (`knowledge` is always missing until
   K8). Finding ids start with the detector id and are unique in a report.
-- **First prioritizer** (K5 replaces it; `data/coach/tuning/report.json`): `priority = impact × confidence`; fixes
+- **First prioritizer** (replaced by K5's, docs/coach/report.md; `data/coach/tuning/report.json`): `priority = impact × confidence`; fixes
   sorted by priority, then id; the top three, never two of one family (the id up to the second dot), never one without
   evidence or below `minConfidence` 0.2; strengths: up to two `strength` findings by priority.
 - **Confidence** = the detector's precision (a constant in its tuning until K11 measures it) × `1 − exp(−n / nScale)`.
 - **Impact scale**: the estimated number of fights the habit decided against the player, scaled to a 24-round match
   (`perMatch`). About 3 means "three duels a match"; under 0.5 is noise. Each detector's cost per instance is a
-  tunable (`costHit`, `costPerSpray`, `costPerMiss`, `costDeath`, `costNear`, `costFull`): K5 recalibrates them, K9
-  replaces them with round-win probability.
+  tunable (`costHit`, `costPerSpray`, `costPerMiss`, `costDeath`, `costNear`, `costFull`): K5 recalibrated them onto
+  one scale (docs/coach/report.md), K9 replaces them with round-win probability.
 - **Strength**: rank ≤ 2 among at least 6 players with a value, with enough samples, and an evidence moment.
 - **Determinism**: no Date, no Math.random, fixed list orders, numbers rounded in the tables;
   `tests/coach/analyze.test.ts` checks the report JSON of the committed fixture is byte-identical across two runs.
