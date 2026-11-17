@@ -150,7 +150,7 @@ Accessors (`src/coach/ingest/access.ts`): `roundRows(raw, round, live?)`, `round
 
 ## Report types (`coach-report@1`, `report.ts`)
 
-Types only; detectors (K2+) and the prioritizer (K5) fill them. `Finding` is the plan's Contract 2 field for field.
+Types only; detectors (K2+) and the prioritizer (K5) fill them; series and charts below. `Finding` is the plan's Contract 2 field for field.
 `Annotation` is a union on `kind`: `line` (from, to), `circle` (center, radius), `cone` (apex, yaw, half-angle,
 length), `path` (points, optional per-point ticks), `zone` (x/y polygon), `label` (at, text); each has
 `tick0`/`tick1` and a colour `role` (`user`, `teammate`, `enemy`, `ct`, `t`, `accent`, `good`, `bad`, `neutral`)
@@ -162,6 +162,45 @@ slot, metrics, findings, top fixes, strengths, rounds, replay tracks, coach vers
 `health`: `step`, `samples`, `players`, `phases`, `side` per slot, `z`, `weapon`, `flags` (`REPLAY_FLAG`), `place`,
 the `weapons` / `places` name tables, and `events` (`ReplayEvents`: kills with positions, shots, hurts, blinds,
 grenades, effects with lifetimes, bomb events with positions). Absent = `REPLAY_ABSENT` (-32768).
+
+### Evidence series (`Evidence.series`, K5)
+
+An evidence may carry a few short channels over its window, so the duel view and the spray plot can be drawn from a
+stored report without the demo. Each `EvidenceSeries` has a `name`, an axis `label`, a `unit`, an `axis` (`tick`: one
+value per demo tick, `x` = the ticks; `bullet`: one value per bullet of a spray, `x` = the bullet numbers, 1 first),
+`values` (NaN / `null` = no sample), an optional `ref` line (`{ value, label }`) and optional per-sample `marks`
+(`''` = none). Standard names (`SERIES` in `report.ts`):
+
+| Viewer | Channel | Axis | Unit | What |
+| --- | --- | --- | --- | --- |
+| duel | `speed` | tick | u/s | horizontal speed (the velocity column, read one row late for the lag); `ref` = 34 % of the weapon's top speed |
+| duel | `inaccuracy` | tick | mrad | the game's inaccuracy of each bullet, on the bullet ticks |
+| duel | `angle` | tick | ° | crosshair to the target's head |
+| duel | `duck` | tick | 0–1 | duck amount |
+| duel | `shots` | tick | count | 1 per bullet on its tick; `marks` `hit` / `miss` |
+| spray | `aim_x`, `aim_y` | bullet | ° | where the recoil-compensated aim (view + 2 × punch) was relative to the target, right / up |
+| spray | `ideal_x`, `ideal_y` | bullet | ° | where the crosshair had to be for the bullet to land on the target (the pattern, inverted) |
+
+Other names are allowed; a viewer draws what it knows. Keep a series to the window (a few seconds at most; a few
+hundred numbers): the series are stored with the report.
+
+### Charts (`MatchReport.charts`, K5)
+
+`charts?: Record<string, ChartPayload>`, keyed by detector or metric id (`aim.placement`, `strat.lane`). Every payload
+has `title`, optional `caption` and the `area` whose page shows it; `kind` picks the renderer
+(`src/coach-app/charts/`):
+
+| `kind` | Payload | Drawn as |
+| --- | --- | --- |
+| `scatter` | `x`, `y` axes (`label`, `unit`, optional `min`/`max`), `categories` (`key`, `label`, colour `role`), `points` (`x`, `y`, `cat`, optional `label`, optional `link`), optional `rings` (radii around the origin) | dots coloured by category, rings, a click opens the linked evidence |
+| `bars` | `unit`, `bars` (`label`, `value`, optional `n`, `cat`, `user`), optional `categories`, optional `ref` line | horizontal bars, the user's bar in the accent |
+| `series` | `x`, `y` axes, `series` (`name`, `label`, `role`, `x[]`, `y[]`) | lines |
+| `boards` | `boards` (one per round: `round`, `caption`, `dots` with `x`, `y` in world units, `role`, `shape`; `zones` as x/y polygons; `highlight`; `link`), optional `legend` | one small radar per round |
+
+A detector fills charts through its optional `charts(ctx, slot, metric, findings)` method (`src/coach/detect/types.ts`),
+called after `run` with the findings `run` returned; keys must start with the detector id. A `link` is
+`{ finding: <finding id>, evidence: <index> }`. Insert keys in a fixed order (the analysis sorts them by
+id before it returns), so the JSON stays byte-identical. Reports without `charts` are valid.
 
 ## Reconciliation (`src/coach/ingest/validate.ts`)
 
@@ -197,6 +236,9 @@ flash that blinded four enemies for 0.8–3.8 s counts 2). On the test demo 3 of
 | a player who leaves | his rows keep coming with team null and `is_connected` = 8 |
 
 ## Changelog
+
+- `coach-report@1` (K5, 2026-11-16): optional `Evidence.series` and `MatchReport.charts` added. Still `@1`: both are
+  optional, so stored reports stay valid.
 
 - `coach-report@1` (K3, 2026-11-16): `ReplayTrack` extended (fields above); `xy`, `yaw` and `health` unchanged. Still
   `@1`: no report had been stored before.

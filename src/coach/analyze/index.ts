@@ -21,7 +21,7 @@ import { ALL_METRICS } from '../metrics/index';
 import type { MetricDef } from '../metrics/types';
 import type { Match, MatchRound } from '../model/match';
 import type { RawDemo } from '../model/raw';
-import { REPORT_FORMAT, type Finding, type MatchReport, type MetricValue, type RoundSummary } from '../model/report';
+import { REPORT_FORMAT, type ChartPayload, type Finding, type MatchReport, type MetricValue, type RoundSummary } from '../model/report';
 import type { CoachTuning } from '../tuning';
 import { createContext, type AnalysisContext } from './context';
 import { REPORT_TUNING, type ReportTuning } from './report-tuning';
@@ -150,15 +150,26 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
     return m === undefined ? null : metricValueFor(m, opts.user);
   };
   const findings: Finding[] = [];
+  const charts: Record<string, ChartPayload> = {};
   const seen = new Set<string>();
   for (const d of opts.detectors ?? ALL_DETECTORS) {
     if (d.needs?.includes('los') === true && ctx.los === null) continue;
     if (d.needs?.includes('knowledge') === true) continue; // no map knowledge loader yet (K8)
-    for (const f of d.run(ctx, opts.user, metric)) {
+    const mine = d.run(ctx, opts.user, metric);
+    for (const f of mine) {
       if (!f.id.startsWith(d.id)) throw new Error(`analysis: finding ${f.id} does not start with its detector id ${d.id}`);
       if (seen.has(f.id)) throw new Error(`analysis: finding id ${f.id} used twice`);
       seen.add(f.id);
       findings.push(f);
+    }
+    if (d.charts) {
+      const made = d.charts(ctx, opts.user, metric, mine);
+      for (const key of Object.keys(made).sort()) {
+        if (!key.startsWith(d.id)) throw new Error(`analysis: chart ${key} does not start with its detector id ${d.id}`);
+        if (charts[key] !== undefined) throw new Error(`analysis: chart ${key} made twice`);
+        const c = made[key];
+        if (c !== undefined) charts[key] = c;
+      }
     }
   }
   const { topFixes, strengths } = prioritize(findings, t);
@@ -176,6 +187,7 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
     strengths,
     rounds: roundSummaries(ctx, opts.user),
     replay: [],
+    ...(Object.keys(charts).length > 0 ? { charts: sortedRecord(charts) } : {}),
     coachVersion: COACH_VERSION,
   };
 }
@@ -183,6 +195,16 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
 /** The report as JSON (NaN → null, typed arrays → plain arrays). Byte-identical for the same input. */
 export function reportJson(report: MatchReport, indent = 0): string {
   return JSON.stringify(report, (_k, v: unknown) => (ArrayBuffer.isView(v) ? Array.from(v as unknown as ArrayLike<number>) : v), indent);
+}
+
+/** The same record with its keys in sorted order (JSON key order is insertion order). */
+function sortedRecord<T>(r: Record<string, T>): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const k of Object.keys(r).sort()) {
+    const v = r[k];
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
 }
 
 function round6(x: number): number {
