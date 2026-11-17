@@ -48,11 +48,11 @@
     "_confidence": "confidence = precision × (1 − exp(−n / nScale)) (src/coach/detect/common.ts), n = the finding's opportunities. Precision is a constant until K11 measures it.",
     "nScale": 6,
     "precision": 0.85,
-    "_impact": "impact = fights decided against the player per instance, scaled to 24 rounds (K2's scale): a flash that blinds nobody 0.15 of a fight (it still clears or delays now and then), a teammate flashed into his fight half, a death with two grenades left in a lost round a third, a rifle round with no utility a quarter, a wasted fire a quarter.",
+    "_impact": "impact = fights decided against the player per instance, scaled to 24 rounds (K2's scale): a flash that blinds nobody 0.15 of a fight (it still clears or delays now and then), a teammate flashed into his fight 0.4, a death with two grenades left in a lost round a quarter, a rifle round with no utility 0.2, a wasted fire 0.15 (a fire also buys time). Recalibrated by K5 (docs/coach/report.md); the prioritizer scales them by the lobby excess.",
     "impactWastedFlash": 0.15,
-    "impactTeamFlash": 0.5,
-    "impactUnusedDeath": 0.33,
-    "impactNoUtilRound": 0.25,
-    "impactWastedFire": 0.25
+    "impactTeamFlash": 0.4,
+    "impactUnusedDeath": 0.25,
+    "impactNoUtilRound": 0.2,
+    "impactWastedFire": 0.15
   }
 }

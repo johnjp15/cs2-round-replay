@@ -1,10 +1,53 @@
 {
-  "_note": "K2: the framework's tunables (src/coach/analyze, src/coach/report/format.ts, src/coach/detect/common.ts). docs/coach/mechanics.md, 'Framework'.",
+  "_note": "The framework's tunables (src/coach/analyze, src/coach/report/format.ts, src/coach/report/prioritize.ts, src/coach/detect/common.ts). docs/coach/report.md 'Prioritizer'.",
   "prioritizer": {
-    "_": "First prioritizer (K5 replaces it): priority = impact × confidence. At most maxFixes fixes, never two of one detector family (the id up to the second dot); up to maxStrengths strengths. A finding below minConfidence is not chosen.",
+    "_": "priority = impact × confidence × fixability × recurrence (src/coach/report/prioritize.ts). Effective confidence = the finding's × (1 − exp(−instances / instanceScale)). A fix leads only above the bar: evidence, effective confidence ≥ minConfidence, impact ≥ minImpact (fights per 24 rounds) and priority ≥ minPriority. Up to maxFixes, one per scope first, never two of one root family. The lobby excess needs minLobby other players with a value. Strengths: max(impact, strengthFloor) × confidence, up to maxStrengths. Recurrence = min(recurrenceMax, 1 + recurrenceStep × earlier matches with the family).",
     "maxFixes": 3,
     "maxStrengths": 2,
-    "minConfidence": 0.2
+    "minConfidence": 0.2,
+    "minImpact": 0.75,
+    "minPriority": 0.2,
+    "instanceScale": 3,
+    "minLobby": 3,
+    "strengthFloor": 0.5,
+    "recurrenceStep": 0.25,
+    "recurrenceMax": 2
+  },
+  "fixability": {
+    "_": "How quickly a player can fix the habit, 0–1 (longest matching detector id or finding-id prefix; default for the rest). Habits of the hands and keys are quick (counter-strafe, reloads, weapon out); buys are a decision before the round; utility needs lineups; aim and positioning are slow skills.",
+    "default": 0.7,
+    "aim.counter_strafe": 1,
+    "aim.first_bullet": 0.6,
+    "aim.spray": 0.6,
+    "aim.range_discipline": 0.9,
+    "move.reload": 1,
+    "move.caught_out": 0.9,
+    "util.flash": 0.7,
+    "util.unused": 0.9,
+    "util.buy": 0.9,
+    "util.damage": 0.7,
+    "pos.untradeable": 0.6,
+    "trade.missed": 0.7,
+    "pos.opening": 0.6,
+    "eco.sync": 0.8,
+    "eco.kit_armor": 0.9
+  },
+  "families": {
+    "_": "Root causes: findings of one family never both lead. Detectors not listed are their own family.",
+    "first-shot": ["aim.counter_strafe", "aim.first_bullet"],
+    "spray": ["aim.spray", "aim.range_discipline"],
+    "gun-ready": ["move.reload", "move.caught_out"],
+    "loadout": ["util.buy", "eco.kit_armor"],
+    "crosshair": ["aim.placement", "aim.time_to_damage"]
+  },
+  "baseline": {
+    "_": "Detectors whose impact counts every instance (not the excess over the lobby): their impact is scaled by the lobby excess of the finding's first metric. The aim detectors and pos.opening.losing already measure against the lobby or an even split.",
+    "lobby": ["move.reload", "move.caught_out", "util.flash", "util.unused", "util.buy", "util.damage", "pos.untradeable", "trade.missed", "pos.opening.ct_push", "eco.sync", "eco.kit_armor"]
+  },
+  "gate": {
+    "_": "Detectors whose precision K11 measured below minPrecision on the review set can only produce observations. measured: detector id → measured precision (none measured yet; the precisions in the area files are assumptions and do not gate).",
+    "minPrecision": 0.9,
+    "measured": {}
   },
   "confidence": {
     "_": "Sample-size factor: 1 − exp(−n / nScale), where each detector gives its own nScale in its area file; strengths also need rank ≤ strengthMaxRank among at least strengthMinLobby players with a value.",

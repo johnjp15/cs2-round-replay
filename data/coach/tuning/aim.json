@@ -36,7 +36,7 @@
     "minN": 8,
     "nScale": 20,
     "precision": 0.9,
-    "costHit": 0.3
+    "costHit": 0.25
   },
   "spray": {
     "_": "Bullets from bulletFrom on in sprays of sprayMin+ with a target. Offsets (degrees) of the zero-spread direction from the target's chest, up and right positive. A bucket of bullets is 'off' when its median offset is beyond the body silhouette's angular half-size and at least offDeg. Finding: a fix when the on-target share is in the bottom half and ≥ minBullets bullets; costPerSpray fights per drifting spray.",
@@ -57,7 +57,7 @@
     "minInstances": 2,
     "nScale": 4,
     "precision": 0.9,
-    "costPerSpray": 0.25
+    "costPerSpray": 0.15
   },
   "firstBullet": {
     "_": "First bullets with a target: hit rate overall, standing against moving (moving = above the counter-strafe threshold), per band. A fix when in the lobby's bottom half with gapToMedian below the lobby median; costPerMiss fights per extra miss.",

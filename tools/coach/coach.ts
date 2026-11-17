@@ -23,7 +23,7 @@ import { analyze, reportJson } from '../../src/coach/analyze/index';
 import { LosWorld } from '../../src/coach/derive/los';
 import type { Match } from '../../src/coach/model/match';
 import type { MatchReport } from '../../src/coach/model/report';
-import { playerLabel, rankOf, roundClock } from '../../src/coach/report/format';
+import { confidenceText, lobbyRankText, metricValue, playerLabel, roundClock } from '../../src/coach/report/format';
 import { parseDemoNode } from './parse-node';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -134,24 +134,20 @@ function loadLos(map: string): LosWorld | null {
 }
 
 function fmtValue(v: number, unit: string): string {
-  if (!Number.isFinite(v)) return '–';
-  if (unit === '%') return `${(v * 100).toFixed(1)} %`;
-  if (unit === 'deg') return `${v.toFixed(2)}°`;
-  if (unit === 'x') return `${v.toFixed(2)}×`;
-  if (unit === 'ms') return `${v.toFixed(0)} ms`;
-  return Number.isInteger(v) ? `${v}` : v.toFixed(2);
+  return metricValue(v, unit);
 }
 
 function printReport(rep: MatchReport, match: Match): void {
-  const lobbyN = (l: number[]): number => l.filter((x) => Number.isFinite(x)).length;
   const byId = new Map(rep.findings.map((f) => [f.id, f]));
   const show = (id: string, k: number, kind: string): void => {
     const f = byId.get(id);
     if (!f) return;
-    console.log(`\n${kind} ${k}. ${f.title}   [${f.id}; impact ${f.impact.toFixed(2)} × confidence ${f.confidence.toFixed(2)} = ${f.priority.toFixed(2)}]`);
+    const sc = f.scoring;
+    const why = sc ? `impact ${sc.rawImpact.toFixed(2)} × excess ${sc.excess.toFixed(2)} = ${f.impact.toFixed(2)}; confidence ${sc.confidence.toFixed(2)} (${confidenceText(sc.confidence)}); fixability ${sc.fixability}; recurrence ${sc.recurrence}` : `impact ${f.impact.toFixed(2)} × confidence ${f.confidence.toFixed(2)}`;
+    console.log(`\n${kind} ${k}. ${f.title}   [${f.id}; ${why}; priority ${f.priority.toFixed(2)}]`);
     console.log(`   ${f.summary}`);
     if (f.why) console.log(`   why: ${f.why}`);
-    for (const m of f.metrics) console.log(`   · ${m.id} = ${fmtValue(m.value, m.unit)} (n ${m.n}), ${m.lobbyRank > 0 ? rankOf(m.lobbyRank, lobbyN(m.lobby)) : 'unranked'} in the lobby`);
+    for (const m of f.metrics) console.log(`   · ${m.id} = ${fmtValue(m.value, m.unit)} (n ${m.n}), ${lobbyRankText(m) || 'unranked'} in the lobby`);
     for (const a of f.advice) console.log(`   → ${a.text}${a.drill ? ` Drill: ${a.drill}` : ''}`);
     for (const e of f.evidence) console.log(`   ▶ ${e.kind} ${roundClock(match, e.focus)} (ticks ${e.tick0}–${e.tick1}, focus ${e.focus}): ${e.caption}`);
   };

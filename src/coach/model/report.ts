@@ -106,6 +106,11 @@ export interface MetricValue {
   n: number;
   /** 1 = best of the lobby. */
   lobbyRank: number;
+  /** The metric's label and skill area (K5; optional: older reports lack them). */
+  label?: string;
+  area?: FindingArea;
+  /** Rank direction (K5; optional: older reports lack it, and the page then infers it from the rank). */
+  better?: 'higher' | 'lower';
   /** The same metric for every slot (index = slot; NaN where not defined). */
   lobby: number[];
   /** Earlier matches of the same user, oldest first. */
@@ -139,6 +144,28 @@ export interface Finding {
   impact: number;
   /** Set by the prioritizer. */
   priority: number;
+  /** How the prioritizer scored it (K5, `src/coach/report/prioritize.ts`); absent before it ran. */
+  scoring?: FindingScoring;
+}
+
+/** The prioritizer's factors for one finding (docs/coach/report.md "Prioritizer"). */
+export interface FindingScoring {
+  /** The detector's own impact (before the lobby excess). */
+  rawImpact: number;
+  /** The detector's polarity (before the precision gate). */
+  polarity: Polarity;
+  /** Root family: findings of one family never both lead. */
+  family: string;
+  /** Lobby excess of the key metric, 0–1 (1 = not scaled). `impact` = rawImpact × excess. */
+  excess: number;
+  /** Effective confidence: `confidence` × the instance factor. */
+  confidence: number;
+  fixability: number;
+  recurrence: number;
+  /** Demoted to an observation by the precision gate. */
+  gated: boolean;
+  /** A fix that clears the bar (may lead). */
+  bar: boolean;
 }
 
 /** One round's summary line for the round strip. */

@@ -21,8 +21,8 @@
     "_confidence": "As utility.json scoring.",
     "nScale": 4,
     "precision": 0.85,
-    "_impact": "Fights per round: a buy out of sync with three teammates half a fight, a missing kit / armor / leftover money a third.",
-    "impactSyncRound": 0.5,
-    "impactKitArmorRound": 0.33
+    "_impact": "Fights per round on K5's unified scale (docs/coach/report.md): a buy out of sync with three teammates a quarter of a fight, a missing kit / armor / leftover money a quarter. The prioritizer scales both by the lobby excess.",
+    "impactSyncRound": 0.25,
+    "impactKitArmorRound": 0.25
   }
 }

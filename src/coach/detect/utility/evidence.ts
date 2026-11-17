@@ -4,7 +4,7 @@
 import type { AnalysisContext } from '../../analyze/context';
 import { pos, rowAt, secToTicks, type Vec3 } from '../../derive/positioning/grid';
 import type { Annotation, ColorRole, Evidence, MetricValue } from '../../model/report';
-import { fixed, grouped, playerLabel, rankOf } from '../../report/format';
+import { fixed, grouped, lobbyRankText, playerLabel } from '../../report/format';
 
 /** A player's feet position at a tick. */
 export function at(ctx: AnalysisContext, tick: number, p: number): Vec3 {
@@ -62,10 +62,9 @@ export function present(...mvs: (MetricValue | null)[]): MetricValue[] {
   return mvs.filter((m): m is MetricValue => m !== null && Number.isFinite(m.value));
 }
 
-/** "4th of 10" for a metric, or '' without a rank. */
+/** "4th of 10" (or "tied 2nd of 8") for a metric, or '' without a rank. */
 export function rankText(mv: MetricValue | null): string {
-  if (mv === null || mv.lobbyRank < 1) return '';
-  return rankOf(mv.lobbyRank, mv.lobby.filter((v) => Number.isFinite(v)).length);
+  return lobbyRankText(mv);
 }
 
 /** Seconds with one decimal: "2.3 s". */
