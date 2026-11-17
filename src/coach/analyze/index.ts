@@ -5,8 +5,7 @@
  * 2. Compute every metric for every slot: the lobby values, and ranks (1 = best; ties share a rank, competition
  *    ranking 1, 2, 2, 4; `better` decides the direction; slots without a value get NaN and rank 0).
  * 3. Run every detector for the user (skipping those whose `needs` are missing: `los` without a sight mesh,
- *    `knowledge` on a map without `data/coach/knowledge/<map>.json`) and collect the charts detectors return
- *    (`Detector.charts`) into `MatchReport.charts`, keys sorted.
+ *    `knowledge` on a map without `data/coach/knowledge/<map>.json`).
  * 4. First prioritizer: `priority = impact × confidence`; fixes sorted by priority (then id); the top `maxFixes`, never
  *    two from the same detector family (the id up to the second dot) and never one without evidence; strengths = up to
  *    `maxStrengths` `strength` findings by priority. K5 replaces this.
@@ -24,8 +23,8 @@ import type { MetricDef } from '../metrics/types';
 import type { Match, MatchRound } from '../model/match';
 import type { RawDemo } from '../model/raw';
 import { REPORT_FORMAT, type ChartPayload, type Finding, type MatchReport, type MetricValue, type RoundSummary } from '../model/report';
-import { knowledgeFor } from '../derive/strategy/knowledge';
 import type { CoachTuning } from '../tuning';
+import { knowledgeFor } from '../derive/strategy/knowledge';
 import { createContext, type AnalysisContext } from './context';
 import { REPORT_TUNING, type ReportTuning } from './report-tuning';
 
@@ -153,28 +152,28 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
     return m === undefined ? null : metricValueFor(m, opts.user);
   };
   const findings: Finding[] = [];
-  const seen = new Set<string>();
   const charts: Record<string, ChartPayload> = {};
+  const seen = new Set<string>();
   for (const d of opts.detectors ?? ALL_DETECTORS) {
     if (d.needs?.includes('los') === true && ctx.los === null) continue;
     if (d.needs?.includes('knowledge') === true && knowledgeFor(match.meta.map) === null) continue;
-    const own: Finding[] = [];
-    for (const f of d.run(ctx, opts.user, metric)) {
+    const mine = d.run(ctx, opts.user, metric);
+    for (const f of mine) {
       if (!f.id.startsWith(d.id)) throw new Error(`analysis: finding ${f.id} does not start with its detector id ${d.id}`);
       if (seen.has(f.id)) throw new Error(`analysis: finding id ${f.id} used twice`);
       seen.add(f.id);
       findings.push(f);
-      own.push(f);
     }
     if (d.charts) {
-      const c = d.charts(ctx, opts.user, own);
-      for (const k of Object.keys(c).sort()) {
-        if (charts[k] !== undefined) throw new Error(`analysis: chart ${k} filled twice`);
-        charts[k] = c[k] as ChartPayload;
+      const made = d.charts(ctx, opts.user, metric, mine);
+      for (const key of Object.keys(made).sort()) {
+        if (!key.startsWith(d.id)) throw new Error(`analysis: chart ${key} does not start with its detector id ${d.id}`);
+        if (charts[key] !== undefined) throw new Error(`analysis: chart ${key} made twice`);
+        const c = made[key];
+        if (c !== undefined) charts[key] = c;
       }
     }
   }
-  const chartKeys = Object.keys(charts).sort();
   const { topFixes, strengths } = prioritize(findings, t);
   return {
     format: REPORT_FORMAT,
@@ -190,7 +189,7 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
     strengths,
     rounds: roundSummaries(ctx, opts.user),
     replay: [],
-    ...(chartKeys.length > 0 ? { charts: Object.fromEntries(chartKeys.map((k) => [k, charts[k] as ChartPayload])) } : {}),
+    ...(Object.keys(charts).length > 0 ? { charts: sortedRecord(charts) } : {}),
     coachVersion: COACH_VERSION,
   };
 }
@@ -198,6 +197,16 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
 /** The report as JSON (NaN → null, typed arrays → plain arrays). Byte-identical for the same input. */
 export function reportJson(report: MatchReport, indent = 0): string {
   return JSON.stringify(report, (_k, v: unknown) => (ArrayBuffer.isView(v) ? Array.from(v as unknown as ArrayLike<number>) : v), indent);
+}
+
+/** The same record with its keys in sorted order (JSON key order is insertion order). */
+function sortedRecord<T>(r: Record<string, T>): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const k of Object.keys(r).sort()) {
+    const v = r[k];
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
 }
 
 function round6(x: number): number {

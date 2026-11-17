@@ -78,7 +78,7 @@ export const setupDetector: Detector = {
       impact: fix ? patternImpact(ctx, slot, lost.length) : 0,
     })];
   },
-  charts(ctx, slot, findings) {
+  charts(ctx, slot, _metric, findings) {
     return setupBoards(ctx, slot, findings);
   },
 };

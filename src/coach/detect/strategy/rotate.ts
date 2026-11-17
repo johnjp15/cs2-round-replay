@@ -72,7 +72,7 @@ export const rotateDetector: Detector = {
       confidence: patternConfidence(rows.length), impact: patternImpact(ctx, slot, lost),
     })];
   },
-  charts(ctx, slot, findings) {
+  charts(ctx, slot, _metric, findings) {
     return rotateBoards(ctx, slot, findings);
   },
 };

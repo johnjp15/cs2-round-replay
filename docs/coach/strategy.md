@@ -98,8 +98,8 @@ map per round of the user's side, the dots at the key tick (the Ts through the l
 moment), the lane or site coloured (amber taken untouched / blue contested; red light / blue defended; green behind
 utility / red dry), a caption with the outcome, and a link to the evidence of that round when there is one.
 
-To return charts a detector implements the new optional `Detector.charts(ctx, slot, findings)`; `analyze()` collects
-them into `MatchReport.charts` with sorted keys (K5's contract).
+Charts go through K5's optional `Detector.charts(ctx, slot, metric, findings)`; `analyze()` collects them into
+`MatchReport.charts` with sorted keys.
 
 **Confidence and impact.** Confidence = precision 0.7 (until K11 measures it) × (1 − e^(−rounds / 6)): 9 rounds give
 0.54, 4 rounds 0.34, 24 rounds 0.69. Impact = rounds lost to the pattern per 24 rounds × 0.3 (a round is worth

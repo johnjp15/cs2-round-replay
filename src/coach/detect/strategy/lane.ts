@@ -125,7 +125,7 @@ export const laneDetector: Detector = {
       roundsLost: s.openLost, confidence: patternConfidence(n), impact: patternImpact(ctx, slot, s.punished.filter((r) => r.g.round.winnerSide === 'T').length),
     })];
   },
-  charts(ctx, slot, findings) {
+  charts(ctx, slot, _metric, findings) {
     return laneBoards(ctx, slot, findings);
   },
 };

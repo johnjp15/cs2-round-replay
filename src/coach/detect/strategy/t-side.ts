@@ -81,7 +81,7 @@ export const tSideDetector: Detector = {
       confidence: patternConfidence(hits.length), impact: fix ? patternImpact(ctx, slot, dry.length - dw) : 0,
     })];
   },
-  charts(ctx, slot, findings) {
+  charts(ctx, slot, _metric, findings) {
     return tBoards(ctx, slot, findings);
   },
 };
