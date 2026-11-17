@@ -152,8 +152,8 @@ is a constant until K11 measures it (utility 0.85, positioning 0.8, economy 0.85
 K2's scale (fights decided against the player, per 24 rounds, `perMatch`), with an assumed fights-per-instance weight:
 flash that blinds nobody 0.15, teammate flashed into a fight 0.5, death with grenades left in a lost round 0.33, rifle
 round without utility 0.25, wasted fire 0.25, isolated untraded death 0.5, missed trade 1, opening duel lost beyond an
-even split 1, CT push death 1, buy out of sync 0.5, loadout hole 0.33. These are judgement calls for K5/K9 to
-recalibrate. Strengths carry impact 0.
+even split 1, CT push death 1, buy out of sync 0.5, loadout hole 0.33. These are judgement calls; K5 recalibrated
+them (docs/coach/report.md, "Prioritizer"). Strengths carry impact 0.
 
 Evidence is always `replay`, two or three moments picked with K2's `pickClearest` (one per round where possible):
 flashes draw the throw line, the burst and a label per blinded player ("A4 3.3 s"); deaths draw the 900-unit trade

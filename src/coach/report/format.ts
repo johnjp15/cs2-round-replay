@@ -123,3 +123,77 @@ export function weaponName(item: string): string {
   }
   return item === 'knife' ? 'knife' : item;
 }
+
+/**
+ * Metric values (K5). **A metric's value is stored in the unit its `unit` names, except `%`: a `%` metric stores a
+ * 0–1 share** (0.78 = 78 %), like every share the detectors compute. Every renderer (the page, the CLI, the docs)
+ * formats through `metricValue`, so nothing prints a raw share.
+ *
+ * | unit | stored | shown |
+ * | --- | --- | --- |
+ * | `%` | 0–1 share | `78 %` |
+ * | `deg` | degrees | `1.8°` |
+ * | `ms` | milliseconds | `125 ms` |
+ * | `x` | ratio | `16.9×` |
+ * | `units` | Source units | `942 units` |
+ * | `count` | a count or a mean count | `5`, `0.14` |
+ * | `per_round` | per round | `0.56 / round` |
+ * | `$/round` | dollars per round | `$122 / round` |
+ * | anything else | as is | `<value> <unit>` |
+ */
+export function metricValue(v: number, unit: string): string {
+  if (!Number.isFinite(v)) return '–';
+  switch (unit) {
+    case '%': return pct(v);
+    case 'deg': return deg(v);
+    case 'ms': return ms(v);
+    case 'x': return times(v);
+    case 'units': return units(v);
+    case 'count': return Number.isInteger(v) ? grouped(v) : fixed(v, 2);
+    case 'per_round': return `${fixed(v, 2)} / round`;
+    case '$/round': return `$${grouped(v)} / round`;
+    default: return unit ? `${fixed(v, 2)} ${unit}` : fixed(v, 2);
+  }
+}
+
+/** A value on the metric's own axis as a plain number (for chart scales): `%` → percent, the rest unchanged. */
+export function metricAxisValue(v: number, unit: string): number {
+  return unit === '%' ? v * 100 : v;
+}
+
+/** A metric's rank among the players with a value: competition rank (1 = best), how many have a value, how many share it. */
+export interface LobbyRankInfo {
+  rank: number;
+  of: number;
+  /** Players with exactly the same value (the user included): 1 = no tie. */
+  tied: number;
+}
+
+/** Rank information of a slot's value, or null without a value or a rank. */
+export function lobbyRankInfo(mv: { value: number; lobbyRank: number; lobby: readonly number[] }): LobbyRankInfo | null {
+  if (!Number.isFinite(mv.value) || mv.lobbyRank < 1) return null;
+  const vals = mv.lobby.filter((v) => Number.isFinite(v));
+  return { rank: mv.lobbyRank, of: vals.length, tied: vals.filter((v) => v === mv.value).length };
+}
+
+/** "8th of 10", "tied 2nd of 8", "all 8 tied"; '' without a rank. */
+export function rankPhrase(r: LobbyRankInfo | null): string {
+  if (r === null) return '';
+  if (r.tied >= r.of && r.of > 1) return `all ${r.of} tied`;
+  return `${r.tied > 1 ? 'tied ' : ''}${rankOf(r.rank, r.of)}`;
+}
+
+/** The same for a metric value. */
+export function lobbyRankText(mv: { value: number; lobbyRank: number; lobby: readonly number[] } | null): string {
+  return mv === null ? '' : rankPhrase(lobbyRankInfo(mv));
+}
+
+/** Confidence in plain words: ≥ 0.6 "high", ≥ 0.35 "moderate", else "low". */
+export function confidenceWord(c: number): 'high' | 'moderate' | 'low' {
+  return c >= 0.6 ? 'high' : c >= 0.35 ? 'moderate' : 'low';
+}
+
+/** "high confidence (0.74)". */
+export function confidenceText(c: number): string {
+  return `${confidenceWord(c)} confidence`;
+}

@@ -11,6 +11,8 @@ import type { ReportMessage } from './client';
 import { deleteMatch, getEntry, listMatches, loadReport, matchId, putReport, saveMatch } from './library';
 import type { LibraryEntry } from './library';
 import { MatchPage } from './MatchPage';
+import { setHideNames, slotLabel, useHideNames } from './display';
+import { download, exportFeedback } from './feedback';
 import { mapName } from './names';
 import type { ParsedInfo, PickerPlayer, Stage } from './protocol';
 import { rememberUser, rememberedUser } from './prefs';
@@ -76,6 +78,7 @@ function Progress(props: { stage: Stage; fraction: number; fileName: string }) {
 function Picker(props: { info: ParsedInfo; current: number | null; onPick: (p: PickerPlayer) => void; onCancel?: () => void }) {
   const { info } = props;
   const remembered = rememberedUser();
+  const hide = useHideNames();
   const team = (t: 'A' | 'B') => info.players.filter((p) => p.team === t).sort((a, b) => b.kills - a.kills || a.slot - b.slot);
   return (
     <section class="picker" aria-labelledby="picker-h" data-testid="picker">
@@ -91,7 +94,7 @@ function Picker(props: { info: ParsedInfo; current: number | null; onPick: (p: P
                 <tr key={p.slot} class={`${p.slot === props.current ? 'on' : ''} ${p.steamId === remembered ? 'remembered' : ''}`}>
                   <td>
                     <button type="button" class="pick" data-testid="pick" data-slot={p.slot} onClick={() => props.onPick(p)}>
-                      {p.name}{p.bot ? ' (bot)' : ''}
+                      {hide ? slotLabel(info.players, p.slot) : p.name}{p.bot ? ' (bot)' : ''}
                     </button>
                   </td>
                   <td class="num">{p.kills}</td><td class="num">{p.deaths}</td><td class="num">{p.assists}</td><td class="num">{Math.round(p.adr)}</td>
@@ -106,7 +109,21 @@ function Picker(props: { info: ParsedInfo; current: number | null; onPick: (p: P
   );
 }
 
+async function exportAllFeedback(entries: LibraryEntry[]): Promise<void> {
+  const meta: Parameters<typeof exportFeedback>[0] = {};
+  for (const e of entries) {
+    const r = await loadReport(e.id);
+    const titles: Record<string, string> = {};
+    for (const f of r?.findings ?? []) titles[f.id] = f.title;
+    meta[e.id] = { map: e.map, coachVersion: e.coachVersion, user: e.user.label ?? e.user.team, titles };
+  }
+  const out = exportFeedback(meta);
+  coach['lastFeedbackExport'] = out;
+  download('cs2-coach-feedback.json', out);
+}
+
 function Library(props: { entries: LibraryEntry[]; onDelete: (id: string) => void }) {
+  const hide = useHideNames();
   if (props.entries.length === 0) return <p class="empty">Analyzed matches appear here and stay in this browser.</p>;
   return (
     <table class="library" data-testid="library">
@@ -116,7 +133,7 @@ function Library(props: { entries: LibraryEntry[]; onDelete: (id: string) => voi
           <tr key={e.id}>
             <td><a href={matchHref(e.id)} data-testid="open-match">{mapName(e.map)}</a></td>
             <td class={`num ${e.score[0] > e.score[1] ? 'win' : e.score[0] < e.score[1] ? 'loss' : ''}`}>{e.score[0]}–{e.score[1]}</td>
-            <td>{e.user.name}</td>
+            <td>{hide ? (e.user.label ?? e.user.team) : e.user.name}</td>
             <td class="num">{e.sides.T.won}/{e.sides.T.played}</td>
             <td class="num">{e.sides.CT.won}/{e.sides.CT.played}</td>
             <td class="dim">{new Date(e.addedAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
@@ -141,6 +158,7 @@ function App() {
   const [current, setCurrent] = useState<Current | null>(null);
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [opening, setOpening] = useState(false);
+  const hideNow = useHideNames();
 
   const refresh = (): void => { void listMatches().then(setEntries).catch((e: unknown) => setError(String(e))); };
   useEffect(refresh, []);
@@ -249,6 +267,10 @@ function App() {
       <section class="lib" aria-labelledby="lib-h">
         <h2 id="lib-h">Library</h2>
         <Library entries={entries} onDelete={onDelete} />
+        <p class="lib-tools">
+          <label class="hide-names"><input type="checkbox" checked={hideNow} onChange={(e) => setHideNames((e.currentTarget as HTMLInputElement).checked)} /> Hide names</label>
+          {entries.length > 0 && <button type="button" class="link" data-testid="export-feedback" onClick={() => { void exportAllFeedback(entries); }}>Export feedback (JSON)</button>}
+        </p>
       </section>
     </main>
   );

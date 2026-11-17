@@ -16,7 +16,7 @@ export interface MetricDef {
   /** `<detector id>.<name>`, e.g. `aim.counter_strafe.early_share`. Unique. */
   readonly id: string;
   readonly label: string;
-  /** `%` (value is a 0–1 share), `ms`, `deg`, `count`, `per_round`, `x`, `units`. */
+  /** `%` (value is a 0–1 share), `ms`, `deg`, `count`, `per_round`, `$/round`, `x`, `units`; shown by `metricValue` (report/format.ts). */
   readonly unit: string;
   readonly better: 'higher' | 'lower';
   readonly area: FindingArea;

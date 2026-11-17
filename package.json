@@ -58,6 +58,7 @@
     "test:e2e:ak-browser": "tsx tools/e2e/ak-browser.ts",
     "test:e2e:mobile": "tsx tools/e2e/mobile3d.ts",
     "dev:coach": "vite --config vite.coach.config.ts",
+    "golden:coach": "UPDATE_GOLDEN=1 vitest run tests/coach/golden-report.test.ts",
     "build:coach": "tsc --noEmit && vite build --config vite.coach.config.ts",
     "preview:coach": "vite preview --config vite.coach.config.ts",
     "coach": "tsx tools/coach/coach.ts",

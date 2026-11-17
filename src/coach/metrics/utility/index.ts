@@ -47,7 +47,7 @@ export const UTILITY_METRICS: readonly MetricDef[] = [
     },
   },
   {
-    id: 'util.unused.value_per_round', label: 'Dollars of grenades unused at death or round end, per round', unit: 'per_round', better: 'lower', area: 'utility',
+    id: 'util.unused.value_per_round', label: 'Dollars of grenades unused at death or round end, per round', unit: '$/round', better: 'lower', area: 'utility',
     compute(ctx, slot) {
       const s = unusedStats(ctx, slot);
       return s.rounds === 0 ? null : { value: (s.deathValue + s.endValue) / s.rounds, n: s.rounds };

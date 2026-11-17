@@ -15,10 +15,10 @@ import { fourPlayers, roundsFrom, synthDemo } from './synth';
 
 const ev: Evidence = { kind: 'replay', round: 1, tick0: 0, tick1: 10, focus: 5, players: [0], annotations: [], caption: 'x' };
 
-function finding(id: string, polarity: Finding['polarity'], impact: number, confidence: number, evidence: Evidence[] = [ev]): Finding {
+function finding(id: string, polarity: Finding['polarity'], impact: number, confidence: number, evidence: Evidence[] = [ev], instances = 10): Finding {
   return makeFinding({
     id, area: 'aim', scope: 'mechanics', polarity, title: id, summary: id, why: '', advice: [], metrics: [], evidence,
-    instances: 1, opportunities: 1, rounds: [1], confidence, impact,
+    instances, opportunities: 10, rounds: [1], confidence, impact,
   });
 }
 
@@ -64,12 +64,13 @@ describe('analysis framework', () => {
     expect(rep.metrics[0]?.lobby.map((x) => (Number.isNaN(x) ? null : x))).toEqual([0, 1, 2, null]);
     expect(rep.findings.map((f) => f.id)).toEqual(['aim.test.fix']);
     expect(rep.topFixes).toEqual(['aim.test.fix']);
-    expect(rep.findings[0]?.priority).toBe(1);
+    // K5's prioritizer: impact 2 × confidence 0.5 × instance factor (10 instances) × default fixability 0.7.
+    expect(rep.findings[0]?.priority).toBeCloseTo(2 * 0.5 * (1 - Math.exp(-10 / 3)) * 0.7, 3);
     expect(rep.rounds.map((r) => r.number)).toEqual([1, 2]);
     expect(JSON.parse(reportJson(rep)).metrics[0].lobby).toEqual([0, 1, 2, null]);
   });
 
-  it('prioritizer: impact × confidence, top three, one per family, evidence required, two strengths', () => {
+  it('prioritizer (K5; tests/coach/prioritize.test.ts has the rules): top three, one per root family, evidence required, two strengths', () => {
     expect(family('aim.spray.vertical')).toBe('aim.spray');
     const fs = [
       finding('aim.spray.vertical', 'fix', 5, 0.9),
@@ -83,6 +84,7 @@ describe('analysis framework', () => {
       finding('aim.spray.s', 'strength', 0.5, 0.9),
     ];
     const { topFixes, strengths } = prioritize(fs);
+    // move.reload and move.caught_out share the root family 'gun-ready'; aim.range_discipline and aim.spray 'spray'.
     expect(topFixes).toEqual(['aim.spray.vertical', 'move.reload.exposed', 'aim.counter_strafe.early']);
     expect(strengths).toEqual(['aim.first_bullet.s', 'aim.range_discipline.s']);
   });

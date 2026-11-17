@@ -7,9 +7,9 @@
     "minInstances": 2,
     "nScale": 6,
     "precision": 0.85,
-    "costDeath": 1,
-    "costNear": 0.25,
-    "costFull": 0.05
+    "costDeath": 0.6,
+    "costNear": 0.2,
+    "costFull": 0.02
   },
   "caughtOut": {
     "_": "Deaths with the knife or a grenade in hand (row before the death). Not counted: a grenade thrown within throwGraceMs before the death toward the killer (view yaw within throwAimDeg of the killer).",
@@ -19,6 +19,6 @@
     "minInstances": 2,
     "nScale": 3,
     "precision": 0.85,
-    "costDeath": 0.7
+    "costDeath": 0.5
   }
 }

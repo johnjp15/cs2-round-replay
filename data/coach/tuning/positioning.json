@@ -35,10 +35,10 @@
     "_confidence": "As utility.json scoring.",
     "nScale": 5,
     "precision": 0.8,
-    "_impact": "Fights per instance: an untraded death with nobody in range half a fight, a missed trade one, an opening duel lost beyond an even split one, a CT first death pushing one.",
-    "impactUntradeable": 0.5,
-    "impactMissedTrade": 1,
+    "_impact": "Fights per instance on K5's unified scale (docs/coach/report.md): an untraded death with nobody in range 0.4 (a trade would win the kill back about 40 % of the time), a missed trade 0.5 (an average player converts about half), an opening duel lost beyond an even split one, a CT first death pushing 0.7. The prioritizer scales untradeable, missed trades and push deaths by the lobby excess.",
+    "impactUntradeable": 0.4,
+    "impactMissedTrade": 0.5,
     "impactOpeningLoss": 1,
-    "impactPushDeath": 1
+    "impactPushDeath": 0.7
   }
 }

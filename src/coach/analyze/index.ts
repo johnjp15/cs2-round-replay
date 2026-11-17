@@ -5,9 +5,9 @@
  * 2. Compute every metric for every slot: the lobby values, and ranks (1 = best; ties share a rank, competition
  *    ranking 1, 2, 2, 4; `better` decides the direction; slots without a value get NaN and rank 0).
  * 3. Run every detector for the user (skipping those whose `needs` are missing).
- * 4. First prioritizer: `priority = impact × confidence`; fixes sorted by priority (then id); the top `maxFixes`, never
- *    two from the same detector family (the id up to the second dot) and never one without evidence; strengths = up to
- *    `maxStrengths` `strength` findings by priority. K5 replaces this.
+ * 4. Prioritizer (`src/coach/report/prioritize.ts`, K5): impact on one scale, × confidence × fixability × recurrence;
+ *    up to three fixes for spread, never two of one root family; the precision gate; up to two strengths. Then the
+ *    duel and spray evidence get their series (`src/coach/report/evidence-series.ts`).
  * 5. Fill `MatchReport`: match facts, the user's value of every metric (with the whole lobby), findings, top fixes,
  *    strengths, round summaries. `replay` stays empty here (K3's `src/coach/report/replay.ts`).
  *
@@ -21,10 +21,14 @@ import { ALL_METRICS } from '../metrics/index';
 import type { MetricDef } from '../metrics/types';
 import type { Match, MatchRound } from '../model/match';
 import type { RawDemo } from '../model/raw';
-import { REPORT_FORMAT, type Finding, type MatchReport, type MetricValue, type RoundSummary } from '../model/report';
+import { REPORT_FORMAT, type ChartPayload, type Finding, type MatchReport, type MetricValue, type RoundSummary } from '../model/report';
 import type { CoachTuning } from '../tuning';
 import { createContext, type AnalysisContext } from './context';
 import { REPORT_TUNING, type ReportTuning } from './report-tuning';
+import { detectorOf, prioritize } from '../report/prioritize';
+import { addEvidenceSeries } from '../report/evidence-series';
+
+export { prioritize } from '../report/prioritize';
 
 export { createContext } from './context';
 export type { AnalysisContext, TableDef } from './context';
@@ -40,6 +44,8 @@ export interface AnalyzeOptions {
   /** Override the metric and detector lists (tests). */
   metrics?: readonly MetricDef[];
   detectors?: readonly Detector[];
+  /** Earlier matches that had each root family (match history; absent = none). */
+  recurrence?: Readonly<Record<string, number>>;
 }
 
 /** One metric for every slot. */
@@ -79,31 +85,12 @@ export function computeLobby(ctx: AnalysisContext, defs: readonly MetricDef[]): 
 
 /** The MetricValue of one slot. */
 export function metricValueFor(m: LobbyMetric, slot: number): MetricValue {
-  return { id: m.def.id, value: m.values[slot] ?? NaN, unit: m.def.unit, n: m.n[slot] ?? 0, lobbyRank: m.ranks[slot] ?? 0, lobby: [...m.values] };
+  return { id: m.def.id, value: m.values[slot] ?? NaN, unit: m.def.unit, n: m.n[slot] ?? 0, lobbyRank: m.ranks[slot] ?? 0, label: m.def.label, area: m.def.area, better: m.def.better, lobby: [...m.values] };
 }
 
 /** Detector family: the id up to the second dot (`aim.counter_strafe.early` → `aim.counter_strafe`). */
 export function family(id: string): string {
-  const parts = id.split('.');
-  return parts.slice(0, 2).join('.');
-}
-
-/** The first prioritizer (see the file comment). Sets `priority` on every finding; returns the chosen ids. */
-export function prioritize(findings: Finding[], t: ReportTuning = REPORT_TUNING): { topFixes: string[]; strengths: string[] } {
-  for (const f of findings) f.priority = round6(f.impact * f.confidence);
-  const order = (a: Finding, b: Finding): number => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-  const eligible = (f: Finding): boolean => f.evidence.length > 0 && f.confidence >= t.prioritizer.minConfidence;
-  const fixes = findings.filter((f) => f.polarity === 'fix' && eligible(f)).sort(order);
-  const topFixes: string[] = [];
-  const families = new Set<string>();
-  for (const f of fixes) {
-    if (topFixes.length >= t.prioritizer.maxFixes) break;
-    if (families.has(family(f.id))) continue;
-    families.add(family(f.id));
-    topFixes.push(f.id);
-  }
-  const strengths = findings.filter((f) => f.polarity === 'strength' && eligible(f)).sort(order).slice(0, t.prioritizer.maxStrengths).map((f) => f.id);
-  return { topFixes, strengths };
+  return detectorOf(id);
 }
 
 function publicRound(r: MatchRound): Omit<MatchRound, 'rowStart' | 'rowEnd' | 'refRow'> {
@@ -150,18 +137,31 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
     return m === undefined ? null : metricValueFor(m, opts.user);
   };
   const findings: Finding[] = [];
+  const charts: Record<string, ChartPayload> = {};
   const seen = new Set<string>();
   for (const d of opts.detectors ?? ALL_DETECTORS) {
     if (d.needs?.includes('los') === true && ctx.los === null) continue;
     if (d.needs?.includes('knowledge') === true) continue; // no map knowledge loader yet (K8)
-    for (const f of d.run(ctx, opts.user, metric)) {
+    const mine = d.run(ctx, opts.user, metric);
+    for (const f of mine) {
       if (!f.id.startsWith(d.id)) throw new Error(`analysis: finding ${f.id} does not start with its detector id ${d.id}`);
       if (seen.has(f.id)) throw new Error(`analysis: finding id ${f.id} used twice`);
       seen.add(f.id);
       findings.push(f);
     }
+    if (d.charts) {
+      const made = d.charts(ctx, opts.user, metric, mine);
+      for (const key of Object.keys(made).sort()) {
+        if (!key.startsWith(d.id)) throw new Error(`analysis: chart ${key} does not start with its detector id ${d.id}`);
+        if (charts[key] !== undefined) throw new Error(`analysis: chart ${key} made twice`);
+        const c = made[key];
+        if (c !== undefined) charts[key] = c;
+      }
+    }
   }
-  const { topFixes, strengths } = prioritize(findings, t);
+  const better = new Map(lobby.map((m) => [m.def.id, m.def.better]));
+  const { topFixes, strengths } = prioritize(findings, { tuning: t, user: opts.user, better: (id) => better.get(id) ?? null, ...(opts.recurrence ? { recurrence: opts.recurrence } : {}) });
+  for (const f of findings) addEvidenceSeries(ctx, f);
   return {
     format: REPORT_FORMAT,
     match: {
@@ -176,6 +176,7 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
     strengths,
     rounds: roundSummaries(ctx, opts.user),
     replay: [],
+    ...(Object.keys(charts).length > 0 ? { charts: sortedRecord(charts) } : {}),
     coachVersion: COACH_VERSION,
   };
 }
@@ -183,6 +184,16 @@ export function analyze(raw: RawDemo, match: Match, opts: AnalyzeOptions): Match
 /** The report as JSON (NaN → null, typed arrays → plain arrays). Byte-identical for the same input. */
 export function reportJson(report: MatchReport, indent = 0): string {
   return JSON.stringify(report, (_k, v: unknown) => (ArrayBuffer.isView(v) ? Array.from(v as unknown as ArrayLike<number>) : v), indent);
+}
+
+/** The same record with its keys in sorted order (JSON key order is insertion order). */
+function sortedRecord<T>(r: Record<string, T>): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const k of Object.keys(r).sort()) {
+    const v = r[k];
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
 }
 
 function round6(x: number): number {

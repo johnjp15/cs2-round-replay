@@ -1,6 +1,6 @@
 /**
- * Contract 2 of the demo coach: what detectors produce and the page renders. Types only; nothing computes them yet
- * (K2 and later: detectors; K5: the prioritizer and `MatchReport`).
+ * Contract 2 of the demo coach: what detectors produce and the page renders. Types only (detectors: K2, K4 and later;
+ * the prioritizer, evidence series and chart renderers: K5).
  *
  * World coordinates are Source units in the map's frame (the same as `RawDemo.ticks.x/y/z`); ticks are demo ticks;
  * players are slots of `RawDemo.players` / `Match.players`.
@@ -37,6 +37,51 @@ export type Annotation =
   | (AnnotationBase & { kind: 'zone'; polygon: [number, number][] })
   | (AnnotationBase & { kind: 'label'; at: [number, number, number]; text: string });
 
+/**
+ * One short channel of numbers over an evidence window, for the duel view and the spray plot (K5,
+ * `src/coach/report/evidence-series.ts`). Values are plain numbers in `unit`; NaN (null in JSON) = no sample.
+ *
+ * - `axis: 'tick'`: one value per demo tick, `x[i]` = the tick of `values[i]` (ascending).
+ * - `axis: 'bullet'`: one value per bullet of a spray, `x[i]` = the bullet number (1 = first bullet).
+ *
+ * `ref` is an optional horizontal reference line (e.g. the speed below which a weapon has no movement inaccuracy).
+ * `marks` are per-sample categories the viewer draws as markers (e.g. `hit` / `miss` on the shot ticks); same length
+ * as `values` when present, `''` = no mark.
+ */
+export interface EvidenceSeries {
+  /** Channel name, e.g. `speed`, `inaccuracy`, `angle`, `duck`, `shots`, `aim_x`, `aim_y`, `ideal_x`, `ideal_y`. */
+  name: string;
+  /** Short label shown on the axis. */
+  label: string;
+  /** Unit of `values` and `ref`: `u/s`, `°`, `mrad`, `%`, `count`, …. */
+  unit: string;
+  axis: 'tick' | 'bullet';
+  x: number[];
+  values: number[];
+  ref?: { value: number; label: string };
+  marks?: string[];
+}
+
+/** Standard channel names (other names are allowed; the viewers draw what they know and list the rest). */
+export const SERIES = {
+  /** Duel view (`axis: 'tick'`): horizontal speed, u/s, with `ref` = the weapon's accurate-speed threshold. */
+  speed: 'speed',
+  /** Duel view: the game's inaccuracy of each bullet (`fire_bullets.inaccuracy`), on the bullet ticks, mrad. */
+  inaccuracy: 'inaccuracy',
+  /** Duel view: angle between the crosshair and the target's head (or chest), degrees. */
+  angle: 'angle',
+  /** Duel view: duck amount 0–1. */
+  duck: 'duck',
+  /** Duel view: the shots, on their ticks; value 1, `marks` `hit` / `miss`. */
+  shots: 'shots',
+  /** Spray plot (`axis: 'bullet'`): where the recoil-compensated aim was relative to the target, degrees (x = right, y = up). */
+  aimX: 'aim_x',
+  aimY: 'aim_y',
+  /** Spray plot: the ideal compensation path from the weapon's pattern, degrees (where the crosshair must go so bullets land). */
+  idealX: 'ideal_x',
+  idealY: 'ideal_y',
+} as const;
+
 export interface Evidence {
   kind: 'replay' | 'duel' | 'spray' | 'map' | 'board';
   /** Round number (`MatchRound.number`). */
@@ -48,6 +93,8 @@ export interface Evidence {
   players: number[];
   annotations: Annotation[];
   caption: string;
+  /** Short channels over the window for the duel view and the spray plot (a few seconds, a few hundred numbers). */
+  series?: EvidenceSeries[];
 }
 
 export interface MetricValue {
@@ -59,6 +106,11 @@ export interface MetricValue {
   n: number;
   /** 1 = best of the lobby. */
   lobbyRank: number;
+  /** The metric's label and skill area (K5; optional: older reports lack them). */
+  label?: string;
+  area?: FindingArea;
+  /** Rank direction (K5; optional: older reports lack it, and the page then infers it from the rank). */
+  better?: 'higher' | 'lower';
   /** The same metric for every slot (index = slot; NaN where not defined). */
   lobby: number[];
   /** Earlier matches of the same user, oldest first. */
@@ -92,6 +144,28 @@ export interface Finding {
   impact: number;
   /** Set by the prioritizer. */
   priority: number;
+  /** How the prioritizer scored it (K5, `src/coach/report/prioritize.ts`); absent before it ran. */
+  scoring?: FindingScoring;
+}
+
+/** The prioritizer's factors for one finding (docs/coach/report.md "Prioritizer"). */
+export interface FindingScoring {
+  /** The detector's own impact (before the lobby excess). */
+  rawImpact: number;
+  /** The detector's polarity (before the precision gate). */
+  polarity: Polarity;
+  /** Root family: findings of one family never both lead. */
+  family: string;
+  /** Lobby excess of the key metric, 0–1 (1 = not scaled). `impact` = rawImpact × excess. */
+  excess: number;
+  /** Effective confidence: `confidence` × the instance factor. */
+  confidence: number;
+  fixability: number;
+  recurrence: number;
+  /** Demoted to an observation by the precision gate. */
+  gated: boolean;
+  /** A fix that clears the bar (may lead). */
+  bar: boolean;
 }
 
 /** One round's summary line for the round strip. */
@@ -255,6 +329,98 @@ export interface ReplayTrack {
   events: ReplayEvents;
 }
 
+/** A link from a chart mark to one evidence of one finding (`report.findings[finding].evidence[evidence]`, by id). */
+export interface ChartLink {
+  /** Finding id. */
+  finding: string;
+  /** Index into that finding's `evidence`. */
+  evidence: number;
+}
+
+interface ChartBase {
+  /** Chart title. */
+  title: string;
+  /** One sentence under the chart (how to read it). */
+  caption?: string;
+  /** The area whose page shows it. */
+  area: FindingArea;
+}
+
+export interface ChartAxis {
+  label: string;
+  unit: string;
+  min?: number;
+  max?: number;
+}
+
+export interface ScatterPoint {
+  x: number;
+  y: number;
+  /** Category (a key of `categories`); drives the colour. */
+  cat: string;
+  /** Short hover text. */
+  label?: string;
+  link?: ChartLink;
+}
+
+/** Categories of a chart: key → label and colour role. */
+export interface ChartCategory {
+  key: string;
+  label: string;
+  role: ColorRole;
+}
+
+export interface BarItem {
+  label: string;
+  value: number;
+  /** Optional sample size shown next to the bar. */
+  n?: number;
+  cat?: string;
+  /** Mark the bar that is the user. */
+  user?: boolean;
+}
+
+export interface BoardDot {
+  x: number;
+  y: number;
+  /** Colour role, e.g. `ct`, `t`, `user`, `bad`. */
+  role: ColorRole;
+  /** Shape: `dot` (a player), `cross` (a death), `ring` (a grenade). Default `dot`. */
+  shape?: 'dot' | 'cross' | 'ring';
+  label?: string;
+}
+
+export interface BoardZone {
+  polygon: [number, number][];
+  role: ColorRole;
+  label?: string;
+}
+
+/** One small map: world coordinates on the report's map radar. */
+export interface RoundBoard {
+  round: number;
+  caption: string;
+  dots: BoardDot[];
+  zones: BoardZone[];
+  /** Mark the board (e.g. a round lost to the pattern). */
+  highlight?: boolean;
+  link?: ChartLink;
+}
+
+/**
+ * A named chart payload any detector can fill (`MatchReport.charts`, keyed by detector or metric id). The page draws
+ * each kind with one renderer (`src/coach-app/charts/`) inside its `area`.
+ */
+export type ChartPayload =
+  | (ChartBase & { kind: 'scatter'; x: ChartAxis; y: ChartAxis; categories: ChartCategory[]; points: ScatterPoint[];
+      /** Rings around the origin (e.g. 1°, 3°, 5° for crosshair placement). */
+      rings?: number[] })
+  | (ChartBase & { kind: 'bars'; unit: string; categories?: ChartCategory[]; bars: BarItem[]; ref?: { value: number; label: string } })
+  | (ChartBase & { kind: 'series'; x: ChartAxis; y: ChartAxis; series: { name: string; label: string; role: ColorRole; x: number[]; y: number[] }[] })
+  | (ChartBase & { kind: 'boards'; boards: RoundBoard[]; legend?: ChartCategory[] });
+
+export type ChartKind = ChartPayload['kind'];
+
 export interface MatchReport {
   format: typeof REPORT_FORMAT;
   /** The match facts (without per-tick data). */
@@ -269,6 +435,8 @@ export interface MatchReport {
   strengths: string[];
   rounds: RoundSummary[];
   replay: ReplayTrack[];
+  /** Named chart payloads (key = detector or metric id, e.g. `aim.placement`, `strat.lane`). Optional: older reports have none. */
+  charts?: Record<string, ChartPayload>;
   /** Version of the analysis code that wrote this report. */
   coachVersion: string;
 }
