@@ -4,7 +4,7 @@
  * Shared helpers for confidence, strengths and finding skeletons are in `./common.ts`.
  */
 import type { AnalysisContext } from '../analyze/context';
-import type { Finding, FindingArea, FindingScope, MetricValue } from '../model/report';
+import type { ChartPayload, Finding, FindingArea, FindingScope, MetricValue } from '../model/report';
 
 export type DetectorNeed = 'los' | 'knowledge';
 
@@ -16,4 +16,10 @@ export interface Detector {
   /** What the detector cannot run without; it is skipped when a need is missing. */
   readonly needs?: readonly DetectorNeed[];
   run(ctx: AnalysisContext, slot: number, metric: (id: string) => MetricValue | null): Finding[];
+  /**
+   * Optional (K5): chart payloads for `MatchReport.charts`, keyed by detector or metric id (each key must start with
+   * this detector's id). Called after `run` for the same slot; `findings` are the ones `run` returned, so a chart
+   * mark can link to their evidence (`ChartLink`).
+   */
+  charts?(ctx: AnalysisContext, slot: number, metric: (id: string) => MetricValue | null, findings: readonly Finding[]): Record<string, ChartPayload>;
 }

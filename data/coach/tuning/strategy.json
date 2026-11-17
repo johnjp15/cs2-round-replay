@@ -1,0 +1,80 @@
+{
+  "_note": "K8: strategy tables and detectors (src/coach/derive/strategy, src/coach/metrics/strategy, src/coach/detect/strategy; docs/coach/strategy.md). Times are seconds after freeze end unless said otherwise.",
+  "grid": {
+    "_sample": "Positions are read every sampleTicks ticks from freeze end to the round's end (0.25 s at 64 ticks/s).",
+    "sampleTicks": 16
+  },
+  "lanes": {
+    "_take": "A lane is taken when at least takeMinTs Ts entered it before the plant (or the round end) and one of them got through to the lane's site or stayed in it at least takeMinSec. enteredBy counts the distinct Ts who had entered by each checkpoint.",
+    "takeMinTs": 1,
+    "takeMinSec": 3,
+    "checkpoint1Sec": 15,
+    "checkpoint2Sec": 25,
+    "checkpoint3Sec": 40,
+    "_contest": "Contested in time: from freeze end to contestSec after the first T entered, a CT stood in the lane, saw a T in it (the demo's spotted_by), dealt damage to a T in it or from it, or a CT grenade landed in it.",
+    "contestSec": 5,
+    "_look": "Sight with a sight mesh: a CT within lookRange units of a T in the lane, the T inside his field of view and a clear line to a body point, tested every lookStep samples (spotted_by alone is sparse in GOTV demos).",
+    "lookRange": 3000,
+    "lookStep": 2
+  },
+  "hits": {
+    "_commit": "The Ts committed to a site when hitMinTs living Ts stood in its area at once (or planted there). committed = distinct Ts in the area from that entry to commitWindowSec later.",
+    "hitMinTs": 2,
+    "commitWindowSec": 10,
+    "_util": "Utility before the hit: T grenades landing in the site area or in a lane leading to it from utilWindowSec before the entry to utilAfterSec after it. A hit is 'behind utility' with at least utilMin of them, one a smoke or a flash.",
+    "utilWindowSec": 10,
+    "utilAfterSec": 1,
+    "utilMin": 2,
+    "_timing": "fast: entry at or before fastSec; late: at or after lateSec; default in between.",
+    "fastSec": 30,
+    "lateSec": 60,
+    "_role": "Second in: entered the area within secondSec of the entry player. Lurk: at the entry, alive, outside the hit site's area and its lanes, and at least lurkDistance from the entry point.",
+    "secondSec": 3,
+    "lurkDistance": 1500
+  },
+  "setup": {
+    "_setup": "The CT setup is read setupSec after freeze end (before most first contacts) and again at the first contact (first damage between enemies).",
+    "setupSec": 15
+  },
+  "rotations": {
+    "_info": "Hard information on a site: a plant there, infoMinTs Ts in its area or its lanes shown on the CT radar (spotted) at once, the bomb carrier shown there, or a fight there (damage between a T in its area or lanes and a CT). The radar flag is sparse in GOTV demos, so fights carry most of it.",
+    "infoMinTs": 2,
+    "_rotate": "A CT whose zone at setup time is on one site rotates when he later reaches the other site's side; he left at his last sample on his own side. Early: he left more than earlySlackSec before any information on the site he went to. Stayed: information on the other site, that site was hit, and he was still alive on his own side stayGraceSec later with no T on his side.",
+    "earlySlackSec": 0,
+    "stayGraceSec": 8,
+    "_limits": "A move counts as a rotation only when he arrives within rotateMaxSec of leaving and does not pass through T territory (that is a flank). An early rotation is punished when the Ts entered his own site within punishSec after he left.",
+    "rotateMaxSec": 25,
+    "punishSec": 30
+  },
+  "repeats": {
+    "_repeat": "A choice repeats when it happened in at least minCount rounds of the half and in at least minShare of the half's rounds; a streak is the longest run of consecutive rounds with the same choice.",
+    "minCount": 3,
+    "minShare": 0.5
+  },
+  "detect": {
+    "_lane": "strat.lane: at least laneMinTaken CT rounds with the lane taken, laneMinOpen of them uncontested, uncontested in at least laneOpenShare of the takes, and at least laneMinPunished of the open rounds lost or planted on the lane's site.",
+    "laneMinTaken": 3,
+    "laneMinOpen": 3,
+    "laneOpenShare": 0.5,
+    "laneMinPunished": 2,
+    "_setup": "strat.setup: hits on a site that had at most setupLight CTs defending it at setup time, at least setupMinLight of them and setupMinLost of those lost.",
+    "setupLight": 1,
+    "setupMinLight": 3,
+    "setupMinLost": 2,
+    "_rotate": "strat.rotate: at least rotateMin early-and-punished rotations plus stays.",
+    "rotateMin": 2,
+    "_tside": "strat.t_side: at least tMinHits hits. A fix when at least tMinDry dry hits won at most tDryWinMax of them; a strength when at least tMinExec hits behind utility won at least tExecWinMin; otherwise an observation.",
+    "tMinHits": 4,
+    "tMinDry": 3,
+    "tDryWinMax": 0.4,
+    "tMinExec": 3,
+    "tExecWinMin": 0.6,
+    "_opponent": "strat.opponent: the other team's most repeated site or lane (repeats above); 'answered' when, in the repeats after the second, the user's team had at least two CTs on that site at the hit or contested that lane.",
+    "opponentMinRounds": 4,
+    "_scoring": "Confidence = precision x (1 - exp(-rounds / nScale)), rounds = the CT or T rounds behind the finding (small samples: 9 rounds give 0.78 of the precision). Impact = rounds lost to the pattern per 24 rounds x impactPerRound: a round is worth several fights on the K2 scale, but a team pattern is shared by five players, so the user's part is about 0.3 fights per lost round.",
+    "nScale": 6,
+    "precision": 0.7,
+    "impactPerRound": 0.3,
+    "evidenceRounds": 3
+  }
+}

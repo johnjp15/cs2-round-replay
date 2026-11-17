@@ -12,11 +12,12 @@ the aim and movement detectors: [`mechanics.md`](mechanics.md).
 | `src/coach/model/` | `raw.ts` (`RawDemo`), `items.ts` (canonical item names), `raw-codec.ts` (binary container), `match.ts` (`Match`), `report.ts` (`Finding`, `MatchReport`) |
 | `src/coach/ingest/` | `ingestMatch` (RawDemo → Match), `rounds.ts` (segmentation), `access.ts` (accessors), `validate.ts` (reconciliation) |
 | `src/coach/tuning.ts`, `data/coach/tuning.json` | ingest's and the replay's thresholds |
-| `src/coach/analyze/`, `metrics/`, `detect/`, `derive/<area>/`, `report/format.ts`, `data/coach/tuning/<area>.json` | the analysis (Contract 3) and per-area tunables ([`mechanics.md`](mechanics.md), [`utility.md`](utility.md)) |
+| `src/coach/analyze/`, `metrics/`, `detect/`, `derive/<area>/`, `report/format.ts`, `data/coach/tuning/<area>.json` | the analysis (Contract 3) and per-area tunables ([`mechanics.md`](mechanics.md), [`utility.md`](utility.md), [`strategy.md`](strategy.md)) |
+| `data/coach/knowledge/<map>.json` | map knowledge for the strategy area: zones, sites, lanes, counters ([`strategy.md`](strategy.md)) |
 | `src/coach/report/replay.ts` | replay tracks for the 2D viewer |
 | `src/coach-parser/`, `crates/coach-parser/` | the browser parser: demoparser2's Rust core as WebAssembly in a worker ([`parser.md`](parser.md)) |
 | `src/coach-app/`, `coach/index.html`, `vite.coach.config.ts` | the page (Preact), built to `dist-coach/`: pipeline worker, library, player picker, match page, 2D replay ([`app.md`](app.md)) |
-| `tools/coach/` | `coach.ts` (CLI), `parse-node.ts` (native adapter), `fetch-test-demo.ts`, `make-fixture.ts` |
+| `tools/coach/` | `coach.ts` (CLI), `parse-node.ts` (native adapter), `fetch-test-demo.ts`, `make-fixture.ts`, `knowledge-check.ts` and `strategy-check.ts` (K8) |
 | `tests/coach/` | unit tests (`synth.ts` builds synthetic RawDemos), the fixture test, the full-demo test |
 | `local/demos/`, `local/coach-cache/` | demos and parsed caches (gitignored; never commit a demo) |
 
