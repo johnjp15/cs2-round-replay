@@ -11,7 +11,7 @@
   "sightings": {
     "_step": "Pairs are evaluated every stepTicks rows of live play (freeze end to round end, both alive), plus at the rows of every gun shot, hurt and kill between the two (anchors); where two evaluated rows differ, the change is found to the row by bisection. A sighting shorter than stepTicks that no anchor touches can be missed (docs/coach/sight.md measures how many).",
     "stepTicks": 8,
-    "_maxDistance": "Pairs farther apart than this (eye to eye) are not tested: no line of sight on the test demo was longer than 3,600 units (docs/coach/sight.md).",
+    "_maxDistance": "Pairs farther apart than this (eye to eye) are not tested: the longest line of sight between live enemies in the test demo (Mirage) was 2,203 units; the margin is for the longer maps (docs/coach/sight.md).",
     "maxDistance": 4500,
     "_blind": "The observer is blind while the flash he is under has more than blindRemainingSec left (the demo's flash column is the flash's full duration, constant until the next one; the remaining time is counted from the row it changed). CS2's screen stays white for most of a flash and fades over the last two or so seconds.",
     "blindRemainingSec": 1.0

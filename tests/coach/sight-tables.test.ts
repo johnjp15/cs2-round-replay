@@ -249,6 +249,8 @@ describe('death context', () => {
     const d = rows[0];
     expect(d?.labels).toEqual(['unseen', 'crossfire', 'objective']);
     expect(d?.behind).toBe(true);
+    expect(d?.direction).toBe('behind');
+    expect(d?.through).toBeNull();
     expect(d?.seenBy).toEqual([B1, B2]);
   });
 
@@ -280,5 +282,6 @@ describe('death context', () => {
     const d = ctx.table(DEATH_CONTEXT).rows[0];
     expect(d?.labels).toEqual(['open']);
     expect(d?.sawKillerTick).toBe(590);
+    expect(d?.direction).toBe('front');
   });
 });

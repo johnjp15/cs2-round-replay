@@ -1,9 +1,12 @@
 /**
- * K6 table `sight.death_context`: every death by an enemy (K4's `DEATHS`) labelled from sight (docs/coach/sight.md,
- * "Death context"; thresholds in sight.json `deathContext`). A death can carry several labels.
+ * K6 table `sight.death_context`: every death by an enemy's gun or knife (K4's `DEATHS`; grenade, fire and world
+ * deaths are left out) labelled from sight (docs/coach/sight.md, "Death context"; thresholds in sight.json
+ * `deathContext`). A death can carry several labels.
  *
- * - `unseen`: the victim did not see the killer on any row of the lookbackSec before the death; `behind` when the
- *   killer was more than behindDeg off the victim's view yaw at death (else from the side).
+ * - `unseen`: the victim did not see the killer on any row of the lookbackSec before the death (checked on every row,
+ *   not only the table's samples); `behind` when the
+ *   killer was more than behindDeg off the victim's view yaw at death, `side` beyond the view's half-width, else
+ *   `front` (hidden by a wall, a smoke or too small a sliver); `through` from the kill event's flags.
  * - `crossfire`: two or more enemies saw the victim on the row before the death.
  * - `repeek`: inside the repeekSec before the death the victim was hurt by an enemy, or killed one, within
  *   repeekRadius of where he died; after that no enemy saw him for at least hideSec; he came back into an enemy's
@@ -14,6 +17,7 @@
  */
 import type { TableDef } from '../../analyze/context';
 import { DEATHS, type DeathRow } from '../positioning/deaths';
+import { isGun } from '../economy/prices';
 import { wrap180 } from '../aim/geom';
 import { rowAtOrAfter } from '../../model/raw';
 import { SEE, SIGHTINGS } from './sightings';
@@ -30,6 +34,10 @@ export interface DeathContext {
   /** unseen: the killer's angle off the victim's view yaw at death (degrees, 0–180), and whether that is behind. */
   readonly offDeg: number;
   readonly behind: boolean;
+  /** Where the killer was against the victim's view at death: inside the view frustum's width, beside it, or behind (behindDeg). */
+  readonly direction: 'front' | 'side' | 'behind';
+  /** The kill went through smoke or a wall (the kill event's flags). */
+  readonly through: 'smoke' | 'wall' | null;
   /** Enemies who saw the victim on the row before the death. */
   readonly seenBy: readonly number[];
   /** repeek: the tick of the earlier hit or kill and of coming back into sight. */
@@ -57,8 +65,11 @@ export const DEATH_CONTEXT: TableDef<DeathContextTables> = {
     const see = (r: number, o: number, t: number): number => tab.state[(r * P + o) * P + t] ?? 0;
     const rowOf = (tick: number): number => Math.min(T.count - 1, rowAtOrAfter(T, tick));
     const out: DeathContext[] = [];
+    const lt = ctx.los?.tuning;
+    const halfView = lt === undefined ? 53.1 : (Math.atan((Math.tan((lt.fovDeg * Math.PI) / 360) / lt.fovAspect) * lt.aspect) * 180) / Math.PI;
     for (const d of ctx.table(DEATHS)) {
       if (!d.byEnemy || d.killer < 0) continue;
+      if (!isGun(d.weapon) && d.weapon !== 'knife') continue;
       const v = d.victim;
       const k = d.killer;
       const vr = Math.max(0, rowOf(d.tick) - 1);
@@ -67,9 +78,10 @@ export const DEATH_CONTEXT: TableDef<DeathContextTables> = {
 
       // unseen
       const look0 = rowOf(d.tick - Math.round(c.lookbackSec * rate));
+      // Exact on every row (the table can miss a glimpse shorter than its step between two samples).
       let sawKillerTick: number | null = null;
       for (let r = look0; r <= vr; r++) {
-        if ((see(r, v, k) & SEE.seen) !== 0) {
+        if ((see(r, v, k) & SEE.seen) !== 0 || (tab.probe !== null && (tab.probe.eval(r, v, k) & SEE.seen) !== 0)) {
           sawKillerTick = T.tick[r] ?? null;
           break;
         }
@@ -132,8 +144,10 @@ export const DEATH_CONTEXT: TableDef<DeathContextTables> = {
       }
       if (open) labels.push('open');
 
+      const kev = raw.events.kills[d.k];
       out.push({
-        death: d, labels, offDeg, behind: offDeg > c.behindDeg, seenBy, repeekFrom: back !== null ? from : null, repeekBack: back, sawKillerTick,
+        death: d, labels, offDeg, behind: offDeg > c.behindDeg, direction: offDeg > c.behindDeg ? 'behind' : offDeg > halfView ? 'side' : 'front',
+        through: kev?.thruSmoke === true ? 'smoke' : (kev?.penetrated ?? 0) > 0 ? 'wall' : null, seenBy, repeekFrom: back !== null ? from : null, repeekBack: back, sawKillerTick,
       });
     }
     return { available: true, rows: out };

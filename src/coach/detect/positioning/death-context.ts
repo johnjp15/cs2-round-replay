@@ -36,7 +36,9 @@ const ADVICE: Readonly<Record<DeathLabel, string>> = {
 };
 
 function text(d: DeathContext): string {
-  const parts = d.labels.map((l) => (l === 'unseen' ? `killer unseen (${d.behind ? 'from behind' : 'from the side'}, ${Math.round(d.offDeg)}° off your view)` : l === 'crossfire' ? `seen by ${d.seenBy.length} enemies` : NAME[l]));
+  const where = d.direction === 'behind' ? 'from behind' : d.direction === 'side' ? 'from the side' : 'in front of you but out of sight';
+  const through = d.through === 'smoke' ? ', through smoke' : d.through === 'wall' ? ', through a wall' : '';
+  const parts = d.labels.map((l) => (l === 'unseen' ? `killer unseen (${where}, ${Math.round(d.offDeg)}° off your view${through})` : l === 'crossfire' ? `seen by ${d.seenBy.length} enemies` : NAME[l]));
   return parts.join('; ');
 }
 

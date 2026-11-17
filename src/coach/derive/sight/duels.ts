@@ -3,13 +3,14 @@
  *
  * A meeting joins the sightings of one enemy pair in one round, both directions, whose gaps are at most
  * `duels.mergeGapSec`. For each side: the first row it saw the other, its first bullet at him (K2's `TARGETS`), its
- * first damaging hit, the damage it did, whether it was holding still or moving at its first sight (the one-tick
+ * first damaging hit with a gun, the gun damage it did (grenades and fire do not count), whether it was holding still or moving at its first sight (the one-tick
  * velocity lag applied: `speedAt`) and the weapon in hand. Shots and damage count from `preSec` before the meeting to
  * `postSec` after its last sighting (or the kill). The outcome: `kill` when one killed the other in that window,
  * `other` when one of them died to someone else, else `disengaged`.
  */
 import type { AnalysisContext, TableDef } from '../../analyze/context';
 import { HURTS } from '../hurts';
+import { isGun } from '../economy/prices';
 import { SHOTS } from '../aim/shots';
 import { TARGETS } from '../aim/targets';
 import { speedAt } from '../movement/speed';
@@ -28,7 +29,7 @@ export interface DuelSide {
   readonly shotTick: number | null;
   readonly shot: number | null;
   readonly shots: number;
-  /** First hurt with damage on the other (index into HURTS) and its tick. */
+  /** First gun hurt with damage on the other (index into HURTS) and its tick; damage = gun damage in the window. */
   readonly damageTick: number | null;
   readonly hurt: number | null;
   readonly damage: number;
@@ -152,7 +153,7 @@ export const DUELS: TableDef<DuelTables> = {
         for (const h of hurts) {
           if (h.hurt.tick < w0) continue;
           if (h.hurt.tick > w1) break;
-          if (h.hurt.attacker !== p || h.hurt.victim !== q || h.damage <= 0) continue;
+          if (h.hurt.attacker !== p || h.hurt.victim !== q || h.damage <= 0 || !isGun(h.hurt.weapon)) continue;
           damage += h.damage;
           if (hurt === null) hurt = h.i;
         }

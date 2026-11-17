@@ -84,6 +84,13 @@ export interface SightTable {
   /** Every sighting, by tick0, then observer, then target. */
   readonly sightings: readonly Sighting[];
   readonly stats: SightStats;
+  /** Exact evaluation of one pair at one row (the same test as the table), for checks that must not miss a glimpse between samples; null when unavailable. */
+  readonly probe: SightProbe | null;
+}
+
+/** The table's per-row test, exposed for exact re-checks of a few rows (it does not change the table). */
+export interface SightProbe {
+  eval(r: number, o: number, t: number): number;
 }
 
 export interface SightOptions {
@@ -147,7 +154,7 @@ export function blindRows(ctx: AnalysisContext, remainingSec: number): Uint8Arra
 
 const DEG = Math.PI / 180;
 
-class Evaluator {
+class Evaluator implements SightProbe {
   readonly pts = new Float64Array(BODY_POINTS.length * 3);
   readonly fov = new Uint8Array(BODY_POINTS.length);
   readonly order = new Uint8Array(BODY_POINTS.length);
@@ -265,7 +272,7 @@ export function buildSightings(ctx: AnalysisContext, opts: SightOptions = {}): S
   const T = ctx.raw.ticks;
   const stats: SightStats = { pairRows: 0, deadRows: 0, farRows: 0, liveRows: 0, evaluated: 0, segmentTests: 0, smokeFloods: 0 };
   const los = ctx.los;
-  if (los === null) return { available: false, P, state: new Uint8Array(0), blind: new Uint8Array(0), sightings: [], stats };
+  if (los === null) return { available: false, P, state: new Uint8Array(0), blind: new Uint8Array(0), sightings: [], stats, probe: null };
   const tun = opts.tuning ?? SIGHT_TUNING;
   const step = Math.max(1, Math.round(opts.step ?? tun.sightings.stepTicks));
   const only = opts.slots === undefined ? null : new Set(opts.slots);
@@ -360,7 +367,7 @@ export function buildSightings(ctx: AnalysisContext, opts: SightOptions = {}): S
   stats.evaluated = ev.evaluated;
   stats.segmentTests = los.segmentTests - tests0;
   stats.smokeFloods = smoke.floods;
-  return { available: true, P, state, blind, sightings: collectSightings(ctx, state), stats };
+  return { available: true, P, state, blind, sightings: collectSightings(ctx, state), stats, probe: ev };
 }
 
 function collectSightings(ctx: AnalysisContext, state: Uint8Array): Sighting[] {
