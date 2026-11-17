@@ -15,7 +15,7 @@ import { decodeRawDemo } from '../../src/coach/model/raw-codec';
 
 const raw = decodeRawDemo(gunzipSync(readFileSync(new URL('./fixtures/test-demo-r4.craw.gz', import.meta.url))));
 const match = ingestMatch(raw);
-const K4 = /^(util|pos|trade|eco)\./;
+const K4 = /^(util|pos(?!\.death_context)|trade|eco)\./; // pos.death_context is K6
 
 describe('K4 on the test demo fixture', () => {
   const ctx = createContext(raw, match);

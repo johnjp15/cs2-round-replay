@@ -4,16 +4,16 @@
  * horizontal (signed: "your crosshair sits 3.1° low"), holding against peeking, and by place; plus the Leetify-style
  * figure (how far the view moved from the first sight to the first damaging shot).
  *
- * Also fills the placement scatter (`placementChart`): where each enemy appeared relative to the crosshair, in degrees
- * right and up, by outcome, with the index of the finding's evidence moment that shows it.
+ * Also fills `MatchReport.charts['aim.placement']` (`placementChart`): where each enemy appeared relative to the
+ * crosshair, in degrees right and up, by outcome, linked to the finding's evidence moment that shows it.
  */
 import type { AnalysisContext } from '../../analyze/context';
 import { median } from '../../derive/aim/select';
-import type { FirstOutcome, FirstSight } from '../../derive/sight/firsts';
+import type { FirstSight } from '../../derive/sight/firsts';
 import { placementSights } from '../../derive/sight/select';
 import { SIGHT_TUNING } from '../../derive/sight/tuning';
-import type { Finding, MetricValue } from '../../model/report';
-import { deg, plural, rankOf } from '../../report/format';
+import type { ChartCategory, ChartPayload, Finding, MetricValue } from '../../model/report';
+import { deg, plural, rankOf, roundClock, units } from '../../report/format';
 import { confidence, isBelowMedian, isStrength, makeFinding, perMatch, pickClearest, roundsPlayedBy } from '../common';
 import type { Detector } from '../types';
 import { who } from '../utility/evidence';
@@ -22,22 +22,6 @@ import { lobbyMedian } from './util';
 
 const ID = 'aim.placement';
 const t = SIGHT_TUNING.placement;
-
-/**
- * The placement scatter. A local type until K5's `MatchReport.charts` lands (then it becomes that union's scatter
- * member): x = degrees the enemy's head was right of the crosshair, y = degrees above it.
- */
-export interface PlacementScatter {
-  kind: 'scatter';
-  id: 'aim.placement';
-  title: string;
-  x: { label: string; unit: 'deg' };
-  y: { label: string; unit: 'deg' };
-  /** Reference rings, degrees. */
-  rings: number[];
-  categories: FirstOutcome[];
-  points: { x: number; y: number; category: FirstOutcome; round: number; tick: number; enemy: number; distance: number; holding: boolean; place: string; evidence: number }[];
-}
 
 function rank(mv: MetricValue | null): string {
   if (mv === null || mv.lobbyRank < 1) return '';
@@ -124,19 +108,40 @@ export const PLACEMENT: Detector = {
     }
     return [];
   },
+  charts(ctx, slot, _metric, findings) {
+    const c = placementChart(ctx, slot, findings);
+    return c === null ? {} : { [ID]: c };
+  },
 };
 
-/** The placement scatter for a slot (null without first sights); `evidenceTicks` are the finding's evidence focus ticks. */
-export function placementChart(ctx: AnalysisContext, slot: number, evidenceTicks: readonly number[] = []): PlacementScatter | null {
+const CATEGORIES: ChartCategory[] = [
+  { key: 'won', label: 'you won the duel', role: 'good' },
+  { key: 'lost', label: 'you lost the duel', role: 'bad' },
+  { key: 'no_shot', label: 'you did not shoot', role: 'neutral' },
+  { key: 'other', label: 'no kill between you', role: 'accent' },
+];
+
+/**
+ * The placement scatter (`MatchReport.charts['aim.placement']`): x = degrees the enemy's head was right of the
+ * crosshair at the first sight, y = degrees above it; one point per first sight, by outcome; points shown by the
+ * finding's evidence link to it. Null without first sights.
+ */
+export function placementChart(ctx: AnalysisContext, slot: number, findings: readonly Finding[] = []): ChartPayload | null {
   const xs = placementSights(ctx, slot);
   if (xs.length === 0) return null;
+  const f = findings.find((x) => x.id.startsWith(ID));
   return {
-    kind: 'scatter', id: ID, title: 'Where enemies appeared relative to your crosshair',
-    x: { label: 'degrees right of the crosshair', unit: 'deg' }, y: { label: 'degrees above the crosshair', unit: 'deg' },
-    rings: [1, 3, 5], categories: ['won', 'lost', 'no_shot', 'other'],
-    points: xs.map((f) => ({
-      x: Math.round(f.right * 100) / 100, y: Math.round(f.up * 100) / 100, category: f.outcome, round: f.round, tick: f.tick, enemy: f.enemy,
-      distance: f.dist, holding: f.holding, place: f.place, evidence: evidenceTicks.indexOf(f.tick),
-    })),
+    kind: 'scatter', area: 'aim', title: 'Where enemies appeared relative to your crosshair',
+    caption: 'Each dot is an enemy\'s head at the moment he first came into your view; the centre is your crosshair.',
+    x: { label: 'right of the crosshair', unit: 'deg' }, y: { label: 'above the crosshair', unit: 'deg' },
+    rings: [1, 3, 5], categories: CATEGORIES,
+    points: xs.map((x) => {
+      const ev = f === undefined ? -1 : f.evidence.findIndex((e) => e.focus === x.tick && e.players.includes(x.enemy));
+      return {
+        x: Math.round(x.right * 100) / 100, y: Math.round(x.up * 100) / 100, cat: x.outcome,
+        label: `${roundClock(ctx.match, x.tick)}: ${who(ctx, slot, x.enemy)}, ${deg(x.angle)} off, ${units(x.dist)}, ${x.holding ? 'holding' : 'moving'}${x.place ? `, ${x.place}` : ''}`,
+        ...(f !== undefined && ev >= 0 ? { link: { finding: f.id, evidence: ev } } : {}),
+      };
+    }),
   };
 }
