@@ -1,0 +1,37 @@
+[package]
+name = "coach-parser"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "CS2 demo -> typed-array columns for the CS2 Demo Coach, on demoparser2's parser core"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "coach-parser-native"
+path = "src/bin/native.rs"
+
+[dependencies]
+# Pinned by upstream.env / fetch-upstream.sh (LaihoE/demoparser, MIT).
+parser = { path = "upstream/src/parser" }
+ahash = "0.8"
+# Containers: pure Rust, no C, so they build for wasm32 without a C toolchain.
+bzip2-rs = "0.1"
+ruzstd = "0.8"
+miniz_oxide = "0.8"
+sha2 = { version = "0.10", default-features = false }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.130"
+js-sys = "0.3"
+getrandom = { version = "0.2", features = ["js"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+

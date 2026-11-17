@@ -4,7 +4,7 @@ import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { analyze, createContext, family, lobbyRanks, prioritize, reportJson } from '../../src/coach/analyze/index';
 import type { TableDef } from '../../src/coach/analyze/context';
-import { makeFinding, pickClearest } from '../../src/coach/detect/common';
+import { confidence, isBelowMedian, isStrength, makeFinding, perMatch, pickClearest } from '../../src/coach/detect/common';
 import type { Detector } from '../../src/coach/detect/types';
 import { ingestMatch } from '../../src/coach/ingest/index';
 import type { MetricDef } from '../../src/coach/metrics/types';
@@ -85,6 +85,20 @@ describe('analysis framework', () => {
     const { topFixes, strengths } = prioritize(fs);
     expect(topFixes).toEqual(['aim.spray.vertical', 'move.reload.exposed', 'aim.counter_strafe.early']);
     expect(strengths).toEqual(['aim.first_bullet.s', 'aim.range_discipline.s']);
+  });
+
+  it('confidence, strengths and the impact scale', () => {
+    expect(confidence(0.9, 20, 20)).toBeCloseTo(0.9 * (1 - Math.exp(-1)), 3);
+    expect(confidence(0.9, 0, 20)).toBe(0);
+    expect(perMatch(3, 12)).toBe(6);
+    const mv = (rank: number, n: number, lobby: number[]) => ({ id: 'x', value: lobby[0] ?? 0, unit: '%', n, lobbyRank: rank, lobby });
+    const six = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6];
+    expect(isStrength(mv(2, 10, six), 5)).toBe(true);
+    expect(isStrength(mv(3, 10, six), 5)).toBe(false);
+    expect(isStrength(mv(1, 4, six), 5)).toBe(false);
+    expect(isStrength(mv(1, 10, [0.1, 0.2, NaN]), 5)).toBe(false);
+    expect(isBelowMedian(mv(4, 10, six))).toBe(true);
+    expect(isBelowMedian(mv(3, 10, six))).toBe(false);
   });
 
   it('picks the clearest evidence, one per round first, in time order', () => {

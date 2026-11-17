@@ -1,0 +1,55 @@
+diff --git a/src/parser/src/parse_demo.rs b/src/parser/src/parse_demo.rs
+index 2787c87..25a3d28 100644
+--- a/src/parser/src/parse_demo.rs
++++ b/src/parser/src/parse_demo.rs
+@@ -19,6 +19,22 @@ use rayon::prelude::ParallelIterator;
+ 
+ pub const HEADER_ENDS_AT_BYTE: usize = 16;
+ 
++// coach-parser patch: std::time::Instant::now() panics on wasm32-unknown-unknown.
++#[cfg(not(target_arch = "wasm32"))]
++use std::time::Instant as ProfInstant;
++#[cfg(target_arch = "wasm32")]
++#[derive(Clone, Copy)]
++struct ProfInstant;
++#[cfg(target_arch = "wasm32")]
++impl ProfInstant {
++    fn now() -> Self {
++        ProfInstant
++    }
++    fn elapsed(&self) -> std::time::Duration {
++        std::time::Duration::ZERO
++    }
++}
++
+ #[derive(Debug)]
+ pub struct DemoOutput {
+     pub df: AHashMap<u32, PropColumn>,
+@@ -61,7 +77,7 @@ impl<'a> Parser<'a> {
+     }
+     pub fn parse_demo(&mut self, demo_bytes: &[u8]) -> Result<DemoOutput, DemoParserError> {
+         let _prof = std::env::var("CS2_PROF").is_ok();
+-        let _t = std::time::Instant::now();
++        let _t = ProfInstant::now();
+         let mut first_pass_parser = FirstPassParser::new(&self.input);
+         let first_pass_output = first_pass_parser.parse_demo(demo_bytes, false)?;
+         if _prof {
+@@ -128,14 +144,14 @@ impl<'a> Parser<'a> {
+     }
+     fn second_pass_single_threaded(&self, outer_bytes: &[u8], first_pass_output: FirstPassOutput) -> Result<DemoOutput, DemoParserError> {
+         let prof = std::env::var("CS2_PROF").is_ok();
+-        let mut t = std::time::Instant::now();
++        let mut t = ProfInstant::now();
+         let mut parser = SecondPassParser::new(first_pass_output.clone(), 16, true, None)?;
+         parser.start(outer_bytes)?;
+-        if prof { eprintln!("[prof] second_pass start(): {:.3}s", t.elapsed().as_secs_f64()); t = std::time::Instant::now(); }
++        if prof { eprintln!("[prof] second_pass start(): {:.3}s", t.elapsed().as_secs_f64()); t = ProfInstant::now(); }
+         let second_pass_output = parser.create_output();
+-        if prof { eprintln!("[prof] create_output: {:.3}s", t.elapsed().as_secs_f64()); t = std::time::Instant::now(); }
++        if prof { eprintln!("[prof] create_output: {:.3}s", t.elapsed().as_secs_f64()); t = ProfInstant::now(); }
+         let mut outputs = self.combine_outputs(&mut vec![second_pass_output], first_pass_output);
+-        if prof { eprintln!("[prof] combine_outputs: {:.3}s", t.elapsed().as_secs_f64()); t = std::time::Instant::now(); }
++        if prof { eprintln!("[prof] combine_outputs: {:.3}s", t.elapsed().as_secs_f64()); t = ProfInstant::now(); }
+         if let Some(new_df) = self.rm_unwanted_ticks(&mut outputs.df) {
+             outputs.df = new_df;
+         }

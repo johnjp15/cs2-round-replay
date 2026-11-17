@@ -1,0 +1,44 @@
+{
+  "_note": "K4: trades, deaths and opening duels (src/coach/derive/positioning, docs/coach/utility.md).",
+  "trades": {
+    "_window": "A kill trades a teammate's death when its victim is that teammate's killer and it comes within windowSec of the death.",
+    "windowSec": 5,
+    "_distance": "A teammate could have traded when he was alive within tradeDistance units (horizontal) of the victim at the death tick. 900 covers 8 of the 9 trades in the test demo (traders were 101–1,017 units from the victim); the lobby's nearest-teammate distribution is in docs/coach/utility.md.",
+    "tradeDistance": 900,
+    "_los": "With a sight mesh: rows sampled every losStepTicks inside the trade window; a teammate 'had sight' of the killer when any body point is visible from his eye (smokes ignored).",
+    "losStepTicks": 8
+  },
+  "untradeable": {
+    "_detector": "Deaths with no living teammate within tradeDistance that were not traded (rounds where the player was the last alive are excluded). Fix: at least minInstances such deaths, and a share of deaths >= share.",
+    "share": 0.5,
+    "minInstances": 3
+  },
+  "missed": {
+    "_detector": "A teammate died within tradeDistance of the player while the player was alive with a gun; a miss is no damage to the killer inside the window (opportunities traded by another teammate are not misses). Fix: at least minMissed misses and a miss share >= share.",
+    "minMissed": 2,
+    "share": 0.5
+  },
+  "opening": {
+    "_detector": "Fix 'losing openings': at least minDuels opening duels and a win rate <= maxWinRate. Fix 'CT dies first pushing': first deaths as CT within earlySec of freeze end at a position closer to the T spawn than pushProgress (0 = CT spawn, 1 = T spawn; spawns are the sides' mean positions at freeze end); at least minPushDeaths. Strength: at least minDuels and win rate >= strengthWinRate.",
+    "minDuels": 4,
+    "maxWinRate": 0.35,
+    "earlySec": 30,
+    "pushProgress": 0.5,
+    "minPushDeaths": 2,
+    "strengthWinRate": 0.65
+  },
+  "clock": {
+    "_round": "Seconds of play after freeze end (CS2: 1:55) for the round clock in the deaths table.",
+    "roundSec": 115
+  },
+  "scoring": {
+    "_confidence": "As utility.json scoring.",
+    "nScale": 5,
+    "precision": 0.8,
+    "_impact": "Fights per instance: an untraded death with nobody in range half a fight, a missed trade one, an opening duel lost beyond an even split one, a CT first death pushing one.",
+    "impactUntradeable": 0.5,
+    "impactMissedTrade": 1,
+    "impactOpeningLoss": 1,
+    "impactPushDeath": 1
+  }
+}

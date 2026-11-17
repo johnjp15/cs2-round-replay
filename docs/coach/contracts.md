@@ -193,6 +193,7 @@ flash that blinded four enemies for 0.8–3.8 s counts 2). On the test demo 3 of
 | grenade positions per tick | `parseGrenades` by default also returns every held grenade and weapon (517k rows, 1.5 GB RSS); `grenades=false` gives the 87k projectile rows. Entity ids are reused, so a gap of more than 16 ticks starts a new projectile |
 | `fire_bullets` | `player_inair` and `player_scoped` are always null; use the tick grid's `airborne` / `scoped` flags |
 | round flow | the first `round_start` (tick 65) is still warmup; `begin_new_match` (67) starts round 1. The last round ends by surrender in freeze time with no `round_freeze_end` and no `round_officially_ended` |
+| velocity and shot state per tick | the velocity column lags positions by one tick (use row t + 1 for the speed behind an action at row t); a bullet's tick row already holds the post-shot penalty, recoil index and punch, and `fire_bullets` angles = view(row before) + 2 × punch (docs/coach/mechanics.md) |
 | a player who leaves | his rows keep coming with team null and `is_connected` = 8 |
 
 ## Changelog
