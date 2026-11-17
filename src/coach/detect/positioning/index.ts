@@ -12,6 +12,7 @@ import type { Annotation, Evidence, Finding } from '../../model/report';
 import { pct, plural, roundClock, units } from '../../report/format';
 import { confidence, isStrength, makeFinding, perMatch, pickClearest, roundsPlayedBy } from '../common';
 import type { Detector } from '../types';
+import { DEATH_CONTEXT_DETECTOR } from './death-context';
 import { circle, label, line, present, rankText, replayAt, roundsLost, who } from '../utility/evidence';
 
 const T = POSITIONING_TUNING;
@@ -190,4 +191,4 @@ const opening: Detector = {
   },
 };
 
-export const POSITIONING_DETECTORS: readonly Detector[] = [untradeable, missed, opening];
+export const POSITIONING_DETECTORS: readonly Detector[] = [untradeable, missed, opening, DEATH_CONTEXT_DETECTOR];

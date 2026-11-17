@@ -6,5 +6,6 @@ import { UTILITY_TABLES } from './utility/index';
 import { POSITIONING_TABLES } from './positioning/index';
 import { ECONOMY_TABLES } from './economy/index';
 import { HURTS } from './hurts';
+import { SIGHT_TABLES } from './sight/index';
 
-export const ALL_TABLES: readonly TableDef<unknown>[] = [HURTS, ...AIM_TABLES, ...MOVEMENT_TABLES, ...UTILITY_TABLES, ...POSITIONING_TABLES, ...ECONOMY_TABLES];
+export const ALL_TABLES: readonly TableDef<unknown>[] = [HURTS, ...AIM_TABLES, ...MOVEMENT_TABLES, ...UTILITY_TABLES, ...POSITIONING_TABLES, ...ECONOMY_TABLES, ...SIGHT_TABLES];

@@ -5,6 +5,7 @@
 import type { MetricDef, MetricResult } from '../types';
 import { firstBullets, longSprays, mean, median, spraysOf } from '../../derive/aim/select';
 import { AIM_TUNING } from '../../derive/aim/tuning';
+import { SIGHT_AIM_METRICS } from './sight';
 
 const share = (k: number, n: number): MetricResult | null => (n === 0 ? null : { value: k / n, n });
 
@@ -103,4 +104,5 @@ export const AIM_METRICS: readonly MetricDef[] = [
       return share(f.filter((x) => x.shot.hitEnemy).length, f.length);
     },
   },
+  ...SIGHT_AIM_METRICS,
 ];

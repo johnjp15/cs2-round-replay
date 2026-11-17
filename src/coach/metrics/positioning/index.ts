@@ -2,6 +2,7 @@
 import type { MetricDef } from '../types';
 import { roundsPlayedBy } from '../../detect/common';
 import { median } from '../utility/instances';
+import { DEATH_CONTEXT_METRICS } from './death-context';
 import { openingStats, tradeChances, untradeableStats } from './instances';
 
 export const POSITIONING_METRICS: readonly MetricDef[] = [
@@ -54,4 +55,5 @@ export const POSITIONING_METRICS: readonly MetricDef[] = [
       return { value: s.pushDeaths.length, n: roundsPlayedBy(ctx, slot) };
     },
   },
+  ...DEATH_CONTEXT_METRICS,
 ];

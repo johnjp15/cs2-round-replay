@@ -47,7 +47,7 @@
     "costSawFirstLost": 1
   },
   "habits": {
-    "_": "Counted habits. Airborne shots: bullets fired in the air with a target. Flashed shots: bullets fired while blind (sightings.blindRemainingSec). Scoped moving: runs of at least scopedMinMs where a sniper rifle is scoped and the speed is above the weapon's moveStartFraction of its scoped max speed while an enemy sees the player or the player sees one. Re-peek: after a sniper bullet at a target that hurt nobody, the two lose sight of each other and within repeekSec of the shot the target sees the player again from within repeekRadius of the shot. A fix when a habit recurs: count >= fixCount; costPerInstance fights each.",
+    "_": "Counted habits. Airborne shots: bullets fired in the air with a target. Flashed shots: bullets fired while blind (sightings.blindRemainingSec). Scoped moving: runs of at least scopedMinMs where a sniper rifle is scoped and the speed is above the weapon's moveStartFraction of its scoped max speed while an enemy sees the player or the player sees one. Re-peek: after a sniper bullet at a target that hurt nobody, the two lose sight of each other and within repeekSec of the shot the target sees the player again from within repeekRadius of the shot. Airborne and flashed shots count once per burst. A fix when a habit recurs: count >= fixCount; costPerInstance fights each.",
     "scopedMinMs": 150,
     "repeekSec": 4,
     "repeekRadius": 160,
