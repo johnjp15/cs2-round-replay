@@ -197,7 +197,9 @@ has `title`, optional `caption` and the `area` whose page shows it; `kind` picks
 | `series` | `x`, `y` axes, `series` (`name`, `label`, `role`, `x[]`, `y[]`) | lines |
 | `boards` | `boards` (one per round: `round`, `caption`, `dots` with `x`, `y` in world units, `role`, `shape`; `zones` as x/y polygons; `highlight`; `link`), optional `legend` | one small radar per round |
 
-A `link` is `{ finding: <finding id>, evidence: <index> }`. Insert keys in a fixed order (the analysis sorts them by
+A detector fills charts through its optional `charts(ctx, slot, metric, findings)` method (`src/coach/detect/types.ts`),
+called after `run` with the findings `run` returned; keys must start with the detector id. A `link` is
+`{ finding: <finding id>, evidence: <index> }`. Insert keys in a fixed order (the analysis sorts them by
 id before it returns), so the JSON stays byte-identical. Reports without `charts` are valid.
 
 ## Reconciliation (`src/coach/ingest/validate.ts`)
