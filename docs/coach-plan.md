@@ -353,7 +353,15 @@ Status 11-16: **K0 merged (#78)**, **KM merged (#77)**, K1 running. What they fo
 - `tools/coach/places-report.ts`: the place names a demo uses, with counts and centroids (the awpy-data navs carry none, so demos are the source of the callout vocabulary).
 - Done when: packs exist for every pool map in the release, the sight check passes on Mirage, and the benchmark meets the target.
 
-### Wave 2 (running from 11-16)
+### Wave 2
+
+Status 11-16 16:40: **all merged**: K1 #79 (wave 1's browser parser), K2 #80, K4 #82, K3 #81. A real `.dem` dropped on the built page in headless Chrome goes through the WebAssembly parser, ingest, analysis and replay to a match page with fixes. Results, in `docs/coach/{parser,mechanics,utility,app}.md`:
+- **Parser:** our crate on demoparser2's core, 2.96 MB (0.89 MB gzipped), identical to the native adapter on 15.6 M cells and 8,493 events; the test demo parses in about 5 s in a Chrome worker with 190 MB of WebAssembly memory (about 13 s and 0.5 GB extrapolated to a 150 MB demo on this box). CI rebuilds it from source and checks both that build and the committed binary.
+- **Mechanics:** the game's per-bullet inaccuracy equals the engine's model within 1 % for 95 % of bullets once the one-tick velocity lag is accounted for; bullet angles are view + 2.0 × aim punch; 35 metrics for all ten players; analysis of the test demo takes about 0.5 s with the sight mesh.
+- **Utility, trades, deaths, economy:** utility damage equals the scoreboard exactly; trade distance 900 units from the lobby's distribution.
+- **Page:** drop to interactive in under a second from a parsed file; replay at 60 fps; 454 of 454 checked positions on the radar and inside their callout's box; a stored match reopens in about 20 ms; replay data about 4 MB in memory and 1 MB stored for a full match (accepted; the earlier 3 MB figure was a guess).
+
+Open points from wave 2: `item_purchase` is a re-sent purchase list, not a log, and `RawPurchase` lacks the slot and balance that would make buys exact (a small contract change for both parsers); the Node adapter loses velocity on the first tick of each 4,000-tick chunk (379 cells; the browser parser is right); the demo says CS2's recoil scale is 2.0 where the sims' tuning has 1.884, and the M4A1-S fires in mode 1 while `sprays` holds its mode-0 pattern (questions for the sims' weapon model); the metric cards on the page print raw fractions (K5 replaces them).
 
 **K2 · Analysis framework, combat tables, mechanics** (`k2-coach-mechanics`)
 - **First commit within 40 minutes:** the framework of Contract 3 (`src/coach/analyze/`, `metrics/types.ts`, `detect/types.ts`, the per-area `index.ts` files, empty for the areas K4 fills), `analyze()` returning a valid `MatchReport` with a first prioritizer (fixes ordered by impact × confidence, top three, no two from the same detector family), `src/coach/report/format.ts`, and `coach report <demo> --user <name|slot>` in the CLI (prints the fixes with their numbers, writes the JSON under `local/`). K4 and K3 build on this commit.
@@ -379,15 +387,42 @@ Status 11-16: **K0 merged (#78)**, **KM merged (#77)**, K1 running. What they fo
 - Builds on K2's framework commit; until it lands, the tables are built and tested alone.
 - Done when: the detectors run through `analyze()` on the test demo and every instance they report is checked against the events by a test or a listed spot check in `docs/coach/utility.md`.
 
-### Wave 3
+### Wave 3 (running from 11-16)
 
-- **K5 · Report.** Prioritizer, the three-fixes cards, skill-area pages, duel view, spray plot, rank strips, golden report test.
-- **K6 · Sight-based analysis.** Sightings and duels from `los.ts`; `aim.placement`, `aim.time_to_damage`, `aim.habits`, `pos.death_context`, placement scatter. Budget the sighting pass (coarse steps refined to the tick at changes, early exit, head and chest first): a full match is millions of segment tests and the big maps run at a quarter of Mirage's speed. Fold `data/coach/los-tuning.json` into `data/coach/tuning.json`.
-- **K7 · Publish.** Single-file build of the page with the parser inside; `cs2/coach/` added to the deploy that PR #76 moves into this repo's CI (`tools/pages/deploy.sh`), after that PR is merged by its own session; map packs published as separate files per decision 8; the locked-page check extended to the coach.
+**K5 · Report** (`k5-coach-report`)
+- **First commit within 30 minutes: the contract additions** K6 and K8 need, in `src/coach/model/report.ts` and `docs/coach/contracts.md`: `Evidence.series` (a few short channels over the evidence window for the duel view and the spray plot) and `MatchReport.charts` (named chart payloads a detector can fill: scatter, bars, series, round boards), each a small typed union.
+- **Prioritizer** (`src/coach/report/prioritize.ts`): the plan's rule (impact × confidence × fixability × recurrence; one mechanics, one micro, one macro when each clears the bar; never two with one root cause; observations below the precision gate). Put K2's and K4's per-instance costs on one scale and show the resulting top three for all ten players of the test demo in the doc; the "more than half a magazine" reload rule fires for most of every lobby and must not lead.
+- **The three-fixes cards and strengths:** title, the one sentence, the key number correctly formatted with its unit (the current cards print raw fractions: "0.8 %" for 78 %), a rank strip (the ten players as dots, the user marked, ties shown as ties), sample size and confidence in words, Watch buttons, what to do instead, the drill.
+- **Skill-area pages:** every metric with value, unit, n and rank strip; every finding including observations; "nothing to flag" where the area was analyzed and is clean.
+- **Duel view and spray plot** as evidence viewers, fed by `Evidence.series` built at analysis time from K2's tables (`src/coach/report/evidence-series.ts`), so a match reopened from the library can still show them. Renderers for `charts` (scatter, bars, small-multiple boards) for K6 and K8.
+- **Feedback:** thumbs up or down on each finding, kept in the browser and exportable.
+- **Golden report:** the report JSON for the committed fixture is snapshotted (`tests/coach/golden-report.test.ts`), with an update script.
+- `tools/coach/browser-check.ts` extended to the report; screenshots from the anonymized fixture for review.
+- Done when: for each of the ten players of the test demo the top fixes read correctly on the page with working Watch buttons, duel views and spray plots, and the checks pass.
+
+**K6 · Sight-based analysis** (`k6-coach-sight`)
+- **Sightings** (`src/coach/derive/sight/`): for every pair of enemies, the tick ranges in which one can see the other: line of sight to any body point, inside the field of view, not through a smoke, the observer not blind. Coarse steps refined to the tick at changes, head and chest first, early exit. Budget on this box: the user's pairs for a full match in ≤ 10 s, all pairs in ≤ 30 s (Inferno, Ancient and Train run at about a quarter of Mirage's speed).
+- **Duels:** per meeting of two enemies: first sight each way, first shot, first damage, who won, distance, whether each was moving or holding.
+- **Detectors and metrics** (for all ten players): `aim.placement` (angle from the crosshair to the enemy's head at the first sight, split vertical and horizontal and holding against peeking, plus the Leetify-style figure: angle moved from first sight to first damage), `aim.time_to_damage` (first sight to first damage; fights where you saw first and lost), `aim.habits` (jumping shots, shots while flashed, scoped walking, re-peeking after a missed sniper shot), `pos.death_context` (each death labelled: killer never in your view, seen by two or more enemies, after a re-peek, while planting or defusing, in the open between covers).
+- Fills `charts['aim.placement']` (the scatter of where enemies appeared relative to the crosshair) and evidence with the view cone and sight line drawn.
+- Folds `data/coach/los-tuning.json` into `data/coach/tuning/sight.json`.
+- Sanity: the lobby's crosshair placement and time to damage must land in the ranges Leetify publishes for comparable ranks (several degrees; several hundred ms); explain any that don't.
+- Done when: the detectors run through `analyze()` on the test demo inside the time budget, and the spot checks of ten sightings and ten duels against the replay are in `docs/coach/sight.md`.
+
+**K8 · Map knowledge and strategy** (`k8-coach-strategy`)
+- **Knowledge files** `data/coach/knowledge/<map>.json` with a documented schema: the demo's place names grouped into sites, lanes, connectors and spawns; each chokepoint with the places it covers and what it leads to; site-hit zones; the textbook counters the advice quotes. Mirage first (its 23 callouts are in `data/coach/maps/de_mirage/places.json`), then Dust II drafted and marked unverified until a Dust II demo confirms its place names. Unknown place names are reported and treated as unclassified.
+- **Tables** (`src/coach/derive/strategy/`): lane control per round (when the Ts first enter each lane, how many, whether a CT contested it with a body, damage or a grenade in time, how the round ended); CT setups (who holds what at a fixed time and at first contact) against the site the Ts hit; rotations (who left which site when, relative to the first information); T-side rounds (site, timing, utility thrown before entry, result); what the opponent repeated.
+- **Detectors and metrics:** `strat.lane` (the "A Long" case), `strat.setup`, `strat.rotate`, `strat.t_side`, `strat.opponent`, worded as patterns with counts, the user's part named, each with a round board (`charts`) and replay evidence with the lane drawn as a zone.
+- Done when: on the test demo (one team is T for all nine rounds) the tables agree with what the replay shows round by round (listed in `docs/coach/strategy.md`), and the detectors are covered by synthetic matches with both halves.
+
+### Next
+
+- **K7 · Publish.** Single-file build of the page with the parser inside; `cs2/coach/` added to the deploy that PR #76 moves into this repo's CI (`tools/pages/deploy.sh`), after that PR is merged by its own session; map packs published as separate files per decision 8; the locked-page check extended to the coach. Until then the page runs locally: `npm ci && npm run dev:coach`.
+- **KF · Contract fixes.** Purchases with slot and balance in both parsers; the Node adapter's chunk-start velocity.
 
 ### Wave 4 and later
 
-- **K8 · Strategy.** Map control, lanes, setups, rotations, T-side and opponent patterns; knowledge files for all seven maps; round boards.
+- **K8b · The other maps.** Knowledge files for the remaining pool maps as demos of each arrive (their callout names come from demos).
 - **K14 · Game sense.** `src/coach/sense`: the observation stream from a demo (radar sightings from `spotted`, kill feed, clock, bomb), the information-state reducer, the call rules starting with the numbers read, call scoring against the truth, the `sense.*` detectors, fog-of-war mode and calls in the replay. Causal and observation-only (decision 10).
 - **K9 · Win probability.** A small table model (players alive, bomb, time, equipment) fitted with our own pipeline; impact scoring.
 - **K10 · Over time.** Trends, focus goals, recurring findings, reference demos, the coach brief.
