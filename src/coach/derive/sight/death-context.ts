@@ -38,6 +38,8 @@ export interface DeathContext {
   readonly direction: 'front' | 'side' | 'behind';
   /** The kill went through smoke or a wall (the kill event's flags). */
   readonly through: 'smoke' | 'wall' | null;
+  /** The victim was blind on the row before the death (the sightings' blind rows). */
+  readonly blind: boolean;
   /** Enemies who saw the victim on the row before the death. */
   readonly seenBy: readonly number[];
   /** repeek: the tick of the earlier hit or kill and of coming back into sight. */
@@ -147,7 +149,7 @@ export const DEATH_CONTEXT: TableDef<DeathContextTables> = {
       const kev = raw.events.kills[d.k];
       out.push({
         death: d, labels, offDeg, behind: offDeg > c.behindDeg, direction: offDeg > c.behindDeg ? 'behind' : offDeg > halfView ? 'side' : 'front',
-        through: kev?.thruSmoke === true ? 'smoke' : (kev?.penetrated ?? 0) > 0 ? 'wall' : null, seenBy, repeekFrom: back !== null ? from : null, repeekBack: back, sawKillerTick,
+        through: kev?.thruSmoke === true ? 'smoke' : (kev?.penetrated ?? 0) > 0 ? 'wall' : null, blind: tab.blind[vr * P + v] === 1, seenBy, repeekFrom: back !== null ? from : null, repeekBack: back, sawKillerTick,
       });
     }
     return { available: true, rows: out };

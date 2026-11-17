@@ -251,6 +251,7 @@ describe('death context', () => {
     expect(d?.behind).toBe(true);
     expect(d?.direction).toBe('behind');
     expect(d?.through).toBeNull();
+    expect(d?.blind).toBe(false);
     expect(d?.seenBy).toEqual([B1, B2]);
   });
 

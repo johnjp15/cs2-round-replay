@@ -37,7 +37,7 @@ const ADVICE: Readonly<Record<DeathLabel, string>> = {
 
 function text(d: DeathContext): string {
   const where = d.direction === 'behind' ? 'from behind' : d.direction === 'side' ? 'from the side' : 'in front of you but out of sight';
-  const through = d.through === 'smoke' ? ', through smoke' : d.through === 'wall' ? ', through a wall' : '';
+  const through = `${d.through === 'smoke' ? ', through smoke' : d.through === 'wall' ? ', through a wall' : ''}${d.blind ? ', you were blind' : ''}`;
   const parts = d.labels.map((l) => (l === 'unseen' ? `killer unseen (${where}, ${Math.round(d.offDeg)}° off your view${through})` : l === 'crossfire' ? `seen by ${d.seenBy.length} enemies` : NAME[l]));
   return parts.join('; ');
 }
@@ -78,7 +78,7 @@ export const DEATH_CONTEXT_DETECTOR: Detector = {
     const labelled = rows.filter((r) => top.some((t) => r.labels.includes(t.l)));
     const lost = roundsLost(ctx, slot, labelled.map((r) => r.death.round));
     const shares = counts.map((x) => `${NAME[x.l]} ${x.k} (${pct(x.k / n)})`).join(', ');
-    const summary = `Of your ${plural(n, 'death')} to an enemy: ${shares}. The two that dominate, ${top.map((t) => `"${NAME[t.l]}"`).join(' and ')}, came in rounds your team lost ${lost} of ${new Set(labelled.map((r) => r.death.round)).size}.`;
+    const summary = `Of your ${plural(n, 'death')} to an enemy: ${shares}. ${top.length === 1 ? 'Those deaths came' : `The two that dominate, ${top.map((t) => `"${NAME[t.l]}"`).join(' and ')}, came`} in rounds your team lost ${lost} of ${new Set(labelled.map((r) => r.death.round)).size}.`;
     const fix = avoid !== undefined && n >= c.minDeaths && avoid.k / n >= c.fixShare;
     const focus = fix && avoid ? rows.filter((r) => r.labels.includes(avoid.l)) : labelled;
     const picks = pickClearest(focus, (r) => r.labels.length, (r) => r.death.tick, (r) => r.death.round, 3);

@@ -13,6 +13,7 @@ the aim and movement detectors: [`mechanics.md`](mechanics.md).
 | `src/coach/ingest/` | `ingestMatch` (RawDemo → Match), `rounds.ts` (segmentation), `access.ts` (accessors), `validate.ts` (reconciliation) |
 | `src/coach/tuning.ts`, `data/coach/tuning.json` | ingest's and the replay's thresholds |
 | `src/coach/analyze/`, `metrics/`, `detect/`, `derive/<area>/`, `report/format.ts`, `data/coach/tuning/<area>.json` | the analysis (Contract 3) and per-area tunables ([`mechanics.md`](mechanics.md), [`utility.md`](utility.md)) |
+| `src/coach/derive/sight/`, `data/coach/tuning/sight.json` | line of sight between players, duels, crosshair placement, time to damage, habits, death context ([`sight.md`](sight.md)) |
 | `src/coach/report/replay.ts` | replay tracks for the 2D viewer |
 | `src/coach-parser/`, `crates/coach-parser/` | the browser parser: demoparser2's Rust core as WebAssembly in a worker ([`parser.md`](parser.md)) |
 | `src/coach-app/`, `coach/index.html`, `vite.coach.config.ts` | the page (Preact), built to `dist-coach/`: pipeline worker, library, player picker, match page, 2D replay ([`app.md`](app.md)) |
